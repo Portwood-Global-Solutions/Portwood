@@ -3944,21 +3944,26 @@ only one of the two is fixed, the symptom persists. Check both.
 3. Confirm `Word`, `PowerPoint`, `Excel`, `HTML`, `PDF` and `Canvas` are all present and
    **Active**. Use **Activate** on any that are listed but deactivated.
 4. If a value is **absent from the list entirely**, add it with **New**, spelled exactly
-   as above — the engine compares the stored value, so `canvas` or `Canvas Template`
-   will not work. If Salesforce does not offer **New** on this field, see the note below.
+   as above. This works even though the field belongs to the managed package — see the
+   note below.
 5. If your org uses **record types** on the object, open each record type and add
    the values to its available list — a value that exists but is not assigned to
    the record type will not appear in the picker.
 6. Repeat all of the above for **Portwood Template Version**. Both objects matter, for
    the reason in the table above.
 
-**If Salesforce will not let you add the value.** Both fields are **restricted**
-picklists owned by the managed package, and depending on your org Salesforce may not
-offer **New** on them. Upgrading again does not help — an earlier version of this guide
-said it would, and that is wrong: the orgs measured above were fully upgraded and still
-did not have `Canvas`. If you cannot add the value, raise it with
-[support](https://portwood.dev/support) and say which value is missing and which version
-you upgraded from; a fresh install of the current version always has the full list.
+**Adding the value by hand is safe, and it works.** Both fields are restricted picklists
+owned by the managed package, which normally means a subscriber cannot extend them —
+but **New** is available here and a value added that way behaves exactly like one that
+shipped with the package. Confirmed on an upgraded org: adding `Canvas` by hand made
+Canvas templates creatable and they generate normally.
+
+Upgrading again does **not** fix it. An earlier version of this guide said an absent
+value means the org predates it and the upgrade will bring it — that is wrong, and the
+orgs measured above were fully upgraded and still did not have `Canvas`. Add the value.
+
+Spelling matters: the engine compares the stored value, so it must be exactly `Canvas`,
+not `canvas` or `Canvas Template`.
 
 **Repairing templates already saved with the wrong type.** Fixing the picklist
 does not retype existing records. Open the template, set **Type** correctly, then

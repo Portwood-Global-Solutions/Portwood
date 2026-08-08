@@ -65,17 +65,23 @@ Creating one by API fails with `INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST`.
 Documented in UserGuide §15.12, with the check surfaced in the release note so it is read
 before someone goes looking for the designer rather than after.
 
-Two things not yet established, and both change the remedy:
+**An admin can add the value by hand, and it works.** Confirmed on an upgraded org:
+Setup → Object Manager → Portwood Template → Type → **New** → `Canvas` made Canvas
+templates creatable, and they generate normally. Restricted managed picklists normally
+refuse subscriber additions, so this was worth checking rather than assuming — the
+assumption would have been wrong and would have sent people to support for something
+they can fix in two minutes.
 
-- **Whether an admin can add the value by hand.** Both fields are restricted picklists
-  owned by the package, and Salesforce normally forbids a subscriber adding to those. If
-  it is forbidden here, documentation alone cannot fix it and the answer is code — a
-  post-install step, or an unrestricted picklist.
-- **Whether it reproduces outside a scratch org.** All three orgs measured are scratch
-  orgs, which are not a faithful model of subscriber upgrade behaviour. A real
-  Developer or Enterprise org upgrading is the test that settles it.
+So documentation is a real remedy, not a workaround for a dead end, and §15.12 carries
+the steps for both objects.
 
-Worth resolving before the next release rather than carrying.
+Still unestablished: **whether it reproduces outside a scratch org.** Every org measured
+is a scratch org, which is not a faithful model of subscriber upgrade behaviour. If it
+turns out to be scratch-only, this entry becomes a footnote rather than a customer
+issue. A real Developer or Enterprise org upgrading settles it.
+
+Worth a code fix regardless if it reproduces: a post-install step that adds any missing
+value would remove the manual step entirely.
 
 ## 2. The runner offers templates it cannot generate
 
