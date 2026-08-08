@@ -31,7 +31,7 @@ Kept here briefly so an older report reading "known issue" is not confusing.
 - **`Validate Signature Token` faulted a bulk Flow.** It queries per token, so past
   roughly fifty requests the transaction died on `Too many SOQL queries: 101` and lost
   every result. It now validates as many as the allowance affords and returns the rest
-  marked "not attempted". The underlying per-token querying remains — see #3 below.
+  marked "not attempted". The underlying per-token querying remains — see #4 below.
 
 ## Not a defect — corrected
 
@@ -50,7 +50,34 @@ The check now asserts that composition instead. What remains is a usability poin
 correctness one: a template whose filter excludes every selected record produces an empty
 job with no explanation. A count preview on the bulk picker would close it.
 
-## 1. The runner offers templates it cannot generate
+## 1. A new Type picklist value can be missing after an upgrade
+
+`Canvas` arrived in v3.54 and does not always reach an org that already had Portwood
+installed. Measured on two orgs upgraded to v3.56 — from v3.48 and from v3.53 — both
+offer Word, PowerPoint, Excel, HTML and PDF; neither offers `Canvas`. The same org
+installed fresh has all six. Not inactive, absent, on both `DocGen_Template__c.Type__c`
+and `DocGen_Template_Version__c.Type__c`.
+
+**Consequence:** an upgrading customer cannot create a Canvas template, which puts the
+Canvas designer and everything built on it out of reach — while a fresh install is fine.
+Creating one by API fails with `INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST`.
+
+Documented in UserGuide §15.12, with the check surfaced in the release note so it is read
+before someone goes looking for the designer rather than after.
+
+Two things not yet established, and both change the remedy:
+
+- **Whether an admin can add the value by hand.** Both fields are restricted picklists
+  owned by the package, and Salesforce normally forbids a subscriber adding to those. If
+  it is forbidden here, documentation alone cannot fix it and the answer is code — a
+  post-install step, or an unrestricted picklist.
+- **Whether it reproduces outside a scratch org.** All three orgs measured are scratch
+  orgs, which are not a faithful model of subscriber upgrade behaviour. A real
+  Developer or Enterprise org upgrading is the test that settles it.
+
+Worth resolving before the next release rather than carrying.
+
+## 2. The runner offers templates it cannot generate
 
 `getTemplatesForObjectInternal` filters on `Is_Active__c` and audience, but not on the
 template having a body. The template appears in the picker and fails only after Generate,
@@ -78,7 +105,7 @@ A workable fix needs to tolerate the async window — a grace period on
 `LastModifiedDate`, or the queueable marking the version — plus the fixture work. Worth
 doing, not worth guessing at.
 
-## 2. Signature actions fault the Flow on invalid input
+## 3. Signature actions fault the Flow on invalid input
 
 `Create Signature Request` throws for a null Template Id, a null Related Record Id, an
 empty Signers collection, or a signer with no email. `Finalize Signature Image` throws on
@@ -95,7 +122,7 @@ Documented instead: UserGuide §11.11 now spells out which errors arrive by whic
 tells authors to wire a fault connector. Revisit as a deliberate contract change in a
 major release, not as a patch.
 
-## 3. `Validate Signature Token` is still not truly bulkified
+## 4. `Validate Signature Token` is still not truly bulkified
 
 The limit no longer faults the interview (see Fixed, above), but the action still issues
 per-token queries and so cannot validate a large batch in one transaction.
@@ -109,7 +136,7 @@ being folded into a release.
 `DocGenFlowAction.generateDocument`; the same reasoning applies, and the same fix would
 cover it.
 
-## 4. A template created outside the designer opens to an empty canvas
+## 5. A template created outside the designer opens to an empty canvas
 
 The Designer loads a template body from a ContentVersion titled
 `docgen_html_body_<templateId>`. It does **not** fall back to the active version's
@@ -123,7 +150,7 @@ Re-saving once through the Template Manager UI writes the CV the designer expect
 template created by script. That is the check working: the same thing happens to a
 customer who builds templates through the API. The durable fix is the fallback.
 
-## 5. 149 fields have no description or help text
+## 6. 149 fields have no description or help text
 
 `metadata-audit` reports one row per field. Real, worth doing, and mechanical — an admin
 looking at the field in Setup has nothing to tell them what it does.

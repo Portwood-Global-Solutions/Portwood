@@ -24,6 +24,12 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 >   [§15.2](#152-raw-css-appears-at-the-top-of-generated-pdfs)
 > - **Fixed:** a Flow validating signature tokens in bulk faulted with a governor limit
 >   and lost the whole batch. [§11.11](#1111-error-handling)
+> - **Upgrading and want the Canvas designer?** Check the **Type** picklist first. A
+>   value added in a later version does not always reach an org that already had
+>   Portwood installed, and `Canvas` arrived in v3.54 — so an upgraded org can be missing
+>   it while a fresh install has it. Without it you cannot create a Canvas template at
+>   all. Two minutes to check and fix:
+>   [§15.12](#1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel)
 > - **Upgrading?** One change does not travel with the upgrade. `Type__c` on Portwood
 >   Template Version no longer defaults to **Word**, but Salesforce does not push a removed
 >   picklist default to an org that already has the package. If you create template
@@ -3902,12 +3908,23 @@ and finds hyphens that were never in the record.
     XHTML-style. This only works for text you type into the template — there is
     no way to place `<wbr/>` inside a merged field's value.
 
-### 15.12 "HTML" or "Excel" missing from the Type picklist
+### 15.12 A value is missing from the Type picklist (Canvas, HTML, Excel)
 
-**Symptom.** Creating or editing a template, the **Type** picklist offers only
-some of Word / PowerPoint / Excel / HTML / PDF. Commonly HTML or Excel is absent,
-so an HTML template cannot be created — or worse, it saves as **Word** and then
-opens to an empty canvas in the Designer and converts badly on generation.
+**Symptom.** Creating or editing a template, the **Type** picklist is missing one of
+Word / PowerPoint / Excel / HTML / PDF / Canvas. The value you need is simply not in the
+list, so that kind of template cannot be created — or it saves as **Word** and then opens
+to an empty canvas in the Designer and converts badly on generation.
+
+> **Most likely after an upgrade, and specifically for `Canvas`.** A value added in a
+> later package version does not always reach an org that already had Portwood
+> installed. A **fresh install** gets the full list; an **upgrade** can keep the list it
+> had. Measured on orgs upgraded from v3.48 and v3.53 to v3.56: both offer Word,
+> PowerPoint, Excel, HTML and PDF, and neither offers **Canvas**, which arrived in
+> v3.54. The same org installed fresh has all six.
+>
+> If Canvas is missing you cannot create a Canvas template, which also puts the Canvas
+> designer and everything in it out of reach. This is worth checking straight after an
+> upgrade rather than discovering it when you go to build one.
 
 **Type lives on TWO objects, and both matter.**
 
@@ -3924,19 +3941,24 @@ only one of the two is fixed, the symptom persists. Check both.
 
 1. **Setup → Object Manager**, open **Portwood Template**.
 2. **Fields & Relationships → Type → Values**.
-3. Confirm `Word`, `PowerPoint`, `Excel`, `HTML` and `PDF` are all present and
-   **Active**. Use **Activate** on any that are deactivated.
-4. If your org uses **record types** on the object, open each record type and add
+3. Confirm `Word`, `PowerPoint`, `Excel`, `HTML`, `PDF` and `Canvas` are all present and
+   **Active**. Use **Activate** on any that are listed but deactivated.
+4. If a value is **absent from the list entirely**, add it with **New**, spelled exactly
+   as above — the engine compares the stored value, so `canvas` or `Canvas Template`
+   will not work. If Salesforce does not offer **New** on this field, see the note below.
+5. If your org uses **record types** on the object, open each record type and add
    the values to its available list — a value that exists but is not assigned to
    the record type will not appear in the picker.
-5. Repeat all of the above for **Portwood Template Version**.
+6. Repeat all of the above for **Portwood Template Version**. Both objects matter, for
+   the reason in the table above.
 
-**If a value is genuinely absent rather than inactive**, do not try to add it by
-hand. Both fields are **restricted** picklists owned by the managed package, so a
-subscriber org cannot add a new value to them — and a value typed in manually
-would not match what the engine compares against. An absent value means the org
-is on a package version that predates it: **upgrade Portwood** and the value
-arrives with the upgrade.
+**If Salesforce will not let you add the value.** Both fields are **restricted**
+picklists owned by the managed package, and depending on your org Salesforce may not
+offer **New** on them. Upgrading again does not help — an earlier version of this guide
+said it would, and that is wrong: the orgs measured above were fully upgraded and still
+did not have `Canvas`. If you cannot add the value, raise it with
+[support](https://portwood.dev/support) and say which value is missing and which version
+you upgraded from; a fresh install of the current version always has the full list.
 
 **Repairing templates already saved with the wrong type.** Fixing the picklist
 does not retype existing records. Open the template, set **Type** correctly, then
