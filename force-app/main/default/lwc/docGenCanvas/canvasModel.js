@@ -1897,12 +1897,35 @@ function escapeRe(v) {
 /**
  * Expands inline marks into tags. Runs on ALREADY-ESCAPED text, so a literal "<" the
  * author typed stays escaped and only the marks become markup.
+ *
+ * A merge tag is an atom: marks are never applied INSIDE `{…}`. The underline mark
+ * `__` collides with the double underscores every Salesforce relationship and custom
+ * field carries (`__r` / `__c`), so a box holding two tags — `{Client__r.Name} …
+ * {Contact__c.FirstName}` — used to pair the underscores across the two tags into one
+ * `<u>` span, corrupting both so they printed raw in the PDF. Splitting on tag-like
+ * brace groups and expanding marks only in the plain text between them fixes the
+ * root cause for every mark, not just underline, and is the documented fix for #282.
  */
 function expandMarks(escaped) {
-    let out = escaped;
-    for (const m of INLINE_MARKS) {
-        const re = new RegExp(escapeRe(m.open) + '([\\s\\S]+?)' + escapeRe(m.close), 'g');
-        out = out.replace(re, '<' + m.tag + '>$1</' + m.tag + '>');
+    let out = '';
+    let last = 0;
+    const tagRe = /\{[^{}]*\}/g;
+    let m;
+    while ((m = tagRe.exec(escaped)) !== null) {
+        out += expandMarksInPlainText(escaped.slice(last, m.index));
+        out += m[0]; // the tag passes through verbatim, its marks untouched
+        last = m.index + m[0].length;
+    }
+    out += expandMarksInPlainText(escaped.slice(last));
+    return out;
+}
+
+/** Applies mark expansion to one plain-text (non-tag) slice. */
+function expandMarksInPlainText(text) {
+    let out = text;
+    for (const mk of INLINE_MARKS) {
+        const re = new RegExp(escapeRe(mk.open) + '([\\s\\S]+?)' + escapeRe(mk.close), 'g');
+        out = out.replace(re, '<' + mk.tag + '>$1</' + mk.tag + '>');
     }
     return out;
 }
