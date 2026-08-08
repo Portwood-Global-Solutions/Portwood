@@ -24,11 +24,11 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 >   [§15.2](#152-raw-css-appears-at-the-top-of-generated-pdfs)
 > - **Fixed:** a Flow validating signature tokens in bulk faulted with a governor limit
 >   and lost the whole batch. [§11.11](#1111-error-handling)
-> - **Upgrading and want the Canvas designer?** Check the **Type** picklist first. A
->   value added in a later version does not always reach an org that already had
->   Portwood installed, and `Canvas` arrived in v3.54 — so an upgraded org can be missing
->   it while a fresh install has it. Without it you cannot create a Canvas template at
->   all. Two minutes to check and fix:
+> - **Upgrading from v3.53 or earlier and want the Canvas designer?** Check the **Type**
+>   picklist first. `Canvas` arrived in v3.54, and an org installed before that never
+>   receives the value — no later upgrade brings it. Orgs already on v3.54+ are fine, as
+>   are fresh installs. Without it you cannot create a Canvas template at all. Two
+>   minutes to check and fix:
 >   [§15.12](#1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel)
 > - **Upgrading?** One change does not travel with the upgrade. `Type__c` on Portwood
 >   Template Version no longer defaults to **Word**, but Salesforce does not push a removed
@@ -37,7 +37,7 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 >   Setup → Object Manager → **Portwood Template Version** → **Type** → edit the **Word**
 >   value → untick **Default**. New installs already have it.
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fXFIAY) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fXFIAY) · [Support](https://portwood.dev/support) · [Expert Services](https://portwood.dev/services)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Support](https://portwood.dev/support) · [Expert Services](https://portwood.dev/services)
 
 ---
 
@@ -3915,16 +3915,27 @@ Word / PowerPoint / Excel / HTML / PDF / Canvas. The value you need is simply no
 list, so that kind of template cannot be created — or it saves as **Word** and then opens
 to an empty canvas in the Designer and converts badly on generation.
 
-> **Most likely after an upgrade, and specifically for `Canvas`.** A value added in a
-> later package version does not always reach an org that already had Portwood
-> installed. A **fresh install** gets the full list; an **upgrade** can keep the list it
-> had. Measured on orgs upgraded from v3.48 and v3.53 to v3.56: both offer Word,
-> PowerPoint, Excel, HTML and PDF, and neither offers **Canvas**, which arrived in
-> v3.54. The same org installed fresh has all six.
+> **Who this affects: orgs that installed Portwood before the value existed.** `Canvas`
+> arrived in **v3.54**. An org that already had Portwood installed at v3.53 or earlier
+> never receives it, and no later upgrade brings it. An org that was on v3.54 or later
+> already has it and keeps it. A fresh install always has the full list.
 >
-> If Canvas is missing you cannot create a Canvas template, which also puts the Canvas
-> designer and everything in it out of reach. This is worth checking straight after an
-> upgrade rather than discovering it when you go to build one.
+> Measured on identical upgrades to v3.56:
+>
+> | Org was on | After upgrading |     |
+> | ---------- | --------------- | --- |
+> | v3.48      | Canvas missing  | ❌  |
+> | v3.53      | Canvas missing  | ❌  |
+> | v3.54      | Canvas present  | ✅  |
+> | v3.55      | Canvas present  | ✅  |
+>
+> So the question is not "did I upgrade" but "what was I on when Canvas shipped". If you
+> were on v3.53 or earlier, add the value once (below) and you are done — it persists
+> through every future upgrade.
+>
+> Without it you cannot create a Canvas template at all, which puts the Canvas designer
+> and everything in it out of reach. Worth two minutes straight after upgrading rather
+> than discovering it when you go to build one.
 
 **Type lives on TWO objects, and both matter.**
 

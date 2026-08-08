@@ -2,7 +2,7 @@
 
 ## v3.56.0 — Chart label size, and bold that tells the truth
 
-Released 2026-08-08 · ancestor 3.55.0
+Released 2026-08-08 · `04tVx0000010fnNIAQ` · ancestor 3.55.0.2 · 1,961 tests, 78% coverage
 
 Two small fixes where the editor promised something the PDF did not deliver.
 
