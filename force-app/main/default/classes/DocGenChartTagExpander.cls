@@ -337,13 +337,13 @@ public with sharing class DocGenChartTagExpander {
         String chartBucketTag = buildChartBucketTag(relationship, field, opts);
 
         if (style == 'bar') {
-            return renderBar(title, chartBucketTag);
+            return renderBar(title, chartBucketTag, opts);
         } else if (style == 'pivot') {
-            return renderPivot(title, chartBucketTag, opts.get('colSort'));
+            return renderPivot(title, chartBucketTag, opts.get('colSort'), opts);
         } else if (style == 'clustered') {
-            return renderClustered(title, chartBucketTag, opts.get('colSort'));
+            return renderClustered(title, chartBucketTag, opts.get('colSort'), opts);
         } else if (style == 'stacked') {
-            return renderStacked(title, chartBucketTag, opts.get('colSort'));
+            return renderStacked(title, chartBucketTag, opts.get('colSort'), opts);
         }
         // Unreachable due to ALLOWED_STYLES guard above — `column`, `pie`,
         // `donut` only render in HTML output via the `htmlRender=svg` opt-in
@@ -438,10 +438,74 @@ public with sharing class DocGenChartTagExpander {
 
     // ─── style renderers ─────────────────────────────────────────────────
 
-    private static String renderBar(String title, String chartBucketTag) {
+    /**
+     * A point size scaled by the tag's `fontSize=`, if it set one.
+     *
+     * THE THIRD RENDERER. Charts are drawn three ways — Chart.js in the browser,
+     * DocGenSvgChartSerializer for Word and PowerPoint, and these HTML/CSS bars for
+     * HTML-to-PDF. fontSize= was added to the first, then the second, and each time the
+     * feature looked finished until someone generated through the path that had been
+     * missed. Two byte-identical PDFs at fontSize=10 and fontSize=26 is what finally
+     * showed this one.
+     *
+     * `fontSize=` is stated in PIXELS, as it is everywhere else, and the default of 12px
+     * is exactly the 9pt this path already used — so an unset option changes nothing.
+     * Everything else keeps its ratio to that 9pt, which is why a heading stays a
+     * heading.
+     *
+     * Not applied to the 1px rules: those give a zero-height bar its line box and are
+     * layout, not text. Scaling them would push every bar out of shape.
+     */
+    private static String fsPt(Decimal basePt, Map<String, String> opts) {
+        if (opts == null || String.isBlank(opts.get('fontSize'))) {
+            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+        }
+        Decimal requestedPx;
+        try {
+            requestedPx = Decimal.valueOf(opts.get('fontSize').trim());
+        } catch (Exception e) {
+            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+        }
+        if (requestedPx <= 0) {
+            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+        }
+        // Clamped to the same 6-48px the Canvas control offers.
+        Decimal clamped = Math.min(Math.max(requestedPx, 6), 48);
+        Decimal scaled = basePt * clamped / LABEL_BASE_PX;
+        return String.valueOf(scaled.setScale(1, System.RoundingMode.HALF_UP).stripTrailingZeros());
+    }
+
+    /** The pixel size `fontSize=` names. 12px is the 9pt this path already drew. */
+    private static final Decimal LABEL_BASE_PX = 12;
+
+    /**
+     * The HTML a chart style renders to, for tests.
+     *
+     * Public because the e2e scripts and the QA harness run as anonymous Apex, where a
+     * @TestVisible private is unreachable. Not global, so it stays invisible to
+     * subscribers.
+     */
+    @TestVisible
+    public static String renderForTest(String title, String chartBucketTag, Map<String, String> opts) {
+        String style = opts == null ? 'bar' : opts.get('style');
+        if (style == 'pivot') {
+            return renderPivot(title, chartBucketTag, opts.get('colSort'), opts);
+        }
+        if (style == 'clustered') {
+            return renderClustered(title, chartBucketTag, opts.get('colSort'), opts);
+        }
+        if (style == 'stacked') {
+            return renderStacked(title, chartBucketTag, opts.get('colSort'), opts);
+        }
+        return renderBar(title, chartBucketTag, opts);
+    }
+
+    private static String renderBar(String title, String chartBucketTag, Map<String, String> opts) {
         String h = String.isBlank(title)
             ? ''
-            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:16pt; font-weight:bold; line-height:1.25;">' +
+            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:' +
+              fsPt(16, opts) +
+              'pt; font-weight:bold; line-height:1.25;">' +
               escape(title) +
               '</h2>';
         return h +
@@ -454,7 +518,9 @@ public with sharing class DocGenChartTagExpander {
             '<div style="height:18px; line-height:18px; font-size:1px; width:{percent}%; background-color:{color};">&nbsp;</div>' +
             '</div>' +
             '</td>' +
-            '<td style="padding:7px 6px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:17%; text-align:right; color:#6b7280; font-size:10pt; padding-left:14px; white-space:nowrap;">{count} ({percent}%)</td>' +
+            '<td style="padding:7px 6px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:17%; text-align:right; color:#6b7280; font-size:' +
+            fsPt(10, opts) +
+            'pt; padding-left:14px; white-space:nowrap;">{count} ({percent}%)</td>' +
             '</tr>' +
             '{:else}' +
             '<tr><td colspan="3" style="padding:14px; background-color:#fef3c7; border-left:4px solid #fbbf24; color:#92400e; font-style:italic;">No data available for this chart.</td></tr>' +
@@ -462,26 +528,34 @@ public with sharing class DocGenChartTagExpander {
             '</table>';
     }
 
-    private static String renderPivot(String title, String chartBucketTag, String colSort) {
+    private static String renderPivot(String title, String chartBucketTag, String colSort, Map<String, String> opts) {
         String h = String.isBlank(title)
             ? ''
-            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:16pt; font-weight:bold; line-height:1.25;">' +
+            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:' +
+              fsPt(16, opts) +
+              'pt; font-weight:bold; line-height:1.25;">' +
               escape(title) +
               '</h2>';
 
         List<String> headerCells = new List<String>();
         headerCells.add(
-            '<div style="display:table-cell; padding:8px 10px; background-color:#1e3a8a; color:#fff; font-weight:bold; font-size:9pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:left;">Answer</div>'
+            '<div style="display:table-cell; padding:8px 10px; background-color:#1e3a8a; color:#fff; font-weight:bold; font-size:' +
+                fsPt(9, opts) +
+                'pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:left;">Answer</div>'
         );
         for (String col : colSort.split(',')) {
             headerCells.add(
-                '<div style="display:table-cell; padding:8px 10px; background-color:#1e3a8a; color:#fff; font-weight:bold; font-size:9pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:right;">' +
+                '<div style="display:table-cell; padding:8px 10px; background-color:#1e3a8a; color:#fff; font-weight:bold; font-size:' +
+                    fsPt(9, opts) +
+                    'pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:right;">' +
                     escape(col.trim()) +
                     '</div>'
             );
         }
         headerCells.add(
-            '<div style="display:table-cell; padding:8px 10px; background-color:#fbbf24; color:#1f2937; font-weight:bold; font-size:9pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:right;">Total</div>'
+            '<div style="display:table-cell; padding:8px 10px; background-color:#fbbf24; color:#1f2937; font-weight:bold; font-size:' +
+                fsPt(9, opts) +
+                'pt; letter-spacing:1px; text-transform:uppercase; border-bottom:2px solid #fbbf24; text-align:right;">Total</div>'
         );
 
         return h +
@@ -502,10 +576,17 @@ public with sharing class DocGenChartTagExpander {
             '</div>';
     }
 
-    private static String renderClustered(String title, String chartBucketTag, String colSort) {
+    private static String renderClustered(
+        String title,
+        String chartBucketTag,
+        String colSort,
+        Map<String, String> opts
+    ) {
         String h = String.isBlank(title)
             ? ''
-            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:16pt; font-weight:bold; line-height:1.25;">' +
+            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:' +
+              fsPt(16, opts) +
+              'pt; font-weight:bold; line-height:1.25;">' +
               escape(title) +
               '</h2>';
 
@@ -515,7 +596,9 @@ public with sharing class DocGenChartTagExpander {
         for (String col : colSort.split(',')) {
             String color = paletteColor(i++);
             swatches.add(
-                '<td style="padding:4px 14px 4px 0; font-size:9pt; color:#374151; vertical-align:middle;">' +
+                '<td style="padding:4px 14px 4px 0; font-size:' +
+                    fsPt(9, opts) +
+                    'pt; color:#374151; vertical-align:middle;">' +
                     '<span style="display:inline-block; width:14px; height:10px; margin-right:6px; vertical-align:middle; border:1px solid #d1d5db; background-color:' +
                     color +
                     ';">&nbsp;</span>' +
@@ -534,12 +617,16 @@ public with sharing class DocGenChartTagExpander {
             '<div style="display:table; margin:0 auto; border-collapse:separate; border-spacing:1px 0;">' +
             '{#cols}' +
             '<div style="display:table-cell; vertical-align:bottom; width:22px; padding:0;">' +
-            '<div style="font-size:7pt; color:#6b7280; text-align:center; line-height:1.1; margin-bottom:1px; white-space:nowrap;">{percent_int}%</div>' +
+            '<div style="font-size:' +
+            fsPt(7, opts) +
+            'pt; color:#6b7280; text-align:center; line-height:1.1; margin-bottom:1px; white-space:nowrap;">{percent_int}%</div>' +
             '<div style="width:22px; min-height:1px; height:{percent_int}px; background-color:{color};">&nbsp;</div>' +
             '</div>' +
             '{/cols}' +
             '</div>' +
-            '<div style="padding-top:8px; font-size:9pt; font-weight:bold; color:#1e3a8a; line-height:1.2;">{key_label}</div>' +
+            '<div style="padding-top:8px; font-size:' +
+            fsPt(9, opts) +
+            'pt; font-weight:bold; color:#1e3a8a; line-height:1.2;">{key_label}</div>' +
             '</div>' +
             '{:else}' +
             '<div style="padding:14px; background-color:#fef3c7; color:#92400e; font-style:italic;">No data available for this chart.</div>' +
@@ -547,10 +634,12 @@ public with sharing class DocGenChartTagExpander {
             '</div>';
     }
 
-    private static String renderStacked(String title, String chartBucketTag, String colSort) {
+    private static String renderStacked(String title, String chartBucketTag, String colSort, Map<String, String> opts) {
         String h = String.isBlank(title)
             ? ''
-            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:16pt; font-weight:bold; line-height:1.25;">' +
+            : '<h2 style="margin:18px 0 10px 0; color:#1e3a8a; font-size:' +
+              fsPt(16, opts) +
+              'pt; font-weight:bold; line-height:1.25;">' +
               escape(title) +
               '</h2>';
 
@@ -560,7 +649,9 @@ public with sharing class DocGenChartTagExpander {
         for (String col : colSort.split(',')) {
             String color = paletteColor(i++);
             swatches.add(
-                '<td style="padding:4px 14px 4px 0; font-size:9pt; color:#374151; vertical-align:middle;">' +
+                '<td style="padding:4px 14px 4px 0; font-size:' +
+                    fsPt(9, opts) +
+                    'pt; color:#374151; vertical-align:middle;">' +
                     '<span style="display:inline-block; width:14px; height:10px; margin-right:6px; vertical-align:middle; border:1px solid #d1d5db; background-color:' +
                     color +
                     ';">&nbsp;</span>' +
@@ -584,7 +675,9 @@ public with sharing class DocGenChartTagExpander {
             '{/cols}' +
             '</div>' +
             '</div>' +
-            '<div style="display:table-cell; padding:9px 8px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:15%; text-align:right; color:#6b7280; font-size:10pt; white-space:nowrap;">{count} total</div>' +
+            '<div style="display:table-cell; padding:9px 8px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:15%; text-align:right; color:#6b7280; font-size:' +
+            fsPt(10, opts) +
+            'pt; white-space:nowrap;">{count} total</div>' +
             '</div>' +
             '{:else}' +
             '<div style="display:table-row;"><div style="display:table-cell; padding:14px; background-color:#fef3c7; color:#92400e; font-style:italic;">No data available for this chart.</div></div>' +
