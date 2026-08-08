@@ -52,11 +52,23 @@ job with no explanation. A count preview on the bulk picker would close it.
 
 ## 1. A new Type picklist value can be missing after an upgrade
 
-`Canvas` arrived in v3.54 and does not always reach an org that already had Portwood
-installed. Measured on two orgs upgraded to v3.56 — from v3.48 and from v3.53 — both
-offer Word, PowerPoint, Excel, HTML and PDF; neither offers `Canvas`. The same org
-installed fresh has all six. Not inactive, absent, on both `DocGen_Template__c.Type__c`
-and `DocGen_Template_Version__c.Type__c`.
+A restricted picklist value never reaches an org that was already installed before that
+value existed, and no later upgrade brings it. `Canvas` arrived in v3.54, so:
+
+| Org was on | Upgraded to v3.56 |     |
+| ---------- | ----------------- | --- |
+| v3.48      | Canvas missing    | ❌  |
+| v3.53      | Canvas missing    | ❌  |
+| v3.54      | Canvas present    | ✅  |
+| v3.55      | Canvas present    | ✅  |
+
+Absent rather than inactive, on both `DocGen_Template__c.Type__c` and
+`DocGen_Template_Version__c.Type__c`. A fresh install always has the full list.
+
+The boundary was worth measuring: the first write-up here said upgrades do not get new
+picklist values, which is wrong and would have alarmed every customer. It is only orgs
+predating the value — which, for Canvas, is still exactly the population who would
+upgrade in order to use it.
 
 **Consequence:** an upgrading customer cannot create a Canvas template, which puts the
 Canvas designer and everything built on it out of reach — while a fresh install is fine.
