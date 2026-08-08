@@ -584,4 +584,85 @@ private class DocGenChartTagExpanderTest {
         out.sort();
         return String.join(out, ',');
     }
+
+    /**
+     * The category labels have to move with fontSize= as well.
+     *
+     * Measured in a rendered PDF: at fontSize=30 the value labels grew from 7.8pt to
+     * 23.4pt while "Sales" and "Engineering" stayed at 10.3. Those cells carried no
+     * font-size at all and were inheriting the document's, so the option moved half the
+     * chart.
+     *
+     * The size is emitted only when the tag asks for one. Always-on would give those
+     * cells a fixed base and silently restyle every existing chart in a template that
+     * sets its own body font.
+     */
+    @isTest
+    static void categoryLabelsScaleAndDefaultsAreUntouched() {
+        String tag = '{#ChartBucket:Contacts:Department}{key}{count}{percent}{/ChartBucket}';
+        Test.startTest();
+        for (String style : new List<String>{ 'bar', 'pivot', 'stacked', 'clustered' }) {
+            Map<String, String> plain = new Map<String, String>{ 'style' => style, 'colSort' => 'A,B' };
+            Map<String, String> big = new Map<String, String>{
+                'style' => style,
+                'colSort' => 'A,B',
+                'fontSize' => '24'
+            };
+            String a = DocGenChartTagExpander.renderForTest('T', tag, plain);
+            String b = DocGenChartTagExpander.renderForTest('T', tag, big);
+
+            System.assertNotEquals(a, b, style + ': fontSize= must change the output');
+            System.assert(
+                b.substringBefore('{key_label}').substringAfterLast('<').contains('font-size'),
+                style + ': the category cell carries a size once fontSize= is set'
+            );
+            System.assertEquals(
+                a,
+                DocGenChartTagExpander.renderForTest('T', tag, plain),
+                style + ': rendering is deterministic'
+            );
+        }
+        Test.stopTest();
+    }
+
+    /**
+     * Sizes must be valid CSS at every fontSize=, not just the convenient ones.
+     *
+     * Decimal.stripTrailingZeros() renders any multiple of ten in scientific notation —
+     * 1E+1, 2E+1, 4E+1 — which is not a CSS length. The engine discards the declaration
+     * and the element falls back to the inherited size, silently.
+     *
+     * It bit unevenly, which is why it survived: at fontSize=12 the 10pt cell broke, at
+     * 30 the 16pt title broke, and at 24 nothing did. 24 is the value the first tests
+     * happened to use.
+     */
+    @isTest
+    static void chartSizesAreAlwaysValidCss() {
+        String tag = '{#ChartBucket:Contacts:Department}{key}{count}{percent}{/ChartBucket}';
+        Test.startTest();
+        for (String style : new List<String>{ 'bar', 'pivot', 'stacked', 'clustered' }) {
+            // 12 and 30 are the values that produced 1E+1 and 4E+1; 18 gives fractions.
+            for (String req : new List<String>{ '6', '12', '18', '24', '30', '48' }) {
+                String html = DocGenChartTagExpander.renderForTest(
+                    'Title',
+                    tag,
+                    new Map<String, String>{ 'style' => style, 'colSort' => 'A,B', 'fontSize' => req }
+                );
+                System.assert(
+                    !html.contains('E+'),
+                    style +
+                        ' @ fontSize=' +
+                        req +
+                        ' emitted scientific notation: ' +
+                        html.substringAfter('E+').left(0) +
+                        html
+                );
+                System.assert(
+                    Pattern.compile('font-size:[0-9]').matcher(html).find(),
+                    style + ' @ fontSize=' + req + ' emitted no usable size'
+                );
+            }
+        }
+        Test.stopTest();
+    }
 }

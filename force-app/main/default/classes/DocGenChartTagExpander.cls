@@ -456,23 +456,59 @@ public with sharing class DocGenChartTagExpander {
      * Not applied to the 1px rules: those give a zero-height bar its line box and are
      * layout, not text. Scaling them would push every bar out of shape.
      */
+    /**
+     * A `font-size:` declaration for a cell that normally inherits the document font —
+     * emitted ONLY when the tag asked for a size.
+     *
+     * The category-label cells never carried a size; they took the document's. So
+     * fontSize= moved the value labels and left the categories behind, which measured as
+     * "3 (50.0%)" growing from 7.8pt to 23.4pt while "Sales" stayed at 10.3.
+     *
+     * Conditional rather than always-on, deliberately. Giving these cells a fixed base
+     * would change how every existing chart looks in templates that set their own body
+     * font — a silent restyle of documents nobody asked to change. With no fontSize= the
+     * output is byte-for-byte what it was.
+     */
+    /**
+     * A Decimal as a CSS length, which rules out scientific notation.
+     *
+     * `stripTrailingZeros()` renders any multiple of ten as `1E+1`, `2E+1`, `4E+1`. That
+     * is not a valid CSS length: the engine discards the declaration and the element
+     * silently falls back to the inherited size. It bites unevenly — at fontSize=12 the
+     * 10pt cell broke, at fontSize=30 the 16pt title broke, and at 24 nothing did, which
+     * is exactly the value the first tests happened to use.
+     *
+     * Trailing ".0" is trimmed by hand instead, so 10.0 prints as "10" and 10.5 stays
+     * "10.5".
+     */
+    private static String css(Decimal v) {
+        String out = String.valueOf(v.setScale(1, System.RoundingMode.HALF_UP));
+        return out.endsWith('.0') ? out.removeEnd('.0') : out;
+    }
+
+    private static String fsPtIfSet(Decimal basePt, Map<String, String> opts) {
+        if (opts == null || String.isBlank(opts.get('fontSize'))) {
+            return '';
+        }
+        return ' font-size:' + fsPt(basePt, opts) + 'pt;';
+    }
+
     private static String fsPt(Decimal basePt, Map<String, String> opts) {
         if (opts == null || String.isBlank(opts.get('fontSize'))) {
-            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+            return css(basePt);
         }
         Decimal requestedPx;
         try {
             requestedPx = Decimal.valueOf(opts.get('fontSize').trim());
         } catch (Exception e) {
-            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+            return css(basePt);
         }
         if (requestedPx <= 0) {
-            return String.valueOf(basePt.setScale(1).stripTrailingZeros());
+            return css(basePt);
         }
         // Clamped to the same 6-48px the Canvas control offers.
         Decimal clamped = Math.min(Math.max(requestedPx, 6), 48);
-        Decimal scaled = basePt * clamped / LABEL_BASE_PX;
-        return String.valueOf(scaled.setScale(1, System.RoundingMode.HALF_UP).stripTrailingZeros());
+        return css(basePt * clamped / LABEL_BASE_PX);
     }
 
     /** The pixel size `fontSize=` names. 12px is the 9pt this path already drew. */
@@ -512,7 +548,9 @@ public with sharing class DocGenChartTagExpander {
             '<table style="width:100%; border-collapse:collapse; margin:6px 0 18px 0;">' +
             chartBucketTag +
             '<tr>' +
-            '<td style="padding:7px 6px; vertical-align:middle; border-bottom:1px solid #e5e7eb; font-weight:bold; color:#1f2937; padding-right:14px; width:28%;">{key_label}</td>' +
+            '<td style="padding:7px 6px; vertical-align:middle; border-bottom:1px solid #e5e7eb; font-weight:bold; color:#1f2937; padding-right:14px; width:28%;' +
+            fsPtIfSet(10, opts) +
+            '">{key_label}</td>' +
             '<td style="padding:7px 6px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:55%;">' +
             '<div style="width:100%; background-color:#f3f4f6; height:18px; border:1px solid #e5e7eb;">' +
             '<div style="height:18px; line-height:18px; font-size:1px; width:{percent}%; background-color:{color};">&nbsp;</div>' +
@@ -565,7 +603,9 @@ public with sharing class DocGenChartTagExpander {
             '</div>' +
             chartBucketTag +
             '<div style="display:table-row;">' +
-            '<div style="display:table-cell; padding:7px 10px; border-bottom:1px solid #e5e7eb; font-weight:bold; color:#1e3a8a;">{key_label}</div>' +
+            '<div style="display:table-cell; padding:7px 10px; border-bottom:1px solid #e5e7eb; font-weight:bold; color:#1e3a8a;' +
+            fsPtIfSet(9, opts) +
+            '">{key_label}</div>' +
             '{#cols}' +
             '<div style="display:table-cell; padding:7px 10px; border-bottom:1px solid #e5e7eb; text-align:right; color:#1f2937;">{percent}%</div>' +
             '{/cols}' +
@@ -667,7 +707,9 @@ public with sharing class DocGenChartTagExpander {
             '<div style="display:table; width:100%; border-collapse:collapse; margin:0 0 18px 0;">' +
             chartBucketTag +
             '<div style="display:table-row;">' +
-            '<div style="display:table-cell; padding:9px 8px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:30%; font-weight:bold; color:#1f2937;">{key_label}</div>' +
+            '<div style="display:table-cell; padding:9px 8px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:30%; font-weight:bold; color:#1f2937;' +
+            fsPtIfSet(9, opts) +
+            '">{key_label}</div>' +
             '<div style="display:table-cell; padding:9px 8px; vertical-align:middle; border-bottom:1px solid #e5e7eb; width:55%;">' +
             '<div style="display:table; width:100%; height:18px; border:1px solid #d1d5db;">' +
             '{#cols}' +
