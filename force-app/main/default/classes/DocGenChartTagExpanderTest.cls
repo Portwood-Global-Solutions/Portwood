@@ -527,4 +527,61 @@ private class DocGenChartTagExpanderTest {
         out.sort();
         return String.join(out, ',');
     }
+
+    /**
+     * The HTML/CSS chart path must honour fontSize= as well.
+     *
+     * Charts render three ways — Chart.js in the browser, SVG for Word and PowerPoint,
+     * and these CSS bars for HTML-to-PDF. fontSize= went into the first two and this one
+     * kept its own sizes, so an HTML template produced the same chart whatever the tag
+     * asked for. Two byte-identical PDFs at fontSize=10 and fontSize=26 is what showed
+     * it.
+     */
+    @isTest
+    static void htmlChartsHonourFontSize() {
+        String bucketTag = '{#ChartBucket:Contacts:Department}{key}{count}{percent}{/ChartBucket}';
+        Map<String, String> plain = new Map<String, String>{ 'style' => 'clustered', 'colSort' => 'A,B' };
+        Map<String, String> big = new Map<String, String>{
+            'style' => 'clustered',
+            'colSort' => 'A,B',
+            'fontSize' => '24'
+        };
+        Map<String, String> junk = new Map<String, String>{
+            'style' => 'clustered',
+            'colSort' => 'A,B',
+            'fontSize' => 'abc'
+        };
+
+        Test.startTest();
+        String a = DocGenChartTagExpander.renderForTest('Headcount', bucketTag, plain);
+        String b = DocGenChartTagExpander.renderForTest('Headcount', bucketTag, big);
+        String c = DocGenChartTagExpander.renderForTest('Headcount', bucketTag, junk);
+        Test.stopTest();
+
+        System.assertEquals('16,7,9', ptsIn(a), 'the built-in sizes');
+        // Doubled, every one of them — the hierarchy has to survive an override or a
+        // heading stops looking like a heading.
+        System.assertEquals('14,18,32', ptsIn(b), 'fontSize=24 doubles all three: ' + ptsIn(b));
+        System.assertEquals(ptsIn(a), ptsIn(c), 'an unparseable size falls back');
+
+        // The 1px rules give a zero-height bar its line box. They are layout, not text,
+        // and scaling them would push every bar out of shape. They live in the bar and
+        // stacked renderers, not clustered — so check one that actually has them.
+        Map<String, String> barBig = new Map<String, String>{ 'style' => 'bar', 'fontSize' => '24' };
+        String bar = DocGenChartTagExpander.renderForTest('Headcount', bucketTag, barBig);
+        System.assert(bar.contains('font-size:1px'), 'the bar line-box rule is left at 1px');
+        System.assert(!bar.contains('font-size:2px'), 'and is not scaled with the text');
+    }
+
+    /** Distinct pt sizes in the rendered HTML, for readable assertion messages. */
+    private static String ptsIn(String html) {
+        Matcher m = Pattern.compile('font-size:([0-9.]+)pt').matcher(html);
+        Set<String> found = new Set<String>();
+        while (m.find()) {
+            found.add(m.group(1));
+        }
+        List<String> out = new List<String>(found);
+        out.sort();
+        return String.join(out, ',');
+    }
 }

@@ -9,7 +9,13 @@ Two small fixes where the editor promised something the PDF did not deliver.
 ### Added
 
 - **Label size on charts.** `fontSize=` on a `{Chart:...}` tag, and a **Label size** box
-  in the Canvas chart properties — which is what makes it reachable, since a Canvas
+  in the Canvas chart properties, honoured by **all three chart renderers** — Chart.js in
+  the browser, the SVG serializer behind Word and PowerPoint, and the HTML/CSS bars
+  behind HTML-to-PDF. It reached them one at a time, and each time the feature looked
+  finished until someone generated through the path that had been missed; two
+  byte-identical PDFs at `fontSize=10` and `fontSize=26` is what found the last one.
+  Titles and other text scale with the label size, so the hierarchy survives an
+  override — which is what makes it reachable, since a Canvas
   author never writes the tag by hand. The live preview honours it, so the artboard and
   the PDF agree.
 
