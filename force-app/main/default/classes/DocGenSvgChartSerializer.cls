@@ -51,6 +51,44 @@ public with sharing class DocGenSvgChartSerializer {
      * Unknown style throws — caller is responsible for vocabulary validation
      * via DocGenChartTagExpander before reaching this emitter.
      */
+    /**
+     * A font size scaled by the tag's `fontSize=`, if it set one.
+     *
+     * The sizes below were chosen against each other — 14 for a title, 11 for an axis
+     * label, 9 for a dense one — so an override has to move all of them together or the
+     * hierarchy collapses. `fontSize=` states the AXIS LABEL size, the same thing it
+     * means on the client, and everything else keeps its ratio to that.
+     *
+     * Why this exists: fontSize= was added to the browser renderer first, and this path
+     * ignored it. A Flow or a batch job then produced a chart with different label sizes
+     * from the same template rendered in the runner — the modifier documented as working
+     * quietly doing nothing on the half of generation that has no browser.
+     *
+     * Clamped 6-48 to match the Canvas control, so a stray value cannot produce an
+     * unreadable or absurd chart.
+     */
+    private static Integer fs(Integer base, Map<String, String> opts) {
+        if (opts == null || String.isBlank(opts.get('fontSize'))) {
+            return base;
+        }
+        Decimal requested;
+        try {
+            requested = Decimal.valueOf(opts.get('fontSize').trim());
+        } catch (Exception e) {
+            return base;
+        }
+        if (requested <= 0) {
+            return base;
+        }
+        Decimal clamped = Math.min(Math.max(requested, 6), 48);
+        // AXIS_LABEL_BASE is what fontSize= names; the rest scale against it.
+        Integer scaled = (Integer) (Decimal.valueOf(base) * clamped / AXIS_LABEL_BASE).round();
+        return Math.max(scaled, 1);
+    }
+
+    /** The size `fontSize=` refers to. Every other literal is a ratio of this. */
+    private static final Decimal AXIS_LABEL_BASE = 11;
+
     public static String emit(List<Map<String, Object>> buckets, Map<String, String> options) {
         if (buckets == null || buckets.isEmpty()) {
             return emitEmpty(options);
@@ -140,7 +178,9 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
@@ -177,7 +217,9 @@ public with sharing class DocGenSvgChartSerializer {
             parts.add(
                 '<text x="0" y="' +
                     textY +
-                    '" font-family="Arial, sans-serif" font-size="11" fill="#374151">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(11, opts) +
+                    '" fill="#374151">' +
                     escapeXml(label) +
                     '</text>'
             );
@@ -201,7 +243,9 @@ public with sharing class DocGenSvgChartSerializer {
                     valueX +
                     '" y="' +
                     textY +
-                    '" font-family="Arial, sans-serif" font-size="11" fill="#111827">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(11, opts) +
+                    '" fill="#111827">' +
                     escapeXml(valueLabel) +
                     '</text>'
             );
@@ -266,7 +310,9 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
@@ -335,7 +381,9 @@ public with sharing class DocGenSvgChartSerializer {
                     slotCenter +
                     '" y="' +
                     (barY - 6) +
-                    '" font-family="Arial, sans-serif" font-size="10" fill="#111827" text-anchor="middle">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(10, opts) +
+                    '" fill="#111827" text-anchor="middle">' +
                     escapeXml(valueLabel) +
                     '</text>'
             );
@@ -347,7 +395,9 @@ public with sharing class DocGenSvgChartSerializer {
                     slotCenter +
                     '" y="' +
                     labelY +
-                    '" font-family="Arial, sans-serif" font-size="10" fill="#374151" text-anchor="end" transform="rotate(-30 ' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(10, opts) +
+                    '" fill="#374151" text-anchor="end" transform="rotate(-30 ' +
                     slotCenter +
                     ' ' +
                     labelY +
@@ -428,7 +478,9 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="20" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
@@ -564,7 +616,9 @@ public with sharing class DocGenSvgChartSerializer {
                     legendTextX +
                     '" y="' +
                     (swatchY + 11) +
-                    '" font-family="Arial, sans-serif" font-size="11" fill="#374151">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(11, opts) +
+                    '" fill="#374151">' +
                     escapeXml(legendLabel) +
                     ' — ' +
                     escapeXml(valueLabel) +
@@ -630,12 +684,14 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
         }
-        appendLegendRow(parts, legendCols, 0, titleHeight, width);
+        appendLegendRow(parts, legendCols, 0, titleHeight, width, fs(10, opts));
 
         Integer rowsTop = titleHeight + legendHeight;
         for (Integer i = 0; i < buckets.size(); i++) {
@@ -651,7 +707,9 @@ public with sharing class DocGenSvgChartSerializer {
             parts.add(
                 '<text x="0" y="' +
                     textY +
-                    '" font-family="Arial, sans-serif" font-size="11" fill="#374151">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(11, opts) +
+                    '" fill="#374151">' +
                     escapeXml(label) +
                     '</text>'
             );
@@ -711,7 +769,9 @@ public with sharing class DocGenSvgChartSerializer {
                     6) +
                     '" y="' +
                     textY +
-                    '" font-family="Arial, sans-serif" font-size="11" fill="#111827">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(11, opts) +
+                    '" fill="#111827">' +
                     escapeXml(formatNumber(rowTotal) + ' total') +
                     '</text>'
             );
@@ -793,12 +853,14 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
         }
-        appendLegendRow(parts, legendCols, 0, titleHeight, width);
+        appendLegendRow(parts, legendCols, 0, titleHeight, width, fs(10, opts));
 
         // Baseline
         parts.add(
@@ -870,7 +932,9 @@ public with sharing class DocGenSvgChartSerializer {
                     slotCenter +
                     '" y="' +
                     labelY +
-                    '" font-family="Arial, sans-serif" font-size="10" fill="#374151" text-anchor="end" transform="rotate(-25 ' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(10, opts) +
+                    '" fill="#374151" text-anchor="end" transform="rotate(-25 ' +
                     slotCenter +
                     ' ' +
                     labelY +
@@ -959,12 +1023,14 @@ public with sharing class DocGenSvgChartSerializer {
         parts.add('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#ffffff"/>');
         if (String.isNotBlank(title)) {
             parts.add(
-                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#111827">' +
+                '<text x="0" y="18" font-family="Arial, sans-serif" font-size="' +
+                    fs(14, opts) +
+                    '" font-weight="bold" fill="#111827">' +
                     escapeXml(title) +
                     '</text>'
             );
         }
-        appendLegendRow(parts, legendCols, 0, titleHeight, width);
+        appendLegendRow(parts, legendCols, 0, titleHeight, width, fs(10, opts));
 
         // Axes
         parts.add(
@@ -995,7 +1061,9 @@ public with sharing class DocGenSvgChartSerializer {
                 (plotLeft - 4) +
                 '" y="' +
                 (plotTop + 4) +
-                '" font-family="Arial, sans-serif" font-size="9" fill="#6b7280" text-anchor="end">' +
+                '" font-family="Arial, sans-serif" font-size="' +
+                fs(9, opts) +
+                '" fill="#6b7280" text-anchor="end">' +
                 escapeXml(formatNumber(peakCount)) +
                 '</text>'
         );
@@ -1004,7 +1072,9 @@ public with sharing class DocGenSvgChartSerializer {
                 (plotLeft - 4) +
                 '" y="' +
                 (plotBottom + 3) +
-                '" font-family="Arial, sans-serif" font-size="9" fill="#6b7280" text-anchor="end">0</text>'
+                '" font-family="Arial, sans-serif" font-size="' +
+                fs(9, opts) +
+                '" fill="#6b7280" text-anchor="end">0</text>'
         );
 
         Integer n = buckets.size();
@@ -1043,7 +1113,9 @@ public with sharing class DocGenSvgChartSerializer {
                     cx +
                     '" y="' +
                     labelY +
-                    '" font-family="Arial, sans-serif" font-size="10" fill="#374151" text-anchor="end" transform="rotate(-25 ' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    fs(10, opts) +
+                    '" fill="#374151" text-anchor="end" transform="rotate(-25 ' +
                     cx +
                     ' ' +
                     labelY +
@@ -1262,12 +1334,15 @@ public with sharing class DocGenSvgChartSerializer {
      * (or at y=0 if no title). Returns silently when the col list is empty.
      * Layout: each entry takes ~110px; entries wrap by width.
      */
+    // labelPx rather than opts: this helper is shared by three emitters and only needs
+    // the resolved size, not the whole option map.
     private static void appendLegendRow(
         List<String> parts,
         List<Map<String, Object>> legendCols,
         Integer startX,
         Integer startY,
-        Integer maxWidth
+        Integer maxWidth,
+        Integer labelPx
     ) {
         if (legendCols == null || legendCols.isEmpty()) {
             return;
@@ -1315,7 +1390,9 @@ public with sharing class DocGenSvgChartSerializer {
                     (y +
                     swatchH -
                     1) +
-                    '" font-family="Arial, sans-serif" font-size="10" fill="#374151">' +
+                    '" font-family="Arial, sans-serif" font-size="' +
+                    labelPx +
+                    '" fill="#374151">' +
                     escapeXml(label) +
                     '</text>'
             );
@@ -1366,7 +1443,9 @@ public with sharing class DocGenSvgChartSerializer {
             (width / 2) +
             '" y="' +
             (height / 2 + 5) +
-            '" font-family="Arial, sans-serif" font-size="13" fill="#9ca3af" text-anchor="middle">No data</text>' +
+            '" font-family="Arial, sans-serif" font-size="' +
+            fs(13, options) +
+            '" fill="#9ca3af" text-anchor="middle">No data</text>' +
             '</svg>';
     }
 

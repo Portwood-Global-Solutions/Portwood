@@ -24,6 +24,12 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 >   [§15.2](#152-raw-css-appears-at-the-top-of-generated-pdfs)
 > - **Fixed:** a Flow validating signature tokens in bulk faulted with a governor limit
 >   and lost the whole batch. [§11.11](#1111-error-handling)
+> - **Upgrading and want the Canvas designer?** Check the **Type** picklist first. A
+>   value added in a later version does not always reach an org that already had
+>   Portwood installed, and `Canvas` arrived in v3.54 — so an upgraded org can be missing
+>   it while a fresh install has it. Without it you cannot create a Canvas template at
+>   all. Two minutes to check and fix:
+>   [§15.12](#1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel)
 > - **Upgrading?** One change does not travel with the upgrade. `Type__c` on Portwood
 >   Template Version no longer defaults to **Word**, but Salesforce does not push a removed
 >   picklist default to an org that already has the package. If you create template
@@ -1937,19 +1943,19 @@ A single tag that expands into a complete chart image at render time. **Tag synt
 
 Modifiers come after the style, joined with `&`. **Order doesn't matter.** Values containing `&` or `=` are not supported (use `where=` for SOQL with operators — see below).
 
-| Modifier      | Applies to                        | Example                                                  | What it does                                                                                                                                                                                                                 |
-| ------------- | --------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title=`      | all styles                        | `title=How satisfied are you with your role?`            | Chart header text drawn above the chart. Becomes the `<img alt="…">` attribute on the HTML side.                                                                                                                             |
-| `width=`      | all styles                        | `width=420`                                              | Logical-pixel width of the chart. Defaults: 540 (stacked/clustered), 500 (bar/column/line/area), 360 (pie/donut). Word/PDF downsample bigger PNGs for free AA.                                                               |
-| `height=`     | all styles                        | `height=240`                                             | Logical-pixel height. Defaults vary per style (see source); bar auto-grows by bucket count.                                                                                                                                  |
-| `fontSize=`   | all styles                        | `fontSize=16`                                            | Label size in pixels at the standard 540px width, scaled with `width=` so it means the same thing at any size. Default 12; the title is drawn about a third larger. Raise it when the chart lands in a small frame. (v3.56+) |
-| `where=`      | all styles                        | `where=Survey_Question__r.Display_Order__c=1`            | SOQL fragment appended to the chart's `WHERE`. Identifier-only, sanitized through the same keyword blocklist as Query Builder. Forces server-side aggregation.                                                               |
-| `groupBy=`    | stacked/clustered/pivot/line/area | `groupBy=Department__c`                                  | Cross-tab dimension. **Required** for `stacked`/`clustered`/`pivot`; **optional** for `line`/`area` (omit → single-series). Field on the same child object as `FIELD`.                                                       |
-| `colSort=`    | stacked/clustered/pivot/line/area | `colSort=Engineering,Sales,Marketing,Support,Operations` | Author-controlled column ordering. Named values appear first in this order; remaining values alpha-sorted; synthetic `Total` always last (pivot path only).                                                                  |
-| `colors=`     | all styles                        | `colors=#1e40af,#b91c1c,#16a34a`                         | Override the default 8-color palette. Cycles by row/series index. Each color is `#hex` (6 chars).                                                                                                                            |
-| `split=`      | all (bucket-shape only)           | `split=;`                                                | Multi-select delimiter. Each respondent's pick contributes to every value they selected. Percentages sum to >100% by design.                                                                                                 |
-| `scale=`      | all (raster path only)            | `scale=2`                                                | Supersample multiplier. Default 1 for stacked/clustered/line/area, 2 for bar/column/pie/donut. Larger = sharper PNG but slower; 4 is the practical ceiling.                                                                  |
-| `htmlRender=` | HTML browser preview              | `htmlRender=svg`                                         | (HTML only, opt-in.) Inline `<svg>` instead of `<img>`. **Browser-only — Flying Saucer drops SVG**. Default `<img>` works in both HTML view and PDF.                                                                         |
+| Modifier      | Applies to                        | Example                                                  | What it does                                                                                                                                                                                                                                                                                                        |
+| ------------- | --------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title=`      | all styles                        | `title=How satisfied are you with your role?`            | Chart header text drawn above the chart. Becomes the `<img alt="…">` attribute on the HTML side.                                                                                                                                                                                                                    |
+| `width=`      | all styles                        | `width=420`                                              | Logical-pixel width of the chart. Defaults: 540 (stacked/clustered), 500 (bar/column/line/area), 360 (pie/donut). Word/PDF downsample bigger PNGs for free AA.                                                                                                                                                      |
+| `height=`     | all styles                        | `height=240`                                             | Logical-pixel height. Defaults vary per style (see source); bar auto-grows by bucket count.                                                                                                                                                                                                                         |
+| `fontSize=`   | all styles                        | `fontSize=16`                                            | Axis-label size. Default 12 in the browser, 11 server-side; the title and other text scale with it, keeping their proportions. Raise it when the chart lands in a small frame. On a Canvas chart use the **Label size** box rather than writing the tag. Honoured on every path, including Flow and batch. (v3.56+) |
+| `where=`      | all styles                        | `where=Survey_Question__r.Display_Order__c=1`            | SOQL fragment appended to the chart's `WHERE`. Identifier-only, sanitized through the same keyword blocklist as Query Builder. Forces server-side aggregation.                                                                                                                                                      |
+| `groupBy=`    | stacked/clustered/pivot/line/area | `groupBy=Department__c`                                  | Cross-tab dimension. **Required** for `stacked`/`clustered`/`pivot`; **optional** for `line`/`area` (omit → single-series). Field on the same child object as `FIELD`.                                                                                                                                              |
+| `colSort=`    | stacked/clustered/pivot/line/area | `colSort=Engineering,Sales,Marketing,Support,Operations` | Author-controlled column ordering. Named values appear first in this order; remaining values alpha-sorted; synthetic `Total` always last (pivot path only).                                                                                                                                                         |
+| `colors=`     | all styles                        | `colors=#1e40af,#b91c1c,#16a34a`                         | Override the default 8-color palette. Cycles by row/series index. Each color is `#hex` (6 chars).                                                                                                                                                                                                                   |
+| `split=`      | all (bucket-shape only)           | `split=;`                                                | Multi-select delimiter. Each respondent's pick contributes to every value they selected. Percentages sum to >100% by design.                                                                                                                                                                                        |
+| `scale=`      | all (raster path only)            | `scale=2`                                                | Supersample multiplier. Default 1 for stacked/clustered/line/area, 2 for bar/column/pie/donut. Larger = sharper PNG but slower; 4 is the practical ceiling.                                                                                                                                                         |
+| `htmlRender=` | HTML browser preview              | `htmlRender=svg`                                         | (HTML only, opt-in.) Inline `<svg>` instead of `<img>`. **Browser-only — Flying Saucer drops SVG**. Default `<img>` works in both HTML view and PDF.                                                                                                                                                                |
 
 **Composability:** every modifier composes with every other modifier where it makes sense:
 
@@ -3902,12 +3908,23 @@ and finds hyphens that were never in the record.
     XHTML-style. This only works for text you type into the template — there is
     no way to place `<wbr/>` inside a merged field's value.
 
-### 15.12 "HTML" or "Excel" missing from the Type picklist
+### 15.12 A value is missing from the Type picklist (Canvas, HTML, Excel)
 
-**Symptom.** Creating or editing a template, the **Type** picklist offers only
-some of Word / PowerPoint / Excel / HTML / PDF. Commonly HTML or Excel is absent,
-so an HTML template cannot be created — or worse, it saves as **Word** and then
-opens to an empty canvas in the Designer and converts badly on generation.
+**Symptom.** Creating or editing a template, the **Type** picklist is missing one of
+Word / PowerPoint / Excel / HTML / PDF / Canvas. The value you need is simply not in the
+list, so that kind of template cannot be created — or it saves as **Word** and then opens
+to an empty canvas in the Designer and converts badly on generation.
+
+> **Most likely after an upgrade, and specifically for `Canvas`.** A value added in a
+> later package version does not always reach an org that already had Portwood
+> installed. A **fresh install** gets the full list; an **upgrade** can keep the list it
+> had. Measured on orgs upgraded from v3.48 and v3.53 to v3.56: both offer Word,
+> PowerPoint, Excel, HTML and PDF, and neither offers **Canvas**, which arrived in
+> v3.54. The same org installed fresh has all six.
+>
+> If Canvas is missing you cannot create a Canvas template, which also puts the Canvas
+> designer and everything in it out of reach. This is worth checking straight after an
+> upgrade rather than discovering it when you go to build one.
 
 **Type lives on TWO objects, and both matter.**
 
@@ -3924,19 +3941,29 @@ only one of the two is fixed, the symptom persists. Check both.
 
 1. **Setup → Object Manager**, open **Portwood Template**.
 2. **Fields & Relationships → Type → Values**.
-3. Confirm `Word`, `PowerPoint`, `Excel`, `HTML` and `PDF` are all present and
-   **Active**. Use **Activate** on any that are deactivated.
-4. If your org uses **record types** on the object, open each record type and add
+3. Confirm `Word`, `PowerPoint`, `Excel`, `HTML`, `PDF` and `Canvas` are all present and
+   **Active**. Use **Activate** on any that are listed but deactivated.
+4. If a value is **absent from the list entirely**, add it with **New**, spelled exactly
+   as above. This works even though the field belongs to the managed package — see the
+   note below.
+5. If your org uses **record types** on the object, open each record type and add
    the values to its available list — a value that exists but is not assigned to
    the record type will not appear in the picker.
-5. Repeat all of the above for **Portwood Template Version**.
+6. Repeat all of the above for **Portwood Template Version**. Both objects matter, for
+   the reason in the table above.
 
-**If a value is genuinely absent rather than inactive**, do not try to add it by
-hand. Both fields are **restricted** picklists owned by the managed package, so a
-subscriber org cannot add a new value to them — and a value typed in manually
-would not match what the engine compares against. An absent value means the org
-is on a package version that predates it: **upgrade Portwood** and the value
-arrives with the upgrade.
+**Adding the value by hand is safe, and it works.** Both fields are restricted picklists
+owned by the managed package, which normally means a subscriber cannot extend them —
+but **New** is available here and a value added that way behaves exactly like one that
+shipped with the package. Confirmed on an upgraded org: adding `Canvas` by hand made
+Canvas templates creatable and they generate normally.
+
+Upgrading again does **not** fix it. An earlier version of this guide said an absent
+value means the org predates it and the upgrade will bring it — that is wrong, and the
+orgs measured above were fully upgraded and still did not have `Canvas`. Add the value.
+
+Spelling matters: the engine compares the stored value, so it must be exactly `Canvas`,
+not `canvas` or `Canvas Template`.
 
 **Repairing templates already saved with the wrong type.** Fixing the picklist
 does not retype existing records. Open the template, set **Type** correctly, then

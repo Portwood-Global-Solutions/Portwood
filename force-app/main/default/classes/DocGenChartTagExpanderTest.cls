@@ -474,4 +474,57 @@ private class DocGenChartTagExpanderTest {
         String out = DocGenChartTagExpander.expand(input, 'HTML', new Map<String, Object>(), null);
         System.assert(out.contains('{#ChartBucket:'), 'Null chartCvMap should fall through to CSS-bar. Got: ' + out);
     }
+
+    /**
+     * fontSize= has to work on the server path too.
+     *
+     * It was added to the browser renderer first, and this one kept 19 hardcoded sizes —
+     * so the same template produced different label sizes depending on whether a person
+     * or a Flow generated it, and the modifier documented as working did nothing on the
+     * half of generation that has no browser.
+     */
+    @isTest
+    static void serverChartsHonourFontSize() {
+        List<Map<String, Object>> buckets = new List<Map<String, Object>>{
+            new Map<String, Object>{ 'key_label' => 'Sales', 'count' => 4, 'percent' => 40, 'color' => '#1e40af' },
+            new Map<String, Object>{ 'key_label' => 'Engineering', 'count' => 6, 'percent' => 60, 'color' => '#b91c1c' }
+        };
+        Map<String, String> base = new Map<String, String>{ 'style' => 'bar', 'title' => 'Headcount' };
+
+        Test.startTest();
+        String plain = DocGenSvgChartSerializer.emit(buckets, base);
+        Map<String, String> bigOpts = new Map<String, String>(base);
+        bigOpts.put('fontSize', '22');
+        String big = DocGenSvgChartSerializer.emit(buckets, bigOpts);
+        Map<String, String> junkOpts = new Map<String, String>(base);
+        junkOpts.put('fontSize', 'abc');
+        String junk = DocGenSvgChartSerializer.emit(buckets, junkOpts);
+        Test.stopTest();
+
+        System.assert(plain.contains('font-size="11"'), 'the default axis label is 11: ' + sizesIn(plain));
+        System.assert(plain.contains('font-size="14"'), 'and the default title is 14');
+
+        // The whole point of scaling rather than substituting: the hierarchy survives.
+        System.assert(big.contains('font-size="22"'), 'fontSize=22 sets the axis label: ' + sizesIn(big));
+        System.assert(big.contains('font-size="28"'), 'and carries the title up with it, keeping the 14:11 ratio');
+        System.assert(!big.contains('font-size="11"'), 'nothing is left at the old size');
+
+        System.assertEquals(
+            sizesIn(plain),
+            sizesIn(junk),
+            'an unparseable size falls back rather than breaking the SVG'
+        );
+    }
+
+    /** The distinct font sizes in an SVG, sorted, for readable assertion messages. */
+    private static String sizesIn(String svg) {
+        Matcher m = Pattern.compile('font-size="(\\d+)"').matcher(svg);
+        Set<String> found = new Set<String>();
+        while (m.find()) {
+            found.add(m.group(1));
+        }
+        List<String> out = new List<String>(found);
+        out.sort();
+        return String.join(out, ',');
+    }
 }
