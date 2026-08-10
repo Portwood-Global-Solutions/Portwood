@@ -448,7 +448,9 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships on a **biweekly release cycle**.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-09-11**, then 09-25, 10-09, 10-23.
+
+Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
 | Version     | Headline                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -493,7 +495,25 @@ Need dedicated support? Contact us at [hello@portwood.dev](mailto:hello@portwood
 
 ## Contributing
 
-We welcome contributions — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
+Portwood is built in the open and **actively looking for contributors**. Clone to green tests is three commands:
+
+```bash
+npm install          # prettier + the QA harness
+npm run org:new      # creates and fully configures a scratch org
+npm run qa           # runs every suite and writes a report
+```
+
+No Salesforce org yet? `npm run qa -- --offline` runs every suite that doesn't need one.
+
+**Good places to start:**
+
+- [`good first issue`](https://github.com/Portwood-Global-Solutions/Portwood/labels/good%20first%20issue) — well-specified, bounded, with a named fix approach
+- [`help wanted`](https://github.com/Portwood-Global-Solutions/Portwood/labels/help%20wanted) — we'd particularly welcome someone picking these up
+- [`template-help`](https://github.com/Portwood-Global-Solutions/Portwood/labels/template-help) — answer an authoring question; no Apex required
+
+**Before you write code,** read [`.claude/skills/`](.claude/skills/README.md). It packages the things that make this codebase hard to change and aren't visible from the code — the PDF engine is CSS 2.1 and silently ignores `flex`/`grid`/`calc()`, merge tags resolve through several paths that don't share code, and a whole class of bug only appears in a real managed-package install. If you use Claude Code they load automatically; otherwise they read as plain Markdown.
+
+Full setup, architecture map, and PR guidelines in [CONTRIBUTING.md](CONTRIBUTING.md). Priority rubric in [TRIAGE.md](TRIAGE.md).
 
 ## Security
 

@@ -1,14 +1,43 @@
 # CLAUDE.md — Portwood
 
+## Skills
+
+`.claude/skills/` packages the project's working knowledge as Claude Code skills — they load automatically when relevant, and read as plain Markdown otherwise. Prefer them over re-deriving from this file:
+
+| Skill                     | Covers                                                        |
+| ------------------------- | ------------------------------------------------------------- |
+| `dev-setup`               | Fresh clone → working, tested org                             |
+| `run-tests`               | QA harness, e2e scripts, Apex tests, prettier, Code Analyzer  |
+| `triage-report`           | Is a report a real defect or a template issue?                |
+| `fix-merge-tag`           | The merge-tag resolution paths and how not to half-fix one    |
+| `html-template-authoring` | CSS 2.1 constraints, charts, fonts, images                    |
+| `canvas-designer`         | Canvas artboard, serializer, importer                         |
+| `managed-package-rules`   | `global` visibility, Flow Apex-Defined types, namespace traps |
+
+## How this project runs (from 2026-08-10)
+
+Portwood is in **community-development mode**. Dave has deliberately stepped back from the code so contributors have work to pick up.
+
+- **File issues; don't fix them.** When you find a bug, write the issue and stop. No PR, no patched working tree. The issue is the deliverable — it's the contributor work queue, so the write-up carries the weight a direct fix used to: exact repro, `file:line` citations, the mechanism **proven by running the code** rather than asserted, ranked fix options, an explicit scope note. Issues #282 and #295 are the reference shape.
+- **Triage before recording.** Real defect, or template-authoring problem? **Most reports are template issues.** See the `triage-report` skill — it's the gate, not an optional step.
+- **Fixes happen in designated sessions only.** Bugs accumulate until Dave says otherwise. Don't prompt for a release between dates.
+- **Only P0 jumps the queue.** The test: would a customer hit this and not know their output is wrong? Silent corruption beats loud crashes.
+- **Reach for `good first issue` / `help wanted`.** A well-specified bug with a named fix option is exactly what a new contributor can land. `community-contribution` covers the inbound side.
+- **Community PRs change merge mechanics.** `gh pr merge --admin` after self-approval was the sole-coder shortcut; real contributor PRs mean actual review, and CI gates now matter to people other than Dave — `npm run format:check` blocks merge.
+
+### Release cadence
+
+**Fridays, every two weeks.** Next release: **2026-09-11**, deliberately ~4.6 weeks out to collect real user feedback first. Then 09-25, 10-09, 10-23, 11-06.
+
+Milestones on GitHub are **release dates**, not version numbers — a contributor can see when their PR would actually ship. Version numbers are assigned at release time.
+
 ## Triage
 
-See `TRIAGE.md` at the repo root for the priority rubric (P0/P1/P2/P3 + severity labels + milestone scheme). Apply it when classifying new issues or proposing what to work on next. Current milestones live on GitHub: `v1.89.0` (in flight — Template_Version Type picklist fix + CSS 2.1 guidance + #60/#72), `v1.90.0`, `Backlog`.
+See `TRIAGE.md` for the priority rubric (P0/P1/P2/P3 + severity labels). Apply it when classifying new issues.
 
 ## Mission
 
 Maintain Portwood — a native Salesforce 2GP package for generating Word and PDF documents from any Salesforce record. Work is roadmap-driven via the GitHub issue board; treat it as the source of truth for what's in flight.
-
-When picking up work, prefer the highest open priority on the smallest milestone. P0 silent-corruption bugs jump the queue. Community-contributed fixes (the `community-contribution` label) are usually fast wins because the reporter has already done the diagnostic work.
 
 ## Critical: three merge-tag resolution paths
 
@@ -43,9 +72,30 @@ When picking up work, prefer the highest open priority on the smallest milestone
 
 - `docs/SurveyChartExample.html` — single-dimension chart per question + cross-tab spread (rich pivot + vertical clustered bars + stacked composition) using Department dimension. Canonical chart template.
 - `docs/CommuteSurveyExample.html` — pivot + filter + multi-select + colSort all composed
-- `docs/SurveyChartExample.docx` — Word-authored variant. Supports simple bars only; pivot/stacked/vertical-clustered styles require `<div>` table-cell layout which Word lacks. Steer chart customers to HTML.
+- `docs/SurveyChartExample.docx` — Word-authored variant, hand-built `{#ChartBucket}` bars.
 
-**HTML is the recommended chart source format.** Word `.docx` chart templates work but are constrained — Word's row auto-expansion (`{#Lines}` semantics) conflicts with the inner `{#cols}` loop when both want to drive cell placement in the same `<w:tr>`. `<div>` + `display:table-cell` in HTML dodges this entirely; Word has no `<div>` equivalent. The `{color_hex}` chart field exists specifically so Word's `w:shd w:fill` attributes can use cycled palette colors (raw hex, no `#`).
+### Charts render in EVERY format — pick by style, not by format
+
+**Do not say "charts are HTML only." That is wrong**, and it contradicts how charts are actually authored (Word, PowerPoint and PDF all in active use). Two separate authoring surfaces, with opposite constraints:
+
+1. **The `{Chart:}` tag → PNG-via-CV pipeline.** `DocGenChartRasterizer` emits real PNG bytes server-side; `DocGenChartImageController` gates on `Word` / `isHtmlBacked` / `PowerPoint`. `KNOWN_STYLES` = `bar, column, pie, donut, stacked, clustered, line, area`. **This is the path to recommend.**
+2. **Hand-authored `{#ChartBucket}` loops building bars from table-cell widths.** Constrained in Word — `w:type="pct"` normalizes within the row, compressing dynamic range (45.9% vs 2.9% renders at ~6–9× instead of 15.8×), and `{#cols}` nesting conflicts with `<w:tr>` auto-expansion. This is what the old "steer to HTML" advice was about.
+
+| Style                                    | Word / PPTX / XLSX | HTML → PDF | HTML in browser  |
+| ---------------------------------------- | :----------------: | :--------: | :--------------: |
+| `bar`                                    |        PNG         |  CSS-bar   |       yes        |
+| `pivot`                                  |       **no**       | CSS table  |       yes        |
+| `clustered`, `stacked`                   |        PNG         | CSS table  |       yes        |
+| `column`, `pie`, `donut`, `line`, `area` |        PNG         |   **no**   | `htmlRender=svg` |
+
+Two rules generate that table:
+
+- **`pivot` never rasterizes** — not in `KNOWN_STYLES`, because a cross-tab is a table, not a chart shape. Cross-tab belongs in HTML.
+- **Flying Saucer drops inline `<svg>` from `Blob.toPdf`.** `htmlRender=svg` looks right in a browser and vanishes in the PDF, so HTML→PDF templates must stay on CSS-bar styles (`bar`, `pivot`, `clustered`, `stacked`).
+
+**This inverts the old guidance:** for rich chart shapes in a PDF, **Word is the better source**, because the PNG pipeline carries pie/donut/column/line/area that HTML→PDF cannot render at all. HTML is better for cross-tab.
+
+The `{color_hex}` chart field exists so Word's `w:shd w:fill` attributes can use cycled palette colors (raw hex, no `#`).
 
 ## Critical: zero-heap PDF image rendering (don't accidentally regress)
 
@@ -56,7 +106,9 @@ If your fix touches `processXml`, do not add `VersionData` to the PDF-path SOQL 
 ## Package info
 
 - Package: **Portwood**, Managed 2GP (id `0Hoal0000003d9hCAA`), namespace `portwoodglobal`. This is the package `sfdx-project.json` builds and what customers install. (A legacy Unlocked package `Portwood (Unlocked)` `0Hoal0000003TwjCAE` also exists in the Dev Hub but is NOT the release artifact.) **Managed-package consequence:** only `global` Apex is visible to subscribers — `public` classes/methods are invisible in subscriber orgs. An `@InvocableMethod` must be `global` to appear in a subscriber's Flow Builder; a Flow **Apex-Defined variable type** needs ALL of: (1) **top-level/standalone class** (Flow ignores inner/nested classes — the v2.7.0 lesson), (2) `global` class, (3) `@AuraEnabled` members, (4) `global` no-arg constructor. See [[feedback_flow_apexdefined_managed_pkg_recipe]].
-- Current shipped version: **v3.54.0** (`04tVx0000010Y4LIAU`, build `3.54.0-1`, promoted 2026-08-06, ancestor 3.53.0) — the **Canvas designer**, a new `Canvas` template type with a Canva-style artboard: pinned and flow boxes, tables with nested grandchild loops and totals, images from Portwood Assets via `{%asset:key:WIDTHx}`, shapes, QR/barcodes, signature placements, per-box `{#IF}` conditions, z-order, undo/redo and an HTML importer. Renders through the HTML path (`DocGenService.isHtmlBacked`), so output is always PDF. **The `Canvas` picklist value and everything around it are now frozen forever.** Shipped labelled Beta in the UI. Two notes for anyone touching it: `Blob.toPdf` only draws symbols/CJK under `'Arial Unicode MS'` (the generic families render them as nothing), and serializer fixes do NOT reach documents already saved — a stored body keeps its old markup until re-saved. 1,905 tests pass, 78% coverage.
+- Current shipped version: **v3.56.0** (`04tVx0000010fnNIAQ`, build `3.56.0-5`) — chart label sizing made an explicit control (`fontSize=` on a chart tag, **Label size** on the Canvas chart), with title and other text scaling with it; plus **Bold** disabled for `'Arial Unicode MS'`, which has no bold face and was silently printing regular (#281). This is the ID the README's install link points at — keep the two in sync.
+- Previous shipped version: **v3.55.0** (`04tVx0000010fXFIAY`, build `3.55.0-2`) — Canvas element linking (a block **follows** another and travels with it as the table above grows), named blocks, and charts as a Canvas element with live preview. PowerPoint and Excel now assemble in the browser like Word, lifting the 6 MB ceiling (tested to 30,000 child records), with Chart.js on that path.
+- Previous shipped version: **v3.54.0** (`04tVx0000010Y4LIAU`, build `3.54.0-1`, promoted 2026-08-06, ancestor 3.53.0) — the **Canvas designer**, a new `Canvas` template type with a Canva-style artboard: pinned and flow boxes, tables with nested grandchild loops and totals, images from Portwood Assets via `{%asset:key:WIDTHx}`, shapes, QR/barcodes, signature placements, per-box `{#IF}` conditions, z-order, undo/redo and an HTML importer. Renders through the HTML path (`DocGenService.isHtmlBacked`), so output is always PDF. **The `Canvas` picklist value and everything around it are now frozen forever.** Shipped labelled Beta in the UI. Two notes for anyone touching it: `Blob.toPdf` only draws symbols/CJK under `'Arial Unicode MS'` (the generic families render them as nothing), and serializer fixes do NOT reach documents already saved — a stored body keeps its old markup until re-saved. 1,905 tests pass, 78% coverage.
 - Previous shipped version: **v3.50.0** (`04tVx000000zxCrIAI`, build `3.50.0-1`, promoted 2026-07-31, ancestor 3.49.0) — the DocGen -> Portwood rename (PR #263). Display names only: labels, masterLabels, descriptions, user-visible strings. **Every API name is unchanged and frozen forever** — `DocGen_Template__c`, `DocGenService`, `DocGen_Admin`, the `portwoodglobal` namespace. Two scheduled job names deliberately keep the old string because they are matched by `CronJobDetail.Name` in orgs that already scheduled them: `DocGen Signature Reminders` and `DocGen Chart CV Reaper`. 1,890 tests pass, 78% coverage.
 - Previous shipped version: **v2.9.0** (`04tVx000000a7fhIAA`, build `2.9.0-1`, promoted 2026-05-27) — Large-table repeating headers. Tight follow-up to v2.8 for giant-query PDFs, verified on a real customer short-codes `.docx` and 3,559 staging records. Adds Flying Saucer's table pagination CSS (`-fs-table-paginate: paginate` + `thead { display: table-header-group; }`) to snapshot-backed and HTML-backed giant-query tables so Word-authored headers repeat on every PDF page. Also forces `border-collapse: collapse` + `border-spacing: 0` and Word-style cell padding (`0pt 5.4pt`) so the repeated-header table keeps a continuous single-line frame rather than separated cell boxes. Fixes the Word edge case where both the visible header row and the merge-loop row carry `w:tblHeader`, causing the DOCX HTML snapshot to put the loop row inside `<thead>`; `replaceGiantLoopTableTail` now closes `<thead>` before generated rows. Validation: real-template proof = repeated orange header page 2+, continuous borders, 68-page PDF; e2e-01..08 + 07-syntax1..4 PASS/FAIL0; RunLocalTests 1470/100%/77%; `sf code-analyzer` 0; package build coverage 77%.
 - Previous shipped version: **v2.8.0** (`04tVx000000a7e5IAA`, build `2.8.0-1`, promoted 2026-05-27) — Large-table rendering fidelity (PR #144). Three giant-query table fixes, all found + verified on a **real customer short-codes template** (~3,560-row `.docx`) generated through the giant path → 86-page PDF. (1) **Giant tables rendered ~50% width**: `DocGenGiantQueryAssembler` prepended its own `<colgroup>` on top of the snapshot's authored one → 2 colgroups = 2× columns = 200% width, packing cells into the left half (regression surfaced by the v2.5.0 chrome fix — before it, the empty-snapshot fallback gave a single-colgroup `width:100%` table). Fix: drop the duplicate; capture the snapshot's authored `<table>` tag + single colgroup and reuse them in every chunk-break table; `max-width:100%` clamp stops an authored absolute width clipping the last column. (2) **Footer = black box**: `processTable` collapsed borders into one `hasBorders` boolean + blanket `border:0.5pt solid #000` per cell — a top-rule-only footer became a full grid. Replaced with **per-side translation** (explicit `<w:tblBorders>` beats the named style; outer sides → `<table>`, `insideH/insideV` → cell grid lines in the authored color); new `addInteriorBorders` + public `resolveCellGridBorderCss`. (3) **Giant data rows used invented gray `#ccc`**: now carry a `gqc` class and inherit the authored grid border (scoped to data cells so it never leaks onto the running footer). `{RepeatHeader}` marker (pre-merge `applyRepeatHeaderMarkers` → Word `<w:tblHeader/>` → `<thead>`) groups the header for section-level repeat. **DEFERRED to a future release — true per-page header repeat on giant tables:** Flying Saucer's `-fs-table-paginate` is the only mechanism, works on clean content (78 pages at 3,559 rows, scales to 15K) but **mis-paginates the real metric/multi-running-element template to 8,258 pages**; metric→inch `@page` decimals (210mm→`8.26388…in`) are a contributing factor (~20%) but not the root. Validation: e2e-01..08 + 07-syntax1..4 PASS/FAIL0, RunLocalTests 1469/100%/77%, `sf code-analyzer` 0, real-template render confirmed (full-width every page, footer top-rule-only, no clipped columns, 86 pages).
@@ -89,6 +141,15 @@ The detailed engineering-language belongs in `CHANGELOG.md` (and the local-only 
 ## Release validation checklist
 
 All three checks MUST pass before release. No exceptions.
+
+**The one-command version** (runs every suite and writes `scripts/qa/report/qa-report.md`, exit 0 only when everything evaluated passed):
+
+```bash
+npm run qa                  # against docgen-verify
+npm run qa -- --offline     # only suites needing no org — CI-safe
+```
+
+A suite that cannot run reports as **skipped**, not passed — check the report, not just the exit code. The explicit sequences below are what the harness runs, and what to fall back on when diagnosing a single failure. See the `run-tests` skill.
 
 ### 1. E2E test suite
 

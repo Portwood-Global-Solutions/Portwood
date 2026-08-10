@@ -22,28 +22,38 @@ How we prioritize issues and enhancement requests on this repo. Reporters are we
 
 A bug should usually carry one severity label. Enhancements don't need a severity.
 
-## Milestones
+## Is it even a bug?
 
-Three rolling milestones plus a backlog:
+Before applying any of the above: **most reports are template-authoring problems, not code defects.** The renderer is CSS 2.1 and silently ignores `flex`, `grid`, `gap`, `calc()` and CSS variables; image URLs must be relative; and a chart style that doesn't survive the chosen output format fails silently (`pivot` never rasterizes for Word/PPTX; SVG-rendered styles are dropped from `Blob.toPdf`). Reproduce and rule the template out first.
 
-- **vNEXT.0** — current release in flight. Bug-fix-only when possible. Pull P0s here unconditionally.
-- **vNEXT+1.0** — next release after that. P1 bugs and small enhancements land here.
-- **vNEXT+2.0** — enhancement bundle. Larger features with completed specs.
+A report that turns out to be an authoring problem gets answered as guidance and closed with `template-help`. It does not become engineering work. See `.claude/skills/triage-report/SKILL.md` for the full checklist.
+
+## Milestones — release dates, not version numbers
+
+Portwood releases **every two weeks, on a Friday**. Milestones are the release date, so a contributor can see when their PR would actually ship. Version numbers are assigned at release time, not in advance.
+
+- **The next date** (currently `2026-09-11`) — what's shipping next. Bug-fix-only when possible. P0s land here unconditionally.
+- **The date after** — P1 bugs and small enhancements.
+- **Later dates** — larger features with completed specs.
 - **Backlog** — P3 items, anything needing more scoping, parking lot.
 
-When we cut a release we close its milestone, rename `vNEXT+1.0` → `vNEXT.0`, etc., and re-evaluate the backlog.
+When a release ships we close its date milestone and add the next Friday two weeks out. Closed version-numbered milestones (`v1.x`, `v3.4x`) are retained for historical record and are not used for new work.
 
 ## Other useful labels
 
-- `community-contribution` — reporter included a verified fix or substantial RCA. These are fast wins; surface them in triage.
+- `good first issue` — well-specified, bounded, with a named fix approach. The best entry point for a new contributor; apply it whenever a bug qualifies.
+- `help wanted` — we'd particularly welcome someone picking this up.
+- `community-contribution` — reporter included a verified fix or substantial RCA. Fast wins; surface them in triage.
 - `bug`, `enhancement` — the type. Set automatically by issue templates.
-- `pdf`, `docx`, `flow-action`, `bulk-generation`, `install-upgrade`, `template-help` — subsystem tags for filtering.
+- `pdf`, `docx`, `designer`, `flow-action`, `bulk-generation`, `install-upgrade`, `template-help` — subsystem tags for filtering.
 
 ## Filter recipes
 
 ```
 is:open label:priority:P0                  # fire-now list
-is:open milestone:vNEXT.0                  # what's shipping
+is:open milestone:2026-09-11               # what's shipping next
 is:open label:severity:silent-corruption   # quality-of-fix watchlist
+is:open label:"good first issue"           # newcomer entry points
 is:open label:community-contribution       # reporter-fix-attached
+is:open no:milestone                       # untriaged
 ```
