@@ -2584,8 +2584,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param createVersion Whether to create a new active version snapshot
      */
     @AuraEnabled
-    public static Id saveTemplate(Map<String, Object> fields, Boolean createVersion, String contentVersionId) {
+    public static Map<String, Object> saveTemplate(
+        Map<String, Object> fields,
+        Boolean createVersion,
+        String contentVersionId
+    ) {
         Id createdVersionId = null;
+        Map<String, Object> saveResult = new Map<String, Object>();
         try {
             // 1. Update Template
             Id templateId = (Id) fields.get('Id');
@@ -2986,10 +2991,52 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     String noop = htmlErr.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
                 }
             }
-            return createdVersionId;
+            // Fidelity report (issue #272) for Word/PowerPoint uploads. Lint the
+            // newly uploaded body and hand the findings back with the save result,
+            // mirroring saveHtmlTemplateBody's `warnings`/`warningCount` keys.
+            // Warnings only — the version is already stored, and a lint failure
+            // must never change the save outcome.
+            List<DocGenAiHtmlValidator.Finding> warnings = new List<DocGenAiHtmlValidator.Finding>();
+            try {
+                if (
+                    createVersion == true &&
+                    String.isNotBlank(contentVersionId) &&
+                    isDocxBodyType((String) fields.get('Type__c'))
+                ) {
+                    warnings = lintUploadedOfficeBody(contentVersionId);
+                }
+            } catch (Exception lintErr) {
+                String noop = lintErr.getMessage(); // NOPMD — lint is advisory; it must never fail a save
+            }
+            saveResult.put('createdVersionId', createdVersionId);
+            saveResult.put('warnings', warnings);
+            saveResult.put('warningCount', warnings.size());
+            return saveResult;
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error saving template. Please verify your inputs and permissions.');
         }
+    }
+
+    /** The Word/PowerPoint template types the DOCX/PPTX linter covers. */
+    private static Boolean isDocxBodyType(String type) {
+        return type == 'Word' || type == 'PowerPoint' || type == 'PPT' || type == 'PPTX';
+    }
+
+    /** Reads a just-uploaded body ContentVersion and lints its Office bytes. */
+    private static List<DocGenAiHtmlValidator.Finding> lintUploadedOfficeBody(Id contentVersionId) {
+        DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<ContentVersion> cvs = [
+            SELECT VersionData
+            FROM ContentVersion
+            WHERE Id = :contentVersionId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (cvs.isEmpty() || cvs[0].VersionData == null) {
+            return new List<DocGenAiHtmlValidator.Finding>();
+        }
+        return DocGenDocxTemplateLinter.lint(cvs[0].VersionData);
     }
 
     /**

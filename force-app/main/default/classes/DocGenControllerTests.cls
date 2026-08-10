@@ -548,7 +548,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            Id newVersionId = DocGenController.saveTemplate(fields, true, null);
+            Id newVersionId = (Id) DocGenController.saveTemplate(fields, true, null).get('createdVersionId');
             Test.stopTest();
 
             DocGen_Template_Version__c newActive = [

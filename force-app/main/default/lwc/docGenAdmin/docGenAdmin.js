@@ -5770,11 +5770,22 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const savedPdfSnapshotJson = this.uploadedPdfAcroFormSnapshotJson;
             const templateBodyContentVersionId = this.uploadedContentVersionId;
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-            const versionId = await saveTemplate({
+            const saveResult = await saveTemplate({
                 fields: fields,
                 createVersion: true,
                 contentVersionId: templateBodyContentVersionId
             });
+            const versionId = saveResult && saveResult.createdVersionId ? saveResult.createdVersionId : null;
+            // #272 fidelity report for Word/PowerPoint uploads: the linter's
+            // warnings ride the saveTemplate response (same contract as the HTML
+            // path's saveHtmlTemplateBody). Advisory only — the version is already
+            // stored, nothing was blocked. Render into the SAME panel the HTML
+            // report uses.
+            this.lintFindings = [];
+            if (saveResult && Array.isArray(saveResult.warnings) && saveResult.warnings.length > 0) {
+                this.lintFindings = this._mapLintFindings(saveResult.warnings);
+                this._toastLintFindings();
+            }
             if (versionId && savedPdfSnapshotJson) {
                 await savePdfAcroFormSnapshot({
                     templateId: this.editTemplateId,

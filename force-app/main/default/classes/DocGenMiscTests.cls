@@ -5943,7 +5943,7 @@ private class DocGenMiscTests {
             FirstPublishLocationId = tpl.Id
         );
         insert htmlCv;
-        Id newVerId = DocGenController.saveTemplate(fields, true, htmlCv.Id);
+        Id newVerId = (Id) DocGenController.saveTemplate(fields, true, htmlCv.Id).get('createdVersionId');
         Test.stopTest();
 
         System.assert(blocked, 'Details-only save must not change the template format without a new body');
