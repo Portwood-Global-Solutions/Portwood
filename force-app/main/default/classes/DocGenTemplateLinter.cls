@@ -34,6 +34,16 @@ public with sharing class DocGenTemplateLinter {
     };
     private static final Set<String> AGGREGATE_TAGS = new Set<String>{ 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX' };
 
+    // Vijay: fix for false-positive on {#ChartBucket} loop variables (RCA below).
+    // These are scopes supplied by a resolver (e.g. the chart-bucket resolver),
+    // not real SObject child relationships. Their inner tags (key_label,
+    // percent, …) must be skipped from base-object field validation, but they
+    // must NOT be checked against child relationship names either — unlike a
+    // real {#Rel} loop, there is no Schema describe or Query Config node that
+    // will ever "define" ChartBucket. Add future resolver-supplied loop names
+    // here, not to isRelationshipLoop().
+    private static final Set<String> SYNTHETIC_SCOPE_TAGS = new Set<String>{ 'ChartBucket' };
+
     // {Field}, {Parent.Field}, {Field:format} — the GiantQueryAssembler tag shape.
     private static final Pattern FIELD_TAG = Pattern.compile(
         '^([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)(?::(.+))?$'
@@ -402,13 +412,20 @@ public with sharing class DocGenTemplateLinter {
                         );
                     }
                     loopDepth++;
+                } else if (SYNTHETIC_SCOPE_TAGS.contains(t.key)) {
+                    // Vijay: bucket-resolver scope (e.g. ChartBucket) — treat like a
+                    // relationship loop for field-validation purposes (bump loopDepth
+                    // so inner tags are skipped below), but skip the relationship-name
+                    // check above since it's never a real child relationship.
+                    loopDepth++;
                 }
                 continue;
             }
             if (t.isClose == true) {
                 if (!stack.isEmpty() && stack[stack.size() - 1].key.equals(t.key)) {
                     MergeToken popped = stack.remove(stack.size() - 1);
-                    if (isRelationshipLoop(popped.key)) {
+                    // Vijay: pop loopDepth for synthetic scopes too, mirroring the push above.
+                    if (isRelationshipLoop(popped.key) || SYNTHETIC_SCOPE_TAGS.contains(popped.key)) {
                         loopDepth--;
                     }
                 }
