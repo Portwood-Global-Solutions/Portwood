@@ -5939,10 +5939,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
-     * {Amount:currency}                          → backward-compat hardcoded $
-     * {Amount:currency:EUR[:de_DE]}              → explicit ISO (+ optional locale)
-     * {Amount:currency:auto[:locale]}            → ISO read from the record's CurrencyIsoCode
-     * {Amount:currency:auto=Field__c[:locale]}   → ISO read from a named record field
+     * {Amount:currency}                              → backward-compat hardcoded $
+     * {Amount:currency:EUR[:de_DE]}                  → explicit ISO (+ optional locale)
+     * {Amount:currency:auto[:locale]}                → ISO read from the record's CurrencyIsoCode
+     * {Amount:currency:auto=Field__c[:locale]}       → ISO read from a named record field
+     * {Amount:currency:SEK:iso}                      → force the ISO code instead of the symbol
+     * {Amount:currency:SEK:sv_SE:iso}                → same, with an explicit locale
+     * {Amount:currency:auto:iso} / {…:auto:locale:iso} → same, resolved from the record
      *
      * The auto forms need the record's field map (`data`); when it's null/missing the
      * source field, or the value isn't a known ISO code, we fall back to the safe `$`
@@ -5952,6 +5955,27 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Bare :currency → backward compat: hardcoded $ with US separators
         if (segments.size() == 1) {
             return formatCurrencyDollarFallback(num);
+        }
+
+        // Vijay: fix for #296 — a trailing `:iso` segment forces the ISO code
+        // (e.g. "SEK") instead of the mapped symbol. Needed because SEK/NOK/DKK
+        // all print as "kr" and JPY/CNY both print as "¥" in CURRENCY_SYMBOLS,
+        // which makes a generated Nordic invoice genuinely ambiguous about which
+        // currency it's billed in. Stripped BEFORE the existing locale-slot
+        // logic below runs, so `:iso` composes with an explicit locale
+        // ({Amount:currency:SEK:sv_SE:iso}) exactly like without one
+        // ({Amount:currency:SEK:iso}), and works for both the explicit-ISO and
+        // :auto forms since the strip happens ahead of that branch.
+        Boolean forceIso = false;
+        if (!segments.isEmpty() && 'iso'.equalsIgnoreCase(segments[segments.size() - 1].trim())) {
+            forceIso = true;
+            segments = segments.clone();
+            segments.remove(segments.size() - 1);
+            // {Amount:currency:iso} with nothing left to force — no ISO/auto was
+            // given, so there's nothing to override. Fall back like bare :currency.
+            if (segments.size() == 1) {
+                return formatCurrencyDollarFallback(num);
+            }
         }
 
         String spec = segments[1].trim();
@@ -5966,13 +5990,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 return formatCurrencyDollarFallback(num);
             }
             String autoLocale = segments.size() >= 3 ? segments[2].trim() : UserInfo.getLocale();
-            return formatCurrencyWithIso(num, autoIso, autoLocale);
+            return formatCurrencyWithIso(num, autoIso, autoLocale, forceIso);
         }
 
         // :currency:ISO or :currency:ISO:locale
         String iso = spec.toUpperCase();
         String locale = segments.size() >= 3 ? segments[2].trim() : null;
-        return formatCurrencyWithIso(num, iso, locale);
+        return formatCurrencyWithIso(num, iso, locale, forceIso);
     }
 
     /** Backward-compat bare-:currency output: hardcoded $ with US separators. */
@@ -5980,10 +6004,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return '$' + formatNumberLocale(num.setScale(2, RoundingMode.HALF_UP), ',', '.');
     }
 
-    /** Formats `num` with the symbol for `iso` and the separators/placement for `locale`. */
-    private static String formatCurrencyWithIso(Decimal num, String iso, String locale) {
+    /**
+     * Formats `num` with the symbol for `iso` and the separators/placement for `locale`.
+     *
+     * Vijay: fix for #296 (SEK/NOK/DKK all render "kr", JPY/CNY both render "¥").
+     * `forceIso` overrides CURRENCY_SYMBOLS even for a currency that DOES have a
+     * mapped symbol, so the author can disambiguate. Same "unmapped currency"
+     * fallback (`iso + ' '`) as before covers both cases — forced and genuinely
+     * unmapped both want the bare ISO code.
+     */
+    private static String formatCurrencyWithIso(Decimal num, String iso, String locale, Boolean forceIso) {
         // Resolve symbol
-        String symbol = CURRENCY_SYMBOLS.containsKey(iso) ? CURRENCY_SYMBOLS.get(iso) : iso + ' ';
+        String symbol = (!forceIso && CURRENCY_SYMBOLS.containsKey(iso)) ? CURRENCY_SYMBOLS.get(iso) : iso + ' ';
 
         // Determine decimal places (0 for JPY, KRW, etc.)
         Integer scale = ZERO_DECIMAL_CURRENCIES.contains(iso) ? 0 : 2;
