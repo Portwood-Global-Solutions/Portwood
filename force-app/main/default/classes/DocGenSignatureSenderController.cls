@@ -223,6 +223,36 @@ public with sharing class DocGenSignatureSenderController {
             return null;
 
         DocGen_Template_Version__c activeVersion = activeVersions[0];
+
+        // A PDF template has no WordprocessingML to scan, and must never reach the
+        // DOCX branch below (#330).
+        //
+        // The type test here is isHtmlBacked, which is HTML-or-Canvas only, so
+        // every other type — including PDF — fell through to the pre-decomposed
+        // word/document.xml lookup. A PDF is never decomposed into that, so the
+        // lookup found nothing and dropped to getActiveTemplateDocumentXml, which
+        // does:
+        //
+        //     new Compression.ZipReader(cvs[0].VersionData)
+        //
+        // A PDF is not a ZIP. Apex throws compression.ZipException "Could not
+        // load Zip", which is exactly what elliottr saw from BOTH the sender LWC
+        // and the Flow action — both reach here through
+        // createGuidedPdfSignatureRequest:
+        //
+        //   "when using either the docGenSignatureSender lwc or the DocGen:
+        //    Create Signature Request action in a flow I get the error:
+        //    'Error generating links: Could not load Zip Error on ZipFile
+        //    unknown archive'"
+        //
+        // Returning null means "no {@Signature_*} text tags", which is true: a
+        // PDF template positions signatures through its AcroForm fields, not
+        // through tags in a text stream. The caller already handles an empty
+        // placement list.
+        if (activeVersion.Template__r.Type__c == 'PDF') {
+            return null;
+        }
+
         if (DocGenService.isHtmlBacked(activeVersion.Template__r.Type__c)) {
             if (String.isBlank(activeVersion.Content_Version_Id__c))
                 return null;

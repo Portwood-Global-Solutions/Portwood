@@ -654,4 +654,102 @@ private class DocGenGuidedSigningTest {
         DocGenSignatureService.purgeFrozenSnapshotCv(null);
         DocGenSignatureService.purgeFrozenSnapshotCv(cvId);
     }
+
+    // ─── #330: a PDF template must not be handed to the ZIP reader ───────────
+    //
+    // extractTemplatePlainText branched on isHtmlBacked, which is HTML-or-Canvas
+    // only, so every other type — INCLUDING PDF — fell through to the
+    // pre-decomposed word/document.xml lookup. A PDF is never decomposed into
+    // that, so the lookup found nothing and dropped to
+    // getActiveTemplateDocumentXml, which does:
+    //
+    //     new Compression.ZipReader(cvs[0].VersionData)
+    //
+    // A PDF is not a ZIP. Apex throws compression.ZipException "Could not load
+    // Zip", which is what elliottr saw from BOTH the sender LWC and the Flow
+    // action — both reach it through createGuidedPdfSignatureRequest.
+
+    /** A minimal fillable PDF: catalog -> AcroForm -> two text widgets. */
+    private static Blob fillableAcroFormPdf() {
+        return Blob.valueOf(
+            '%PDF-1.4\n' +
+                '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +
+                '2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n' +
+                '3 0 obj\n<< /Fields [5 0 R 6 0 R] >>\nendobj\n' +
+                '4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [5 0 R 6 0 R] >>\nendobj\n' +
+                '5 0 obj\n<< /FT /Tx /T (Name) /Subtype /Widget /Rect [10 10 200 30] >>\nendobj\n' +
+                '6 0 obj\n<< /FT /Tx /T (Owner.Email) /Subtype /Widget /Rect [10 40 200 60] /V (old) >>\nendobj\n' +
+                'xref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000076 00000 n \n' +
+                '0000000135 00000 n \n0000000184 00000 n \n0000000281 00000 n \n0000000357 00000 n \n' +
+                'trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n'
+        );
+    }
+
+    private static DocGen_Template__c pdfTemplateWithBody(Blob body) {
+        DocGen_Template__c t = new DocGen_Template__c(
+            Name = 'PdfSig330',
+            Type__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name'
+        );
+        insert t;
+        ContentVersion cv = new ContentVersion(Title = 'pdf330', PathOnClient = 'pdf330.pdf', VersionData = body);
+        insert cv;
+        ContentVersion r = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id LIMIT 1];
+        insert new DocGen_Template_Version__c(
+            Template__c = t.Id,
+            Is_Active__c = true,
+            Content_Version_Id__c = r.Id,
+            Type__c = 'PDF'
+        );
+        insert new ContentDocumentLink(LinkedEntityId = t.Id, ContentDocumentId = r.ContentDocumentId, ShareType = 'V');
+        return t;
+    }
+
+    @IsTest
+    static void pdfTemplatePlacementScanDoesNotUnzipThePdf() {
+        DocGen_Template__c t = pdfTemplateWithBody(fillableAcroFormPdf());
+
+        Test.startTest();
+        List<DocGenSignatureSenderController.PlacementInfo> placements;
+        try {
+            placements = DocGenSignatureSenderController.getTemplateSignaturePlacements(t.Id);
+        } catch (Exception e) {
+            System.assert(
+                false,
+                'A PDF template must never reach the ZIP reader. Got: ' + e.getTypeName() + ' :: ' + e.getMessage()
+            );
+        }
+        Test.stopTest();
+
+        // A PDF positions signatures through AcroForm fields, not {@Signature_*}
+        // text tags, so "no text placements" is the correct answer here.
+        System.assertEquals(0, placements == null ? 0 : placements.size(), 'A PDF has no text-tag placements.');
+    }
+
+    @IsTest
+    static void signatureRequestSucceedsForAFillablePdfTemplate() {
+        DocGen_Template__c t = pdfTemplateWithBody(fillableAcroFormPdf());
+        Account a = new Account(Name = 'Acme 330');
+        insert a;
+        String signers = '[{"name":"Ada Test","email":"ada@example.com","roleName":"Signer 1","order":1}]';
+
+        Test.startTest();
+        List<DocGenSignatureSenderController.SignerResult> res;
+        try {
+            res = DocGenSignatureSenderController.createGuidedPdfSignatureRequest(
+                t.Id,
+                a.Id,
+                signers,
+                'Sequential',
+                null
+            );
+        } catch (Exception e) {
+            System.assert(false, 'Signature request on a PDF template threw: ' + e.getMessage());
+        }
+        Test.stopTest();
+
+        System.assertEquals(1, res == null ? 0 : res.size(), 'One signer in, one signer link out.');
+    }
 }
