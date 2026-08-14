@@ -243,7 +243,10 @@ function buildConfig(style, buckets, opts) {
     const common = {
         responsive: false,
         animation: false,
-        devicePixelRatio: 1, // canvas is already sized at scale; see renderChartPng
+        // Overridden to `scale` by renderChartPng so the type supersamples with
+        // the canvas (#304). 1 is right for the on-screen path, which draws at
+        // logical size.
+        devicePixelRatio: 1,
         plugins: {
             legend: { display: false },
             title: title
@@ -414,23 +417,54 @@ export function renderChartPng(ChartCtor, buckets, opts) {
     // 2x is the sweet spot: 4x quadruples bytes for no visible gain at these sizes.
     const scale = Math.min(Math.max(Number(opts.scale) || 2, 1), 4);
 
+    // Leave the canvas at LOGICAL size and let Chart.js do the supersampling via
+    // devicePixelRatio (#304).
+    //
+    // Sizing the canvas by hand and setting devicePixelRatio: 1 grew the pixel
+    // count but not the drawing transform — Chart.js resets the context
+    // transform, so type stayed at `fontSize` DEVICE pixels and shrank relative
+    // to the chart as `scale` rose. Measured on a 700x250 canvas at fontSize 12,
+    // category-label ink height divided by scale:
+    //
+    //   scale 1  ->  11 px          (both ways)
+    //   scale 2  ->   5.5 px  vs  11 px with devicePixelRatio
+    //   scale 3  ->   3.7 px  vs  11.3 px
+    //
+    // Same backing-store resolution either way, so the PNG is exactly as crisp —
+    // the type just stops shrinking. That is what made `fontSize` mean three
+    // different things across the three renderers, and why every shipped
+    // template carries a compensating value (fontSize=34/42/45 in the OneCommute
+    // deck, 27 for 10pt in the HTML report) that only makes sense against the bug.
     const canvas = document.createElement('canvas');
-    canvas.width = logicalWidth * scale;
-    canvas.height = logicalHeight * scale;
-
+    canvas.width = logicalWidth;
+    canvas.height = logicalHeight;
     const ctx = canvas.getContext('2d');
-    // Opaque white ground: PowerPoint composites the PNG over the slide, and a
-    // transparent chart picks up whatever shape sits behind it.
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
 
     const config = buildConfig(style, buckets, opts);
+    // Retina-scales the backing store AND the drawing transform together, so
+    // type, padding, tick marks and grid lines all grow with `scale`.
+    config.options.devicePixelRatio = scale;
     config.plugins = [valueLabelPlugin(style, buckets, resolveTickPx(opts))];
 
     const chart = new ChartCtor(ctx, config);
     try {
         chart.update('none');
+        // Opaque white ground, painted AFTER the chart (#307).
+        //
+        // PowerPoint composites the PNG over the slide, and a transparent chart
+        // picks up whatever shape sits behind it. Painting the ground first
+        // could never work: assigning canvas.width/height CLEARS the canvas, and
+        // Chart.js assigns both when it applies devicePixelRatio — so the fill
+        // was wiped before a single bar was drawn and every PNG shipped with an
+        // alpha mask. 'destination-over' puts the white behind the pixels that
+        // are already there, which is the same result the original code was
+        // reaching for.
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // ground is painted in device pixels
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
         const dataUrl = canvas.toDataURL('image/png');
         return {
             base64: dataUrl.substring(dataUrl.indexOf(',') + 1),

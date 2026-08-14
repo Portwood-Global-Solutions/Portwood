@@ -86,8 +86,15 @@ public with sharing class DocGenSvgChartSerializer {
         return Math.max(scaled, 1);
     }
 
-    /** The size `fontSize=` refers to. Every other literal is a ratio of this. */
-    private static final Decimal AXIS_LABEL_BASE = 11;
+    /**
+     * The size `fontSize=` refers to. Every other literal is a ratio of this.
+     *
+     * 12, matching DocGenChartTagExpander.LABEL_BASE_PX (#304). It was 11, so the
+     * same `fontSize=` produced 2.45x the defaults here and 2.25x on the CSS-bar
+     * path — a template tuned on one renderer was wrong on the other, and there
+     * was no value correct on both.
+     */
+    private static final Decimal AXIS_LABEL_BASE = 12;
 
     public static String emit(List<Map<String, Object>> buckets, Map<String, String> options) {
         if (buckets == null || buckets.isEmpty()) {
