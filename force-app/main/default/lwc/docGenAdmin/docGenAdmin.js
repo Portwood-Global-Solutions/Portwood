@@ -12250,25 +12250,49 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 for (let i = 0; i < raw.length; i++) {
                     bytes[i] = raw.charCodeAt(i);
                 }
-                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-                // Usually still inside the click's activation window, so this
-                // opens directly. (LWS neuters a pre-opened window's proxy —
-                // document.write/location are silent no-ops — so the tab must
-                // be opened WITH its URL.)
-                const win = window.open(url, '_blank');
-                if (!win) {
-                    // Popup blocked: arm the button for a synchronous open.
-                    this._pendingPreviewUrl = url;
-                    this.pdfPreviewReady = true;
-                    this.showToast(
-                        'Preview ready',
-                        'Your PDF is rendered — click "Open preview" to view it.',
-                        'success'
-                    );
+                // blob: is not universally openable (#321). Locker Service's
+                // SecureWindow.open permits only http:, https: and mailto: and
+                // THROWS on a blob: URL — it does not return null — so the
+                // popup-blocked recovery below was unreachable in exactly the
+                // orgs that needed it, and the author got a bare
+                // "PDF preview failed" carrying the raw platform message.
+                //
+                // On any failure here, fall through to the ContentVersion +
+                // native viewer path below. That is an ordinary https:
+                // navigation, it is already the route for payloads too large for
+                // Aura, and it works in every org. A slower preview beats none.
+                let deliveredInline = false;
+                try {
+                    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+                    // Usually still inside the click's activation window, so this
+                    // opens directly. (LWS neuters a pre-opened window's proxy —
+                    // document.write/location are silent no-ops — so the tab must
+                    // be opened WITH its URL.)
+                    const win = window.open(url, '_blank');
+                    if (!win) {
+                        // Popup blocked: arm the button for a synchronous open.
+                        this._pendingPreviewUrl = url;
+                        this.pdfPreviewReady = true;
+                        this.showToast(
+                            'Preview ready',
+                            'Your PDF is rendered — click "Open preview" to view it.',
+                            'success'
+                        );
+                    }
+                    deliveredInline = true;
+                } catch (blobErr) {
+                    // NOPMD — the org's browser sandbox refused blob:; the
+                    // ContentVersion path below is the answer, not an error.
+                    const noop = blobErr && blobErr.message;
+                    void noop;
                 }
-                return;
+                if (deliveredInline) {
+                    return;
+                }
             }
-            // Too large for the Aura payload — ContentVersion + native viewer.
+            // ContentVersion + native viewer. Reached when the PDF is too large
+            // for the Aura payload, OR when the org's browser sandbox refused the
+            // blob: URL above (#321). Plain https:, so it is the portable route.
             const res2 = await previewDraftPdf({
                 templateId: this.editTemplateId,
                 recordId: this.editTemplateTestRecordId,
