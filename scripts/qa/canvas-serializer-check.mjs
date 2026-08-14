@@ -59,6 +59,14 @@ const rich = m.newTextBox(0.5, 5.2, 3, 0.4);
 rich.html = '<p><b>Rich</b> text with {Owner.Name} and a &#123;braced&#125; entity</p>';
 doc.artboards[0].boxes.push(rich);
 
+// #295: an author clearing a box in the rich-text editor writes html='' (not null).
+// That must serialize to nothing — falling through to `text` would resurrect stale
+// content the canvas shows as empty (the pre-edit import, or the 'Text' placeholder).
+const cleared = m.newTextBox(0.5, 5.6, 3, 0.4);
+cleared.html = '';
+cleared.text = 'STALE-CLEARED-BOX';
+doc.artboards[0].boxes.push(cleared);
+
 const logo = m.newImageBox(0.5, 0.2, 1.5, 0.75);
 logo.image.src = '/sfc/servlet.shepherd/version/download/068000000000001';
 logo.image.keepRatio = true;
@@ -288,6 +296,9 @@ const checks = [
     // showing what a format suffix looks like, and decoding it would turn the example
     // into a live merge tag that prints the record's data.
     ['escaped braces are NOT turned into live tags', /&#123;braced&#125;|&amp;#123;/.test(html)],
+    // #295: an empty html='' is authored-empty, not "fall back to text". The stale
+    // `text` on a cleared box must never serialize into the document.
+    ['a cleared box serializes empty, not its stale text', !html.includes('STALE-CLEARED-BOX')],
 
     // --- Images ------------------------------------------------------------
     // Flying Saucer computes a replaced element's size ONCE PER URL, so the same image

@@ -1931,9 +1931,18 @@ function textToHtml(box) {
     // A box edited in the rich-text editor carries `html`, and that is what the author
     // actually sees. Serializing `text` here meant every bold, bullet and colour was
     // dropped on the way to the PDF while the canvas kept showing them — the editor
-    // silently stopped being WYSIWYG. `text` remains the fallback for boxes authored
-    // before the rich-text editor existed, and for a box whose html was cleared.
-    if (box.html != null && String(box.html).trim() !== '') {
+    // silently stopped being WYSIWYG. `text` remains the fallback ONLY for boxes
+    // authored before the rich-text editor existed (html == null) and never carries
+    // the live content once the editor has touched a box.
+    //
+    // html == '' is "the author cleared the box" — the editor writes an empty string on
+    // delete — and must serialize to nothing. Falling through to `text` there resurfaces
+    // stale content (the pre-edit import, or the literal placeholder 'Text'), which the
+    // canvas shows as empty so the loss is invisible until the PDF renders. See #295.
+    if (box.html != null) {
+        if (String(box.html).trim() === '') {
+            return ''; // authored-empty is empty — never resurrect `text`
+        }
         // Guarded so the serializer stays runnable without a DOM — scripts/qa/
         // canvas-serializer-check.mjs is a pure-Node guard on exactly these rules, and
         // a serializer that only runs in a browser cannot be checked before it ships.
