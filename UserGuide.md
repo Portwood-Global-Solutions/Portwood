@@ -3077,6 +3077,56 @@ For each template you can edit the **subject** and **body**, preview it live wit
 
 > **Out of the box:** a default record for each template is created on install, so emails work immediately with zero setup. Delete a record to fall back to the built-in default.
 
+#### Changing a widget's wording or styling
+
+Each widget renders a fixed block of English text with **inline styles** — `{ActionButton}` always reads "Review & Sign Document," `{SecurityNote}` always says "This link is unique to you and will expire in _N_ hours." You cannot edit the text inside a widget, and because the widget's own inline styles win over any wrapper rule in most email clients, wrapping it in CSS won't recolor the button or relabel it either.
+
+**To change wording, stop using the widget and build the block yourself.** Every widget is assembled from ordinary merge tokens that you can place directly — so authoring your own gives you full control of both the words and the styling:
+
+| Instead of this widget | Use these tokens                      |
+| ---------------------- | ------------------------------------- |
+| `{ActionButton}`       | `{SignatureUrl}`                      |
+| `{DocumentInfo}`       | `{DocumentTitle}`, `{RoleName}`       |
+| `{SecurityNote}`       | `{SignatureUrl}`, `{ExpirationHours}` |
+| `{VerificationCode}`   | `{Pin}`, `{ExpirationMinutes}`        |
+
+A replacement for `{ActionButton}` with your own label and brand color — this is a plain `<a>`, so restyle it however you like:
+
+```html
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px auto">
+    <tr>
+        <td align="center" style="border-radius: 6px; background-color: #0b3d2e">
+            <a
+                href="{SignatureUrl}"
+                target="_blank"
+                style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;border-radius:6px;"
+                >Approve your agreement</a
+            >
+        </td>
+    </tr>
+</table>
+```
+
+And a replacement for `{SecurityNote}` in your own words:
+
+```html
+<p style="font-size: 13px; color: #706e6b; line-height: 1.5">
+    This link belongs to you alone and stops working after {ExpirationHours} hours. Trouble with the button? Paste this
+    into your browser:<br />
+    <a href="{SignatureUrl}" style="color: #0b3d2e">{SignatureUrl}</a>
+</p>
+```
+
+**To keep the widget but control what's around it,** wrap it — spacing, alignment and background of the surrounding container are yours, since those are properties of your element, not the widget's:
+
+```html
+<div style="background: #f7f9fa; padding: 20px; text-align: center; border-radius: 8px">{ActionButton}</div>
+```
+
+Use **Full custom HTML** layout mode (above) when you're replacing widgets wholesale, so Portwood adds no header/footer of its own around your markup.
+
+> **Which tokens are available depends on the email.** A token that isn't supplied for that email type renders as empty text and is then stripped. `{Pin}` / `{ExpirationMinutes}` exist only on the **Verification PIN** email; `{SignatureUrl}` / `{ExpirationHours}` / `{RoleName}` only on the emails that carry a signing link (Signature Request, Reminder). `{CompanyName}`, `{DocumentTitle}` and `{BrandColor}` are available everywhere. Use the live preview and **Send Test** on the Email Templates tab to confirm before saving.
+
 **Send-time customization.** When sending a single-template request (from the Signature Sender or the `Portwood: Create Signature Request` Flow action), you can type a **Custom Email Subject** and/or **Custom Email Message** that override the saved template for that one send. The subject supports merge tokens; the branded layout and signing button are always kept. Bulk/packet sends always use the saved templates.
 
 **Per-template default message (v3.28+).** Each Portwood Template has a **Default Email Message** field (Command Hub → template editor). When set, it becomes the `{Message}` text for signature requests sent from that template — pre-filled in the sender so you see exactly what will go out, and used automatically by Flow sends that leave the message blank. Resolution order: send-time custom message → template default → the email template's generic text. A quote template can say "Please see the attached proposal…" while an NDA template carries different copy, with no per-send typing.
