@@ -98,6 +98,9 @@ import DOCGEN_TEMPLATE_OBJECT from '@salesforce/schema/DocGen_Template__c';
 import NAME_FIELD from '@salesforce/schema/DocGen_Template__c.Name';
 import CATEGORY_FIELD from '@salesforce/schema/DocGen_Template__c.Category__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
+// The version object carries its OWN restricted Type picklist — see #303.
+import DOCGEN_VERSION_OBJECT from '@salesforce/schema/DocGen_Template_Version__c';
+import VERSION_TYPE_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Type__c';
 import BASE_OBJECT_FIELD from '@salesforce/schema/DocGen_Template__c.Base_Object_API__c';
 import QUERY_CONFIG_FIELD from '@salesforce/schema/DocGen_Template__c.Query_Config__c';
 import DESC_FIELD from '@salesforce/schema/DocGen_Template__c.Description__c';
@@ -4497,6 +4500,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     _typePicklist;
     @track _orgTypeValues = null;
 
+    // The SECOND restricted Type picklist (#303).
+    //
+    // Saving a template writes Type__c on DocGen_Template__c AND on the version
+    // record, and BOTH fields are restricted picklists carrying the same value
+    // set. The check above only ever read the template's, so the warning named
+    // one object — and an admin who followed it exactly still could not save:
+    //
+    //   "I added the 'Canvas' type manually which got me over the initial error
+    //    message ... the save failed ... Type: bad value for restricted
+    //    picklist field: Canvas"
+    //
+    // They fixed the field the message named and hit the one it did not.
+    @wire(getObjectInfo, { objectApiName: DOCGEN_VERSION_OBJECT })
+    versionObjectInfo;
+
+    @wire(getPicklistValues, {
+        recordTypeId: '$versionObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: VERSION_TYPE_FIELD
+    })
+    wiredVersionTypePicklist(result) {
+        this._versionTypePicklist = result;
+        if (result && result.data && Array.isArray(result.data.values)) {
+            this._orgVersionTypeValues = result.data.values.map((v) => v.value);
+        }
+    }
+    _versionTypePicklist;
+    @track _orgVersionTypeValues = null;
+
     get typeOptions() {
         const fallback = Object.keys(TYPE_VALUE_HISTORY);
         // Until the wire resolves (and if it errors) keep the historical hardcoded
@@ -4520,18 +4551,101 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgTypeValues.includes(v));
     }
 
-    get hasMissingTypeValues() {
-        return this.missingTypeValues.length > 0;
+    /** Values missing from the VERSION object's Type picklist (#303). */
+    get missingVersionTypeValues() {
+        if (!this._orgVersionTypeValues || !this._orgVersionTypeValues.length) {
+            return [];
+        }
+        return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgVersionTypeValues.includes(v));
     }
 
+    get hasMissingTypeValues() {
+        return this.missingTypeValues.length > 0 || this.missingVersionTypeValues.length > 0;
+    }
+
+    /**
+     * Names EVERY field that needs the value, not just the first one (#303).
+     *
+     * The old message named only "Portwood Template > Type". Saving also writes
+     * the version record's own restricted Type picklist, so an admin who did
+     * exactly what the message said still hit
+     * "Type: bad value for restricted picklist field: Canvas" on save.
+     */
     get missingTypeValuesMessage() {
-        const missing = this.missingTypeValues.map((v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`).join(', ');
+        const describe = (v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`;
+        const onTemplate = this.missingTypeValues;
+        const onVersion = this.missingVersionTypeValues;
+        const all = Array.from(new Set([...onTemplate, ...onVersion]));
+
+        const fields = [];
+        if (onTemplate.length) {
+            fields.push('Portwood Template > Type');
+        }
+        if (onVersion.length) {
+            fields.push('Portwood Template Version > Type');
+        }
+
         return (
-            `This org's Template Type picklist is missing: ${missing}. ` +
-            'That means the package upgrade did not fully apply its schema. ' +
-            'Re-run the package upgrade, or add the missing values to the ' +
-            'Portwood Template > Type field in Setup. Until then those template types cannot be created.'
+            `This org's Type picklist is missing: ${all.map(describe).join(', ')}. ` +
+            'That means the package upgrade did not fully apply its schema — a restricted ' +
+            'picklist value never reaches an org that was already installed before that value ' +
+            'existed, and no later upgrade brings it. ' +
+            `Add the missing values to ${fields.join(' AND ')} in Setup — ` +
+            (fields.length > 1
+                ? 'BOTH fields are needed, because saving writes the type to the template and to its version. '
+                : '') +
+            'Until then those template types cannot be created.'
         );
+    }
+
+    /**
+     * Direct Setup links for every field that is short a value (#303).
+     *
+     * Apex cannot add a picklist value — the Apex Metadata API exposes only
+     * CustomMetadata and Layout, not CustomField/ValueSet — so this is an admin
+     * task by necessity. The least we can do is take them to the exact field
+     * rather than describing where it lives. Object API names come from the wire,
+     * so these carry the package namespace in a subscriber org.
+     */
+    get missingTypeFieldLinks() {
+        const links = [];
+        const base = '/lightning/setup/ObjectManager/';
+        const tmplApi = this.templateObjectInfo && this.templateObjectInfo.data && this.templateObjectInfo.data.apiName;
+        const versApi = this.versionObjectInfo && this.versionObjectInfo.data && this.versionObjectInfo.data.apiName;
+        if (this.missingTypeValues.length && tmplApi) {
+            links.push({
+                objectApiName: tmplApi,
+                label: 'Portwood Template > Type',
+                url: base + tmplApi + '/FieldsAndRelationships/view'
+            });
+        }
+        if (this.missingVersionTypeValues.length && versApi) {
+            links.push({
+                objectApiName: versApi,
+                label: 'Portwood Template Version > Type',
+                url: base + versApi + '/FieldsAndRelationships/view'
+            });
+        }
+        return links;
+    }
+
+    /** Re-read both picklists after the admin has added the values. */
+    handleRecheckTypeValues() {
+        Promise.all([refreshApex(this._typePicklist), this._refreshVersionTypePicklist()])
+            .then(() => {
+                if (this.hasMissingTypeValues) {
+                    this.showToast('Still missing', this.missingTypeValuesMessage, 'warning');
+                } else {
+                    this.showToast('Schema is complete', 'Every template type is available now.', 'success');
+                }
+            })
+            .catch(() => {
+                this.showToast('Could not re-check', 'Reload the page to check again.', 'warning');
+            });
+    }
+
+    _refreshVersionTypePicklist() {
+        return this._versionTypePicklist ? refreshApex(this._versionTypePicklist) : Promise.resolve();
     }
 
     get outputFormatOptions() {
