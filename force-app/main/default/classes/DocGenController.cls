@@ -770,8 +770,44 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param base64Data  Base64-encoded image bytes
      * @return The created ContentVersion ID
      */
-    @AuraEnabled
+    /**
+     * Apex-side convenience with no retained source. NOT @AuraEnabled — Apex
+     * forbids overloading an @AuraEnabled method, so the LWC entry point is the
+     * four-argument form below and passes null when there is no source (#313).
+     */
     public static Id saveWatermarkImage(Id versionId, String fileName, String base64Data) {
+        return saveWatermarkImage(versionId, fileName, base64Data, null);
+    }
+
+    /** Title prefix for the retained, unbaked watermark source (#313). */
+    private static final String WATERMARK_SOURCE_PREFIX = 'docgen_watermark_src_';
+
+    /**
+     * Returns the retained unbaked watermark source for a version, or null when
+     * there is none — a watermark uploaded before #313, or one saved without a
+     * source. The caller re-bakes from this rather than from the stored image,
+     * which is already washed (#313).
+     */
+    @AuraEnabled
+    public static String getWatermarkSource(Id versionId) {
+        if (versionId == null) {
+            return null;
+        }
+        DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title', 'VersionData' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<ContentVersion> cvs = [
+            SELECT VersionData
+            FROM ContentVersion
+            WHERE Title = :(WATERMARK_SOURCE_PREFIX + versionId)
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        return cvs.isEmpty() || cvs[0].VersionData == null ? null : EncodingUtil.base64Encode(cvs[0].VersionData);
+    }
+
+    @AuraEnabled
+    public static Id saveWatermarkImage(Id versionId, String fileName, String base64Data, String sourceBase64) {
         if (versionId == null) {
             throw new DocGenException('Version ID is required.');
         }
@@ -811,6 +847,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             FirstPublishLocationId = versionId
         );
         Database.insert(cv, AccessLevel.USER_MODE);
+
+        // Keep the UNBAKED original alongside the washed image (#313).
+        //
+        // Opacity is baked into the stored PNG's pixels — Flying Saucer has no CSS
+        // opacity, so pre-multiplied alpha is the only thing that renders. That
+        // means the stored image cannot be re-washed: 30% of an already-30% image
+        // is 9%, and every change would compound. Persisting the source is what
+        // lets the opacity control keep working after the page is reloaded, or in
+        // a later session, instead of asking the author to upload the file again.
+        if (String.isNotBlank(sourceBase64)) {
+            ContentVersion src = new ContentVersion(
+                Title = WATERMARK_SOURCE_PREFIX + versionId,
+                PathOnClient = 'watermark-source.png',
+                VersionData = EncodingUtil.base64Decode(sourceBase64),
+                FirstPublishLocationId = versionId
+            );
+            Database.insert(src, AccessLevel.USER_MODE);
+        }
         // Persist the CV ID on the template version so the renderer knows about it.
         // SYSTEM_MODE on the namespaced custom-field update — Schema check above
         // gates access; USER_MODE strict-FLS strips Watermark_Image_CV_Id__c when

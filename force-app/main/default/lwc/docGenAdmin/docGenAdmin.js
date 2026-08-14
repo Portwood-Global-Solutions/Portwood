@@ -83,6 +83,7 @@ import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions
 import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import saveWatermarkImage from '@salesforce/apex/DocGenController.saveWatermarkImage';
+import getWatermarkSource from '@salesforce/apex/DocGenController.getWatermarkSource';
 import clearWatermarkImage from '@salesforce/apex/DocGenController.clearWatermarkImage';
 import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
@@ -15272,18 +15273,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (!this.editTemplateWatermarkCvId) {
             return;
         }
-        if (!this._watermarkSourceFile) {
-            // Uploaded in an earlier session, so the unbaked original is gone.
-            // Say so rather than leaving the control looking like it worked.
-            this.showToast(
-                'Re-upload to change the wash',
-                'The opacity is baked into the stored image, and the original from this upload is not in this session. Upload the image again to apply ' +
-                    this.watermarkOpacityPct +
-                    '%.',
-                'warning'
-            );
-            return;
-        }
         await this._reuploadWatermarkAtCurrentOpacity();
     }
 
@@ -15296,11 +15285,30 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.isUploadingWatermark = true;
         try {
             const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
-            const baked = await this._bakeWatermarkOpacity(this._watermarkSourceFile, pct);
+            // In-session file first; otherwise the original persisted at upload
+            // time, which is what makes this work after a reload (#313).
+            let source = this._watermarkSourceFile;
+            if (!source) {
+                const stored = await getWatermarkSource({ versionId: active.Id });
+                if (!stored) {
+                    this.showToast(
+                        'Re-upload to change the wash',
+                        'This watermark was uploaded before Portwood started keeping the original, so the opacity is baked in. Upload the image again to apply ' +
+                            pct +
+                            '%.',
+                        'warning'
+                    );
+                    return;
+                }
+                source = await (await fetch('data:image/png;base64,' + stored)).blob();
+            }
+            const baked = await this._bakeWatermarkOpacity(source, pct);
+            const original = await this._bakeWatermarkOpacity(source, 100);
             this.editTemplateWatermarkCvId = await saveWatermarkImage({
                 versionId: active.Id,
-                fileName: baked.fileName,
-                base64Data: baked.base64
+                fileName: baked.fileName || 'watermark.png',
+                base64Data: baked.base64,
+                sourceBase64: original.base64
             });
             this.showToast('Watermark updated', 'Re-applied at ' + pct + '%.', 'success');
         } catch (err) {
@@ -15378,10 +15386,14 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
             const baked = await this._bakeWatermarkOpacity(file, pct);
+            // Persist the UNBAKED original too, so the opacity stays adjustable in
+            // any later session — not just this one (#313).
+            const source = await this._bakeWatermarkOpacity(file, 100);
             const newCvId = await saveWatermarkImage({
                 versionId: active.Id,
                 fileName: baked.fileName,
-                base64Data: baked.base64
+                base64Data: baked.base64,
+                sourceBase64: source.base64
             });
             this.editTemplateWatermarkCvId = newCvId;
             // Retain the UNBAKED original so a later opacity change can re-bake

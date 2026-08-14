@@ -14,8 +14,10 @@
  * control has nothing left to act on. Changing it updated a field nobody read.
  *
  * Re-baking the STORED image is not a fix: 30% of an already-30% wash is 9%, and
- * every change would compound. The original is the only correct source, so the
- * unbaked file is retained for the session.
+ * every change would compound. The original is the only correct source, so it is
+ * PERSISTED at upload time as `docgen_watermark_src_<versionId>` — Dave's call
+ * over keeping it only for the session, which would have meant asking the author
+ * to re-upload after every page reload.
  *
  * This asserts the routing — which of the three situations each change lands in —
  * because that is where the silence was.
@@ -36,11 +38,14 @@ function onOpacityChange(state, pct) {
     if (!state.editTemplateWatermarkCvId) {
         return 'stored-for-upload';
     }
-    if (!state._watermarkSourceFile) {
+    // In-session file first, then the source persisted at upload time. Only a
+    // watermark saved before #313 has neither.
+    const source = state._watermarkSourceFile || state.storedSource;
+    if (!source) {
         return 'told-to-reupload';
     }
     // Re-bakes from the ORIGINAL, never from the stored (already-washed) image.
-    state.bakedFrom = state._watermarkSourceFile;
+    state.bakedFrom = source;
     state.bakedAt = pct;
     return 'rebaked';
 }
@@ -49,6 +54,7 @@ function onOpacityChange(state, pct) {
 function onUpload(state, file, cvId) {
     state.editTemplateWatermarkCvId = cvId;
     state._watermarkSourceFile = file;
+    state.storedSource = file; // persisted server-side as docgen_watermark_src_<versionId>
     state.bakedFrom = file;
     state.bakedAt = state.watermarkOpacityPct;
 }
@@ -82,10 +88,29 @@ console.log('\nthe re-bake must start from the ORIGINAL, never the stored wash')
     ok(s.bakedAt === '15', 'ending at exactly what was asked for');
 }
 
-console.log('\nan image from an earlier session cannot be re-baked, and says so');
+console.log('\nafter a page reload the stored original still drives the re-bake');
 {
-    // Page reloaded: the CV is on the record but the unbaked original is gone.
-    const s = { watermarkOpacityPct: '30', editTemplateWatermarkCvId: '068AAA', _watermarkSourceFile: null };
+    // The in-session file is gone, but the source persisted at upload time is not.
+    const s = {
+        watermarkOpacityPct: '30',
+        editTemplateWatermarkCvId: '068AAA',
+        _watermarkSourceFile: null,
+        storedSource: 'logo.png'
+    };
+    ok(onOpacityChange(s, '50') === 'rebaked', 'a reload no longer costs the author a re-upload');
+    ok(s.bakedFrom === 'logo.png', 'and it re-bakes from the stored ORIGINAL, not the washed image');
+    ok(s.bakedAt === '50', 'landing at exactly what was asked for');
+}
+
+console.log('\nonly a pre-#313 watermark has no source, and that one says so');
+{
+    // Uploaded before the source was retained: nothing to re-bake from.
+    const s = {
+        watermarkOpacityPct: '30',
+        editTemplateWatermarkCvId: '068AAA',
+        _watermarkSourceFile: null,
+        storedSource: null
+    };
     ok(
         onOpacityChange(s, '50') === 'told-to-reupload',
         'the author is told to re-upload rather than left thinking it applied'
@@ -99,6 +124,7 @@ console.log('\nclearing the watermark forgets the original too');
     // Mirrors handleClearWatermark.
     s.editTemplateWatermarkCvId = null;
     s._watermarkSourceFile = null;
+    s.storedSource = null;
     ok(
         onOpacityChange(s, '50') === 'stored-for-upload',
         'after a clear it is back to recording the value for the next upload'
