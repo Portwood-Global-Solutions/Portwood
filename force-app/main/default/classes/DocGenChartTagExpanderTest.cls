@@ -402,15 +402,27 @@ private class DocGenChartTagExpanderTest {
     }
 
     @IsTest
-    static void htmlRenderSvg_bareColumnStyle_errorsWithoutOptIn() {
-        // {Chart:R:F:column} without htmlRender=svg has no CSS-bar renderer
-        // (column is SVG-only) — the expander surfaces an actionable error
-        // pointing the author at the opt-in rather than silently dropping
-        // the chart.
+    static void htmlRenderSvg_bareColumnStyle_degradesWithoutOptIn() {
+        // REVERSED in #306, deliberately. This used to assert that a bare
+        // {Chart:R:F:column} produced "an actionable error pointing the author at
+        // the opt-in". In a browser that branch is never reached — the chart is
+        // rasterized and chartCvMap is populated. Headless it is, and the caller
+        // printed the exception INTO the document: the raw merge tag, in a
+        // client-facing PDF. Seven charts produced seven error blocks and no
+        // images on a real Flow-action run.
+        //
+        // The advice was also unactionable for the format that hit it:
+        // htmlRender=svg emits inline <svg>, which Flying Saucer drops, so it can
+        // never help a PDF. Degrading to CSS bars gives the same data in the same
+        // order; an error block gives nothing.
         String input = '{Chart:Responses__r:A__c:column}';
         String out = DocGenChartTagExpander.expand(input, 'HTML');
-        System.assert(out.contains('Chart error'), 'Bare column style should render an error block. Got: ' + out);
-        System.assert(out.contains('htmlRender=svg'), 'Error should point the author at the htmlRender=svg opt-in.');
+        System.assert(!out.contains('Chart error'), 'A bare column must not render an error block. Got: ' + out);
+        System.assert(!out.contains('{Chart:'), 'The raw tag must never reach the document. Got: ' + out);
+        System.assert(
+            out.contains('{#ChartBucket:Responses__r:A__c'),
+            'It should degrade to the CSS-bar renderer. Got: ' + out
+        );
     }
 
     // ─── Task #23: HTML chart output via PNG-via-CV ──────────────────────────
@@ -664,5 +676,86 @@ private class DocGenChartTagExpanderTest {
             }
         }
         Test.stopTest();
+    }
+
+    // ─── #306: headless HTML degrades, it never prints an error ──────────────
+    //
+    // In a browser these styles are rasterized and chartCvMap is populated, so
+    // any style works. Headless — Flow action, batch, scheduled job — there is
+    // no browser, chartCvMap is empty, and a style with no CSS-bar renderer used
+    // to THROW. The caller printed that exception into the document, putting the
+    // raw merge tag in the middle of a client-facing PDF. Measured on a real
+    // headless run: seven charts, a 7-page PDF, zero images, seven error blocks.
+    //
+    // The advice the old message gave was a dead end anyway — htmlRender=svg
+    // emits inline <svg>, which Flying Saucer drops.
+
+    /** Every style with no CSS-bar renderer of its own. */
+    private static List<String> degradingStyles() {
+        return new List<String>{ 'column', 'pie', 'donut', 'line', 'area' };
+    }
+
+    @isTest
+    static void headlessHtmlDegradesUnsupportedStylesToBars() {
+        Test.startTest();
+        for (String style : degradingStyles()) {
+            String input = '{Chart:Responses__r:A__c:' + style + ':title=Commute mode}';
+            String out;
+            try {
+                out = DocGenChartTagExpander.expand(input, 'HTML');
+            } catch (Exception e) {
+                System.assert(false, style + ' must not throw headless — got: ' + e.getMessage());
+            }
+            System.assert(
+                !out.contains('{Chart:'),
+                style + ': the raw tag must never survive into the document. Got: ' + out
+            );
+            System.assert(
+                !out.containsIgnoreCase('htmlRender=svg'),
+                style + ': must not advise htmlRender=svg, which Flying Saucer drops. Got: ' + out
+            );
+            System.assert(
+                !out.containsIgnoreCase('Chart error'),
+                style + ': must not emit an error block. Got: ' + out
+            );
+            System.assert(
+                out.contains('{#ChartBucket:Responses__r:A__c'),
+                style + ': should degrade to the CSS-bar renderer. Got: ' + out
+            );
+            System.assert(out.contains('Commute mode'), style + ': the author title must survive the degrade.');
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void degradedChartKeepsItsPercentages() {
+        // pie/donut lose the part-of-whole framing when drawn as bars, so the
+        // percentage on each row is what carries that meaning across.
+        Test.startTest();
+        String out = DocGenChartTagExpander.expand('{Chart:Responses__r:A__c:donut}', 'HTML');
+        Test.stopTest();
+        System.assert(out.contains('{percent}'), 'A degraded donut must still show percentages. Got: ' + out);
+    }
+
+    @isTest
+    static void stylesWithTheirOwnCssRendererAreUnaffected() {
+        // Control: the degrade must not swallow the styles that already work.
+        Test.startTest();
+        for (String style : new List<String>{ 'bar', 'pivot', 'clustered', 'stacked' }) {
+            String opts = (style == 'bar') ? '' : ':groupBy=Dept__c';
+            String out = DocGenChartTagExpander.expand('{Chart:Responses__r:A__c:' + style + opts + '}', 'HTML');
+            System.assert(!out.contains('{Chart:'), style + ' still expands. Got: ' + out);
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void htmlRenderSvgStillWinsWhereItIsAsked() {
+        // The opt-in path is unchanged — degrading is the FALLBACK, not a
+        // replacement for an author who explicitly asked for SVG in a browser.
+        Test.startTest();
+        String out = DocGenChartTagExpander.expand('{Chart:Responses__r:A__c:column:htmlRender=svg}', 'HTML');
+        Test.stopTest();
+        System.assert(out.contains('<svg'), 'htmlRender=svg must still emit inline SVG. Got: ' + out);
     }
 }

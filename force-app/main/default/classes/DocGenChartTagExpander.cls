@@ -345,17 +345,33 @@ public with sharing class DocGenChartTagExpander {
         } else if (style == 'stacked') {
             return renderStacked(title, chartBucketTag, opts.get('colSort'), opts);
         }
-        // Unreachable due to ALLOWED_STYLES guard above — `column`, `pie`,
-        // `donut` only render in HTML output via the `htmlRender=svg` opt-in
-        // branch above, since the CSS-bar renderers don't (yet) cover them.
-        // If an author writes a bare {Chart:Rel:Field:column} we surface an
-        // actionable error rather than silently falling through.
-        throw new ChartTagException(
-            'Style "' +
-                style +
-                '" is supported in HTML output only via `htmlRender=svg`. ' +
-                'Add `:htmlRender=svg` to the tag or pick a CSS-bar style (bar, pivot, clustered, stacked).'
-        );
+        // DEGRADE, never error (#306).
+        //
+        // `column`, `pie`, `donut`, `line` and `area` have no CSS-bar renderer.
+        // In a browser that is moot — the chart is rasterized and chartCvMap is
+        // populated, so any style works. Headless (Flow action, batch, scheduled
+        // job) there is no browser, chartCvMap is empty, and this branch is
+        // reached. It used to throw, and the caller printed the exception into
+        // the document — putting the raw merge tag in the middle of a
+        // client-facing PDF:
+        //
+        //   Chart error: Style "column" is supported in HTML output only via
+        //   `htmlRender=svg` ... at {Chart:Survey_Answers__r:Answer_8__c:column:...}
+        //
+        // Measured on a real headless run: seven charts, a 7-page PDF, ZERO
+        // embedded images and seven error blocks. Everything non-chart was
+        // correct.
+        //
+        // The advice that message gave was a dead end anyway: `htmlRender=svg`
+        // emits inline <svg>, which Flying Saucer silently drops, so it cannot
+        // help a PDF.
+        //
+        // A `column` drawn as CSS bars is the same data in the same order, read
+        // sideways. That is a far better document than an error block, and the
+        // author still gets their intended shape everywhere a browser is
+        // involved. `pie`/`donut` lose the part-of-whole framing, which is why
+        // the percentage stays on every bar.
+        return renderBar(title, chartBucketTag, opts);
     }
 
     /**
