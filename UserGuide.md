@@ -1973,20 +1973,28 @@ Modifiers come after the style, joined with `&`. **Order doesn't matter.** Value
 
 Here `Survey_Question__c.Survey_Responses__r` is the child relationship from Question (not from the outer Survey). One chart per question, no `where=` needed.
 
+> **⚠️ Changed in v3.57 — existing `fontSize=` values are now roughly twice too large.**
+> `fontSize=` used to mean three different things depending on which renderer drew the
+> chart, so templates were tuned against whichever one they were previewed in. It now
+> means the same thing everywhere: **N pixels at the chart's placed size**. If a chart
+> was reading correctly before and now looks oversized, **halve the number** — a
+> `fontSize=27` tuned against the old behaviour becomes about `fontSize=13`. Charts with
+> no `fontSize=` at all are unaffected and now render at a sensible default, which
+> previously they did not.
+>
 > **If chart labels come out too small, raise `fontSize=`.** Label sizes are in canvas
-> pixels, so how big they look in the finished document depends on how far the image is
-> scaled to fit its frame.
+> pixels at the chart's placed size — supersampling for a crisp image no longer shrinks
+> the text, so a sharper chart is not a smaller-lettered one.
 >
-> On a **Canvas** template that is straightforward: the chart block renders at its own
-> size, so the 12px default prints at about 9pt whatever size the block is. Set **Label
-> size** in the chart properties to change it.
+> On a **Canvas** template the chart block renders at its own size, so the 12px default
+> prints at about 9pt whatever size the block is. Set **Label size** in the chart
+> properties to change it.
 >
-> On a **PowerPoint or Word** template the image is stretched to fit the shape you drew,
-> and `width=` does not change that — a chart squeezed into a 3-inch shape has small
-> labels however many pixels it was rendered at. Raising `width=` sharpens the picture
-> while making the text smaller relative to the frame, which is the opposite of what
-> most people expect. `fontSize=` is the knob: adjust it until it reads well at the size
-> the shape actually is.
+> On a **PowerPoint or Word** template the image is stretched to fit the shape you drew.
+> A chart squeezed into a 3-inch shape still has proportionally smaller labels than the
+> same chart in a 7-inch shape — that is the shape doing it, not the renderer.
+> `fontSize=` is the knob: adjust it until it reads well at the size the shape actually
+> is.
 
 **Error handling.** Malformed tags render an inline error block in HTML output (red border, monospace tag dump) and a `[Chart error: …]` text placeholder in Word — you see the problem at first preview rather than chasing a silent miss. Errors include the original tag verbatim so you can diff it against a working sample.
 
