@@ -706,6 +706,29 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             outputFormat = outputFormatOverride;
         }
 
+        // PowerPoint cannot render to PDF, and saying so is the whole fix (#336).
+        //
+        // validateOutputFormatOverride already throws "PowerPoint templates
+        // cannot render to PDF" — but ONLY when PDF arrives as an override
+        // argument. A template whose OWN Output_Format__c is PDF never reached
+        // that check: the value was read, ignored, and a .pptx came out with the
+        // generation reporting success.
+        //
+        // yuvraj hit exactly that and had no way to find out why: the picklist
+        // offered PDF, the record saved with PDF, and the output was silently
+        // something else. Two paths, the same impossible request, opposite
+        // handling — so the paths now agree.
+        //
+        // Deliberately an error rather than a silent correction to Native. The
+        // author asked for a PDF; handing them a .pptx and calling it success is
+        // what the report was about.
+        if (templateType == 'PowerPoint' && outputFormat == 'PDF') {
+            throw new DocGenException(
+                'PowerPoint templates cannot render to PDF. Set this template\'s Output Format to Native (.pptx), ' +
+                'or rebuild it as a Word or HTML template if you need PDF output.'
+            );
+        }
+
         // Designer live-preview: render caller-supplied draft HTML in place of
         // the saved body (HTML templates only). One-shot — cleared by the
         // controller in a finally block so it never leaks into a later merge.

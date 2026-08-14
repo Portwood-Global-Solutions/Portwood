@@ -11039,4 +11039,99 @@ private class DocGenMiscTests {
             'Macro-enabled template must save as .xlsm, got: ' + saved.PathOnClient
         );
     }
+
+    // ─── #336: PowerPoint + Output Format = PDF must SAY it cannot ───────────
+    //
+    // validateOutputFormatOverride already threw "PowerPoint templates cannot
+    // render to PDF" — but only when PDF arrived as an OVERRIDE argument. A
+    // template whose own Output_Format__c was PDF never reached that check: the
+    // value was read, ignored, and a .pptx came out with the generation
+    // reporting success. Two paths, the same impossible request, opposite
+    // handling.
+    //
+    // yuvraj hit exactly that: the picklist offered PDF, the record saved with
+    // PDF, and the output was silently something else.
+
+    /** A minimal .pptx with one slide, enough for the merge path to reach a format guard. */
+    private static void linkPptxToTemplate(Id tplId) {
+        Compression.ZipWriter zw = new Compression.ZipWriter();
+        zw.addEntry(
+            '_rels/.rels',
+            Blob.valueOf(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+            )
+        );
+        zw.addEntry(
+            'ppt/slides/slide1.xml',
+            Blob.valueOf(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                    '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+                    '<p:cSld><p:spTree><p:sp><p:txBody><a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+                    '<a:r><a:t>{Name}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>'
+            )
+        );
+        linkWorkbookToTemplate(tplId, 'Deck.pptx', zw.getArchive());
+    }
+    @IsTest
+    static void powerPointTemplateWithPdfOutputSaysItCannot() {
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        tpl.Type__c = 'PowerPoint';
+        tpl.Output_Format__c = 'PDF';
+        tpl.Query_Config__c = 'Name';
+        Database.update(tpl, AccessLevel.SYSTEM_MODE);
+        linkPptxToTemplate(tpl.Id);
+        Account acc = TestDataFactory.getTestAccount();
+
+        Boolean threw = false;
+        String message = '';
+        Test.startTest();
+        try {
+            DocGenService.generateDocument(tpl.Id, acc.Id);
+        } catch (Exception e) {
+            threw = true;
+            message = e.getMessage();
+        }
+        Test.stopTest();
+
+        System.assertEquals(true, threw, 'A PowerPoint template asking for PDF must not silently produce a .pptx.');
+        System.assert(
+            message.contains('cannot render to PDF'),
+            'The error must name the actual limitation. Got: ' + message
+        );
+        System.assert(
+            message.contains('Native'),
+            'And it must say what to set instead, or the author is no better off. Got: ' + message
+        );
+    }
+
+    @IsTest
+    static void powerPointTemplateWithNativeOutputIsUnaffected() {
+        // Control: the supported combination must keep working. If this fails,
+        // the guard is too broad and has broken every PowerPoint template.
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        tpl.Type__c = 'PowerPoint';
+        tpl.Output_Format__c = 'Native';
+        tpl.Query_Config__c = 'Name';
+        Database.update(tpl, AccessLevel.SYSTEM_MODE);
+        linkPptxToTemplate(tpl.Id);
+        Account acc = TestDataFactory.getTestAccount();
+
+        Boolean threw = false;
+        Test.startTest();
+        try {
+            DocGenService.generateDocument(tpl.Id, acc.Id);
+        } catch (DocGenException e) {
+            // Any OTHER DocGenException is a fixture problem, not this guard —
+            // only fail on the one this change introduces.
+            if (e.getMessage().contains('cannot render to PDF')) {
+                threw = true;
+            }
+        } catch (Exception e) {
+            // Unrelated failure modes (missing file, etc.) are not what this asserts.
+        }
+        Test.stopTest();
+
+        System.assertEquals(false, threw, 'Native PowerPoint output must not trip the PDF guard.');
+    }
 }
