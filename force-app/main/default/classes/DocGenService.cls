@@ -3788,6 +3788,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return result;
     }
 
+    /** Lowercase form of the {RepeatHeader} marker — all probes case-fold the document. */
+    private static final String REPEAT_HEADER_MARKER = '{repeatheader}';
+
     /**
      * {RepeatHeader} marker → Word's native repeat-header. For each table row whose text
      * contains the (case-insensitive) {RepeatHeader} marker, strips the marker and ensures
@@ -3798,18 +3801,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * reprints it per chunk. Cheap guard: no-op when the marker is absent.
      */
     private static String applyRepeatHeaderMarkers(String xml) {
-        if (String.isBlank(xml) || !Pattern.compile('(?i)\\{repeatheader\\}').matcher(xml).find()) {
+        if (String.isBlank(xml)) {
+            return xml;
+        }
+
+        // Presence probe by indexOf, NOT by Matcher.find(). This guard runs on EVERY
+        // Word/PowerPoint merge — including the templates that never use
+        // {RepeatHeader}, because it is the check for whether the template uses it —
+        // so a whole-document Matcher here re-imposes the same `Regex too complicated`
+        // ceiling that mergeRunsInTagsCore was rewritten to remove (#325). A 14-char
+        // case-insensitive literal is far cheaper per character than the old
+        // <[wa]:t…> pattern, so it survives further rather than not at all: measured
+        // in-org to pass at 999,991 chars and throw at 1,040,000 on brace-free markup,
+        // and to throw by 1,000,000 once the markup carries merge-tag braces. That put
+        // the reference 966,143-char ACORD 125 about 3% under the wall, not clear of
+        // it. indexOf has no step budget, so this probe has no ceiling at all.
+        // The lowercased copy was already being built three lines below the old guard;
+        // this hoists it and reuses it, which also drops a redundant full-document pass.
+        String lower = xml.toLowerCase();
+        if (lower.indexOf(REPEAT_HEADER_MARKER) == -1) {
             return xml;
         }
 
         // Collect the start of every <w:tr that directly encloses a marker. Match
         // '<w:tr>' / '<w:tr ' (not '<w:trPr') and require the marker to fall before the
         // row's first </w:tr> so a marker outside any row never mis-flags a prior row.
-        String lower = xml.toLowerCase();
         Set<Integer> rowStarts = new Set<Integer>();
         Integer scan = 0;
         while (true) {
-            Integer hit = lower.indexOf('{repeatheader}', scan);
+            Integer hit = lower.indexOf(REPEAT_HEADER_MARKER, scan);
             if (hit == -1) {
                 break;
             }
@@ -3820,7 +3840,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     rowStarts.add(trStart);
                 }
             }
-            scan = hit + 14; // length of '{repeatheader}'
+            scan = hit + REPEAT_HEADER_MARKER.length();
         }
 
         // Inject <w:tblHeader/> descending by position so earlier offsets stay valid.
@@ -3830,8 +3850,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             xml = injectTblHeader(xml, ordered[i]);
         }
 
-        // Strip the marker text everywhere (any case).
-        return Pattern.compile('(?i)\\{repeatheader\\}').matcher(xml).replaceAll('');
+        // Strip the marker text everywhere (any case) — indexOf splice rather than
+        // replaceAll, for the same step-budget reason as the guard above. This one only
+        // runs when a marker was actually found, so it is the lesser exposure of the
+        // two, but it is the same shape and the same document.
+        return stripMarkerAnyCase(xml, REPEAT_HEADER_MARKER);
+    }
+
+    /**
+     * Removes every case-insensitive occurrence of a literal marker, by linear scan.
+     * The regex equivalent (`Pattern.compile('(?i)' + marker).matcher(xml).replaceAll('')`)
+     * carries Apex's per-operation input-sequence budget and throws the uncatchable
+     * `System.LimitException: Regex too complicated` on a large enough document — see
+     * the note in applyRepeatHeaderMarkers. `marker` must already be lowercase.
+     */
+    private static String stripMarkerAnyCase(String xml, String marker) {
+        String lower = xml.toLowerCase();
+        Integer hit = lower.indexOf(marker);
+        if (hit == -1) {
+            return xml;
+        }
+        Integer markerLen = marker.length();
+        List<String> parts = new List<String>();
+        Integer scan = 0;
+        while (hit != -1) {
+            parts.add(xml.substring(scan, hit));
+            scan = hit + markerLen;
+            hit = lower.indexOf(marker, scan);
+        }
+        parts.add(xml.substring(scan));
+        return String.join(parts, '');
     }
 
     /**
