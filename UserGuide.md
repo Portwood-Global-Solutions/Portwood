@@ -285,6 +285,19 @@ Every path also asks for:
 - HTML (`.html` / `.htm` / `.zip`) template → output PDF only (see [§5.7](#57-html-templates-google-docs-notion-any-html-source))
 - PDF (`.pdf`) fillable template → output PDF only (PDF-to-PDF / AcroForm filling is currently in testing)
 - PowerPoint (`.pptx`) template → output PPTX only (PowerPoint→PDF is not supported by the Salesforce platform)
+
+> **⚠️ Changed in v3.57 — a PowerPoint template set to PDF now fails instead of quietly
+> producing a `.pptx`.** The Output Format picklist offers PDF for every template type,
+> but PowerPoint cannot render to it: `Blob.toPdf` only accepts Word source. Until v3.57
+> the value was read and then ignored — the generation reported success and handed back a
+> `.pptx`, with nothing to say the request had been dropped.
+>
+> It now errors, naming what to set instead. **If you have a PowerPoint template already
+> saved with Output Format = PDF, it will start failing on the next release.** Set its
+> Output Format to **Native (.pptx)**, or rebuild it as a Word or HTML template if you
+> genuinely need PDF output. Nothing else changes: PowerPoint templates set to Native are
+> unaffected.
+
 - Excel (`.xlsx` / `.xlsm`) template → output XLSX only (macro-enabled templates output `.xlsm`)
 
 > **One template → one output format.** Templates render in whatever format
