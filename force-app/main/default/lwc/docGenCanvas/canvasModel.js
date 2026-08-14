@@ -1404,7 +1404,48 @@ function subLoopRow(t, parentColCount, boxFont) {
             );
         })
         .join('');
-    return '{#' + rel + '}<tr data-dg-row="subloop" data-dg-subrel="' + esc(rel) + '">' + cells + '</tr>{/' + rel + '}';
+    return (
+        '{#' +
+        rel +
+        '}<tr data-dg-row="subloop" data-dg-subrel="' +
+        esc(rel) +
+        '">' +
+        cells +
+        '</tr>{/' +
+        loopCloseKey(rel) +
+        '}'
+    );
+}
+
+/**
+ * The closing tag for a loop opener, mirroring the engine's own rule (#310).
+ *
+ * Some openers carry ARGUMENTS the closer does not repeat. The engine balances
+ * on the bare key — DocGenChartBucketResolver's close tag is the literal
+ * `{/ChartBucket}` — but the serializer emitted `'{/' + relationship + '}'`,
+ * so a table bound to `ChartBucket:Rel:Field` closed with
+ * `{/ChartBucket:Rel:Field}`, which nothing matches. The block was left
+ * unresolved and the table printed its raw tags.
+ *
+ * That made a chart with its numbers in a table beside it — the commonest chart
+ * layout there is — authorable in Word and HTML but NOT in Canvas.
+ *
+ * This mirrors DocGenTemplateLinter.balanceKey, which mirrors
+ * DocGenService.findBalancedEnd. Keep the three in step.
+ */
+function loopCloseKey(rel) {
+    const name = String(rel || '').trim();
+    const upper = name.toUpperCase();
+    if (upper === 'IF' || upper.startsWith('IF ')) {
+        return 'IF';
+    }
+    if (upper === 'GROUPBY' || upper.startsWith('GROUPBY ')) {
+        return 'GroupBy';
+    }
+    if (upper === 'CHARTBUCKET' || upper.startsWith('CHARTBUCKET:')) {
+        return 'ChartBucket';
+    }
+    return name;
 }
 
 function tableToHtml(box) {
@@ -1479,7 +1520,7 @@ function tableToHtml(box) {
         // The sub loop lives INSIDE the parent loop, after the parent's row, so each
         // parent record is followed by its own children. Outside it, the grandchildren
         // would all pile up once at the end under whichever parent happened to be last.
-        out += '{#' + t.relationship + '}' + loopRow + subRow + '{/' + t.relationship + '}';
+        out += '{#' + t.relationship + '}' + loopRow + subRow + '{/' + loopCloseKey(t.relationship) + '}';
     } else if (!(t.rows || []).length) {
         // No loop and no literal rows — keep one row so the table is not just a header.
         out += loopRow;
@@ -2541,7 +2582,11 @@ function readTable(wrapper, tableEl) {
     // {#Rel} was silently gone. The wrapper still holds it wherever the parser moved it.
     // READ, to find the {#Rel} marker the parser may have moved. No write.
     // eslint-disable-next-line @lwc/lwc/no-inner-html
-    const m = /\{#([A-Za-z0-9_]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
+    // The opener may carry ARGUMENTS — `{#ChartBucket:Rel:Field}` — so this cannot be
+    // [A-Za-z0-9_]+ (#310). With the narrow pattern a bucket table read back as an
+    // unbound table, which is why the documented string-replace workaround did not
+    // survive a round trip through the designer.
+    const m = /\{#([^{}]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
     t.relationship = m ? m[1] : '';
     const count = Math.max(ths.length, tds.length);
     for (let i = 0; i < count; i++) {
