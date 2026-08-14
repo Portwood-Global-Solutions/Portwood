@@ -2590,6 +2590,11 @@ Or in tabular form for surveys / inspection forms (the inverse section `{^Field}
 - **Wingdings / Webdings glyphs** other than checkboxes — Flying Saucer can't render them at all. Portwood translates the common checkbox/check codepoints (Wingdings F0A8, F0FE, F0FD, F0FB, F0FC, F0A2; Wingdings 2 F050–F053, F0A3, F0A4); anything else falls back to a neutral □ placeholder.
 - **Emoji** (😀 🎉 etc.) — out of Arial Unicode MS coverage, render as tofu in PDF. Use the Unicode symbols above instead.
 - **Custom decorative fonts** (script, brand, etc.) — generate as DOCX and open in Word. See [§14.2](#142-pdf-font-limitations).
+- **Arabic, Hebrew and other right-to-left scripts in PDF output.** The glyphs are present in Arial Unicode MS, but the PDF engine applies neither of the two things RTL text needs, so the output is wrong in a way that is easy to miss if you don't read the script:
+    - **No contextual shaping.** Arabic letters change form depending on their neighbours. The engine draws one isolated glyph per character, so words come out as disconnected letterforms rather than joined script. Measured: the letter **ب** renders as the same glyph whether it is initial or medial.
+    - **No bidirectional reordering.** Characters are drawn in the order they appear in your file, left to right. `dir="rtl"` makes no difference — a PDF generated with it is byte-identical to one without.
+
+    **For RTL documents, generate as DOCX** and let Word do the shaping — that is why the same template looks correct in Word and wrong in PDF. Setting `font-family: 'Arial Unicode MS'` is still required for the glyphs to appear at all, but it does not fix the shaping or the direction.
 
 ### 7.15 Classic Approvals related list — `{#Approvals}` (v1.92+)
 
