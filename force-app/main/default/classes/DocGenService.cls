@@ -3606,6 +3606,47 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return mergeRunsInTags(xml);
     }
 
+    /**
+     * A malformed-inverse-tag message a human can act on (#327).
+     *
+     * The old message interpolated the raw key, and when Word has split the tag
+     * across formatting runs that key IS MARKUP — the whole
+     * `</w:t></w:r><w:r><w:rPr>…` blob lands in the middle of the sentence. jlay
+     * reported it as:
+     *
+     *   (Malformed inverse tag: missing closing "" for "" opened near
+     *    "/><w:color w:val="000000"/></w:rPr><w:t></w:t></w:r><w".)
+     *
+     * The quotes look EMPTY because the XML inside them was stripped in transit.
+     * Reproduced: an un-defragmented `{^Optional__c}` produces exactly that
+     * shape, so the report was a split tag all along — the message just made it
+     * unreadable, which cost a round trip to work out.
+     *
+     * Now: strip the markup, reconstruct what the author typed, and say what to
+     * do about it. A key that still contains '<' after stripping means the tag
+     * was split, which is a different fix from a genuinely missing closer.
+     */
+    private static String describeMalformedInverseTag(String key, String snippet, String lineInfo) {
+        String visible = key == null ? '' : key.replaceAll('<[^>]*>', '').trim();
+        Boolean wasSplit = key != null && key.contains('<');
+        if (wasSplit) {
+            return 'The inverse tag {^' +
+                visible +
+                '} is split across formatting runs' +
+                lineInfo +
+                ', so the merge engine cannot read it as one tag. Delete the whole tag in Word and retype it in one go, without backspacing or changing formatting mid-tag.';
+        }
+        return 'Malformed inverse tag: missing closing "{/' +
+            visible +
+            '}" for "{^' +
+            visible +
+            '}"' +
+            lineInfo +
+            '. Add the closing tag, or check it is inside the same table row — opened near "' +
+            snippet.replaceAll('<[^>]*>', ' ').replaceAll('\\s+', ' ').trim() +
+            '".';
+    }
+
     private static String mergeRunsInTags(String xml) {
         // De-fragment split merge tags first (so a {RepeatHeader} broken across runs is
         // contiguous), then apply the structural {RepeatHeader} → <w:tblHeader/> pass.
@@ -4349,17 +4390,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         String lineInfo = currentTemplateType == 'HTML'
                             ? ' (line ' + (xml.substring(0, tagStartPos).countMatches('\n') + 1) + ')'
                             : '';
-                        throw new DocGenException(
-                            'Malformed inverse tag: missing closing "{/' +
-                                key +
-                                '}" for "{^' +
-                                key +
-                                '}"' +
-                                lineInfo +
-                                ' opened near "' +
-                                snippet +
-                                '".'
-                        );
+                        throw new DocGenException(describeMalformedInverseTag(key, snippet, lineInfo));
                     } else {
                         Integer contentStart = tagClose + 1;
                         Integer contentEnd = sectionEnd;

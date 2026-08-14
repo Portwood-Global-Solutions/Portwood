@@ -260,6 +260,49 @@ try {
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
 }
 
+// ── #327: a split inverse tag must name the tag, not dump XML ───────────────
+// jlay's report was unreadable because the message interpolated the raw key,
+// and when Word splits a tag that key IS markup. The quotes looked empty
+// because the XML inside them was stripped in transit.
+try {
+    String splitXml =
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>{#Lines}{^</w:t></w:r>' +
+        '<w:r><w:rPr><w:color w:val="000000"/></w:rPr><w:t></w:t></w:r>' +
+        '<w:r><w:t>Optional__c}</w:t></w:r></w:p></w:tc>' +
+        '<w:tc><w:p><w:r><w:t>{/Optional__c}{/Lines}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    DocGenService.processXmlForTest(
+        splitXml,
+        new Map<String, Object>{ 'Lines' => new List<Object>{ new Map<String, Object>{ 'Optional__c' => false } } }
+    );
+    fail++;
+    System.debug('SPLIT INVERSE TAG: FAIL — expected a DocGenException');
+} catch (Exception e) {
+    String m = e.getMessage();
+    if (m.contains('{^Optional__c}') && m.contains('split across formatting runs') && !m.contains('<w:')) {
+        pass++;
+        System.debug('SPLIT INVERSE TAG: PASS — names the tag, no raw XML');
+    } else {
+        fail++;
+        System.debug('SPLIT INVERSE TAG: FAIL — got [' + m.left(160) + ']');
+    }
+}
+
+// A genuinely missing closer must still say so, and stay readable.
+try {
+    DocGenService.processXmlForTest('<p>{^Optional__c}body</p>', new Map<String, Object>());
+    fail++;
+    System.debug('MISSING INVERSE CLOSER: FAIL — expected a DocGenException');
+} catch (Exception e) {
+    String m = e.getMessage();
+    if (m.contains('{/Optional__c}') && !m.contains('<w:') && !m.contains('split across')) {
+        pass++;
+        System.debug('MISSING INVERSE CLOSER: PASS — asks for the closing tag');
+    } else {
+        fail++;
+        System.debug('MISSING INVERSE CLOSER: FAIL — got [' + m.left(160) + ']');
+    }
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')
