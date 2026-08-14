@@ -34,6 +34,20 @@ public with sharing class DocGenTemplateLinter {
     };
     private static final Set<String> AGGREGATE_TAGS = new Set<String>{ 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX' };
 
+    /**
+     * Bodies at or below this many characters are safe to lint. Above it, the
+     * report is skipped entirely — see the block comment on lint().
+     *
+     * Measured on the 383,163-char customer template from the v3.56 reports:
+     * the full lint() completes at 130,000 chars (300ms CPU) and throws
+     * `System.LimitException: Regex too complicated` at 140,000. The ceiling is
+     * content-dependent, not just length-dependent — a body dense in CSS-like
+     * text does more per-position work — so this sits ~25% under the lowest
+     * ceiling actually observed rather than at it.
+     */
+    @TestVisible
+    private static Integer maxLintChars = 100000;
+
     // {Field}, {Parent.Field}, {Field:format} — the GiantQueryAssembler tag shape.
     private static final Pattern FIELD_TAG = Pattern.compile(
         '^([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)(?::(.+))?$'
@@ -47,6 +61,38 @@ public with sharing class DocGenTemplateLinter {
     public static List<DocGenAiHtmlValidator.Finding> lint(String html, DocGen_Template__c tmpl) {
         List<DocGenAiHtmlValidator.Finding> findings = new List<DocGenAiHtmlValidator.Finding>();
         if (String.isBlank(html)) {
+            return findings;
+        }
+        // Size gate — this MUST be a pre-check, not a try/catch.
+        //
+        // Apex throws `System.LimitException: Regex too complicated` when one
+        // Matcher exceeds its internal step budget, and LimitException is NOT
+        // caught by `catch (Exception)`. Every caller of this method wraps it in
+        // exactly that catch on the assumption that a lint failure can never
+        // fail a save (DocGenController.saveHtmlTemplateBody), and that
+        // assumption does not hold: the exception escapes the catch, the whole
+        // transaction rolls back, and the author's template does not save. That
+        // is the v3.55/v3.56 "Regex too complex" regression — reproduced against
+        // the real 383,163-char customer body, where sanitize() and this class's
+        // own line-190 <style>/<script> strip both throw.
+        //
+        // Nothing here can be made safe by rewriting patterns: the budget is
+        // spent by input length, not by pattern authorship. A trivial
+        // `font-weight:\s*([1-9]00)` throws on the same body. The only reliable
+        // guard is to not start.
+        if (html.length() > maxLintChars) {
+            findings.add(
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    'Template too large to check',
+                    1,
+                    'This body is ' +
+                        html.length() +
+                        ' characters, above the ' +
+                        maxLintChars +
+                        '-character limit for the fidelity report, so it was not checked. Your template saved normally and will render normally — this is the report opting out, not a problem with your file.'
+                )
+            );
             return findings;
         }
         runRendererCompatibilityCheck(html, findings);
@@ -63,16 +109,41 @@ public with sharing class DocGenTemplateLinter {
     //    finding so nothing tells the author their file was changed. It wasn't.
     // -----------------------------------------------------------------------
 
+    /**
+     * Report-mode detail for the validator rules whose own detail describes a
+     * REPAIR it performed. The validator is the Agentforce repair pass; those
+     * sentences are true there. Here nothing is rewritten, so reusing them
+     * produced findings that contradicted themselves in the same breath —
+     * "your file was not modified. Mapped 600 and above to bold" — which is
+     * what made the report read as untrustworthy. Rules whose detail is already
+     * purely diagnostic (calc(), flex/grid, position, @import, <svg>, the two
+     * un-repairable loop rules) are passed through unchanged.
+     */
+    private static final Map<String, String> REPORT_MODE_DETAIL = new Map<String, String>{
+        'Markdown code fence' => 'This file starts or ends with a ``` fence, which prints as literal text. Delete the fence lines.',
+        'CSS variable' => 'var(...) resolves to nothing in this engine, so the property it feeds is dropped. Write the literal value instead.',
+        'Unresolved CSS variable' => 'A var(...) here has no definition and no fallback, so it reads as "inherit". Set a literal value.',
+        'Custom property declaration' => 'The --name: value declarations are inert — this engine never reads them back out.',
+        'rgba() colour' => 'rgba() does NOT fall back to a solid colour here — it resolves to nothing and the element renders invisible. Write a flat hex composited over white.',
+        'hsla() colour' => 'Same failure mode as rgba(): it resolves to nothing and the element renders invisible. Write a flat hex instead.',
+        'Gradient' => 'Gradients are discarded when the stylesheet is parsed, leaving no background at all. Use a solid fill.',
+        'Numeric font-weight' => 'Only normal and bold exist in this engine. A numeric weight of 600 or above renders as bold and anything below renders as normal, so intermediate weights are lost.',
+        'Dingbat font' => 'ZapfDingbats, Symbol, Wingdings and Webdings are NOT installed in the render engine — the character falls back to a serif face and prints a literal "l" or "m" where a shape was intended. Use Unicode glyphs (&#9679; filled, &#9675; hollow, &#8226; bullet) sized with font-size.',
+        '@media query' => 'Media queries never match — the engine has no viewport — so any rule that only lives inside one never applies. Move it to the main stylesheet if you meant it.',
+        'Loop tag placed between rows' => 'A {#Relationship} tag sitting between <tr> elements is foster-parented out of the table by the HTML parser, so the row never repeats. Put {#Rel} in the first cell and {/Rel} in the last cell of the same row.'
+    };
+
     private static void runRendererCompatibilityCheck(String html, List<DocGenAiHtmlValidator.Finding> findings) {
         try {
             DocGenAiHtmlValidator.Result res = DocGenAiHtmlValidator.sanitize(html);
             for (DocGenAiHtmlValidator.Finding f : res.findings) {
+                String detail = REPORT_MODE_DETAIL.containsKey(f.rule) ? REPORT_MODE_DETAIL.get(f.rule) : f.detail;
                 findings.add(
                     new DocGenAiHtmlValidator.Finding(
                         'warning',
                         f.rule,
                         f.occurrences,
-                        'The PDF engine ignores this at render time — your file was not modified. ' + f.detail
+                        'The PDF engine ignores this at render time — your file was not modified. ' + detail
                     )
                 );
             }

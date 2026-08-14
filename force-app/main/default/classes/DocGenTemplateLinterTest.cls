@@ -403,4 +403,90 @@ private class DocGenTemplateLinterTest {
 
         System.assert((Integer) res.get('warningCount') > 0, 'Hand-authored HTML must still get the fidelity report.');
     }
+
+    // -----------------------------------------------------------------------
+    // Oversized bodies. `System.LimitException: Regex too complicated` is NOT
+    // caught by `catch (Exception)`, so before the size gate a large body took
+    // the whole save down with it — the v3.55/v3.56 regression. These assert the
+    // gate itself, because the failure it prevents cannot be asserted directly:
+    // an uncatchable exception fails the test method rather than being caught.
+    // -----------------------------------------------------------------------
+
+    /** A CSS-dense body of a requested length, shaped like the reported templates. */
+    private static String bodyOfLength(Integer target) {
+        String cell = '<td style="border:1px solid #ccc;padding:4pt 6pt;font-size:9pt;font-weight:600">Item</td>';
+        String block = '<table style="width:100%;border-collapse:collapse"><tr>' + cell + cell + cell + '</tr></table>';
+        String html = '<html><head><style>body{font-family:Arial;font-size:10pt}</style></head><body>';
+        while (html.length() < target) {
+            html += block;
+        }
+        return html;
+    }
+
+    @isTest
+    static void oversizedBodySkipsTheReportInsteadOfThrowing() {
+        DocGenTemplateLinter.maxLintChars = 5000;
+        String big = bodyOfLength(20000);
+
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(big, accountTemplate('Name'));
+        Test.stopTest();
+
+        System.assertEquals(1, findings.size(), 'An oversized body reports exactly one advisory finding.');
+        System.assertEquals('Template too large to check', findings[0].rule, 'The gate must name itself.');
+        System.assert(
+            findings[0].detail.contains('saved normally'),
+            'The notice must tell the author their template still saved: ' + findings[0].detail
+        );
+        System.assertEquals(
+            null,
+            findRule(findings, 'Numeric font-weight'),
+            'No renderer-compatibility check may run above the gate — that is what throws.'
+        );
+    }
+
+    @isTest
+    static void bodyUnderTheGateIsStillFullyChecked() {
+        // Control for the gate: the same markup below the threshold must still
+        // be reported, or the fix would have silently disabled the feature.
+        DocGenTemplateLinter.maxLintChars = 100000;
+
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
+            bodyOfLength(20000),
+            accountTemplate('Name')
+        );
+        Test.stopTest();
+
+        System.assertEquals(null, findRule(findings, 'Template too large to check'), 'The gate must not fire here.');
+        System.assertNotEquals(null, findRule(findings, 'Numeric font-weight'), 'Under the gate the checks still run.');
+    }
+
+    @isTest
+    static void reportModeNeverClaimsTheFileWasRepaired() {
+        // The validator is the Agentforce REPAIR pass, so its details describe
+        // edits it made. Reused verbatim here they contradicted themselves —
+        // "your file was not modified. Mapped 600 and above to bold" — which is
+        // what made the report read as untrustworthy.
+        String html =
+            '<html><head><style>.a{font-weight:600}.b{background:rgba(0,0,0,.5)}' +
+            '.c{background:linear-gradient(#fff,#000)}</style></head><body>{Name}</body></html>';
+
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        Test.stopTest();
+
+        System.assert(!findings.isEmpty(), 'This body trips several renderer-compatibility rules.');
+        for (DocGenAiHtmlValidator.Finding f : findings) {
+            String d = f.detail.toLowerCase();
+            System.assert(
+                !d.contains('mapped ') &&
+                    !d.contains('composited the') &&
+                    !d.contains('replaced each') &&
+                    !d.contains('removed the font') &&
+                    !d.contains('substituted the'),
+                'Report-mode detail must not claim an edit was made: [' + f.rule + '] ' + f.detail
+            );
+        }
+    }
 }
