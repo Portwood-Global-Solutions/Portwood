@@ -1,3 +1,5 @@
+import { inflateRawJs } from './docGenZipReader';
+
 function base64ToBytes(base64) {
     const binary = atob((base64 || '').replace(/\s+/g, ''));
     const bytes = new Uint8Array(binary.length);
@@ -24,13 +26,50 @@ function latin1ToBytes(text) {
     return bytes;
 }
 
-async function inflatePdfStream(bytes) {
-    if (typeof DecompressionStream === 'undefined') {
-        throw new Error('This browser cannot decompress PDF object streams.');
+/**
+ * Strips the 2-byte zlib header (RFC 1950) so the raw DEFLATE decoder can read
+ * the body. PDF `FlateDecode` streams are zlib-wrapped — which is why this path
+ * asks for `'deflate'` while the zip reader asks for `'deflate-raw'`.
+ *
+ * The trailing 4-byte Adler-32 is simply not read: the decoder stops at the
+ * final block, so it never reaches the checksum.
+ */
+function stripZlibHeader(bytes) {
+    // CMF/FLG: low nibble of CMF is the compression method, 8 = deflate, and
+    // (CMF<<8 | FLG) must be a multiple of 31. Anything else is already raw.
+    if (bytes.length >= 2 && (bytes[0] & 0x0f) === 8 && ((bytes[0] << 8) | bytes[1]) % 31 === 0) {
+        return bytes.subarray(2);
     }
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
-    const buffer = await new Response(stream).arrayBuffer();
-    return new Uint8Array(buffer);
+    return bytes;
+}
+
+async function inflatePdfStream(bytes) {
+    // Native first, inline decoder when the sandbox will not give it to us (#329).
+    //
+    // This is the same class of failure as #320 — a browser API called with no
+    // feature detection and no fallback — but a DIFFERENT file and a different
+    // format, so #320's fix does not reach it. goravkseth hit it on a hardened
+    // corporate laptop:
+    //
+    //   "receiving 'This browser cannot decompress pdf streams' error after
+    //    uploading the pdf ... note that this computer is a corporate laptop and
+    //    very much locked down"
+    //
+    // A fillable PDF's object streams are Flate-compressed, so there was nothing
+    // to fall back on and the upload dead-ended with a message that told the
+    // user their browser was at fault and offered no next step.
+    try {
+        if (typeof DecompressionStream !== 'undefined') {
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+            const buffer = await new Response(stream).arrayBuffer();
+            return new Uint8Array(buffer);
+        }
+    } catch (e) {
+        // Constructor missing, 'deflate' refused, or the stream failed mid-way.
+        // The inline decoder needs no platform support, so try that rather than
+        // failing the upload.
+    }
+    return inflateRawJs(stripZlibHeader(bytes));
 }
 
 function concatBytes(parts) {

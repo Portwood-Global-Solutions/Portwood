@@ -82,7 +82,11 @@ function buildHuffman(lengths) {
     return { count, symbols };
 }
 
-function inflateRawJs(compressed) {
+/**
+ * Raw DEFLATE (RFC 1951), no container. Exported so the PDF AcroForm decomposer
+ * can reuse it rather than carry a second copy of the same 150 lines (#329).
+ */
+export function inflateRawJs(compressed) {
     const src = compressed;
     let pos = 0;
     let bitBuf = 0;
