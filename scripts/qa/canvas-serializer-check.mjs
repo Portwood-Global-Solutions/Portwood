@@ -33,6 +33,12 @@ const relBox = m.newTextBox(0.5, 3.9, 3, 0.4);
 relBox.text = '{Client__r.Name} / {Amount__c}';
 doc.artboards[0].boxes.push(relBox);
 
+// A mark SPANNING a tag must still expand — the fix keeps tags atomic without cutting
+// the string into slices, so **Total: {Amount__c}** prints bold, not literal asterisks.
+const spanBox = m.newTextBox(0.5, 4.05, 3, 0.4);
+spanBox.text = '**Total: {Amount__c}**';
+doc.artboards[0].boxes.push(spanBox);
+
 const cond = m.newTextBox(0.5, 4.2, 3, 0.4);
 cond.text = '{#IF Amount > 100000}Large deal{/IF}';
 doc.artboards[0].boxes.push(cond);
@@ -272,6 +278,10 @@ const checks = [
     ['a __c merge tag survives intact', html.includes('{Amount__c}')],
     ['no underline mark opens inside a merge tag', !html.includes('{Client<u>r.Name}')],
     ['no underline spans across two merge tags', !html.includes('<u>r.Name} / {Amount</u>')],
+    // A mark that SPANS a tag must still expand — baking the slice split in would
+    // resurrect literal ** in the PDF for every bolded merge tag.
+    ['a mark spanning a merge tag still expands', html.includes('<b>Total: {Amount__c}</b>')],
+    ['no literal ** survives into the output', !html.includes('**')],
     ['a literal < stays escaped, not turned into markup', html.includes('5 &lt; 10')],
     // A flow box's margin is the GAP from the previous flow box, never its absolute y.
     // Emitting y put a box authored at 7.5in seven and a half inches BELOW the table

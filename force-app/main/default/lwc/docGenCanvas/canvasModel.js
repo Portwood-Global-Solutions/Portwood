@@ -1902,25 +1902,31 @@ function escapeRe(v) {
  * `__` collides with the double underscores every Salesforce relationship and custom
  * field carries (`__r` / `__c`), so a box holding two tags — `{Client__r.Name} …
  * {Contact__c.FirstName}` — used to pair the underscores across the two tags into one
- * `<u>` span, corrupting both so they printed raw in the PDF. Splitting on tag-like
- * brace groups and expanding marks only in the plain text between them fixes the
- * root cause for every mark, not just underline, and is the documented fix for #282.
+ * `<u>` span, corrupting both so they printed raw in the PDF.
+ *
+ * Each tag is masked to a placeholder that carries no mark character, marks are
+ * expanded across the whole masked string, then the tags are restored verbatim. This
+ * keeps the tags atomic WITHOUT cutting the string into slices, so a mark that SPANS
+ * a tag — `**Total: {Amount__c}**` — still expands, while `__` inside a tag can never
+ * pair with a delimiter outside it. (A hard slice at every tag boundary would fix the
+ * collision but silently print a bare `**` for every mark wrapped around a tag, which
+ * is a more common authoring shape than two adjacent `__` tags.) Root cause for every
+ * mark, not just underline — the documented fix for #282.
  */
+const _MASK_OPEN = '\u0001'; // control chars no author can type and no mark uses
+const _MASK_CLOSE = '\u0002';
+
 function expandMarks(escaped) {
-    let out = '';
-    let last = 0;
-    const tagRe = /\{[^{}]*\}/g;
-    let m;
-    while ((m = tagRe.exec(escaped)) !== null) {
-        out += expandMarksInPlainText(escaped.slice(last, m.index));
-        out += m[0]; // the tag passes through verbatim, its marks untouched
-        last = m.index + m[0].length;
-    }
-    out += expandMarksInPlainText(escaped.slice(last));
-    return out;
+    const tags = [];
+    const masked = String(escaped).replace(/\{[^{}]*\}/g, (t) => _MASK_OPEN + (tags.push(t) - 1) + _MASK_CLOSE);
+    const out = expandMarksInPlainText(masked);
+    return out.replace(
+        new RegExp(escapeRe(_MASK_OPEN) + '(\\d+)' + escapeRe(_MASK_CLOSE), 'g'),
+        (_, i) => tags[Number(i)]
+    );
 }
 
-/** Applies mark expansion to one plain-text (non-tag) slice. */
+/** Applies mark expansion to one plain-text run (the masked string has no tags in it). */
 function expandMarksInPlainText(text) {
     let out = text;
     for (const mk of INLINE_MARKS) {
