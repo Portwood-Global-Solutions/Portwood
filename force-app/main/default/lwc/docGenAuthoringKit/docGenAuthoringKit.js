@@ -807,7 +807,19 @@ export function scopeHtmlForInlinePreview(html) {
     const styles = [];
     work = work.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (m, css) => {
         styles.push(css);
-        return '';
+        // Leave an INERT copy where the author put it, rather than deleting it
+        // (#322). The scoped sheet below is what actually renders the preview;
+        // this copy exists so the serializer can hand the author's own CSS back
+        // unchanged. `type` is deliberately not text/css, so the browser parses
+        // it as an unknown data block and never applies it — otherwise an
+        // unscoped `body { … }` rule would leak into the Lightning page.
+        //
+        // A copy in the <head> is discarded with the rest of the head below; one
+        // in the <body> survives into the canvas and back out again. That second
+        // case is the bug: `querySelectorAll('style')` on the way out could not
+        // tell the editor's injected sheet from the author's, removed both, and
+        // silently destroyed a stylesheet the author had written inside <body>.
+        return '<style data-dg-authored="1" type="text/dg-css">' + css + '</style>';
     });
     const bodyMatch = work.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
     let content = bodyMatch ? bodyMatch[1] : work.replace(/<\/?(?:!DOCTYPE|html|head|body|meta|title)\b[^>]*>/gi, '');
@@ -860,7 +872,10 @@ export function scopeHtmlForInlinePreview(html) {
         // their edges stay reachable for column drag-resize.
         '.dg-pv table { max-width: 100% !important; }\n' +
         '.dg-pv td, .dg-pv th { overflow-wrap: break-word; }';
-    return '<div class="dg-pv"><style>' + baseline + css + '</style>' + content + '</div>';
+    // data-dg-editor marks this sheet as EDITOR-OWNED (#322). Every serializer
+    // strips the editor layer by that attribute rather than by element type, so
+    // an author's own <style> can never be collateral.
+    return '<div class="dg-pv"><style data-dg-editor="preview">' + baseline + css + '</style>' + content + '</div>';
 }
 
 // ---------------------------------------------------------------------------

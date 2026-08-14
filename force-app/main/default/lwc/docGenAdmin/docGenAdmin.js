@@ -6802,17 +6802,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
             tpl.innerHTML = html;
             const root = tpl.content;
-            for (const marker of root.querySelectorAll('.dg-drop-marker')) {
-                marker.remove();
-            }
+            // Subtract exactly what the editor added — by ownership, never by
+            // element type (#322). This also restores any author stylesheet the
+            // preview had parked inert.
+            this._stripEditorLayer(root);
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
-                // Preview-wrapped payload: keep only the page content, minus
-                // the injected scoped stylesheet.
-                for (const styleEl of pv.querySelectorAll(':scope > style')) {
-                    styleEl.remove();
-                }
                 // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
                 const inner = pv.innerHTML.trim();
                 // Preserve an original shell if one wrapped the preview; else
@@ -11040,6 +11036,41 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * "t.replaceWith is not a function" for subscribers, hanging the
      * designer). replaceChild via the parent works everywhere.
      */
+    /**
+     * Removes the EDITOR layer from a serialized copy of the canvas, by ownership
+     * (#322).
+     *
+     * The editor decorates the author's document in place: a scoped preview
+     * stylesheet, drop markers, and tag pills. Everything it adds is now marked,
+     * so every exit path can subtract exactly what the editor put in — rather
+     * than guessing by element type, which is what made this dangerous.
+     *
+     * `querySelectorAll('style')` used to remove EVERY stylesheet on the way out,
+     * because there was no way to tell the injected sheet from the author's. A
+     * <style> the author had written inside <body> was destroyed on every visual
+     * round trip, silently, with the save reporting success. Only <head> styles
+     * survived, and only because _currentDraftHtml splices the body back into the
+     * original document rather than rebuilding it.
+     *
+     * Call this on a re-parsed COPY, never on the live canvas.
+     */
+    _stripEditorLayer(root) {
+        const doc = root.ownerDocument || document;
+        for (const el of root.querySelectorAll('style[data-dg-editor]')) {
+            el.remove();
+        }
+        for (const marker of root.querySelectorAll('.dg-drop-marker')) {
+            marker.remove();
+        }
+        // Author stylesheets were parked inert so the browser would not apply an
+        // unscoped rule to the Lightning page. Hand them back as real <style>.
+        for (const parked of root.querySelectorAll('style[data-dg-authored]')) {
+            const restored = doc.createElement('style');
+            restored.textContent = parked.textContent;
+            this._safeReplace(parked, restored);
+        }
+    }
+
     _safeReplace(node, replacement) {
         try {
             if (typeof node.replaceWith === 'function') {
@@ -12193,12 +12224,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- string round-trip of the live canvas; re-cleaned below, never cloneNode (LWS drops browser-inserted nodes)
         tpl.innerHTML = pv.innerHTML;
         const root = tpl.content;
-        for (const styleEl of root.querySelectorAll('style')) {
-            styleEl.remove();
-        }
-        for (const markerEl of root.querySelectorAll('.dg-drop-marker')) {
-            markerEl.remove();
-        }
+        // Subtract exactly what the editor added — never every <style> (#322).
+        this._stripEditorLayer(root);
         this._unpillifyTags(root);
         const container = document.createElement('div');
         container.appendChild(root);
