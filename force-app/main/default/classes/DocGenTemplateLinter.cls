@@ -99,7 +99,9 @@ public with sharing class DocGenTemplateLinter {
         runPageSetupConflictCheck(html, tmpl, findings);
         runTbodySelectorCheck(html, findings);
         runMergeTagChecks(html, tmpl, findings);
-        return findings;
+        // Every check funnels through here (#318), so a rule can never sneak
+        // back into the panel by being added to a different check.
+        return quieten(findings);
     }
 
     // -----------------------------------------------------------------------
@@ -132,6 +134,142 @@ public with sharing class DocGenTemplateLinter {
         '@media query' => 'Media queries never match — the engine has no viewport — so any rule that only lives inside one never applies. Move it to the main stylesheet if you meant it.',
         'Loop tag placed between rows' => 'A {#Relationship} tag sitting between <tr> elements is foster-parented out of the table by the HTML parser, so the row never repeats. Put {#Rel} in the first cell and {/Rel} in the last cell of the same row.'
     };
+
+    /**
+     * Rules that are NOT worth telling an author about (#318).
+     *
+     * The report's job is to warn about things that will make the document
+     * visibly wrong. A rule that fires on a correct template, or on something
+     * the reader could never see, does not earn its line — it just makes an
+     * author who did nothing wrong feel like they are making mistakes
+     * constantly, and that is how a report stops being read at all.
+     *
+     * Each of these describes something INERT:
+     *
+     *  - Custom property declaration — `--name: value` lines are dead once the
+     *    values are substituted. Nothing renders differently. The substitution
+     *    is already reported separately as "CSS variable", so this is the same
+     *    fact a second time.
+     *  - Numeric font-weight — 600 renders as bold, which is what an author
+     *    writing 600 wanted. Losing 600-vs-700 is not something anyone can see
+     *    in a PDF, and this fires on essentially every modern stylesheet.
+     *  - Flex/grid alignment properties — only ever appears alongside
+     *    "display:flex / display:grid", which already tells the author the
+     *    layout will not work and what to do. Reporting the companions is the
+     *    same problem counted twice.
+     *
+     * Deliberately NOT here: anything that changes what the reader sees.
+     * rgba() renders invisible, gradients vanish, calc() collapses an element,
+     * a dingbat prints a literal letter, an unbalanced brace fails the merge.
+     * Those stay loud.
+     */
+    private static final Set<String> SUPPRESSED_RULES = new Set<String>{
+        'Custom property declaration',
+        'Numeric font-weight',
+        'Flex/grid alignment properties'
+    };
+
+    /**
+     * The most findings worth showing at once (#318).
+     *
+     * A stylesheet with one bad class can produce dozens of hits, and a wall of
+     * them reads as "this template is broken" when it is one thing to fix. Past
+     * this the panel says how many more there are rather than listing them —
+     * the author fixes the named ones and re-saves to see the rest.
+     */
+    @TestVisible
+    private static Integer maxReportedFindings = 6;
+
+    /**
+     * CSS properties the engine ignores. ONE cause, ONE remedy — so one finding
+     * (#318).
+     *
+     * These all say the same thing: this stylesheet was written for a browser,
+     * and the renderer is CSS 2.1. Listing them separately turned a single fact
+     * about the file into eight accusations, and a realistic modern stylesheet
+     * trips most of them at once — a `:root` block with variables, a flex
+     * header, an rgba() tint and a gradient is four findings before the author
+     * has done anything unusual.
+     *
+     * Grouped, the author reads one line, sees exactly which properties are
+     * affected, and fixes them together, which is how they would fix them
+     * anyway.
+     *
+     * Rules with their OWN distinct remedy stay separate: an external
+     * stylesheet, an @import, an <svg>, a dingbat font, a markdown fence, a
+     * misplaced loop tag, an unbalanced brace. Those are not "rewrite your CSS",
+     * they are each a different action.
+     */
+    private static final Set<String> CSS_COMPAT_RULES = new Set<String>{
+        'CSS variable',
+        'Unresolved CSS variable',
+        'rgba() colour',
+        'hsla() colour',
+        'Gradient',
+        'calc()',
+        'display:flex / display:grid',
+        'position: absolute/fixed/sticky',
+        'border-radius',
+        '@media query'
+    };
+
+    /**
+     * Trims a raw finding list to what is worth an author's attention (#318).
+     * Drops the inert rules, folds the CSS-compat family into one line, then
+     * caps whatever is left rather than printing a wall.
+     */
+    private static List<DocGenAiHtmlValidator.Finding> quieten(List<DocGenAiHtmlValidator.Finding> raw) {
+        List<DocGenAiHtmlValidator.Finding> kept = new List<DocGenAiHtmlValidator.Finding>();
+        List<String> cssNames = new List<String>();
+        Integer cssCount = 0;
+
+        for (DocGenAiHtmlValidator.Finding f : raw) {
+            if (SUPPRESSED_RULES.contains(f.rule)) {
+                continue;
+            }
+            if (CSS_COMPAT_RULES.contains(f.rule)) {
+                cssNames.add(f.rule);
+                cssCount += (f.occurrences == null ? 1 : f.occurrences);
+                continue;
+            }
+            kept.add(f);
+        }
+
+        if (!cssNames.isEmpty()) {
+            // Front of the list: it is the one an author can act on in a single pass.
+            List<DocGenAiHtmlValidator.Finding> withCss = new List<DocGenAiHtmlValidator.Finding>();
+            withCss.add(
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    'Modern CSS the PDF engine ignores',
+                    cssCount,
+                    'The renderer is CSS 2.1, so it drops these and lays the page out without them: ' +
+                        String.join(cssNames, ', ') +
+                        '. Rewrite those rules with table-based layout and literal values — everything else in the file is fine.'
+                )
+            );
+            withCss.addAll(kept);
+            kept = withCss;
+        }
+
+        if (kept.size() <= maxReportedFindings) {
+            return kept;
+        }
+        List<DocGenAiHtmlValidator.Finding> capped = new List<DocGenAiHtmlValidator.Finding>();
+        for (Integer i = 0; i < maxReportedFindings; i++) {
+            capped.add(kept[i]);
+        }
+        Integer more = kept.size() - maxReportedFindings;
+        capped.add(
+            new DocGenAiHtmlValidator.Finding(
+                'warning',
+                more + ' more not shown',
+                more,
+                'Fix the items above and save again to see the rest. They are listed in the order they were found, not by severity.'
+            )
+        );
+        return capped;
+    }
 
     private static void runRendererCompatibilityCheck(String html, List<DocGenAiHtmlValidator.Finding> findings) {
         try {

@@ -5282,14 +5282,14 @@
                                         <template if:true={hasLintFindings}>
                                             <div class="slds-box slds-var-m-top_medium">
                                                 <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">
-                                                    Template warnings — this will still render
+                                                    Notes on how this renders
                                                 </h3>
                                                 <p
                                                     class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
                                                 >
-                                                    Nothing was blocked and your file was saved as-is. The PDF engine is
-                                                    CSS 2.1, so at render time it handles the items below differently
-                                                    than a browser would — here's what changes.
+                                                    Your template saved and will generate. The PDF engine is CSS 2.1, so
+                                                    a few things behave differently there than in a browser. These are
+                                                    the ones that would change what a reader sees.
                                                 </p>
                                                 <template for:each={lintFindings} for:item="f">
                                                     <div key={f.key} class="slds-var-m-bottom_x-small">

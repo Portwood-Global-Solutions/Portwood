@@ -58,15 +58,16 @@ private class DocGenTemplateLinterTest {
         Test.stopTest();
 
         System.assertEquals(before, html, 'lint must never touch the author\'s bytes');
-        System.assertNotEquals(null, findRule(findings, 'display:flex / display:grid'), 'flex must be reported');
-        System.assertNotEquals(null, findRule(findings, 'Gradient'), 'gradients must be reported');
-        System.assertNotEquals(null, findRule(findings, 'calc()'), 'calc() must be reported');
+        // CHANGED in #318: flex, gradients and calc() share one cause and one
+        // remedy, so they are reported as ONE finding naming all three rather
+        // than three accusations about the same stylesheet.
+        DocGenAiHtmlValidator.Finding css = findRule(findings, 'Modern CSS the PDF engine ignores');
+        System.assertNotEquals(null, css, 'the CSS-compat family must still be reported. Got: ' + findings);
+        System.assert(css.detail.contains('display:flex / display:grid'), 'flex must be named: ' + css.detail);
+        System.assert(css.detail.contains('Gradient'), 'gradients must be named: ' + css.detail);
+        System.assert(css.detail.contains('calc()'), 'calc() must be named: ' + css.detail);
         for (DocGenAiHtmlValidator.Finding f : findings) {
             System.assertEquals('warning', f.action, 'lint never repairs or removes — every finding is a warning');
-            System.assert(
-                f.detail.contains('your file was not modified'),
-                'reworded detail must say the file was not modified: ' + f.detail
-            );
         }
     }
 
@@ -414,7 +415,9 @@ private class DocGenTemplateLinterTest {
 
     /** A CSS-dense body of a requested length, shaped like the reported templates. */
     private static String bodyOfLength(Integer target) {
-        String cell = '<td style="border:1px solid #ccc;padding:4pt 6pt;font-size:9pt;font-weight:600">Item</td>';
+        // display:flex is the signal: #318 suppresses font-weight, which this
+        // fixture used to rely on, so it needs a trait that is still reported.
+        String cell = '<td style="border:1px solid #ccc;padding:4pt 6pt;font-size:9pt;display:flex">Item</td>';
         String block = '<table style="width:100%;border-collapse:collapse"><tr>' + cell + cell + cell + '</tr></table>';
         String html = '<html><head><style>body{font-family:Arial;font-size:10pt}</style></head><body>';
         while (html.length() < target) {
@@ -440,7 +443,7 @@ private class DocGenTemplateLinterTest {
         );
         System.assertEquals(
             null,
-            findRule(findings, 'Numeric font-weight'),
+            findRule(findings, 'Modern CSS the PDF engine ignores'),
             'No renderer-compatibility check may run above the gate — that is what throws.'
         );
     }
@@ -459,7 +462,11 @@ private class DocGenTemplateLinterTest {
         Test.stopTest();
 
         System.assertEquals(null, findRule(findings, 'Template too large to check'), 'The gate must not fire here.');
-        System.assertNotEquals(null, findRule(findings, 'Numeric font-weight'), 'Under the gate the checks still run.');
+        System.assertNotEquals(
+            null,
+            findRule(findings, 'Modern CSS the PDF engine ignores'),
+            'Under the gate the checks still run.'
+        );
     }
 
     @isTest
@@ -488,5 +495,123 @@ private class DocGenTemplateLinterTest {
                 'Report-mode detail must not claim an edit was made: [' + f.rule + '] ' + f.detail
             );
         }
+    }
+
+    // ─── #318: the report has to be worth reading ────────────────────────────
+    //
+    // Everything was a separate warning, so a realistic modern stylesheet — a
+    // :root block, a flex header, an rgba() tint, a gradient — produced eight
+    // findings before the author had done anything unusual. That reads as "you
+    // are making errors constantly", and a report that reads that way stops
+    // being read at all.
+    //
+    // Measured on exactly that stylesheet: 10 raw findings -> 2 lines.
+
+    private static String modernStylesheet() {
+        return '<html><head><style>' +
+            ':root{--brand:#0b3d2e;--gap:8px}' +
+            '.hdr{display:flex;gap:var(--gap);align-items:center}' +
+            '.title{font-weight:600;color:var(--brand)}' +
+            '.card{background:rgba(11,61,46,0.08);border-radius:4px}' +
+            '.hero{background:linear-gradient(90deg,#0b3d2e,#63b3ed)}' +
+            '.w{width:calc(100% - 40pt)}' +
+            '@media print{.card{padding:0}}' +
+            '</style></head><body><div class="hdr"><span class="title">{Name}</span></div></body></html>';
+    }
+
+    @isTest
+    static void aModernStylesheetProducesOneLineNotEight() {
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
+            modernStylesheet(),
+            accountTemplate('Name')
+        );
+        Test.stopTest();
+
+        System.assert(findings.size() <= 2, 'A modern stylesheet must not produce a wall. Got: ' + findings);
+        DocGenAiHtmlValidator.Finding css = findRule(findings, 'Modern CSS the PDF engine ignores');
+        System.assertNotEquals(null, css, 'the grouped CSS finding must be present');
+        // It still has to say WHICH properties, or the author cannot act on it.
+        for (String named : new List<String>{ 'CSS variable', 'rgba() colour', 'Gradient', 'calc()' }) {
+            System.assert(css.detail.contains(named), named + ' must be named in the detail: ' + css.detail);
+        }
+    }
+
+    @isTest
+    static void inertRulesAreNotReportedAtAll() {
+        // Each of these describes something the reader could never see. They
+        // fire on essentially every modern stylesheet, which is what made the
+        // panel feel like a scolding.
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
+            modernStylesheet(),
+            accountTemplate('Name')
+        );
+        Test.stopTest();
+
+        for (
+            String gone : new List<String>{
+                'Custom property declaration',
+                'Numeric font-weight',
+                'Flex/grid alignment properties'
+            }
+        ) {
+            System.assertEquals(null, findRule(findings, gone), gone + ' is inert and must not be reported');
+        }
+    }
+
+    @isTest
+    static void aCleanTemplateSaysNothingAtAll() {
+        String clean =
+            '<html><head><style>body{font-family:Arial;font-size:10pt}' +
+            'table{border-collapse:collapse}td{border:1px solid #ccc;padding:4pt}</style></head>' +
+            '<body><table><tr><td>{Name}</td></tr></table></body></html>';
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(clean, accountTemplate('Name'));
+        Test.stopTest();
+        System.assertEquals(0, findings.size(), 'A CSS 2.1-clean template must be silent. Got: ' + findings);
+    }
+
+    @isTest
+    static void thingsThatActuallyBreakAreStillLoud() {
+        // The whole point of quietening the inert rules is that what is LEFT
+        // gets believed. Each of these changes what the reader sees, or fails
+        // the merge outright, and each keeps its own line and its own remedy.
+        Map<String, String> cases = new Map<String, String>{
+            'Unclosed loop tag' => '<p>{#Lines}</p><p>{Name}</p>',
+            'Unmatched closing tag' => '<p>{Name}</p><p>{/Lines}</p>',
+            'Unbalanced merge braces' => '<p>{Name</p>',
+            'Dingbat font' => '<style>.x{font-family:Wingdings}</style><p>l</p>',
+            '<svg>' => '<p><svg width="10"><rect/></svg></p>',
+            'External stylesheet' => '<link rel="stylesheet" href="x.css"><p>{Name}</p>',
+            'Markdown code fence' => '```html\n<p>{Name}</p>\n```'
+        };
+        Test.startTest();
+        for (String rule : cases.keySet()) {
+            List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
+                cases.get(rule),
+                accountTemplate('Name')
+            );
+            System.assertNotEquals(null, findRule(findings, rule), rule + ' must still be reported. Got: ' + findings);
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void theListIsCappedRatherThanEndless() {
+        DocGenTemplateLinter.maxReportedFindings = 2;
+        // Several DISTINCT remedies, so none of them group.
+        String html =
+            '```html\n<link rel="stylesheet" href="a.css"><style>@import url(b.css);.x{font-family:Wingdings}</style>' +
+            '<p><svg/></p><p>{#Lines}</p><p>{/Other}</p>\n```';
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        Test.stopTest();
+
+        System.assertEquals(3, findings.size(), 'cap of 2 plus one summary line. Got: ' + findings);
+        System.assert(
+            findings[findings.size() - 1].rule.endsWith('more not shown'),
+            'the last line must say how many were withheld. Got: ' + findings[findings.size() - 1].rule
+        );
     }
 }
