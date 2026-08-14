@@ -15249,8 +15249,67 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         ].map((o) => ({ ...o, selected: o.value === this.watermarkOpacityPct }));
     }
 
-    handleWatermarkOpacityChange(event) {
+    /**
+     * The file the author picked, kept UNBAKED for the session (#313).
+     *
+     * Opacity is baked into the PNG's pixels at upload time, so once an image is
+     * stored the control had nothing left to act on — changing it did nothing,
+     * silently:
+     *
+     *   "When I try to update the Watermark percentage after I uploaded the
+     *    image it doesn't update this value. It works when I change it before I
+     *    upload the file."
+     *
+     * Keeping the original means a later change can re-bake from it. Re-baking
+     * the STORED image would compound the wash — 30% of an already-30% image is
+     * 9% — so the original is the only correct source.
+     */
+    _watermarkSourceFile = null;
+
+    async handleWatermarkOpacityChange(event) {
         this.watermarkOpacityPct = event.currentTarget.value;
+        // Nothing uploaded yet: the value is picked up when they do upload.
+        if (!this.editTemplateWatermarkCvId) {
+            return;
+        }
+        if (!this._watermarkSourceFile) {
+            // Uploaded in an earlier session, so the unbaked original is gone.
+            // Say so rather than leaving the control looking like it worked.
+            this.showToast(
+                'Re-upload to change the wash',
+                'The opacity is baked into the stored image, and the original from this upload is not in this session. Upload the image again to apply ' +
+                    this.watermarkOpacityPct +
+                    '%.',
+                'warning'
+            );
+            return;
+        }
+        await this._reuploadWatermarkAtCurrentOpacity();
+    }
+
+    /** Re-bakes the retained original at the current setting and replaces the stored image. */
+    async _reuploadWatermarkAtCurrentOpacity() {
+        const active = (this.versions || []).find((v) => v[F.VerIsActive]);
+        if (!active) {
+            return;
+        }
+        this.isUploadingWatermark = true;
+        try {
+            const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
+            const baked = await this._bakeWatermarkOpacity(this._watermarkSourceFile, pct);
+            this.editTemplateWatermarkCvId = await saveWatermarkImage({
+                versionId: active.Id,
+                fileName: baked.fileName,
+                base64Data: baked.base64
+            });
+            this.showToast('Watermark updated', 'Re-applied at ' + pct + '%.', 'success');
+        } catch (err) {
+            const msg =
+                err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Update failed';
+            this.showToast('Could not update the watermark', msg, 'error');
+        } finally {
+            this.isUploadingWatermark = false;
+        }
     }
 
     /** Redraws the image at the chosen opacity on a canvas → PNG base64.
@@ -15325,6 +15384,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 base64Data: baked.base64
             });
             this.editTemplateWatermarkCvId = newCvId;
+            // Retain the UNBAKED original so a later opacity change can re-bake
+            // from it rather than washing an already-washed image (#313).
+            this._watermarkSourceFile = file;
             this.showToast('Success', 'Watermark uploaded.', 'success');
         } catch (err) {
             const msg =
@@ -15345,6 +15407,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             await clearWatermarkImage({ versionId: active.Id });
             this.editTemplateWatermarkCvId = null;
+            this._watermarkSourceFile = null;
             this.showToast('Removed', 'Watermark cleared.', 'success');
         } catch (err) {
             const msg = err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Clear failed';
