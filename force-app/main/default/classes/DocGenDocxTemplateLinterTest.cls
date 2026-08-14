@@ -447,4 +447,74 @@ private class DocGenDocxTemplateLinterTest {
             'non-Office uploads are outside this linter: ' + res.get('warnings')
         );
     }
+
+    // ─── #317: the size gate ─────────────────────────────────────────────────
+    //
+    // This report is advisory and its caller wraps it in catch (Exception) on
+    // the premise that it can never fail a save. That premise does not survive a
+    // governor limit — System.LimitException, CPU timeout included, is NOT
+    // caught by catch (Exception). Measured on a 423,598-char document.xml the
+    // pass COMPLETED but cost 2.7s of the 10,000ms budget, which is survivable
+    // alone and not survivable next to a slow neighbour.
+    //
+    // The gate has to be a pre-check for the same reason #315's does: you cannot
+    // catch your way out of an uncatchable exception.
+
+    /** A .docx whose word/document.xml is `target` characters or so. */
+    private static Blob docxWithBodyOfLength(Integer target) {
+        String para = '<w:p><w:r><w:t>Line item description for the reporting period</w:t></w:r></w:p>';
+        String body = '';
+        while (body.length() < target) {
+            body += para;
+        }
+        String xml =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            body +
+            '</w:body></w:document>';
+        Compression.ZipWriter zw = new Compression.ZipWriter();
+        zw.addEntry('word/document.xml', Blob.valueOf(xml));
+        return zw.getArchive();
+    }
+
+    @IsTest
+    static void oversizedPartSkipsTheReportInsteadOfBurningCpu() {
+        DocGenDocxTemplateLinter.maxLintChars = 5000;
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenDocxTemplateLinter.lint(docxWithBodyOfLength(30000));
+        Test.stopTest();
+
+        System.assertEquals(1, findings.size(), 'An oversized part reports exactly one advisory finding.');
+        System.assertEquals('Template too large to check', findings[0].rule, 'The gate must name itself.');
+        System.assert(
+            findings[0].detail.contains('uploaded normally'),
+            'The notice must tell the author their template still uploaded: ' + findings[0].detail
+        );
+    }
+
+    @IsTest
+    static void partUnderTheGateIsStillChecked() {
+        // Control for the gate: the same document below the threshold must still
+        // be linted, or the fix would have silently disabled the feature. This
+        // body has an unclosed loop, so a real finding is expected.
+        DocGenDocxTemplateLinter.maxLintChars = 200000;
+        String xml =
+            '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:body><w:p><w:r><w:t>{#Lines}</w:t></w:r></w:p></w:body></w:document>';
+        Compression.ZipWriter zw = new Compression.ZipWriter();
+        zw.addEntry('word/document.xml', Blob.valueOf(xml));
+
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenDocxTemplateLinter.lint(zw.getArchive());
+        Test.stopTest();
+
+        Boolean gated = false;
+        for (DocGenAiHtmlValidator.Finding f : findings) {
+            if (f.rule == 'Template too large to check') {
+                gated = true;
+            }
+        }
+        System.assertEquals(false, gated, 'The gate must not fire under the threshold.');
+        System.assert(!findings.isEmpty(), 'An unclosed loop under the gate must still be reported.');
+    }
 }

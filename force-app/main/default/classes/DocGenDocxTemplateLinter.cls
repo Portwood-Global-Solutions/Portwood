@@ -47,6 +47,19 @@ public with sharing class DocGenDocxTemplateLinter {
      * failing check (or an unreadable archive) yields no findings from that
      * part, never an exception.
      */
+    /**
+     * Parts at or below this many characters are safe to lint. Above it, the
+     * report is skipped and says so — see the block comment in lint().
+     *
+     * Measured on a 423,598-char word/document.xml (the order of magnitude of a
+     * real long-form Word template): the full pass COMPLETES, but costs 2.7
+     * seconds of the 10,000 ms synchronous CPU budget — 27% of it, on a save
+     * that also has to insert a ContentVersion, re-query it, and finish
+     * saveTemplate. 200,000 keeps the report well inside a fifth of that.
+     */
+    @TestVisible
+    private static Integer maxLintChars = 200000;
+
     public static List<DocGenAiHtmlValidator.Finding> lint(Blob fileBytes) {
         List<DocGenAiHtmlValidator.Finding> findings = new List<DocGenAiHtmlValidator.Finding>();
         if (fileBytes == null) {
@@ -59,15 +72,51 @@ public with sharing class DocGenDocxTemplateLinter {
             // pair never appears to close across a part boundary it could not.
             for (Compression.ZipEntry e : reader.getEntries()) {
                 if (e.getName() == 'word/document.xml') {
-                    lintXml(reader.extract(e.getName()).toString(), true, findings);
+                    lintPart(reader.extract(e.getName()).toString(), true, findings);
                 } else if (e.getName().startsWith('ppt/slides/slide') && e.getName().endsWith('.xml')) {
-                    lintXml(reader.extract(e.getName()).toString(), false, findings);
+                    lintPart(reader.extract(e.getName()).toString(), false, findings);
                 }
             }
         } catch (Exception e) {
             String noop = e.getMessage(); // NOPMD — lint is advisory; one unreadable file must not sink the report
         }
         return findings;
+    }
+
+    /**
+     * Size gate (#317). MUST be a pre-check, not a try/catch.
+     *
+     * This report is advisory and is wrapped by its caller in
+     * `catch (Exception)` on the premise that it can never fail a save. That
+     * premise does not survive a governor limit: `System.LimitException` — CPU
+     * timeout included — is NOT caught by `catch (Exception)`, so it would
+     * escape, roll the transaction back, and take the author's upload with it.
+     * Exactly the failure #315 fixed on the HTML side, where the limit reached
+     * first was the regex budget rather than CPU.
+     *
+     * The DOCX patterns are anchored on a literal `<` and so fail fast per
+     * position; they do NOT hit the regex ceiling that the HTML validator does.
+     * What they do is spend real time: 2.7s on a 423KB document.xml. That is
+     * survivable alone and not survivable next to a slow neighbour, which is the
+     * whole argument for gating it rather than waiting for the first report.
+     */
+    private static void lintPart(String xml, Boolean isWordPart, List<DocGenAiHtmlValidator.Finding> findings) {
+        if (String.isNotBlank(xml) && xml.length() > maxLintChars) {
+            findings.add(
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    'Template too large to check',
+                    1,
+                    'This template\'s XML is ' +
+                        xml.length() +
+                        ' characters, above the ' +
+                        maxLintChars +
+                        '-character limit for the fidelity report, so it was not checked. Your template uploaded normally and will generate normally — this is the report opting out, not a problem with your file.'
+                )
+            );
+            return;
+        }
+        lintXml(xml, isWordPart, findings);
     }
 
     private static void lintXml(String xml, Boolean isWordPart, List<DocGenAiHtmlValidator.Finding> findings) {
