@@ -172,19 +172,44 @@ function valueLabelPlugin(style, buckets, fontPx) {
                 }
                 const label = `${b.count} (${b.percent}%)`;
                 const pos = element.tooltipPosition();
+                // Belt and braces on top of the layout reserve (#305): clamp to the
+                // canvas so a label can never be cut, whatever the data does to the
+                // axis. The reserve is what keeps it looking right; this is what
+                // keeps it legible if the reserve is ever a pixel short.
                 if (style === 'bar') {
                     ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(label, element.x + 6, pos.y);
+                    const maxX = chart.width - ctx.measureText(label).width - 2;
+                    ctx.fillText(label, Math.min(element.x + 6, maxX), pos.y);
                 } else {
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
-                    ctx.fillText(label, pos.x, element.y - 6);
+                    const minY = (fontPx || 12) + 2;
+                    ctx.fillText(label, pos.x, Math.max(element.y - 6, minY));
                 }
             });
             ctx.restore();
         }
     };
+}
+
+/**
+ * Right-hand reserve for the horizontal bar's value labels, in canvas pixels (#305).
+ *
+ * The widest label the plugin will draw, measured in characters against the size
+ * it draws at. 0.62em per character is a deliberate over-estimate for a
+ * proportional face — over-reserving costs a little plot width, under-reserving
+ * clips the text, and only one of those is a bug.
+ */
+function valueLabelReserve(buckets, fontPx) {
+    let longest = 0;
+    for (const b of buckets || []) {
+        const len = `${b.count} (${b.percent}%)`.length;
+        if (len > longest) {
+            longest = len;
+        }
+    }
+    return Math.max(72, Math.ceil(longest * fontPx * 0.62) + 14);
 }
 
 /** Tick, legend and value-label size, in canvas pixels. */
@@ -339,11 +364,24 @@ function buildConfig(style, buckets, opts) {
             ...common,
             indexAxis: horizontal ? 'y' : 'x',
             // Leave room for the value labels the plugin draws past the bar end.
-            layout: { padding: horizontal ? { right: 72 } : { top: 24 } },
+            //
+            // This used to be a flat { right: 72 } / { top: 24 } (#305). The plugin
+            // draws with ctx.fillText in afterDatasetsDraw and contributes nothing
+            // to layout, so this padding is the ONLY reserve — and a fixed one
+            // cannot cover a label the author sized up: `fontSize=` goes to 48,
+            // where 24px of headroom is half a glyph. Scaled off the same tickPx
+            // the plugin draws with, and off the longest label it will actually
+            // produce, so the reserve tracks the text.
+            layout: { padding: horizontal ? { right: valueLabelReserve(buckets, tickPx) } : { top: tickPx * 1.7 } },
             scales: horizontal
                 ? {
                       x: {
                           beginAtZero: true,
+                          // Keep the longest bar off the axis ceiling, so its label
+                          // has somewhere to sit. Small integer data makes this bite:
+                          // Chart.js takes the data max as the top tick, so 2
+                          // responses gives a top tick of exactly 2.
+                          grace: '8%',
                           grid: { color: gridColor },
                           ticks: { color: '#475569', font: tickFont, precision: 0 }
                       },
@@ -353,6 +391,7 @@ function buildConfig(style, buckets, opts) {
                       x: { grid: { display: false }, ticks: { color: '#334155', font: tickFont } },
                       y: {
                           beginAtZero: true,
+                          grace: '8%',
                           grid: { color: gridColor },
                           ticks: { color: '#475569', font: tickFont, precision: 0 }
                       }
