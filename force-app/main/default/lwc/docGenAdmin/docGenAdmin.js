@@ -6798,9 +6798,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return html;
         }
         try {
+            // Clean ONLY the body when the document has one (#319). Parsing the
+            // whole document and splicing the result back into <body> copies the
+            // head's <meta>/<title>/<style> into the body while leaving the head
+            // in place — duplicating them, and growing the file on every save.
+            const bodyRe = /(<body\b[^>]*>)([\s\S]*?)(<\/body\s*>)/i;
+            const bodyMatch = html.match(bodyRe);
+            const target = bodyMatch ? bodyMatch[2] : html;
+
             const tpl = document.createElement('template');
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            tpl.innerHTML = html;
+            tpl.innerHTML = target;
             const root = tpl.content;
             for (const marker of root.querySelectorAll('.dg-drop-marker')) {
                 marker.remove();
@@ -6808,32 +6816,51 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
-                // Preview-wrapped payload: keep only the page content, minus
-                // the injected scoped stylesheet.
+                // Preview-wrapped payload: drop the injected scoped stylesheet,
+                // then UNWRAP the preview div in place rather than reading only
+                // pv.innerHTML. Reading the inner HTML discards every sibling of
+                // the preview — which on a flattened document is where the
+                // author's <style>, <title> and <meta> are sitting (#319).
                 for (const styleEl of pv.querySelectorAll(':scope > style')) {
                     styleEl.remove();
                 }
-                // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-                const inner = pv.innerHTML.trim();
-                // Preserve an original shell if one wrapped the preview; else
-                // the content becomes the document body in a minimal shell.
-                const bodyRe = /(<body\b[^>]*>)[\s\S]*?(<\/body\s*>)/i;
-                const outer = html.replace(/[\s\S]*/, ''); // placeholder, replaced below
-                void outer;
-                if (bodyRe.test(html) && !/class="dg-pv"/.test(html.split(/<body\b[^>]*>/i)[0] || '')) {
-                    return html.replace(bodyRe, (m, open, close) => open + '\n' + inner + '\n' + close);
+                // insertBefore/remove, not replaceWith — LWS proxied nodes are
+                // missing ChildNode.replaceWith (the v3.39 lesson).
+                while (pv.firstChild) {
+                    pv.parentNode.insertBefore(pv.firstChild, pv);
                 }
-                return (
-                    '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8" />\n<style>\n@page { size: Letter portrait; margin: 0.75in; }\nbody { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; }\n</style>\n</head>\n<body>\n' +
-                    inner +
-                    '\n</body>\n</html>\n'
-                );
+                pv.remove();
             }
-            // No pv wrapper — serialize the cleaned fragment back out.
             const container = document.createElement('div');
-            container.appendChild(root.cloneNode(true));
+            container.appendChild(root);
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            return container.innerHTML;
+            const cleaned = container.innerHTML.trim();
+
+            // Put the cleaned content back inside the AUTHOR'S OWN shell, and
+            // never fabricate one (#319).
+            //
+            // Two bugs used to live in these few lines, and they chained:
+            //
+            //  1. Parsing a full document into a <template> fragment discards
+            //     <!DOCTYPE>, <html>, <head> and <body> — they are ignored tokens
+            //     in that insertion mode. Serializing the fragment back therefore
+            //     returned a body with no shell. The author's <style> survived, so
+            //     nothing looked wrong yet.
+            //  2. On the NEXT save that shell-less body arrives wrapped in the
+            //     canvas's .dg-pv div, so `bodyRe.test(html)` is false, and the
+            //     old code fell through to a hardcoded
+            //     `<style>@page { size: Letter portrait }...</style>` shell —
+            //     silently replacing the author's entire stylesheet, and resetting
+            //     a Landscape template to Portrait.
+            //
+            // Splicing the cleaned BODY back into the original string, and
+            // otherwise returning the cleaned content untouched, fixes both: the
+            // shell is preserved when there is one, and no shell is invented when
+            // there is not.
+            if (bodyMatch) {
+                return html.replace(bodyRe, (m, open, inner, close) => open + '\n' + cleaned + '\n' + close);
+            }
+            return cleaned;
         } catch (e) {
             return html;
         }
