@@ -38,6 +38,39 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
+     * Records that a child or grandchild relationship was dropped from the merge data
+     * because its query could not run for the running user.
+     *
+     * Every child query here runs in USER_MODE, which throws when the running user
+     * lacks FLS on any field in the select list — so a user who can see and edit the
+     * records perfectly well in the UI still loses the entire relationship if one
+     * field in Query Config is invisible to them. The catch that follows each query
+     * turns that into "this relationship has no records": the loop renders nothing,
+     * generation reports success, and nobody is told (#332).
+     *
+     * The drop itself is deliberate — a partial document beats a failed one, and
+     * changing that would break templates that render acceptably today. What was
+     * missing is the trace. Buffered by DocGenErrorLogger and flushed once at the end
+     * of generateDocument, so a template with many child nodes cannot spend the DML
+     * limit on diagnostics.
+     */
+    private static void logDroppedRelationship(String relationshipKey, String objectApiName, Exception cause) {
+        DocGenErrorLogger.warn(
+            'DocGenDataRetriever',
+            'childQuery',
+            'Relationship "' +
+                relationshipKey +
+                '" (' +
+                objectApiName +
+                ') was dropped from the document: its query failed for the running user, ' +
+                'so the loop rendered no rows. This is usually field-level security on a ' +
+                'field in Query Config — the user can often still see the records themselves. ' +
+                'Underlying error: ' +
+                (cause == null ? 'unknown' : cause.getMessage())
+        );
+    }
+
+    /**
      * Returns the query config version (1, 2, or 3) for a given fieldsConfig string.
      * Used by DocGenBatch to decide whether bulk caching is available.
      */
@@ -967,7 +1000,8 @@ public with sharing class DocGenDataRetriever {
                         }
                     }
                 } catch (Exception e) {
-                    // ProcessInstance subquery failed — skip this child relationship
+                    // ProcessInstance subquery failed — skip this child relationship (#332)
+                    logDroppedRelationship(child.dataMapKey(), child.objectApiName, e);
                     continue;
                 }
             } else {
@@ -993,7 +1027,11 @@ public with sharing class DocGenDataRetriever {
 
                     childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
-                    // Child query failed — skip this child relationship
+                    // Child query failed — skip this child relationship, but leave a
+                    // trace. USER_MODE throws when the running user lacks FLS on any
+                    // select-list field, so this is the common "the table is empty for
+                    // one user and fine for the admin" report (#332).
+                    logDroppedRelationship(child.dataMapKey(), child.objectApiName, e);
                     continue;
                 }
             }
@@ -1144,7 +1182,8 @@ public with sharing class DocGenDataRetriever {
                         }
                     }
                 } catch (Exception e) {
-                    // ProcessInstance bulk subquery failed — skip this child relationship
+                    // ProcessInstance bulk subquery failed — skip this child relationship (#332)
+                    logDroppedRelationship(child.dataMapKey(), child.objectApiName, e);
                     continue;
                 }
             } else {
@@ -1197,7 +1236,8 @@ public with sharing class DocGenDataRetriever {
 
                     childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
-                    // Bulk child query failed — skip this child relationship
+                    // Bulk child query failed — skip this child relationship (#332)
+                    logDroppedRelationship(child.dataMapKey(), child.objectApiName, e);
                     continue;
                 }
             }
@@ -1782,7 +1822,8 @@ public with sharing class DocGenDataRetriever {
                 try {
                     piResults = Database.query(piQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
-                    // ProcessInstance subquery failed — skip this relationship
+                    // ProcessInstance subquery failed — skip this relationship (#332)
+                    logDroppedRelationship(grandchildSpec.relationshipName, grandchildSpec.childObjectApiName, e);
                     continue;
                 }
 
@@ -1816,7 +1857,8 @@ public with sharing class DocGenDataRetriever {
                 try {
                     gcResults = Database.query(gcQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
-                    // Grandchild query failed — skip this relationship
+                    // Grandchild query failed — skip this relationship (#332)
+                    logDroppedRelationship(grandchildSpec.relationshipName, grandchildSpec.childObjectApiName, e);
                     continue;
                 }
             }
