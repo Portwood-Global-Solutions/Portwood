@@ -35,11 +35,15 @@ import { writeFileSync, readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launch, login, openTab, inPage, HIT_TEST } from '../lib/browser.mjs';
-import { runAnonymous, debugLines } from '../lib/sf.mjs';
+import { runAnonymous, debugLines, nsPrefix } from '../lib/sf.mjs';
 import { check, skip, suiteResult, SEVERITY } from '../lib/report.mjs';
 
-const APP = 'portwoodglobal__DocGen_Template_Manager';
-const HUB = 'portwoodglobal__DocGen_Command_Hub';
+// Tab names carry the package namespace in a packaged or namespaced org and no
+// prefix in a source-deployed one. These are resolved per run — see nsPrefix in
+// lib/sf.mjs for why hardcoding it made this whole suite unrunnable against the
+// org setup-org.sh creates.
+let APP = 'DocGen_Template_Manager';
+let HUB = 'DocGen_Command_Hub';
 const PREFIX = 'QAUI-';
 
 const msg = (e) => String((e && e.message) || e).slice(0, 200);
@@ -458,6 +462,9 @@ async function countVersions(org, templateName) {
 export async function run({ org, headed }) {
     const C = [];
     const add = (...c) => C.push(...c);
+    const ns = await nsPrefix(org);
+    APP = `${ns}DocGen_Template_Manager`;
+    HUB = `${ns}DocGen_Command_Hub`;
     const runId = Date.now().toString(36).slice(-6);
     const NAME_STARTER = `${PREFIX}${runId}-Starter`;
     const NAME_FILE = `${PREFIX}${runId}-File`;
@@ -1834,6 +1841,139 @@ export async function run({ org, headed }) {
             ]) {
                 add(skip(n, 'the edit modal never opened'));
             }
+        }
+
+        /* ============================================================ *
+         * 5f. RE-UPLOADING THE SAME FILENAME (#309)
+         *
+         * An author uploads report.html, edits it, uploads it again, saves —
+         * and the save kept the PREVIOUS body. The cause is a file input that
+         * is never cleared: a native picker fires NO change event when the same
+         * path is chosen twice, so the second upload simply never happened.
+         *
+         * Playwright cannot reproduce that symptom. setInputFiles assigns the
+         * file list directly and dispatches change unconditionally, so a
+         * re-upload through it succeeds even on the broken build. What this
+         * asserts instead is the INVARIANT the fix restores — after an upload
+         * the input must be empty — which is the exact state the OS picker
+         * reads to decide whether anything changed. That fails on the broken
+         * build and passes on the fixed one.
+         *
+         * The second check is the other half of the bug: the green
+         * "Ready to Save" panel outlived the save it described, so it sat there
+         * promising a staged file directly above the warning saying the body
+         * had been reused.
+         * ============================================================ */
+        try {
+            step('same-filename re-upload (#309)');
+            const NAME_UPLOAD = `${PREFIX}${runId}-Upload`;
+            const mk = await apex(
+                org,
+                `SObject t = (SObject) Type.forName(tgt).newInstance();
+     t.put('Name', '${NAME_UPLOAD}');
+     t.put(ns + 'Type__c', 'HTML');
+     t.put(ns + 'Base_Object_API__c', 'Account');
+     insert t;
+     System.debug('MADE=' + t.Id);`
+            );
+            const made = mk.lines.find((l) => l.trim().startsWith('MADE='));
+            if (!made) {
+                add(skip('an uploaded body clears its file input (#309)', 'the HTML template could not be created'));
+                add(
+                    skip(
+                        '"Ready to Save" clears once the body is saved (#309)',
+                        'the HTML template could not be created'
+                    )
+                );
+            } else {
+                // A fresh navigation re-queries the list (the template was just made
+                // server-side), but the app lands on Create New — the datatable only
+                // exists on Your Templates, so switch before asking for a row action.
+                await openTab(page, base, APP, 10000);
+                await wait(3000);
+                await clickByText(page, '[role="tab"]', 'Your Templates');
+                await wait(3500);
+                await rowAction(NAME_UPLOAD, 'Edit');
+                await wait(5000);
+                // The body upload lives on Document & History, not the tab the modal
+                // opens on.
+                await clickByText(page, '[role="tab"]', 'Document & History');
+                await wait(3000);
+
+                // Same path both times, exactly as the author would do it.
+                const dir = mkdtempSync(join(tmpdir(), 'qaui309-'));
+                const htmlPath = join(dir, 'report.html');
+                const marker = `dg309-${runId}`;
+                writeFileSync(htmlPath, `<html><body><p>${marker}</p></body></html>`, 'utf8');
+
+                const INPUT = 'input.docgen-html-file-input';
+                const hasInput = await ev(page, `return !!__dgFind(${JSON.stringify(INPUT)});`, false);
+                if (hasInput !== true) {
+                    add(
+                        skip(
+                            'an uploaded body clears its file input (#309)',
+                            'the HTML upload input is not on this tab'
+                        )
+                    );
+                    add(
+                        skip(
+                            '"Ready to Save" clears once the body is saved (#309)',
+                            'the HTML upload input is not on this tab'
+                        )
+                    );
+                } else {
+                    await drainToasts(page);
+                    await page.locator(INPUT).setInputFiles(htmlPath);
+                    await wait(9000);
+
+                    const inputValue = await ev(
+                        page,
+                        `const i = __dgFind(${JSON.stringify(INPUT)});
+             return i ? String(i.value || '') : null;`,
+                        null
+                    );
+                    add(
+                        check(
+                            'an uploaded body clears its file input (#309)',
+                            inputValue === '',
+                            inputValue === null
+                                ? 'the input vanished after the upload'
+                                : `input.value is "${inputValue}" after the upload (expected ""). A non-empty ` +
+                                      'value means the OS picker fires no change event when the author picks the ' +
+                                      'same file again, and the re-upload is a silent no-op.',
+                            SEVERITY.BLOCKER
+                        )
+                    );
+
+                    const staged = await ev(
+                        page,
+                        `return (__dgFind('.slds-theme_success', true) || [])
+               .some((d) => __deep(d).indexOf('Ready to Save') !== -1);`,
+                        false
+                    );
+                    await clickByText(page, 'lightning-button', 'Save as New Version', { exact: true });
+                    await wait(14000);
+                    const stillStaged = await ev(
+                        page,
+                        `return (__dgFind('.slds-theme_success', true) || [])
+               .some((d) => __deep(d).indexOf('Ready to Save') !== -1);`,
+                        false
+                    );
+                    add(
+                        check(
+                            '"Ready to Save" clears once the body is saved (#309)',
+                            staged === true && stillStaged === false,
+                            `panel showing before save=${staged}, after save=${stillStaged}. Left showing, it ` +
+                                'promises a staged file over a save that would reuse the previous body — directly ' +
+                                'above the warning that says so.',
+                            SEVERITY.MAJOR
+                        )
+                    );
+                }
+            }
+        } catch (e) {
+            add(skip('an uploaded body clears its file input (#309)', msg(e)));
+            add(skip('"Ready to Save" clears once the body is saved (#309)', msg(e)));
         }
 
         /* ============================================================ *

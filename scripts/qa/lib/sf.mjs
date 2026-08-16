@@ -37,6 +37,44 @@ export async function orgFrontDoorUrl(org) {
     return JSON.parse(raw).result.url;
 }
 
+/**
+ * The package namespace prefix to put in front of a tab or field API name in THIS
+ * org — `portwoodglobal__`, or '' for a source-deployed one.
+ *
+ * Hardcoding the prefix makes a suite navigate to "Page doesn't exist" in every org
+ * scripts/qa/setup-org.sh produces, since that script creates the org --no-namespace
+ * so the e2e Apex compiles. ui-smoke.mjs learned this and resolves the prefix; the
+ * ui-* suites did not, so they failed on their first mount check against the standard
+ * QA org and every check behind it went unrun — a regression guard that cannot run is
+ * indistinguishable from one that passes.
+ *
+ * Three shapes, and the org's own namespace does not distinguish them:
+ *   source-deployed, no namespace     -> ''
+ *   namespaced scratch org            -> portwoodglobal__
+ *   SUBSCRIBER org, package INSTALLED -> portwoodglobal__
+ * The install case reports namespace: null from `org display`, because a subscriber
+ * org receives the namespace rather than owning it — so ask which packages are
+ * installed too, or the install case comes out exactly backwards.
+ */
+export async function nsPrefix(org) {
+    const json = async (argv) => {
+        try {
+            return JSON.parse(await sf(argv, { retries: 0 })).result;
+        } catch {
+            return null;
+        }
+    };
+    const own = ((await json(['org', 'display', '--target-org', org, '--json'])) || {}).namespace || null;
+    if (own) {
+        return `${own}__`;
+    }
+    const installed = (await json(['package', 'installed', 'list', '--target-org', org, '--json'])) || [];
+    const pkg = (Array.isArray(installed) ? installed : []).find(
+        (p) => String(p.SubscriberPackageNamespace || '').length > 0
+    );
+    return pkg ? `${pkg.SubscriberPackageNamespace}__` : '';
+}
+
 /** Run a block of anonymous Apex; returns the raw log. */
 export async function runAnonymous(org, apexSource, opts = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'dgqa-'));
