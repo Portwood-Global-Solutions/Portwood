@@ -56,6 +56,31 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Re-uploading an edited template under the same filename takes effect again (#309).**
+  Upload `report.html`, edit it, upload it again, save — and the save kept the PREVIOUS
+  body. Renaming the file to `report-v2.html` worked first time, which is what made it
+  look like anything but a bug.
+
+    An event object is only dependable for the synchronous part of a handler. Three file
+    pickers reset `event.target.value` in a `finally` that ran after their awaits, by
+    which point reading the event back yields null and the write is simply lost. A file
+    input that keeps its previous value fires **no `change` event at all** when the
+    author picks the same path again — so the second upload never happened, and there was
+    nothing to notice, because nothing ran. Each picker now binds the element to a const
+    before the first await. Alongside the HTML template body, this also fixes re-picking
+    the same file for a designer inline image and for a watermark.
+
+    The screen was also arguing with itself, and the reassuring half was winning. The
+    green **Ready to Save: report.html** panel was bound to the last filename seen, which
+    outlives what it describes — a save clears the staged ContentVersion but keeps the
+    name for download defaults, so the panel kept promising a file was staged directly
+    above the warning saying the body had been reused. It now reflects the staged
+    ContentVersion, the only thing that says what a save will actually do.
+
+    `scripts/qa/lwc-async-event-target.mjs` is a new offline audit for the pattern: it
+    fails on the three handlers as they were and passes once they are fixed. This class
+    of bug deploys clean and lints clean, so nothing else was going to catch it.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said

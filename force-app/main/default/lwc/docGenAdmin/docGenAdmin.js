@@ -6550,6 +6550,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     /**
+     * Filename for the "Ready to Save" panel — empty unless a body file is genuinely
+     * staged (#309).
+     *
+     * `uploadedFileName` outlives what it describes: the save clears
+     * `uploadedContentVersionId` (the thing that actually gets attached) but keeps the
+     * name for download defaults. Binding the panel to the name alone left it reading
+     * "Ready to Save: report.html" over a save that would reuse the PREVIOUS body — and
+     * that reassuring green box sits directly above the warning saying the opposite.
+     * The staged ContentVersion is the only honest signal of what a save will do.
+     */
+    get stagedBodyFileName() {
+        return this.uploadedContentVersionId ? this.uploadedFileName : '';
+    }
+
+    /**
      * Fidelity report (#272): server Finding DTOs → badge rows, the same shape
      * the Agentforce report renders. Lint actions are always 'warning'.
      */
@@ -6596,14 +6611,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async handleHtmlFileSelected(event) {
-        const file = event.target.files && event.target.files[0];
+        // Hold the input element itself, synchronously. `event.target` is only
+        // dependable for the synchronous part of the handler — read it back after an
+        // await and it can be null, so the reset in `finally` never landed. An input
+        // that keeps its old value fires NO change event when the author picks the
+        // SAME path again, which is why re-uploading an edited file under its original
+        // name silently did nothing while a rename worked first time (#309).
+        const input = event.target;
+        const file = input.files && input.files[0];
         if (!file) {
             return;
         }
         const lower = (file.name || '').toLowerCase();
         if (!lower.endsWith('.html') && !lower.endsWith('.htm') && !lower.endsWith('.zip')) {
             this.showToast('Unsupported file', 'Please choose an .html, .htm, or .zip file.', 'error');
-            event.target.value = '';
+            this._clearFileInput(input);
             return;
         }
         this.isUploadingHtml = true;
@@ -6642,7 +6664,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.showToast('Upload Failed', msg, 'error');
         } finally {
             this.isUploadingHtml = false;
-            event.target.value = '';
+            this._clearFileInput(input);
         }
     }
 
@@ -15058,7 +15080,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async handleInsertImageSelected(event) {
-        const file = event.target.files && event.target.files[0];
+        // Captured synchronously — see handleHtmlFileSelected (#309).
+        const input = event.target;
+        const file = input.files && input.files[0];
         if (!file) {
             return;
         }
@@ -15069,7 +15093,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 'Use .png, .jpg, .gif, or .bmp — SVG does not render in PDF output.',
                 'error'
             );
-            event.target.value = '';
+            this._clearFileInput(input);
             return;
         }
         this.isUploadingInsertImage = true;
@@ -15087,7 +15111,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.showToast('Image upload failed', msg, 'error');
         } finally {
             this.isUploadingInsertImage = false;
-            event.target.value = '';
+            this._clearFileInput(input);
         }
     }
 
@@ -15296,13 +15320,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async handleWatermarkFileSelected(event) {
-        const file = event.target.files && event.target.files[0];
+        // Captured synchronously — see handleHtmlFileSelected (#309).
+        const input = event.target;
+        const file = input.files && input.files[0];
         if (!file) {
             return;
         }
         if (!file.type || !file.type.startsWith('image/')) {
             this.showToast('Unsupported file', 'Please choose an image file (PNG, JPEG, GIF).', 'error');
-            event.target.value = '';
+            this._clearFileInput(input);
             return;
         }
         const active = (this.versions || []).find((v) => v[F.VerIsActive]);
@@ -15312,7 +15338,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 'Save the template first so a version exists, then upload the watermark.',
                 'warning'
             );
-            event.target.value = '';
+            this._clearFileInput(input);
             return;
         }
         this.isUploadingWatermark = true;
@@ -15332,7 +15358,28 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.showToast('Watermark upload failed', msg, 'error');
         } finally {
             this.isUploadingWatermark = false;
-            event.target.value = '';
+            this._clearFileInput(input);
+        }
+    }
+
+    /**
+     * Clears a file input so picking the SAME path again still fires `change`.
+     *
+     * Two reasons this is a helper rather than an inline assignment. The element has
+     * to be captured before the first `await` (an event's target is not dependable
+     * afterwards), and under the LWS namespace sandbox a proxied node can reject the
+     * write — which must not take the surrounding `finally` down with it, since by
+     * then the upload itself has already succeeded.
+     */
+    _clearFileInput(input) {
+        if (!input) {
+            return;
+        }
+        try {
+            input.value = '';
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('Portwood: could not reset file input', err);
         }
     }
 
