@@ -4979,6 +4979,97 @@ private class DocGenMiscTests {
         System.assert(html.contains('<html'), 'Should be valid HTML');
     }
 
+    /**
+     * #363 — a Word-authored hyperlink (Insert → Link) survives the real merge path
+     * as a clickable <a href>, in the body and in a header.
+     *
+     * Both parts deliberately use r:id="rId5" for DIFFERENT targets, which is exactly
+     * how Word numbers relationships: r:id values are scoped to their own part. If the
+     * resolver ever reached for document.xml.rels while rewriting a header, the header
+     * link would silently point at the body's URL — the assertions below catch that.
+     */
+    @IsTest
+    static void testWordHyperlinkResolvesThroughRenderPath() {
+        String docXml =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:body><w:p><w:r><w:t xml:space="preserve">{Name}: complete </w:t></w:r>' +
+            '<w:hyperlink r:id="rId5"><w:r><w:t>form X</w:t></w:r></w:hyperlink>' +
+            '<w:r><w:t> today.</w:t></w:r></w:p>' +
+            '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
+            '<w:pgSz w:w="12240" w:h="15840"/>' +
+            '<w:pgMar w:top="1440" w:right="720" w:bottom="1440" w:left="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String docRels =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="https://example.com/formX" TargetMode="External"/>' +
+            '<Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"' +
+            ' Target="header1.xml"/>' +
+            '</Relationships>';
+        String headerXml =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:p><w:hyperlink r:id="rId5"><w:r><w:t>Support</w:t></w:r></w:hyperlink></w:p></w:hdr>';
+        String headerRels =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="https://example.com/support" TargetMode="External"/>' +
+            '</Relationships>';
+
+        Compression.ZipWriter zw = new Compression.ZipWriter();
+        zw.addEntry(
+            '[Content_Types].xml',
+            Blob.valueOf(
+                '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+                    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+                    '<Default Extension="xml" ContentType="application/xml"/></Types>'
+            )
+        );
+        zw.addEntry(
+            '_rels/.rels',
+            Blob.valueOf(
+                '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+                    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+                    '</Relationships>'
+            )
+        );
+        zw.addEntry('word/document.xml', Blob.valueOf(docXml));
+        zw.addEntry('word/_rels/document.xml.rels', Blob.valueOf(docRels));
+        zw.addEntry('word/header1.xml', Blob.valueOf(headerXml));
+        zw.addEntry('word/_rels/header1.xml.rels', Blob.valueOf(headerRels));
+
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        ContentVersion cv = new ContentVersion(
+            Title = 'Issue363Hyperlink',
+            PathOnClient = 'Issue363Hyperlink.docx',
+            VersionData = zw.getArchive()
+        );
+        insert cv;
+        Id conDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id].ContentDocumentId;
+        insert new ContentDocumentLink(LinkedEntityId = tpl.Id, ContentDocumentId = conDocId, ShareType = 'V');
+
+        Account acc = TestDataFactory.getTestAccount();
+
+        Test.startTest();
+        String html = DocGenService.renderPreviewHtml(tpl.Id, acc.Id);
+        Test.stopTest();
+
+        System.assert(
+            html.contains('<a href="https://example.com/formX"'),
+            'Body hyperlink should resolve from document.xml.rels. Got: ' + html
+        );
+        System.assert(
+            html.contains('<a href="https://example.com/support"'),
+            'Header hyperlink should resolve from header1.xml.rels. Got: ' + html
+        );
+        System.assert(html.contains('form X') && html.contains('Support'), 'Link text should survive');
+    }
+
     @IsTest
     static void testRenderPreviewHtmlThrowsForPowerPoint() {
         DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
