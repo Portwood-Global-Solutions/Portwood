@@ -1893,12 +1893,145 @@ public with sharing class DocGenHtmlRenderer {
         return String.join(parts, '');
     }
 
+    // Schemes a resolved hyperlink may carry into the emitted <a href>. Word writes
+    // http/https/mailto/tel/ftp for Insert → Link; anything else (javascript:, data:)
+    // is dropped back to the styled-span fallback, because this same HTML is rendered
+    // in the signature viewer, not only through Blob.toPdf.
+    private static final Set<String> ALLOWED_LINK_SCHEMES = new Set<String>{
+        'http://',
+        'https://',
+        'mailto:',
+        'tel:',
+        'ftp://',
+        'ftps://',
+        'sms:',
+        'callto:'
+    };
+
+    /**
+     * Stamps `w:docgen-url` onto every `<w:hyperlink r:id="rIdN">` whose relationship
+     * resolves to an external URL in the supplied rels part (#363).
+     *
+     * Word stores a hyperlink's target in the rels part, not in document.xml — the
+     * element itself only carries the r:id. processHyperlink cannot see the rels, so
+     * callers run the document (and each header/footer) through this pass first; the
+     * stamped attribute then takes the `<a href>` branch that rich-text-generated
+     * links already use (DocGenService.convertRichTextToDocxXml).
+     *
+     * Callers must pass the rels part that belongs to THIS xml — document.xml.rels for
+     * the body, headerN.xml.rels for headerN.xml. r:id values are per-part, so crossing
+     * them resolves to a different (wrong) target.
+     *
+     * Only TargetMode="External" relationships resolve; internal targets are file paths,
+     * not URLs. `<w:hyperlink w:anchor="...">` (in-document bookmarks/TOC) has no r:id
+     * and is deliberately left alone — it needs a matching anchor to be worth emitting.
+     *
+     * The stamped value is copied verbatim out of the rels XML, so it stays escaped
+     * exactly as authored — a query string's `&amp;` reaches the href already correct.
+     */
+    public static String resolveHyperlinkRelIds(String xml, String relsXml) {
+        if (String.isBlank(xml) || String.isBlank(relsXml) || !xml.contains('<w:hyperlink')) {
+            return xml;
+        }
+        Map<String, String> urlByRelId = parseExternalHyperlinkRels(relsXml);
+        if (urlByRelId.isEmpty()) {
+            return xml;
+        }
+
+        // Accumulate into a list rather than concatenating: a giant-query document.xml
+        // is multi-megabyte, and `result +=` per link would be quadratic over it.
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < xml.length()) {
+            Integer hlStart = xml.indexOf('<w:hyperlink', cursor);
+            if (hlStart == -1) {
+                break;
+            }
+            Integer tagEnd = xml.indexOf('>', hlStart);
+            if (tagEnd == -1) {
+                break;
+            }
+            String openTag = xml.substring(hlStart, tagEnd + 1);
+            parts.add(xml.substring(cursor, hlStart));
+
+            String url = null;
+            // A rich-text-generated link already carries its URL — don't restamp it.
+            if (!openTag.contains('w:docgen-url=')) {
+                String relId = extractAttrFromTag(openTag, 'r:id');
+                if (String.isNotBlank(relId)) {
+                    url = urlByRelId.get(relId);
+                }
+            }
+            if (url == null) {
+                parts.add(openTag);
+            } else {
+                parts.add('<w:hyperlink w:docgen-url="' + url + '"' + openTag.substring('<w:hyperlink'.length()));
+            }
+            cursor = tagEnd + 1;
+        }
+        parts.add(xml.substring(cursor));
+        return String.join(parts, '');
+    }
+
+    /**
+     * Parses an OOXML rels part into relId → external hyperlink target.
+     * Skips internal targets and any scheme outside ALLOWED_LINK_SCHEMES.
+     */
+    private static Map<String, String> parseExternalHyperlinkRels(String relsXml) {
+        Map<String, String> out = new Map<String, String>();
+        Integer cursor = 0;
+        while (cursor < relsXml.length()) {
+            Integer relStart = relsXml.indexOf('<Relationship ', cursor);
+            if (relStart == -1) {
+                break;
+            }
+            Integer relClose = relsXml.indexOf('>', relStart);
+            if (relClose == -1) {
+                break;
+            }
+            String relTag = relsXml.substring(relStart, relClose + 1);
+            String relType = extractAttrFromTag(relTag, 'Type');
+            String targetMode = extractAttrFromTag(relTag, 'TargetMode');
+            if (relType != null && relType.endsWith('/hyperlink') && 'External'.equalsIgnoreCase(targetMode)) {
+                String relId = extractAttrFromTag(relTag, 'Id');
+                String target = extractAttrFromTag(relTag, 'Target');
+                if (String.isNotBlank(relId) && isSafeLinkTarget(target)) {
+                    out.put(relId, target);
+                }
+            }
+            cursor = relClose + 1;
+        }
+        return out;
+    }
+
+    /**
+     * True when the rels target opens with a scheme we're willing to emit as an href.
+     * Entities and whitespace are stripped before the scheme is tested — a hand-built
+     * .docx can write "java&#115;cript:" or "java\tscript:" and still have a browser
+     * resolve it, so the raw prefix is not what needs checking.
+     */
+    private static Boolean isSafeLinkTarget(String target) {
+        if (String.isBlank(target)) {
+            return false;
+        }
+        String probe = target.replaceAll('&#?[a-zA-Z0-9]+;', '').replaceAll('[\\s\\u0000-\\u001F]', '').toLowerCase();
+        for (String scheme : ALLOWED_LINK_SCHEMES) {
+            if (probe.startsWith(scheme)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Processes a <w:hyperlink> element — extracts inner runs and wraps in <a> if possible.
      */
     private static String processHyperlink(String hlXml, Map<String, String> images) {
-        // Hyperlinks may have an anchor (bookmark) or r:id (external link).
-        // We can't resolve r:id without the .rels file, so render the text with underline styling.
+        // Hyperlinks carry either an anchor (in-document bookmark) or an r:id whose
+        // target lives in the rels part. r:id is resolved upstream by
+        // resolveHyperlinkRelIds, which stamps w:docgen-url; anything still unresolved
+        // here (no rels available, internal target, disallowed scheme, or a bare
+        // w:anchor) renders as text with the link styling but no href.
         String innerContent = '';
         Integer cursor = 0;
         while (cursor < hlXml.length()) {
@@ -1929,7 +2062,8 @@ public with sharing class DocGenHtmlRenderer {
             return '';
         }
 
-        // Check for direct URL from rich text (custom attribute set by DocGenService)
+        // Direct URL: stamped by resolveHyperlinkRelIds for a Word-authored r:id link,
+        // or by DocGenService.convertRichTextToWordXml for a rich-text-generated one.
         String directUrl = null;
         Integer urlAttr = hlXml.indexOf('w:docgen-url="');
         if (urlAttr != -1) {
@@ -1947,7 +2081,7 @@ public with sharing class DocGenHtmlRenderer {
                 innerContent +
                 '</a>';
         }
-        // No URL available (template hyperlink without rels) — render as styled text
+        // No URL resolved — render as styled text (see processHyperlink's opening note)
         return '<span style="color:#0563C1;text-decoration:underline">' + innerContent + '</span>';
     }
 
