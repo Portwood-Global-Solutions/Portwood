@@ -1820,6 +1820,10 @@ public without sharing class DocGenSignatureController {
                 'Secure_Token__c'
             }
         );
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Show_Signer_Decline__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
             SELECT
@@ -1829,6 +1833,8 @@ public without sharing class DocGenSignatureController {
                 Signer_Email__c,
                 Signature_Request__c,
                 Signature_Request__r.Expires_At__c,
+                Signature_Request__r.Template__c,
+                Signature_Request__r.Template__r.Show_Signer_Decline__c,
                 Role_Name__c,
                 Contact__c,
                 CreatedDate
@@ -1858,6 +1864,22 @@ public without sharing class DocGenSignatureController {
         if (signer.Status__c == 'Declined') {
             result.put('success', false);
             result.put('message', 'You have already declined this request.');
+            return result;
+        }
+
+        // #367 — server-side enforcement, not just a hidden button: the same AND-gate
+        // validateToken uses (org-wide switch AND this template's own opt-in, or the
+        // org-wide switch alone when there's no template) must hold here too, or a
+        // signer could decline by calling this action directly and skipping the UI.
+        DocGen_Settings__c declineSettings = DocGen_Settings__c.getOrgDefaults();
+        Boolean orgShowsDecline = declineSettings != null && declineSettings.Signature_Show_Decline__c == true;
+        Boolean templateGatePasses =
+            signer.Signature_Request__r.Template__c == null ||
+            (signer.Signature_Request__r.Template__r != null &&
+            signer.Signature_Request__r.Template__r.Show_Signer_Decline__c == true);
+        if (!(orgShowsDecline && templateGatePasses)) {
+            result.put('success', false);
+            result.put('message', 'Declining is not available for this document.');
             return result;
         }
 

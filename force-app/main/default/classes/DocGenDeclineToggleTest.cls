@@ -94,6 +94,37 @@ private class DocGenDeclineToggleTest {
         System.assertEquals(true, res.showDecline, 'org on AND template on together show Decline');
     }
 
+    // ---- Server-side enforcement: declineSignature refuses when the button would be
+    // hidden, not just validateToken's response — closes the dev-tools-bypass gap. ----
+    @IsTest
+    static void declineSignature_blockedWhenNotShown() {
+        Id tplId = createTemplate(false); // default off, org also off
+        String token = insertSignerFor(tplId);
+
+        Test.startTest();
+        Map<String, Object> result = DocGenSignatureController.declineSignature(token, 'test reason', '1.1.1.1', 'ua');
+        Test.stopTest();
+
+        System.assertEquals(false, result.get('success'), 'decline is refused when showDecline resolves to false');
+        DocGen_Signer__c s = [SELECT Status__c FROM DocGen_Signer__c WHERE Secure_Token__c = :token];
+        System.assertEquals('Pending', s.Status__c, 'signer status is untouched by the refused decline');
+    }
+
+    @IsTest
+    static void declineSignature_allowedWhenShown() {
+        Id tplId = createTemplate(true);
+        String token = insertSignerFor(tplId);
+        DocGenSetupController.saveDeclineSettings(true);
+
+        Test.startTest();
+        Map<String, Object> result = DocGenSignatureController.declineSignature(token, 'test reason', '1.1.1.1', 'ua');
+        Test.stopTest();
+
+        System.assertEquals(true, result.get('success'), 'decline succeeds when both org and template show Decline');
+        DocGen_Signer__c s = [SELECT Status__c FROM DocGen_Signer__c WHERE Secure_Token__c = :token];
+        System.assertEquals('Declined', s.Status__c, 'signer status reflects the successful decline');
+    }
+
     // ---- No template on the request (source-document send) → org switch alone decides ----
     @IsTest
     static void noTemplate_orgSwitchAloneDecides() {

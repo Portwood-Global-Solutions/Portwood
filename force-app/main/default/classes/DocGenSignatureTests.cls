@@ -667,6 +667,10 @@ private class DocGenSignatureTests {
         DocGen_Signer__c signer = getTestSigner();
         String signerToken = [SELECT Secure_Token__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Secure_Token__c;
 
+        // #367 — this signer's request has no template, so decline is gated on the
+        // org-wide switch alone; off by default, so this test's decline needs it on.
+        DocGenSetupController.saveDeclineSettings(true);
+
         // Decline the signer first.
         DocGenSignatureController.declineSignature(signerToken, 'Wrong document', null, null);
 
@@ -4398,6 +4402,10 @@ private class DocGenSignatureTests {
             Signature_Data__c = '{"previewHtml":"<html>Electronically signed by ...</html>"}'
         );
         update parentReqSeed;
+
+        // #367 — this signer's request has no template, so decline is gated on the
+        // org-wide switch alone; off by default, so this test's decline needs it on.
+        DocGenSetupController.saveDeclineSettings(true);
 
         Test.startTest();
         Map<String, Object> result = DocGenSignatureController.declineSignature(
