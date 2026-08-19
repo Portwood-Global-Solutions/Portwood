@@ -50,6 +50,9 @@ public with sharing class DocGenSetupController {
             !(s != null && s.Signature_Skip_Email_Verification__c == true)
         );
         result.put('Signature_Prefill_Signer_Email__c', s != null && s.Signature_Prefill_Signer_Email__c == true);
+        // #367 — plain pass-through: Checkbox naturally defaults false, which is
+        // exactly the intended default (Decline hidden until explicitly shown).
+        result.put('Signature_Show_Decline__c', s != null && s.Signature_Show_Decline__c == true);
         return result;
     }
 
@@ -458,6 +461,32 @@ public with sharing class DocGenSetupController {
         };
         DocGenFlsGuard.assertCreateable(settings, verifFields);
         DocGenFlsGuard.assertUpdateable(settings, verifFields);
+        /* code-analyzer-suppress ApexFlsViolation */
+        Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+    }
+
+    /**
+     * #367 — org-wide master switch for the "Decline to Sign" button. Resolved live on
+     * every signing-page load (DocGenSignatureController.validateToken), not stamped
+     * at send time, so flipping this also reaches already-sent, still-pending requests.
+     * Default is off (Decline hidden). When on, each template still needs its own
+     * Show_Signer_Decline__c opt-in before Decline appears on it (AND-gate, not an
+     * override) — except source-document sends with no template, gated by this alone.
+     * @param showDecline true turns the org-wide switch on; templates still gate individually.
+     */
+    @AuraEnabled
+    public static void saveDeclineSettings(Boolean showDecline) {
+        if (
+            !FeatureManagement.checkPermission('DocGen_Admin_Access') &&
+            !Schema.sObjectType.DocGen_Settings__c.isUpdateable()
+        ) {
+            throw DocGenService.ahe('Insufficient privileges to modify Portwood settings.');
+        }
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Show_Decline__c = (showDecline == true);
+        Set<String> declineFields = new Set<String>{ 'Signature_Show_Decline__c' };
+        DocGenFlsGuard.assertCreateable(settings, declineFields);
+        DocGenFlsGuard.assertUpdateable(settings, declineFields);
         /* code-analyzer-suppress ApexFlsViolation */
         Database.upsert(settings, AccessLevel.SYSTEM_MODE);
     }

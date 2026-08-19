@@ -6,6 +6,7 @@ import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.get
 import validateSignatureSetup from '@salesforce/apex/DocGenSetupController.validateSignatureSetup';
 import saveReminderSettings from '@salesforce/apex/DocGenSetupController.saveReminderSettings';
 import saveVerificationSettings from '@salesforce/apex/DocGenSetupController.saveVerificationSettings';
+import saveDeclineSettings from '@salesforce/apex/DocGenSetupController.saveDeclineSettings';
 
 export default class DocGenSignatureSettings extends LightningElement {
     @track isLoaded = false;
@@ -32,6 +33,9 @@ export default class DocGenSignatureSettings extends LightningElement {
     // #verification — org defaults
     @track requireVerification = true;
     @track prefillEmail = false;
+
+    // #367 — org-wide master switch, off by default (Decline hidden until shown).
+    @track showDecline = false;
 
     // Setup checks
     @track setupChecks = [];
@@ -60,6 +64,7 @@ export default class DocGenSignatureSettings extends LightningElement {
             // null → required (upgrade-safe default)
             this.requireVerification = data.Signature_Require_Email_Verification__c !== false;
             this.prefillEmail = data.Signature_Prefill_Signer_Email__c === true;
+            this.showDecline = data.Signature_Show_Decline__c === true;
         } catch (_err) {
             // Settings not yet created — use defaults
         }
@@ -106,6 +111,9 @@ export default class DocGenSignatureSettings extends LightningElement {
     }
     handlePrefillEmailChange(e) {
         this.prefillEmail = e.target.checked;
+    }
+    handleShowDeclineChange(e) {
+        this.showDecline = e.target.checked;
     }
 
     handleRefreshChecks() {
@@ -167,6 +175,8 @@ export default class DocGenSignatureSettings extends LightningElement {
                 requireVerification: this.requireVerification,
                 prefillEmail: this.prefillEmail
             });
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
+            await saveDeclineSettings({ showDecline: this.showDecline });
             this.saveSuccess = true;
             this.saveMessage =
                 'Settings saved successfully.' + (this.reminderEnabled ? ' Reminders scheduled hourly.' : '');

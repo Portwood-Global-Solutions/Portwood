@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Show_Signer_Decline__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Per-template opt-in for the "Decline to Sign" button (#367). Default FALSE — Decline is hidden unless explicitly turned on for this template AND the org-wide setting (Signature_Show_Decline__c on DocGen_Settings__c) is also on. Both must be true for Decline to appear; this field has no effect while the org-wide setting is off. Requests with no template at all (raw source-document sends) are gated by the org-wide setting alone.</description>
+    <externalId>false</externalId>
+    <label>Show Decline Button</label>
+    <type>Checkbox</type>
+</CustomField>

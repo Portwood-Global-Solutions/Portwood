@@ -1484,6 +1484,11 @@
 
                         // Wire the action bar.
                         document.getElementById('btn-open-sign').addEventListener('click', openSignModal);
+                        // #367 — hidden by default; shown only when both the org-wide
+                        // setting and this template's own opt-in are on.
+                        if (!data || !data.showDecline) {
+                            document.getElementById('btn-decline').style.display = 'none';
+                        }
                         document.getElementById('btn-decline').addEventListener('click', function () {
                             showState('decline');
                         });
