@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signature_Show_Decline__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Org-wide master switch for the "Decline to Sign" button (#367). Default FALSE — Decline is hidden everywhere until this is explicitly turned on. When on, each template still needs its own Show_Signer_Decline__c opt-in before Decline appears on it (except source-document sends with no template, which are gated by this setting alone). Resolved live on every signing-page load (DocGenSignatureController.validateToken), not stamped at send time, so flipping this reaches already-sent, still-pending signature requests too.</description>
+    <externalId>false</externalId>
+    <label>Show Decline Button</label>
+    <type>Checkbox</type>
+</CustomField>

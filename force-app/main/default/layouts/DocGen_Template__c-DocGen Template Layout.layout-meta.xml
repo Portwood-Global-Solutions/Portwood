@@ -94,6 +94,10 @@
                 <behavior>Edit</behavior>
                 <field>Prefill_Signer_Email__c</field>
             </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Show_Signer_Decline__c</field>
+            </layoutItems>
         </layoutColumns>
         <style>TwoColumnsLeftToRight</style>
     </layoutSections>

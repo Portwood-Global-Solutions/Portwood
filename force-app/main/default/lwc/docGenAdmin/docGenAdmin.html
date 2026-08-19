@@ -3768,6 +3768,20 @@
                                             field-level-help="When verification is on, auto-send the code to the signer's known email and skip the 'type your email' step. Inherit uses the org default."
                                             class="slds-var-m-top_medium"
                                         ></lightning-combobox>
+                                        <!-- #367 — hidden entirely while the org-wide switch is off, since
+                                             this toggle has no effect until that's on. -->
+                                        <template if:true={orgShowDecline}>
+                                            <lightning-input
+                                                type="toggle"
+                                                label="Show Decline Button"
+                                                checked={editTemplateShowDecline}
+                                                onchange={handleShowDeclineChange}
+                                                message-toggle-active="Signers can decline instead of signing"
+                                                message-toggle-inactive="Decline is hidden"
+                                                field-level-help="Off by default — Decline stays hidden until this is turned on. Both the org-wide and per-template settings must be on together for Decline to appear."
+                                                class="slds-var-m-top_medium"
+                                            ></lightning-input>
+                                        </template>
                                     </div>
                                     <div class="slds-col slds-size_1-of-2">
                                         <!-- #208 — per-template default email message -->
