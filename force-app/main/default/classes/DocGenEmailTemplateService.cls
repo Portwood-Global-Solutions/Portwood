@@ -211,6 +211,87 @@ global with sharing class DocGenEmailTemplateService {
     // Record loading (defensive — never throws to the caller)
     // =====================================================================
 
+    /**
+     * The active-template read, in its own `without sharing` scope.
+     *
+     * `WITH SYSTEM_MODE` bypasses CRUD/FLS but NOT record sharing — sharing is
+     * decided by the sharing keyword of the class the query runs in, and this
+     * class is `with sharing`. DocGen_Email_Template__c ships with
+     * sharingModel=ReadWrite but externalSharingModel=Private, so an internal
+     * sender sees every active record and a GUEST sender sees none: the query
+     * returned zero rows, defCache stayed empty, and getTemplate() silently fell
+     * back to builtInDef(). That is exactly why the two guest-context emails
+     * (Verification PIN, Completion Confirmation) arrived on the built-in
+     * default while the two internal-context ones (Signature Request, Reminder)
+     * used the customer's saved template.
+     *
+     * A guest sharing rule is not the fix — this is package-internal branding
+     * config with no per-record confidentiality model (internal OWD is already
+     * ReadWrite), and requiring every subscriber to hand-build a sharing rule
+     * for it would be a setup trap. The bypass is scoped to this one read rather
+     * than applied to the whole class, and FLS is still enforced by the
+     * guestAssertAccessible guard in loadActiveTemplates.
+     */
+    private without sharing class TemplateReader {
+        /**
+         * The logo asset behind {%asset:key} and Logo_Asset_Key__c, same story:
+         * DocGen_Asset__c is also sharingModel=ReadWrite / externalSharingModel=
+         * Private, so under `with sharing` a guest read returned nothing and the
+         * logo silently vanished from the guest emails — degrading quietly,
+         * because queryAssetPublicUrl treats "no rows" as "no logo".
+         */
+        private List<DocGen_Asset__c> readAssetByKey(String assetKey) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT
+                    Id,
+                    (
+                        SELECT ContentDocument.LatestPublishedVersionId
+                        FROM ContentDocumentLinks
+                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
+                        LIMIT 1
+                    )
+                FROM DocGen_Asset__c
+                WHERE Asset_Key__c = :assetKey
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+        }
+
+        private List<ContentDistribution> readDistribution(Id cvId) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT ContentDownloadUrl
+                FROM ContentDistribution
+                WHERE ContentVersionId = :cvId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
+
+        private List<DocGen_Email_Template__c> read() {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT
+                    Type__c,
+                    Subject__c,
+                    Body_Html__c,
+                    Body_Plain__c,
+                    Brand_Color__c,
+                    Logo_Url__c,
+                    Logo_Url_Extended__c,
+                    Logo_Asset_Key__c,
+                    Logo_Height__c,
+                    Footer_Text__c,
+                    Layout_Mode__c
+                FROM DocGen_Email_Template__c
+                WHERE Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                ORDER BY LastModifiedDate DESC
+            ]; // NOPMD - package-internal object; CRUD via Portwood permission sets
+        }
+    }
+
     private static void loadActiveTemplates() {
         defCache = new Map<String, TemplateDef>();
         try {
@@ -234,25 +315,7 @@ global with sharing class DocGenEmailTemplateService {
                     'Is_Active__c'
                 }
             );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Email_Template__c> rows = [
-                SELECT
-                    Type__c,
-                    Subject__c,
-                    Body_Html__c,
-                    Body_Plain__c,
-                    Brand_Color__c,
-                    Logo_Url__c,
-                    Logo_Url_Extended__c,
-                    Logo_Asset_Key__c,
-                    Logo_Height__c,
-                    Footer_Text__c,
-                    Layout_Mode__c
-                FROM DocGen_Email_Template__c
-                WHERE Is_Active__c = TRUE
-                WITH SYSTEM_MODE
-                ORDER BY LastModifiedDate DESC
-            ]; // NOPMD - package-internal object; CRUD via Portwood permission sets
+            List<DocGen_Email_Template__c> rows = new TemplateReader().read();
             for (DocGen_Email_Template__c r : rows) {
                 if (r.Type__c == null || defCache.containsKey(r.Type__c)) {
                     continue; // first (most-recently-modified) active record per type wins
@@ -542,21 +605,7 @@ global with sharing class DocGenEmailTemplateService {
     private static String queryAssetPublicUrl(String assetKey) {
         try {
             DocGenFlsGuard.guestAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Asset__c> assets = [
-                SELECT
-                    Id,
-                    (
-                        SELECT ContentDocument.LatestPublishedVersionId
-                        FROM ContentDocumentLinks
-                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
-                        LIMIT 1
-                    )
-                FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+            List<DocGen_Asset__c> assets = new TemplateReader().readAssetByKey(assetKey);
             if (assets.isEmpty() || assets[0].ContentDocumentLinks.isEmpty()) {
                 return null;
             }
@@ -568,14 +617,7 @@ global with sharing class DocGenEmailTemplateService {
                 ContentDistribution.sObjectType,
                 new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId' }
             );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<ContentDistribution> dists = [
-                SELECT ContentDownloadUrl
-                FROM ContentDistribution
-                WHERE ContentVersionId = :cvId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
+            List<ContentDistribution> dists = new TemplateReader().readDistribution(cvId);
             return dists.isEmpty() ? null : dists[0].ContentDownloadUrl;
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: logo asset resolution fell back to URL: ' + e.getMessage());
