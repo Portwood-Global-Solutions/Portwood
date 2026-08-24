@@ -76,6 +76,11 @@ public without sharing class DocGenSignatureController {
         // auto-send the PIN to signerEmail (the code still goes only to the real inbox).
         @AuraEnabled
         public Boolean prefillEmail;
+        // #367 — resolved live (org AND template, both must opt in), not stamped
+        // at send time, so an org-wide flip also applies to already-sent pending
+        // requests. Default is false: Decline stays hidden until explicitly shown.
+        @AuraEnabled
+        public Boolean showDecline;
         // Signer form fields to render during e-signing. PUBLIC-SAFE projection
         // only — {key,label,type,required,choices}. The writeback flags and the
         // base-object field API names from the template config are deliberately
@@ -293,7 +298,7 @@ public without sharing class DocGenSignatureController {
         // SYSTEM_MODE on the SOQL below; documented FLS describe signal here.
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Name', 'Form_Fields_Config__c' }
+            new Set<String>{ 'Name', 'Form_Fields_Config__c', 'Show_Signer_Decline__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
@@ -315,7 +320,8 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Expires_At__c,
                 Signature_Request__r.Template__c,
                 Signature_Request__r.Template__r.Name,
-                Signature_Request__r.Template__r.Form_Fields_Config__c
+                Signature_Request__r.Template__r.Form_Fields_Config__c,
+                Signature_Request__r.Template__r.Show_Signer_Decline__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -677,6 +683,21 @@ public without sharing class DocGenSignatureController {
         Boolean requireVerification = parentReq.Require_Email_Verification__c != false; // null → required (default)
         res.requiresPin = requireVerification && (signer.PIN_Verified_At__c == null);
         res.prefillEmail = requireVerification && parentReq.Prefill_Signer_Email__c == true;
+
+        // #367 — Decline shows only when BOTH the org-wide switch and this template's
+        // own opt-in are on (an AND-gate, not an override) — default is hidden on both,
+        // so a template with no explicit setting stays hidden even if the org switch is
+        // on. A request with no template at all (raw source-document send) has no
+        // per-template setting to gate on, so the org-wide switch alone decides.
+        // Resolved live (not stamped at send time) so flipping the org switch also
+        // reaches signature requests that already went out.
+        DocGen_Settings__c declineSettings = DocGen_Settings__c.getOrgDefaults();
+        Boolean orgShowsDecline = declineSettings != null && declineSettings.Signature_Show_Decline__c == true;
+        Boolean templateGatePasses =
+            parentReq.Template__c == null ||
+            (parentReq.Template__r != null &&
+            parentReq.Template__r.Show_Signer_Decline__c == true);
+        res.showDecline = orgShowsDecline && templateGatePasses;
 
         // Count total and signed signers
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
@@ -1799,6 +1820,10 @@ public without sharing class DocGenSignatureController {
                 'Secure_Token__c'
             }
         );
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Show_Signer_Decline__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
             SELECT
@@ -1808,6 +1833,8 @@ public without sharing class DocGenSignatureController {
                 Signer_Email__c,
                 Signature_Request__c,
                 Signature_Request__r.Expires_At__c,
+                Signature_Request__r.Template__c,
+                Signature_Request__r.Template__r.Show_Signer_Decline__c,
                 Role_Name__c,
                 Contact__c,
                 CreatedDate
@@ -1837,6 +1864,22 @@ public without sharing class DocGenSignatureController {
         if (signer.Status__c == 'Declined') {
             result.put('success', false);
             result.put('message', 'You have already declined this request.');
+            return result;
+        }
+
+        // #367 — server-side enforcement, not just a hidden button: the same AND-gate
+        // validateToken uses (org-wide switch AND this template's own opt-in, or the
+        // org-wide switch alone when there's no template) must hold here too, or a
+        // signer could decline by calling this action directly and skipping the UI.
+        DocGen_Settings__c declineSettings = DocGen_Settings__c.getOrgDefaults();
+        Boolean orgShowsDecline = declineSettings != null && declineSettings.Signature_Show_Decline__c == true;
+        Boolean templateGatePasses =
+            signer.Signature_Request__r.Template__c == null ||
+            (signer.Signature_Request__r.Template__r != null &&
+            signer.Signature_Request__r.Template__r.Show_Signer_Decline__c == true);
+        if (!(orgShowsDecline && templateGatePasses)) {
+            result.put('success', false);
+            result.put('message', 'Declining is not available for this document.');
             return result;
         }
 

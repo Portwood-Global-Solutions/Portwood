@@ -1143,6 +1143,11 @@
                             .addEventListener('click', handleCompleteSigning);
 
                         // Decline button
+                        // #367 — hidden by default; shown only when both the org-wide
+                        // setting and this template's own opt-in are on.
+                        if (!signerData || !signerData.showDecline) {
+                            document.getElementById('btn-decline').style.display = 'none';
+                        }
                         document.getElementById('btn-decline').addEventListener('click', function () {
                             showState('decline');
                         });

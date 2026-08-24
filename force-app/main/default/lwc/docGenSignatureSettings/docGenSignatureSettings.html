@@ -232,6 +232,25 @@
                     </div>
                 </div>
 
+                <!-- ===== DECLINE TO SIGN (#367) ===== -->
+                <div class="slds-section slds-is-open slds-m-top_medium">
+                    <h3 class="slds-section__title slds-theme_shade slds-p-around_x-small">
+                        <span class="slds-text-title_caps">Decline to Sign</span>
+                    </h3>
+                    <div class="slds-section__content slds-p-top_small">
+                        <lightning-input
+                            type="toggle"
+                            label="Show Decline Button"
+                            checked={showDecline}
+                            onchange={handleShowDeclineChange}
+                            message-toggle-active="Signers can decline instead of signing"
+                            message-toggle-inactive="Decline is hidden"
+                            field-level-help="Off by default — Decline stays hidden until this is turned on. Both the org-wide and per-template settings must be on together for Decline to appear."
+                        >
+                        </lightning-input>
+                    </div>
+                </div>
+
                 <!-- Save feedback -->
                 <template if:true={saveMessage}>
                     <div class={saveMessageClass}>{saveMessage}</div>

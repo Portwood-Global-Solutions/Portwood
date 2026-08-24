@@ -409,6 +409,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Settings__c.Signature_Show_Decline__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Template_Version__c.Base_Object_API__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -525,6 +530,11 @@
         <readable>true</readable>
     </fieldPermissions>
     <!-- Signer verification template defaults (#verification) -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Template__c.Show_Signer_Decline__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.Signer_Verification__c</field>
