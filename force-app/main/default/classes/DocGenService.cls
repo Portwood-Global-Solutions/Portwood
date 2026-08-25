@@ -5954,6 +5954,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return formatCurrencyDollarFallback(num);
         }
 
+        // `:convert` on a PLAIN field (#297).
+        //
+        // It worked on aggregates and nowhere else. On a plain field the segment
+        // landed in the LOCALE slot — `{Amount:currency:EUR:convert}` parsed
+        // `convert` as a locale name, failed to match one, and fell back to
+        // default separators. The symbol changed to € and the NUMBER did not
+        // move, so a $100 record rendered as "€100.00": a figure that is wrong
+        // by the exchange rate, in the currency it claims to be in, with nothing
+        // to indicate it. That is the worst shape a number bug can take in a
+        // document someone signs.
+        //
+        // Stripped before the locale slot is read, so it composes with every
+        // existing form: :currency:EUR:convert, :currency:EUR:de_DE:convert,
+        // :currency:auto:convert, :currency:auto=Field__c:convert.
+        // Reuses DocGenCurrency.wantsConversion / stripConvertSegment — the same
+        // parsing the aggregate path uses, so the two can never disagree about
+        // what `:convert` means.
+        if (DocGenCurrency.wantsConversion(String.join(segments, ':'))) {
+            segments = DocGenCurrency.stripConvertSegment(String.join(segments, ':')).split(':');
+            String fromIso = resolveCurrencyIso(data, null);
+            String targetIso = resolveConvertTarget(segments, data);
+            // No source or no target means there is nothing to convert BETWEEN.
+            // Leave the amount alone rather than inventing a rate — an
+            // unconverted number is wrong by a known amount; a guessed one is
+            // wrong by an unknown one.
+            if (String.isNotBlank(fromIso) && String.isNotBlank(targetIso) && fromIso != targetIso) {
+                num = DocGenCurrency.convert(num, fromIso, targetIso);
+            }
+        }
+
         String spec = segments[1].trim();
         String lowerSpec = spec.toLowerCase();
 
@@ -5973,6 +6003,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String iso = spec.toUpperCase();
         String locale = segments.size() >= 3 ? segments[2].trim() : null;
         return formatCurrencyWithIso(num, iso, locale);
+    }
+
+    /**
+     * The ISO `:convert` should convert INTO, for a plain-field tag (#297).
+     *
+     * Mirrors how the segments are read below, so the target is whatever the tag
+     * would have formatted as: an explicit ISO, or the record's own code for the
+     * `auto` forms. Returns null when the tag names no currency at all, which is
+     * the case the caller treats as "nothing to convert between".
+     */
+    private static String resolveConvertTarget(List<String> segments, Map<String, Object> data) {
+        if (segments.size() < 2) {
+            return null;
+        }
+        String spec = segments[1].trim();
+        String lowerSpec = spec.toLowerCase();
+        if (lowerSpec == 'auto' || lowerSpec.startsWith('auto=')) {
+            String sourceField = lowerSpec == 'auto' ? null : spec.substring(spec.indexOf('=') + 1).trim();
+            return resolveCurrencyIso(data, sourceField);
+        }
+        String iso = spec.toUpperCase();
+        return CURRENCY_SYMBOLS.containsKey(iso) ? iso : null;
     }
 
     /** Backward-compat bare-:currency output: hardcoded $ with US separators. */
