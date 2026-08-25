@@ -1600,24 +1600,235 @@ private class DocGenHtmlRendererTest {
     // Hyperlink rendering
     // =========================================================================
 
+    // A <w:hyperlink r:id="..."> the way Word writes it for Insert → Link.
+    private static String hyperlinkDocXml(String linkText) {
+        return '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:body>' +
+            '<w:p><w:hyperlink r:id="rId5" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:r><w:t>' +
+            linkText +
+            '</w:t></w:r>' +
+            '</w:hyperlink></w:p>' +
+            '</w:body></w:document>';
+    }
+
+    // word/_rels/document.xml.rels holding one hyperlink relationship for rId5.
+    private static String hyperlinkRelsXml(String target, String targetMode) {
+        return '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="' +
+            target +
+            '"' +
+            (targetMode == null ? '' : ' TargetMode="' + targetMode + '"') +
+            '/>' +
+            '</Relationships>';
+    }
+
+    // #363 — with the rels resolved, a Word-authored link emits a real <a href>.
     @IsTest
-    static void testHyperlink() {
+    static void testHyperlinkResolvesUrlFromRels() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('form X'),
+                hyperlinkRelsXml('https://example.com/formX', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(html.contains('<a href='), 'Word-authored hyperlink should emit an anchor. Got: ' + html);
+            System.assert(
+                html.contains('<a href="https://example.com/formX"'),
+                'Anchor should carry the URL resolved from the rels part. Got: ' + html
+            );
+            System.assert(html.contains('form X'), 'Should contain link text');
+            System.assert(html.contains('color:#0563C1'), 'Should have link color');
+            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+        }
+    }
+
+    // A query string's & is escaped in the rels part and must reach the href that way,
+    // neither raw (malformed HTML) nor double-escaped.
+    @IsTest
+    static void testHyperlinkQueryStringAmpersandStaysEscaped() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Report'),
+                hyperlinkRelsXml('https://example.com/r?a=1&amp;b=2', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(
+                html.contains('<a href="https://example.com/r?a=1&amp;b=2"'),
+                'Ampersand should stay XML-escaped exactly once. Got: ' + html
+            );
+            System.assert(!html.contains('&amp;amp;'), 'Ampersand should not be double-escaped. Got: ' + html);
+        }
+    }
+
+    // Internal (non-External) targets are file paths, not URLs — no anchor.
+    @IsTest
+    static void testHyperlinkInternalTargetNotLinked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Click Here'),
+                hyperlinkRelsXml('other.docx', null)
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(!html.contains('<a href='), 'Internal target should not emit an anchor. Got: ' + html);
+            System.assert(html.contains('Click Here'), 'Should still render the text');
+            System.assert(html.contains('color:#0563C1'), 'Should keep the link styling');
+        }
+    }
+
+    // A hand-built .docx can point a relationship at a script URL; the styled-span
+    // fallback is the correct output, since this HTML also renders in the signature viewer.
+    @IsTest
+    static void testHyperlinkUnsafeSchemeNotLinked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Click Here'),
+                    hyperlinkRelsXml('javascript:alert(1)', 'External')
+                )
+            );
+            System.assert(!html.contains('<a href='), 'javascript: should not become an anchor. Got: ' + html);
+            System.assert(!html.containsIgnoreCase('javascript:'), 'Script URL should not reach output. Got: ' + html);
+
+            // Entity-obfuscated variant — the raw prefix isn't what a browser resolves.
+            String obfuscated = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Click Here'),
+                    hyperlinkRelsXml('java&#115;cript:alert(1)', 'External')
+                )
+            );
+            System.assert(
+                !obfuscated.contains('<a href='),
+                'Obfuscated script URL should not link. Got: ' + obfuscated
+            );
+        }
+    }
+
+    // mailto: is what Word writes for an email link and must survive.
+    @IsTest
+    static void testHyperlinkMailtoResolves() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Email us'),
+                    hyperlinkRelsXml('mailto:sales@example.com', 'External')
+                )
+            );
+            System.assert(
+                html.contains('<a href="mailto:sales@example.com"'),
+                'mailto: link should resolve. Got: ' + html
+            );
+        }
+    }
+
+    // Without a rels part there is nothing to resolve — the pre-#363 styled-span
+    // fallback stays, and it must not throw or drop the text.
+    @IsTest
+    static void testHyperlinkWithoutRelsFallsBackToStyledText() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = hyperlinkDocXml('Click Here');
+            System.assertEquals(xml, DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, null), 'Null rels is a no-op');
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(!html.contains('<a href='), 'No rels means no URL to emit. Got: ' + html);
+            System.assert(html.contains('Click Here'), 'Should contain link text');
+            System.assert(html.contains('color:#0563C1'), 'Should have link color');
+            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+        }
+    }
+
+    // Rich-text-generated links already carry w:docgen-url; resolution must leave them alone.
+    @IsTest
+    static void testHyperlinkRichTextUrlNotRestamped() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
             String xml =
                 '<?xml version="1.0" encoding="UTF-8"?>' +
                 '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-                '<w:body>' +
-                '<w:p><w:hyperlink r:id="rId5" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-                '<w:r><w:t>Click Here</w:t></w:r>' +
-                '</w:hyperlink></w:p>' +
-                '</w:body></w:document>';
+                '<w:body><w:p>' +
+                '<w:hyperlink w:docgen-url="https://example.com/rich" r:id="rId5"' +
+                ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+                '<w:r><w:t>Rich</w:t></w:r></w:hyperlink>' +
+                '</w:p></w:body></w:document>';
 
-            String html = DocGenHtmlRenderer.convertToHtml(xml);
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, hyperlinkRelsXml('https://example.com/rels', 'External'))
+            );
 
-            System.assert(html.contains('Click Here'), 'Should contain link text');
-            System.assert(html.contains('color:#0563C1'), 'Should have link color');
-            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+            System.assert(
+                html.contains('<a href="https://example.com/rich"'),
+                'Existing docgen-url should win over the rels target. Got: ' + html
+            );
+            System.assert(!html.contains('example.com/rels'), 'Should not restamp a resolved link. Got: ' + html);
+        }
+    }
+
+    // An in-document bookmark has no r:id at all — left alone, per #363's scope note.
+    @IsTest
+    static void testHyperlinkAnchorOnlyUnchanged() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body><w:p><w:hyperlink w:anchor="_Toc123">' +
+                '<w:r><w:t>Section 2</w:t></w:r></w:hyperlink></w:p></w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, hyperlinkRelsXml('https://example.com/x', 'External'))
+            );
+
+            System.assert(!html.contains('<a href='), 'Bookmark link should not borrow an unrelated target');
+            System.assert(html.contains('Section 2'), 'Should contain link text');
+        }
+    }
+
+    // Two links in one paragraph, one resolvable and one not — each takes its own branch,
+    // and the surrounding runs survive the rewrite intact.
+    @IsTest
+    static void testHyperlinkMixedResolutionInOneParagraph() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+                ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+                '<w:body><w:p>' +
+                '<w:r><w:t xml:space="preserve">See </w:t></w:r>' +
+                '<w:hyperlink r:id="rId5"><w:r><w:t>form X</w:t></w:r></w:hyperlink>' +
+                '<w:r><w:t xml:space="preserve"> and </w:t></w:r>' +
+                '<w:hyperlink r:id="rId9"><w:r><w:t>form Y</w:t></w:r></w:hyperlink>' +
+                '<w:r><w:t> today.</w:t></w:r>' +
+                '</w:p></w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    xml,
+                    hyperlinkRelsXml('https://example.com/formX', 'External')
+                )
+            );
+
+            System.assert(html.contains('<a href="https://example.com/formX"'), 'rId5 should link. Got: ' + html);
+            System.assertEquals(1, html.countMatches('<a href='), 'Only rId5 resolves; rId9 has no rel. Got: ' + html);
+            System.assert(html.contains('form Y'), 'Unresolved link keeps its text');
+            System.assert(html.contains('See ') && html.contains(' today.'), 'Surrounding runs preserved');
         }
     }
 
