@@ -29,6 +29,10 @@
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
+        <apexClass>DocGenBrandResolver</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>DocGenFieldWritebackService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -38,6 +42,10 @@
     </classAccesses>
     <classAccesses>
         <apexClass>DocGenEmailTemplateController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenBrandController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
@@ -237,6 +245,57 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Email_Template__c.Description__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Email_Template__c.Brand__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <!-- Portwood Brand fields (#369) (Admin: full access). -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.OWA_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Brand_Color__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Logo_Url__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Logo_Url_Extended__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Logo_Asset_Key__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Logo_Height__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Company_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Footer_Text__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Brand__c.Is_Active__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <!-- Shared Asset fields (#185) (Admin: full access; Name is standard).
@@ -506,6 +565,11 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.Category__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Template__c.Brand__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -999,6 +1063,16 @@
         <allowRead>true</allowRead>
         <modifyAllRecords>true</modifyAllRecords>
         <object>DocGen_Email_Template__c</object>
+        <viewAllFields>false</viewAllFields>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>DocGen_Brand__c</object>
         <viewAllFields>false</viewAllFields>
         <viewAllRecords>true</viewAllRecords>
     </objectPermissions>

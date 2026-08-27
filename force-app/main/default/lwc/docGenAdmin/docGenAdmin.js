@@ -49,6 +49,8 @@ function columnsSectionSnippet(n) {
 // Apex
 import getTemplateList from '@salesforce/apex/DocGenController.getTemplateList';
 import getTemplateById from '@salesforce/apex/DocGenController.getTemplateById';
+// #369 — Sending Brand picker
+import getBrands from '@salesforce/apex/DocGenBrandController.getBrands';
 import deleteTemplate from '@salesforce/apex/DocGenController.deleteTemplate';
 import saveTemplate from '@salesforce/apex/DocGenController.saveTemplate';
 import generateDocumentData from '@salesforce/apex/DocGenController.generateDocumentData';
@@ -99,6 +101,8 @@ import NAME_FIELD from '@salesforce/schema/DocGen_Template__c.Name';
 import CATEGORY_FIELD from '@salesforce/schema/DocGen_Template__c.Category__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
 import BASE_OBJECT_FIELD from '@salesforce/schema/DocGen_Template__c.Base_Object_API__c';
+// #369 — which Portwood Brand this template's signature emails use
+import BRAND_FIELD from '@salesforce/schema/DocGen_Template__c.Brand__c';
 import QUERY_CONFIG_FIELD from '@salesforce/schema/DocGen_Template__c.Query_Config__c';
 import DESC_FIELD from '@salesforce/schema/DocGen_Template__c.Description__c';
 import OUTPUT_FORMAT_FIELD from '@salesforce/schema/DocGen_Template__c.Output_Format__c';
@@ -221,6 +225,7 @@ const F = {
     Type: TYPE_FIELD.fieldApiName,
     OutputFormat: OUTPUT_FORMAT_FIELD.fieldApiName,
     BaseObject: BASE_OBJECT_FIELD.fieldApiName,
+    Brand: BRAND_FIELD.fieldApiName,
     QueryConfig: QUERY_CONFIG_FIELD.fieldApiName,
     // #161 follow-up — dedicated storage for Signer Inputs form-field config.
     // The field has no @salesforce/schema import yet (backend ships it in
@@ -446,6 +451,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     editTemplateId;
     editTemplateName;
     editTemplateCategory;
+    // #369 — which Portwood Brand this template's signature emails use
+    @track editTemplateBrand = '';
+    @track brandOptions = [];
     @track editTemplateType;
     // @track so children re-render when it arrives. The canvas mounts before the
     // template record finishes loading, and without this the Data picker was handed
@@ -1349,6 +1357,24 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    // #369 — the Sending Brand picker on the edit modal's Details tab.
+    // Imperative, not @wire: getBrands() is cacheable=false (the Brands admin
+    // screen needs a fresh read right after a save), and @wire only works
+    // against cacheable=true Apex methods — a wired call here silently never
+    // populates.
+    async loadBrandOptions() {
+        try {
+            const data = await getBrands();
+            this.brandOptions = [
+                { label: '— None — (uses org default)', value: '' },
+                ...data.filter((b) => b.isActive !== false).map((b) => ({ label: b.name, value: b.id })),
+                { label: 'Manage brands…', value: '__manage__' }
+            ];
+        } catch (error) {
+            // Non-fatal — the picker just stays empty; template editing still works.
+        }
+    }
+
     templateSortedBy;
     templateSortedDirection = 'asc';
 
@@ -1472,6 +1498,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // never throws — an org without Einstein simply keeps the copy-paste
         // path as the only visible option.
         this._refreshAgentforceAvailability();
+        this.loadBrandOptions();
     }
 
     disconnectedCallback() {
@@ -3793,6 +3820,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     handleEditCategoryChange(event) {
         this.editTemplateCategory = event.detail.value;
     }
+    // #369
+    handleEditBrandChange(event) {
+        const val = event.detail.value;
+        if (val === '__manage__') {
+            this.dispatchEvent(new CustomEvent('managebrands'));
+            return;
+        }
+        this.editTemplateBrand = val;
+    }
     handleEditTypeChange(event) {
         this.editTemplateType = event.detail.value;
         if (event.detail.value === 'Excel' && this.editTemplateOutputFormat === 'PDF') {
@@ -5126,6 +5162,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.lintFindings = [];
             this.editTemplateName = row.Name;
             this.editTemplateCategory = row[F.Category];
+            this.editTemplateBrand = row[F.Brand] || '';
             this.editTemplateType = row[F.Type];
             this.editTemplateObject = row[F.BaseObject];
             this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
@@ -5274,6 +5311,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return JSON.stringify([
             this.editTemplateName,
             this.editTemplateCategory,
+            this.editTemplateBrand,
             this.editTemplateType,
             this.editTemplateObject,
             this.editTemplateOutputFormat,
@@ -5662,6 +5700,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
             Category__c: this.editTemplateCategory,
+            Brand__c: this.editTemplateBrand || null,
             Type__c: this.editTemplateType,
             Output_Format__c: this.editTemplateOutputFormat,
             Base_Object_API__c: this.editTemplateObject,
@@ -5736,6 +5775,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
             Category__c: this.editTemplateCategory,
+            Brand__c: this.editTemplateBrand || null,
             Type__c: this.editTemplateType,
             Output_Format__c: this.editTemplateOutputFormat,
             Base_Object_API__c: this.editTemplateObject,

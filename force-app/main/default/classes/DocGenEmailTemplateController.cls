@@ -76,10 +76,33 @@ public with sharing class DocGenEmailTemplateController {
         }
     };
 
-    /** One editable row per type — the stored record's values or the built-in default. */
-    @AuraEnabled(cacheable=false)
+    /**
+     * One editable row per type — the stored record's values or the built-in
+     * default (today's original shared-only behavior, unchanged). Plain Apex
+     * overload, not @AuraEnabled — @AuraEnabled methods can't be overloaded,
+     * so the LWC calls the 1-arg form directly with a blank brandId; this one
+     * exists so other Apex callers (and the existing test suite) keep compiling
+     * against the pre-#369 signature.
+     */
     public static List<Map<String, Object>> getTemplates() {
-        Map<String, DocGen_Email_Template__c> byType = new Map<String, DocGen_Email_Template__c>();
+        return getTemplates(null);
+    }
+
+    /**
+     * Brand-aware (#369) variant — the LWC's actual entry point. brandId
+     * blank/null behaves exactly like the 0-arg form above. When set, each row
+     * prefers that brand's own active record for the type; if none exists yet,
+     * the row still DISPLAYS the shared record's values (so an admin sees what
+     * they'd be starting from) but 'recordId' comes back null — Save then
+     * CREATES a new record scoped to this brand rather than overwriting the
+     * shared one.
+     */
+    @AuraEnabled(cacheable=false)
+    public static List<Map<String, Object>> getTemplates(String brandId) {
+        Id brandIdParsed = String.isBlank(brandId) ? null : (Id) brandId;
+
+        Map<String, DocGen_Email_Template__c> sharedByType = new Map<String, DocGen_Email_Template__c>();
+        Map<String, DocGen_Email_Template__c> brandByType = new Map<String, DocGen_Email_Template__c>();
         DocGenFlsGuard.assertAccessible(
             DocGen_Email_Template__c.sObjectType,
             new Set<String>{
@@ -94,7 +117,8 @@ public with sharing class DocGenEmailTemplateController {
                 'Logo_Height__c',
                 'Footer_Text__c',
                 'Layout_Mode__c',
-                'Is_Active__c'
+                'Is_Active__c',
+                'Brand__c'
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
@@ -113,25 +137,39 @@ public with sharing class DocGenEmailTemplateController {
                 Logo_Height__c,
                 Footer_Text__c,
                 Layout_Mode__c,
-                Is_Active__c
+                Is_Active__c,
+                Brand__c
             FROM DocGen_Email_Template__c
+            WHERE Is_Active__c = TRUE AND (Brand__c = NULL OR Brand__c = :brandIdParsed)
             WITH SYSTEM_MODE
             ORDER BY LastModifiedDate DESC
         ]) {
-            if (r.Type__c != null && !byType.containsKey(r.Type__c)) {
-                byType.put(r.Type__c, r);
+            if (r.Type__c == null) {
+                continue;
+            }
+            if (r.Brand__c == null) {
+                if (!sharedByType.containsKey(r.Type__c)) {
+                    sharedByType.put(r.Type__c, r);
+                }
+            } else if (brandIdParsed != null && r.Brand__c == brandIdParsed && !brandByType.containsKey(r.Type__c)) {
+                brandByType.put(r.Type__c, r);
             }
         }
 
         List<Map<String, Object>> rows = new List<Map<String, Object>>();
         for (String type : DocGenEmailTemplateService.ALL_TYPES) {
-            DocGen_Email_Template__c r = byType.get(type);
+            DocGen_Email_Template__c brandRec = brandByType.get(type);
+            DocGen_Email_Template__c sharedRec = sharedByType.get(type);
+            Boolean isBrandSpecific = brandRec != null;
+            DocGen_Email_Template__c r = isBrandSpecific ? brandRec : sharedRec;
             DocGenEmailTemplateService.TemplateDef def = DocGenEmailTemplateService.builtInDef(type);
             rows.add(
                 new Map<String, Object>{
                     'type' => type,
                     'typeLabel' => TYPE_LABELS.get(type),
-                    'recordId' => r == null ? null : r.Id,
+                    'recordId' => isBrandSpecific
+                        ? brandRec.Id
+                        : (brandIdParsed == null && sharedRec != null ? sharedRec.Id : null),
                     'name' => r == null ? TYPE_LABELS.get(type) : r.Name,
                     'subject' => r == null ? def.subject : r.Subject__c,
                     'bodyHtml' => r == null ? def.bodyHtml : r.Body_Html__c,
@@ -149,6 +187,7 @@ public with sharing class DocGenEmailTemplateController {
                         : r.Layout_Mode__c,
                     'isActive' => r == null ? true : r.Is_Active__c,
                     'hasRecord' => r != null,
+                    'isBrandSpecific' => isBrandSpecific,
                     'tokens' => TYPE_TOKENS.get(type)
                 }
             );
@@ -188,6 +227,12 @@ public with sharing class DocGenEmailTemplateController {
             ? DocGenEmailTemplateService.MODE_FULL_HTML
             : DocGenEmailTemplateService.MODE_MANAGED;
         rec.Is_Active__c = data.get('isActive') == null ? true : (Boolean) data.get('isActive');
+        // #369 — blank/omitted keeps this the SHARED record for its type, exactly
+        // as before this field existed. getTemplates() never sends an existing
+        // shared record's Id back with a different brandId, so this can't
+        // accidentally re-scope an existing record to a different brand.
+        String brandIdStr = (String) data.get('brandId');
+        rec.Brand__c = String.isBlank(brandIdStr) ? null : (Id) brandIdStr;
 
         Set<String> fields = new Set<String>{
             'Type__c',
@@ -201,7 +246,8 @@ public with sharing class DocGenEmailTemplateController {
             'Logo_Height__c',
             'Footer_Text__c',
             'Layout_Mode__c',
-            'Is_Active__c'
+            'Is_Active__c',
+            'Brand__c'
         };
         if (rec.Id == null) {
             DocGenFlsGuard.assertCreateable(rec, fields);
@@ -397,7 +443,8 @@ public with sharing class DocGenEmailTemplateController {
         DocGenEmailTemplateService.RenderedEmail r = DocGenEmailTemplateService.renderWith(
             buildDef(data),
             sampleTokens((String) data.get('type')),
-            null
+            null,
+            parsedBrandId(data)
         );
         return r;
     }
@@ -408,8 +455,13 @@ public with sharing class DocGenEmailTemplateController {
         if (String.isBlank(toAddress)) {
             throw new AuraHandledException('Enter a recipient email address for the test.');
         }
+        Id brandId = parsedBrandId(data);
+        // #369 — a selected Brand's own OWA sends the test, same as a real send would.
+        DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
-        String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
+        String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+            ? activeBrand.OWA_Id__c
+            : (settings == null ? null : settings.Signature_OWA_Id__c);
         if (String.isBlank(owaId)) {
             throw new AuraHandledException(
                 'No Org-Wide Email Address is configured. Set one under Portwood > Signatures before sending a test.'
@@ -418,7 +470,8 @@ public with sharing class DocGenEmailTemplateController {
         DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.renderWith(
             buildDef(data),
             sampleTokens((String) data.get('type')),
-            null
+            null,
+            brandId
         );
         Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
         email.setToAddresses(new List<String>{ toAddress });
@@ -436,6 +489,12 @@ public with sharing class DocGenEmailTemplateController {
         if (!results.isEmpty() && !results[0].isSuccess()) {
             throw new AuraHandledException('Test send failed: ' + results[0].getErrors()[0].getMessage());
         }
+    }
+
+    /** #369 — parses the editor's selected Brand Id (blank = Shared/Default). */
+    private static Id parsedBrandId(Map<String, Object> data) {
+        String brandIdStr = (String) data.get('brandId');
+        return String.isBlank(brandIdStr) ? null : (Id) brandIdStr;
     }
 
     private static DocGenEmailTemplateService.TemplateDef buildDef(Map<String, Object> data) {

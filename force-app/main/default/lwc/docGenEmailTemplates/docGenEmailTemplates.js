@@ -1,4 +1,4 @@
-import { LightningElement, track } from 'lwc';
+import { LightningElement, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getTemplates from '@salesforce/apex/DocGenEmailTemplateController.getTemplates';
 import saveTemplate from '@salesforce/apex/DocGenEmailTemplateController.saveTemplate';
@@ -7,6 +7,10 @@ import renderPreview from '@salesforce/apex/DocGenEmailTemplateController.render
 import sendTest from '@salesforce/apex/DocGenEmailTemplateController.sendTest';
 import resolveAssetPublicUrl from '@salesforce/apex/DocGenEmailTemplateController.resolveAssetPublicUrl';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
+// #369 — Brand selector
+import getBrands from '@salesforce/apex/DocGenBrandController.getBrands';
+import saveBrand from '@salesforce/apex/DocGenBrandController.saveBrand';
+import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.getOrgWideEmailAddresses';
 
 export default class DocGenEmailTemplates extends LightningElement {
     @track rows = [];
@@ -39,11 +43,49 @@ export default class DocGenEmailTemplates extends LightningElement {
     @track logoAssetKey = '';
     @track logoHeight = null;
 
+    // #369 — Brand selector: which (type, brand) combination is being edited.
+    @track selectedBrandId = '';
+    @track brandOptions = [{ label: 'Shared / Default (all brands)', value: '' }];
+    @track isBrandSpecific = false;
+
+    // #369 — inline "+ New Brand…" quick-create, opened from the selector.
+    @track showAddBrandForm = false;
+    @track isSavingBrand = false;
+    @track newBrandName = '';
+    @track newBrandOwaId = '';
+    @track newBrandColor = '#5A4FCF';
+    @track newBrandCompany = '';
+    @track newBrandLogoUrl = '';
+    @track newBrandFooter = '';
+    @track owaOptions = [];
+
     _previewDirty = false;
 
     connectedCallback() {
         this.loadTemplates();
         this.loadLogoAssets();
+        this.loadBrands();
+    }
+
+    @wire(getOrgWideEmailAddresses)
+    wiredOwas({ data }) {
+        if (data) {
+            this.owaOptions = data;
+        }
+    }
+
+    async loadBrands() {
+        try {
+            const brands = await getBrands();
+            this.brandOptions = [
+                { label: 'Shared / Default (all brands)', value: '' },
+                ...(brands || []).filter((b) => b.isActive !== false).map((b) => ({ label: b.name, value: b.id })),
+                { label: '+ New Brand…', value: '__add__' },
+                { label: 'Manage brands…', value: '__manage__' }
+            ];
+        } catch (_e) {
+            // Brands tab optional — selector just stays at Shared/Default.
+        }
     }
 
     async loadLogoAssets() {
@@ -103,7 +145,7 @@ export default class DocGenEmailTemplates extends LightningElement {
     async loadTemplates() {
         this.isLoading = true;
         try {
-            this.rows = await getTemplates();
+            this.rows = await getTemplates({ brandId: this.selectedBrandId });
             if (this.rows.length) {
                 const keep = this.rows.find((r) => r.type === this.selectedType) || this.rows[0];
                 this.applyRow(keep);
@@ -130,6 +172,7 @@ export default class DocGenEmailTemplates extends LightningElement {
         this.tokens = (row.tokens || []).map((t) => '{' + t + '}');
         this.logoAssetKey = row.logoAssetKey || '';
         this.logoHeight = row.logoHeight || null;
+        this.isBrandSpecific = row.isBrandSpecific === true;
         this.refreshPreview();
     }
 
@@ -151,12 +194,20 @@ export default class DocGenEmailTemplates extends LightningElement {
             logoHeight: this.logoHeight,
             footerText: this.footerText,
             layoutMode: this.layoutMode,
-            isActive: this.isActive
+            isActive: this.isActive,
+            brandId: this.selectedBrandId
         };
     }
 
     get statusLabel() {
-        return this.recordId ? 'Saved template' : 'Built-in default (not yet saved as a record)';
+        if (!this.selectedBrandId) {
+            return this.recordId ? 'Saved template' : 'Built-in default (not yet saved as a record)';
+        }
+        const brand = this.brandOptions.find((b) => b.value === this.selectedBrandId);
+        const brandName = brand ? brand.label : 'this brand';
+        return this.isBrandSpecific
+            ? 'Customized for ' + brandName
+            : 'Inherited from shared default — edit to customize for ' + brandName;
     }
 
     get layoutModeOptions() {
@@ -184,6 +235,95 @@ export default class DocGenEmailTemplates extends LightningElement {
         const row = this.rows.find((r) => r.type === event.detail.value);
         if (row) {
             this.applyRow(row);
+        }
+    }
+    // #369 — the Brand selector. Named distinctly from handleBrandChange below
+    // (that one is the per-type Brand Color Override text field).
+    handleBrandSelectorChange(event) {
+        const val = event.detail.value;
+        if (val === '__add__') {
+            this.showAddBrandForm = true;
+            return;
+        }
+        if (val === '__manage__') {
+            // The full Brands screen already exists as its own Command Hub tab —
+            // navigate there rather than duplicating a list+edit UI inline.
+            this.dispatchEvent(new CustomEvent('managebrands'));
+            return;
+        }
+        this.selectedBrandId = val;
+        this.loadTemplates();
+    }
+
+    // ===== #369 — inline "+ New Brand…" quick-create =====
+    handleNewBrandNameChange(e) {
+        this.newBrandName = e.target.value;
+    }
+    handleNewBrandOwaChange(e) {
+        this.newBrandOwaId = e.detail.value;
+    }
+    handleNewBrandColorChange(e) {
+        this.newBrandColor = e.target.value;
+    }
+    handleNewBrandCompanyChange(e) {
+        this.newBrandCompany = e.target.value;
+    }
+    handleNewBrandLogoChange(e) {
+        this.newBrandLogoUrl = e.target.value;
+    }
+    handleNewBrandFooterChange(e) {
+        this.newBrandFooter = e.target.value;
+    }
+
+    handleCancelAddBrand() {
+        this.showAddBrandForm = false;
+        this.newBrandName = '';
+        this.newBrandOwaId = '';
+        this.newBrandColor = '#5A4FCF';
+        this.newBrandCompany = '';
+        this.newBrandLogoUrl = '';
+        this.newBrandFooter = '';
+    }
+
+    // Reads the CURRENT value straight off the rendered input, not the tracked
+    // newBrandXxx properties — defensive against any change/input-event timing
+    // gap between typing and clicking Save Brand.
+    newBrandFieldValue(fieldName) {
+        const el = this.template.querySelector('[data-field="' + fieldName + '"]');
+        return el ? el.value : '';
+    }
+
+    async handleCreateBrand() {
+        const name = this.newBrandFieldValue('name');
+        if (!name || !name.trim()) {
+            this.toast('Name required', 'Give the brand a name before saving.', 'warning');
+            return;
+        }
+        this.isSavingBrand = true;
+        try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
+            const newId = await saveBrand({
+                dto: {
+                    name: name,
+                    owaId: this.newBrandFieldValue('owaId'),
+                    brandColor: this.newBrandFieldValue('brandColor'),
+                    companyName: this.newBrandFieldValue('companyName'),
+                    logoUrl: this.newBrandFieldValue('logoUrl'),
+                    footerText: this.newBrandFieldValue('footerText'),
+                    isActive: true
+                }
+            });
+            this.toast('Saved', name + ' created.', 'success');
+            this.handleCancelAddBrand();
+            await this.loadBrands();
+            this.selectedBrandId = newId;
+            await this.loadTemplates();
+        } catch (error) {
+            // Diagnostic: show exactly what this client attempted to send, so a
+            // failure here is provable rather than guessed at.
+            this.toast('Save failed', '[sent name: "' + name + '"] ' + this.errMsg(error), 'error');
+        } finally {
+            this.isSavingBrand = false;
         }
     }
     handleSubjectChange(event) {

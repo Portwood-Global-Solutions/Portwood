@@ -3616,6 +3616,14 @@
                                             readonly
                                             class="slds-var-m-top_medium"
                                         ></lightning-input>
+                                        <lightning-combobox
+                                            label="Sending Brand"
+                                            value={editTemplateBrand}
+                                            options={brandOptions}
+                                            onchange={handleEditBrandChange}
+                                            field-level-help="Which Portwood Brand's sender address, logo, and color signature requests from this template use. None uses the org-wide Signature Settings default."
+                                            class="slds-var-m-top_medium"
+                                        ></lightning-combobox>
                                     </div>
                                 </div>
                                 <lightning-textarea

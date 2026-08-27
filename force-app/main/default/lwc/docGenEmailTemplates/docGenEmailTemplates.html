@@ -32,6 +32,80 @@
                         <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_xx-small">{statusLabel}</p>
 
                         <lightning-combobox
+                            name="brandSelector"
+                            label="Brand"
+                            value={selectedBrandId}
+                            options={brandOptions}
+                            onchange={handleBrandSelectorChange}
+                            field-level-help="Overrides logo, color, sender, layout, subject, and body for this email type. Falls back to the shared default above when unset."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-combobox>
+
+                        <template if:true={showAddBrandForm}>
+                            <div
+                                class="slds-box slds-box_xx-small slds-theme_shade slds-p-around_small slds-m-bottom_small"
+                            >
+                                <p class="slds-text-title_bold slds-p-bottom_x-small">New brand</p>
+                                <lightning-input
+                                    data-field="name"
+                                    type="text"
+                                    label="Brand name"
+                                    value={newBrandName}
+                                    oninput={handleNewBrandNameChange}
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-input>
+                                <lightning-combobox
+                                    data-field="owaId"
+                                    label="Send emails from"
+                                    value={newBrandOwaId}
+                                    options={owaOptions}
+                                    onchange={handleNewBrandOwaChange}
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-combobox>
+                                <lightning-input
+                                    data-field="companyName"
+                                    type="text"
+                                    label="Company name"
+                                    value={newBrandCompany}
+                                    oninput={handleNewBrandCompanyChange}
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-input>
+                                <lightning-input
+                                    data-field="logoUrl"
+                                    type="url"
+                                    label="Logo URL"
+                                    value={newBrandLogoUrl}
+                                    oninput={handleNewBrandLogoChange}
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-input>
+                                <lightning-input
+                                    data-field="footerText"
+                                    type="text"
+                                    label="Footer text"
+                                    value={newBrandFooter}
+                                    oninput={handleNewBrandFooterChange}
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-input>
+                                <lightning-input
+                                    data-field="brandColor"
+                                    type="color"
+                                    label="Brand color"
+                                    value={newBrandColor}
+                                    onchange={handleNewBrandColorChange}
+                                    class="slds-p-bottom_small"
+                                ></lightning-input>
+                                <lightning-button
+                                    variant="brand"
+                                    label="Save Brand"
+                                    onclick={handleCreateBrand}
+                                    disabled={isSavingBrand}
+                                    class="slds-m-right_x-small"
+                                ></lightning-button>
+                                <lightning-button label="Cancel" onclick={handleCancelAddBrand}></lightning-button>
+                            </div>
+                        </template>
+
+                        <lightning-combobox
                             name="layoutMode"
                             label="Layout"
                             value={layoutMode}

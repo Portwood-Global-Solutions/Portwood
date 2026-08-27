@@ -86,6 +86,9 @@ export default class DocGenCommandHub extends LightningElement {
     get isEmail() {
         return this.activeSection === 'email';
     }
+    get isBrands() {
+        return this.activeSection === 'brands';
+    }
     get isHelp() {
         return this.activeSection === 'help';
     }
@@ -106,6 +109,9 @@ export default class DocGenCommandHub extends LightningElement {
     }
     get emailTabClass() {
         return this.activeSection === 'email' ? 'tab-active' : '';
+    }
+    get brandsTabClass() {
+        return this.activeSection === 'brands' ? 'tab-active' : '';
     }
     get helpTabClass() {
         return this.activeSection === 'help' ? 'tab-active' : '';
@@ -128,6 +134,9 @@ export default class DocGenCommandHub extends LightningElement {
     }
     handleShowEmail() {
         this.activeSection = 'email';
+    }
+    handleShowBrands() {
+        this.activeSection = 'brands';
     }
     handleShowHelp() {
         this.activeSection = 'help';

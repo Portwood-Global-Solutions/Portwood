@@ -2534,7 +2534,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Signer_Verification__c',
                 'Prefill_Signer_Email__c',
                 'API_Name__c',
-                'Default_Email_Message__c'
+                'Default_Email_Message__c',
+                'Brand__c'
             }
         );
         /* code-analyzer-suppress ApexFlsViolation */
@@ -2568,6 +2569,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Prefill_Signer_Email__c,
                 API_Name__c,
                 Default_Email_Message__c,
+                Brand__c,
                 CreatedDate,
                 LastModifiedDate,
                 (SELECT ContentDocumentId FROM ContentDocumentLinks ORDER BY ContentDocument.CreatedDate DESC LIMIT 1)
@@ -2734,6 +2736,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Default_Email_Message__c')) {
                 template.Default_Email_Message__c = (String) fields.get('Default_Email_Message__c');
             }
+            // #369 — Sending Brand: which Portwood Brand this template's signature
+            // emails use. Blank/omitted leaves the org-wide default in effect,
+            // exactly as before this field existed.
+            if (fields.containsKey('Brand__c')) {
+                template.Brand__c = (Id) fields.get('Brand__c');
+            }
             // #85 — Active flag. Default true on new records; only update when the
             // caller explicitly sends the field (so legacy save paths that omit it
             // don't accidentally toggle an existing template's active state).
@@ -2801,6 +2809,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Prefill_Signer_Email__c',
                     'API_Name__c',
                     'Default_Email_Message__c',
+                    'Brand__c',
                     'Is_Active__c',
                     'Is_Default__c'
                 }

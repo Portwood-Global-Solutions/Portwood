@@ -1,0 +1,177 @@
+<template>
+    <lightning-card title="Brands" icon-name="utility:apps">
+        <div slot="actions">
+            <lightning-button-icon
+                icon-name="utility:refresh"
+                alternative-text="Reload"
+                title="Reload brands"
+                onclick={loadBrands}
+            ></lightning-button-icon>
+        </div>
+
+        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+            <p class="slds-text-body_small slds-text-color_weak slds-p-bottom_small">
+                A Brand controls what your signature emails look like — the sender address, logo, and color. Set one up
+                once here, then choose it on any Portwood Template.
+            </p>
+
+            <template if:true={isLoading}>
+                <div class="slds-p-around_medium slds-align_absolute-center">
+                    <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:false={isLoading}>
+                <template if:true={hasBrands}>
+                    <template for:each={brandRows} for:item="b">
+                        <div key={b.id} class="brand-row" data-id={b.id} onclick={handleEditRow}>
+                            <div class="swatch" style={b.swatchStyle}>{b.initials}</div>
+                            <div class="brand-meta">
+                                <p class="brand-name">{b.name}</p>
+                                <p class="brand-sub">{b.owaId}</p>
+                            </div>
+                            <span class={b.statusClass}>{b.statusLabel}</span>
+                            <lightning-icon icon-name="utility:chevronright" size="x-small"></lightning-icon>
+                        </div>
+                    </template>
+                </template>
+                <template if:false={hasBrands}>
+                    <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_small">
+                        No brands yet — every template still uses the org-wide Signature Settings default.
+                    </p>
+                </template>
+
+                <template if:false={showForm}>
+                    <lightning-button
+                        variant="brand-outline"
+                        label="+ Add Brand"
+                        onclick={handleAddNew}
+                        class="slds-m-top_small"
+                    ></lightning-button>
+                </template>
+
+                <template if:true={showForm}>
+                    <div class="add-form slds-m-top_medium">
+                        <p class="form-title">{formTitle}</p>
+                        <p class="form-context">
+                            This is what a signer sees at the top of every email this brand sends. Fill in the fields
+                            below and watch it update.
+                        </p>
+
+                        <div class="mini-preview">
+                            <div class="mp-header" style={previewHeaderStyle}>
+                                <template if:true={previewHasLogo}>
+                                    <img src={form.logoUrl} alt={previewCompanyOrName} class="mp-logo" />
+                                </template>
+                                <template if:false={previewHasLogo}>
+                                    <span class="mp-badge">
+                                        <template if:true={previewHasInitials}>
+                                            <span class="mp-chip">{previewInitials}</span>
+                                        </template>
+                                        <span>{previewCompanyOrName}</span>
+                                    </span>
+                                </template>
+                            </div>
+                            <div class="mp-body">A document is ready for your signature.</div>
+                            <div class="mp-cta" style={previewCtaStyle}>Review &amp; Sign</div>
+                        </div>
+
+                        <lightning-input
+                            data-field="name"
+                            type="text"
+                            label="Brand name"
+                            value={form.name}
+                            oninput={handleNameChange}
+                            required
+                            field-level-help="Internal name only — used to pick this brand on a Template. Not shown to signers."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-input>
+
+                        <lightning-combobox
+                            data-field="owaId"
+                            label="Send emails from"
+                            value={form.owaId}
+                            options={owaOptions}
+                            onchange={handleOwaChange}
+                            field-level-help="Which Org-Wide Email Address this brand's signature emails send from. Blank falls back to the org-wide Signature Settings default."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-combobox>
+
+                        <lightning-input
+                            data-field="companyName"
+                            type="text"
+                            label="Company name"
+                            value={form.companyName}
+                            oninput={handleCompanyChange}
+                            placeholder="Shown when there's no logo"
+                            field-level-help="Shown in the email header when there's no Logo URL set."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-input>
+
+                        <lightning-input
+                            data-field="logoUrl"
+                            type="url"
+                            label="Logo URL"
+                            value={form.logoUrl}
+                            oninput={handleLogoChange}
+                            placeholder="https://…/logo.png"
+                            field-level-help="Must be a PUBLIC image URL — no Salesforce login required to view it. A private/internal file link (e.g. from a file's default 'Copy Link') will show as broken. Pick a Portwood Asset below instead to avoid this."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-input>
+
+                        <lightning-combobox
+                            data-field="logoAssetKey"
+                            label="…or override with an Asset file"
+                            value={form.logoAssetKey}
+                            options={logoAssetOptions}
+                            onchange={handleLogoAssetChange}
+                            placeholder="Pick a Shared Asset image…"
+                            disabled={logoAssetsUnavailable}
+                            field-level-help="Links the logo to a Shared Asset (Command Hub → Assets): always uses the asset's LATEST image and is always public, so replacing its file updates the logo everywhere — no re-save needed. Typing a URL above unlinks the asset."
+                            class="slds-p-bottom_x-small"
+                        ></lightning-combobox>
+
+                        <lightning-input
+                            data-field="footerText"
+                            type="text"
+                            label="Footer text"
+                            value={form.footerText}
+                            oninput={handleFooterChange}
+                            class="slds-p-bottom_x-small"
+                        ></lightning-input>
+
+                        <lightning-input
+                            data-field="brandColor"
+                            type="color"
+                            label="Brand color"
+                            value={form.brandColor}
+                            onchange={handleColorChange}
+                            class="slds-p-bottom_x-small"
+                        ></lightning-input>
+
+                        <lightning-input
+                            data-field="isActive"
+                            type="toggle"
+                            label="Active"
+                            checked={form.isActive}
+                            onchange={handleActiveChange}
+                            message-toggle-active="On"
+                            message-toggle-inactive="Off"
+                            field-level-help="Inactive brands can't be selected on a Template but existing assignments are preserved."
+                            class="slds-p-bottom_small"
+                        ></lightning-input>
+
+                        <lightning-button
+                            variant="brand"
+                            label={saveLabel}
+                            onclick={handleSave}
+                            disabled={isSaving}
+                            class="slds-m-right_x-small"
+                        ></lightning-button>
+                        <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+                    </div>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>
