@@ -1776,6 +1776,38 @@ export async function run({ org, headed }) {
                 )
             );
 
+            // 5d-bis. #370 — the modal deliberately stays open after "Save as New
+            // Version". Closing it now must NOT prompt to discard: the edits were
+            // just persisted. The bug: the save handlers never re-baselined
+            // _editSnapshot, so it kept its pre-edit value and Close always warned.
+            await drainToasts(page);
+            nativeDialogs.length = 0;
+            await clickByText(page, 'lightning-button', 'Close', { exact: true });
+            await wait(2500);
+            const falseDiscardPrompt = await ev(
+                page,
+                `return ((__dgFind('[role="alertdialog"], .slds-modal', true) || [])
+           .map((d) => __deep(d))
+           .filter((t) => /unsaved changes|discard them|discard changes/i.test(t)))[0] || null;`,
+                null
+            );
+            const closedAfterSave = (await ev(page, `return !__dgFind('.slds-modal');`, false)) === true;
+            add(
+                check(
+                    'closing the modal right after a save does not prompt to discard (#370)',
+                    !falseDiscardPrompt && closedAfterSave,
+                    falseDiscardPrompt
+                        ? `Close warned "${String(falseDiscardPrompt).slice(0, 90)}" although Save as New Version had just succeeded — the save handlers in docGenAdmin.js must re-baseline _editSnapshot`
+                        : closedAfterSave
+                          ? ''
+                          : 'no false discard prompt, but the modal did not close on Close either',
+                    SEVERITY.MAJOR
+                )
+            );
+            // Clear a stray confirm (if any) so the next block starts clean.
+            await clickByText(page, 'button', 'Cancel', { exact: true });
+            await wait(600);
+
             // 5e. CLOSING WITHOUT SAVING must not silently bin the work.
             try {
                 await clickByText(page, '[role="tab"]', 'Your Templates');
