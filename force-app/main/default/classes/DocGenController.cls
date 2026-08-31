@@ -3444,6 +3444,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             throw new DocGenException('saveHtmlTemplateBody is for HTML-backed templates only.');
         }
 
+        // #377 — pull any `data:` URI images out into ContentVersions and rewrite
+        // <img src> to relative /sfc/ URLs BEFORE the body is stored (and before
+        // any whole-body regex below, which a large inline base64 blob would trip).
+        // Blob.toPdf can't render inline base64, and it can't fetch a CV created in
+        // the same transaction as the render — so this has to happen here, at save
+        // time. The Designer's upload path already does this client-side; this
+        // covers every other caller (AI generation, a direct API save). No-op when
+        // the body has no inline images.
+        htmlContent = DocGenService.materialiseInlineHtmlImages(templateId, htmlContent);
+
         // Refuse to overwrite a real body with an empty one.
         //
         // The Designer seeds a placeholder scaffold ("Start typing your document
@@ -7860,14 +7870,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     : tmpl.Name;
                 cv.PathOnClient = tmpl.Name + '.' + (String) fileData.get('fileExtension');
                 Blob bodyBytes = EncodingUtil.base64Decode((String) fileData.get('base64'));
-                // For HTML templates, rewrite embedded shepherd URLs in the body
-                // bytes BEFORE upload (ContentVersion.VersionData is immutable
-                // post-insert). Word/Excel/PowerPoint templates carry their
-                // image references inside docx-internal relationships, not
-                // shepherd URLs, so they pass through untouched.
-                if (DocGenService.isHtmlBacked(tmpl.Type__c) && !cvIdMap.isEmpty()) {
+                // For HTML templates, rewrite the body bytes BEFORE upload
+                // (ContentVersion.VersionData is immutable post-insert):
+                //   1. re-key exported shepherd image URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a "self-contained" export)
+                //      out into ContentVersions and rewrite <img src> to /sfc/ URLs,
+                //      so Blob.toPdf can actually render them. Must happen here at
+                //      import time — a CV created during a render is invisible to
+                //      Blob.toPdf's fetch in that same transaction.
+                // Word/Excel/PowerPoint templates carry image references inside
+                // docx-internal relationships, not shepherd URLs, so they pass
+                // through untouched.
+                if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
                     String htmlBody = bodyBytes.toString();
-                    String rewrittenBody = rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    String rewrittenBody = cvIdMap.isEmpty() ? htmlBody : rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    rewrittenBody = DocGenService.materialiseInlineHtmlImages(tmpl.Id, rewrittenBody);
                     if (rewrittenBody != htmlBody) {
                         bodyBytes = Blob.valueOf(rewrittenBody);
                     }

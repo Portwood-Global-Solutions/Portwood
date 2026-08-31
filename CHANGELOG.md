@@ -56,6 +56,34 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Inline (`data:` URI) images in HTML templates now render instead of coming out blank
+  (#377).** `Blob.toPdf` (Flying Saucer) silently drops `<img src="data:image/…;base64,…">`
+  — the page renders with an empty gap where the image should be — and a large inline
+  blob also trips a "Regex too complicated" limit further down the HTML pipeline. The
+  Designer's upload flow already extracts inline images to ContentVersions client-side,
+  but a "self-contained" body that reaches storage another way did not: a **cross-org
+  template-bundle import** (the reported case), LLM generation, or a direct
+  `saveHtmlTemplateBody` call. New `DocGenService.materialiseInlineHtmlImages` pulls each
+  inline image into a `docgen_html_img_<templateId>_<sha256>` ContentVersion — the title
+  prefix the image picker, the clone re-key, and the signature image allowlist already
+  match on — and rewrites the `<img src>` to the relative
+  `/sfc/servlet.shepherd/version/download/<cvId>` form the renderer can fetch. Images are
+  deduplicated by content hash, so the same logo is one file across every template and
+  every render.
+
+    It runs at **save** time — `saveHtmlTemplateBody` and the bundle importer — because
+    `Blob.toPdf`'s server-side image fetch cannot see a ContentVersion inserted in the
+    same transaction as the `toPdf` call (a committed image embeds at full size; a
+    same-transaction one renders blank — established by isolating the two). `mergeHtml-`
+    `Template` calls it too, as a self-healing fallback for a body that never passed a
+    write path (a file attached straight to the record, a metadata deploy, or a body
+    stored before this change): that first render still shows blank images, but the CVs
+    are now committed, so every later render resolves them. The scan is `indexOf`-based,
+    never a whole-string `Matcher`, so a hundreds-of-KB payload does not throw; malformed
+    base64 and a DML failure both leave the affected `data:` URI in place rather than
+    erroring; and a ~5 MB total-decoded cap keeps a pathological body from a mid-run heap
+    crash. A body with no `data:image/` marker is returned untouched at zero cost.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said

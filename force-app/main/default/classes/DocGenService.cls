@@ -770,6 +770,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             currentOutputFormat = 'PDF';
             return mergeHtmlTemplate(
                 mr,
+                templateId,
                 base64File,
                 recordDataMap,
                 draftHeaderHtmlOverride != null ? draftHeaderHtmlOverride : (String) dataMap.get('headerHtml'),
@@ -9893,6 +9894,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     // =====================================================================
     private static MergeResult mergeHtmlTemplate(
         MergeResult mr,
+        Id templateId,
         String base64File,
         Map<String, Object> recordDataMap,
         String headerHtml,
@@ -9901,6 +9903,20 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     ) {
         Blob htmlBlob = EncodingUtil.base64Decode(base64File);
         String rawHtml = htmlBlob.toString();
+
+        // #377 — self-healing fallback for a body that reached the renderer still
+        // carrying `data:` URI images (never passed a write path — a file attached
+        // straight to the record, a metadata deploy, or a body stored before the
+        // fix). Runs BEFORE any whole-body regex, so it also defuses the
+        // "Regex too complicated" a large inline blob would trip in
+        // stripStyleAndScriptBlocks. Images become blank on THIS render (the CVs
+        // are inserted in this transaction, and Blob.toPdf can't see them yet);
+        // every later render resolves them. Idempotent — a body already on /sfc/
+        // URLs skips out at zero cost.
+        InlineImageContext inlineImgCtx = new InlineImageContext(templateId);
+        rawHtml = materialiseInlineHtmlImages(rawHtml, inlineImgCtx);
+        headerHtml = materialiseInlineHtmlImages(headerHtml, inlineImgCtx);
+        footerHtml = materialiseInlineHtmlImages(footerHtml, inlineImgCtx);
 
         String sourceStyles = extractHtmlStyleBlocks(rawHtml);
         String bodyContent = extractHtmlBodyContent(rawHtml);
@@ -9981,6 +9997,206 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         return html.replaceAll('(?is)<style[^>]*>.*?</style\\s*>', '')
             .replaceAll('(?is)<script[^>]*>.*?</script\\s*>', '');
+    }
+
+    // ---------------------------------------------------------------------------
+    // #377 — inline (data:) image materialisation
+    //
+    // Blob.toPdf (Flying Saucer) silently drops `data:` URI images, and a large
+    // inline base64 blob also trips a "Regex too complicated" limit further down
+    // the HTML pipeline. The Designer upload path already extracts inline images to
+    // ContentVersions client-side (docGenAdmin._processAndSaveHtmlBody), but a body
+    // that reaches storage another way — a cross-org template-bundle import, LLM
+    // generation, a direct saveHtmlTemplateBody call — still carries them.
+    //
+    // materialiseInlineHtmlImages() pulls each `data:` image out into a
+    // `docgen_html_img_<templateId>_<sha256>` ContentVersion (the title prefix
+    // listHtmlTemplateImages / the clone re-key / the signature image allowlist
+    // already match on) and rewrites the <img src> to the relative
+    // /sfc/servlet.shepherd/version/download/<cvId> form Blob.toPdf can fetch.
+    //
+    // It MUST run at *save* time, in a transaction that commits before any render:
+    // Blob.toPdf's server-side image fetch cannot see a ContentVersion inserted in
+    // the same transaction as the toPdf call. mergeHtmlTemplate calls it too, as a
+    // self-healing fallback for bodies that never passed a write path — that first
+    // render still shows blank images, but the CVs are now committed so every later
+    // render (a separate transaction) resolves them.
+    // ---------------------------------------------------------------------------
+
+    /** Per-transaction context: shared hash→CV cache + heap budget across body/header/footer. */
+    private class InlineImageContext {
+        final Id templateId;
+        final Map<String, Id> cvIdByTitle = new Map<String, Id>();
+        Boolean existingLoaded = false;
+        Integer decodedBytesUsed = 0;
+
+        InlineImageContext(Id templateId) {
+            this.templateId = templateId;
+        }
+    }
+
+    // Total decoded bytes one call is allowed to pull out of `data:` URIs. Heap
+    // guard: the caller already holds the full HTML string. Images over the cap
+    // keep their `data:` URI (and render blank) rather than risking a mid-run
+    // heap crash.
+    private static final Integer MAX_INLINE_IMAGE_DECODED_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * Rewrites every `<img src="data:image/...;base64,...">` in `html` to a
+     * relative /sfc/ ContentVersion URL, creating one CV per distinct image
+     * (keyed by SHA-256, reused across templates and renders). Returns `html`
+     * unchanged when it carries no `data:image/` marker or `templateId` is null.
+     * Never throws — malformed base64 and DML failures leave the affected
+     * `data:` URI in place.
+     */
+    public static String materialiseInlineHtmlImages(Id templateId, String html) {
+        return materialiseInlineHtmlImages(html, new InlineImageContext(templateId));
+    }
+
+    private static String materialiseInlineHtmlImages(String html, InlineImageContext ctx) {
+        if (String.isBlank(html) || ctx.templateId == null || !html.contains('data:image/')) {
+            return html;
+        }
+
+        // Pass 1 — locate each  src="data:image/<subtype>;base64,<payload>"  (also
+        // single-quoted) and record the quoted-value bounds for the Pass 3 splice.
+        // indexOf only: a single image can be hundreds of KB and a Matcher over it
+        // throws "Regex too complicated".
+        List<Integer> valStarts = new List<Integer>();
+        List<Integer> valEnds = new List<Integer>();
+        List<String> subtypes = new List<String>();
+        List<String> payloads = new List<String>();
+        Integer cursor = 0;
+        while (true) {
+            Integer sc = html.indexOf('src=', cursor);
+            if (sc == -1) {
+                break;
+            }
+            Integer qi = sc + 4;
+            String quote = (qi < html.length()) ? html.substring(qi, qi + 1) : '';
+            if (quote != '"' && quote != '\'') {
+                cursor = qi + 1;
+                continue;
+            }
+            Integer valStart = qi + 1;
+            Integer valEnd = html.indexOf(quote, valStart);
+            if (valEnd == -1) {
+                break;
+            }
+            cursor = valEnd + 1;
+            if (valEnd - valStart < 20 || !html.substring(valStart, valStart + 11).equalsIgnoreCase('data:image/')) {
+                continue;
+            }
+            Integer b64Marker = html.indexOf(';base64,', valStart);
+            if (b64Marker == -1 || b64Marker > valEnd) {
+                continue;
+            }
+            valStarts.add(valStart);
+            valEnds.add(valEnd);
+            subtypes.add(html.substring(valStart + 11, b64Marker).toLowerCase());
+            payloads.add(html.substring(b64Marker + 8, valEnd));
+        }
+        if (valStarts.isEmpty()) {
+            return html;
+        }
+
+        // Pass 2 — decode (heap-budgeted), hash, and resolve one CV per distinct
+        // image: transaction cache → an existing CV for this template → insert.
+        List<String> titlePerOcc = new List<String>(); // parallel to valStarts; null = leave as-is
+        List<ContentVersion> toInsert = new List<ContentVersion>();
+        Set<String> pendingTitles = new Set<String>();
+        for (Integer i = 0; i < payloads.size(); i++) {
+            Blob bytes;
+            try {
+                bytes = EncodingUtil.base64Decode(payloads[i].deleteWhitespace());
+            } catch (Exception decodeErr) {
+                titlePerOcc.add(null); // malformed — leave the data: URI in place
+                continue;
+            }
+            String title =
+                'docgen_html_img_' +
+                ctx.templateId +
+                '_' +
+                EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', bytes));
+            titlePerOcc.add(title);
+
+            if (ctx.cvIdByTitle.containsKey(title) || pendingTitles.contains(title)) {
+                continue;
+            }
+            if (!ctx.existingLoaded) {
+                for (
+                    ContentVersion cv : loadInternalContentVersionMetaForEntityByTitlePrefix(
+                        ctx.templateId,
+                        'docgen_html_img_'
+                    )
+                ) {
+                    ctx.cvIdByTitle.put(cv.Title, cv.Id);
+                }
+                ctx.existingLoaded = true;
+                if (ctx.cvIdByTitle.containsKey(title)) {
+                    continue;
+                }
+            }
+            if (ctx.decodedBytesUsed + bytes.size() > MAX_INLINE_IMAGE_DECODED_BYTES) {
+                System.debug(
+                    LoggingLevel.WARN,
+                    '#377 inline-image budget exhausted on template ' +
+                        ctx.templateId +
+                        ' — remaining data: URIs left in place (will render blank).'
+                );
+                titlePerOcc[i] = null; // over budget — leave the data: URI
+                continue;
+            }
+            ctx.decodedBytesUsed += bytes.size();
+            String ext = subtypes[i] == 'jpeg' ? 'jpg' : (subtypes[i] == 'svg+xml' ? 'svg' : subtypes[i].left(8));
+            toInsert.add(
+                new ContentVersion(
+                    Title = title,
+                    PathOnClient = 'inline.' + ext,
+                    VersionData = bytes,
+                    FirstPublishLocationId = ctx.templateId
+                )
+            );
+            pendingTitles.add(title);
+        }
+
+        if (!toInsert.isEmpty()) {
+            try {
+                // SYSTEM_MODE: package-managed image assets, and the render-path
+                // fallback can run as a guest user (public signing / guest-runner)
+                // where ContentVersion create FLS would otherwise block it.
+                /* code-analyzer-suppress ApexFlsViolation */
+                Database.insert(toInsert, AccessLevel.SYSTEM_MODE); // NOPMD ApexCRUDViolation — package-internal template image assets
+                for (ContentVersion cv : toInsert) {
+                    ctx.cvIdByTitle.put(cv.Title, cv.Id);
+                }
+            } catch (Exception insertErr) {
+                // e.g. DML-after-callout, or a storage limit. Degrade: images not
+                // inserted keep their data: URI; anything already committed still
+                // gets rewritten below.
+                System.debug(
+                    LoggingLevel.WARN,
+                    '#377 inline-image ContentVersion insert failed on template ' +
+                        ctx.templateId +
+                        ': ' +
+                        insertErr.getMessage()
+                );
+            }
+        }
+
+        // Pass 3 — splice each resolved data: URI to its /sfc/ URL; leave the rest.
+        String out = '';
+        Integer prev = 0;
+        for (Integer i = 0; i < valStarts.size(); i++) {
+            Id cvId = titlePerOcc[i] == null ? null : ctx.cvIdByTitle.get(titlePerOcc[i]);
+            if (cvId == null) {
+                continue;
+            }
+            out += html.substring(prev, valStarts[i]) + '/sfc/servlet.shepherd/version/download/' + cvId;
+            prev = valEnds[i];
+        }
+        out += html.substring(prev);
+        return out;
     }
 
     /**
