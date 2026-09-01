@@ -191,4 +191,90 @@ private class DocGenInlineImageTest {
         );
         System.assertEquals(1, imgCvCount(t), 'fallback commits the image CV for subsequent renders');
     }
+
+    @IsTest
+    static void saveTemplate_materialisesHeaderAndFooterBands() {
+        Id t = newHtmlTemplate();
+
+        Test.startTest();
+        DocGenController.saveTemplate(
+            new Map<String, Object>{
+                'Id' => t,
+                'Name' => 'InlineImg hdr/ftr',
+                'Type__c' => 'HTML',
+                'Base_Object_API__c' => 'Account',
+                'Output_Format__c' => 'PDF',
+                'Header_Html__c' => '<div><img src="data:image/png;base64,' +
+                PNG_1PX +
+                '"> hdr</div>',
+                'Footer_Html__c' => '<div><img src="data:image/png;base64,' +
+                PNG_1PX +
+                '"> ftr</div>'
+            },
+            false,
+            null
+        );
+        Test.stopTest();
+
+        DocGen_Template__c saved = [SELECT Header_Html__c, Footer_Html__c FROM DocGen_Template__c WHERE Id = :t];
+        System.assert(
+            !saved.Header_Html__c.contains('data:image'),
+            'header band materialised: ' + saved.Header_Html__c
+        );
+        System.assert(!saved.Footer_Html__c.contains('data:image'), 'footer band materialised');
+        System.assert(
+            saved.Header_Html__c.contains('/sfc/servlet.shepherd/version/download/'),
+            'header points at a CV URL'
+        );
+        System.assertEquals(1, imgCvCount(t), 'identical header+footer image dedupes to one CV');
+    }
+
+    @IsTest
+    static void bundleImport_materialisesBodyAndHeaderFooter() {
+        // A "self-contained" export: body + header + footer all carry data: URIs.
+        Id src = newHtmlTemplate();
+        update new DocGen_Template__c(
+            Id = src,
+            Header_Html__c = '<div><img src="data:image/png;base64,' + PNG_1PX + '"> {Name}</div>',
+            Footer_Html__c = '<div><img src="data:image/png;base64,' + PNG_1PX + '"></div>'
+        );
+        ContentVersion cv = new ContentVersion(
+            Title = 'docgen_html_body_' + src + '_' + Datetime.now().getTime(),
+            PathOnClient = 'b.html',
+            VersionData = Blob.valueOf(
+                '<html><body><h1>{Name}</h1><img src="data:image/png;base64,' + PNG_1PX + '"></body></html>'
+            ),
+            FirstPublishLocationId = src
+        );
+        insert cv;
+        insert new DocGen_Template_Version__c(
+            Template__c = src,
+            Content_Version_Id__c = [SELECT Id FROM ContentVersion WHERE Id = :cv.Id LIMIT 1]
+            .Id,
+            Is_Active__c = true
+        );
+
+        Test.startTest();
+        String bundle = DocGenController.exportTemplate(src);
+        System.assert(bundle.contains('data:image'), 'export carries the inline images verbatim');
+        Id imported = DocGenController.importTemplate(bundle);
+        Test.stopTest();
+
+        DocGen_Template__c it = [SELECT Header_Html__c, Footer_Html__c FROM DocGen_Template__c WHERE Id = :imported];
+        DocGen_Template_Version__c iv = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :imported AND Is_Active__c = TRUE
+            LIMIT 1
+        ];
+        String importedBody = [SELECT VersionData FROM ContentVersion WHERE Id = :iv.Content_Version_Id__c LIMIT 1]
+            .VersionData.toString();
+
+        System.assert(!importedBody.contains('data:image'), 'imported body is materialised');
+        System.assert(!it.Header_Html__c.contains('data:image'), 'imported header is materialised');
+        System.assert(!it.Footer_Html__c.contains('data:image'), 'imported footer is materialised');
+        System.assert(importedBody.contains('/sfc/servlet.shepherd/version/download/'), 'body points at CV URLs');
+        // Body + header + footer all use the same 1x1 PNG → one deduped CV.
+        System.assertEquals(1, imgCvCount(imported), 'identical images dedupe to one CV on the imported template');
+    }
 }

@@ -2697,10 +2697,23 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Record_Filter__c')) {
                 template.Record_Filter__c = (String) fields.get('Record_Filter__c');
             }
+            // #377 — a data: URI pasted into the header/footer band renders blank
+            // in Blob.toPdf; pull it into a CV at save time. Written back into the
+            // fields map so the version snapshot below (which reads from `fields`,
+            // not from `template`) also stores the materialised markup. templateId
+            // is null on first create — the render-path fallback covers that.
             if (fields.containsKey('Header_Html__c')) {
+                fields.put(
+                    'Header_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Header_Html__c'))
+                );
                 template.Header_Html__c = (String) fields.get('Header_Html__c');
             }
             if (fields.containsKey('Footer_Html__c')) {
+                fields.put(
+                    'Footer_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Footer_Html__c'))
+                );
                 template.Footer_Html__c = (String) fields.get('Footer_Html__c');
             }
             // 1.68 — page orientation, size, margins
@@ -7842,14 +7855,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            // 1.6. If any asset URLs were referenced in Header_Html__c or
-            // Footer_Html__c, rewrite them to point at the newly-inserted CVs.
-            if (!cvIdMap.isEmpty()) {
-                String rewrittenHeader = rewriteShepherdCvIds(tmpl.Header_Html__c, cvIdMap);
-                String rewrittenFooter = rewriteShepherdCvIds(tmpl.Footer_Html__c, cvIdMap);
-                if (rewrittenHeader != tmpl.Header_Html__c || rewrittenFooter != tmpl.Footer_Html__c) {
-                    tmpl.Header_Html__c = rewrittenHeader;
-                    tmpl.Footer_Html__c = rewrittenFooter;
+            {
+                // 1.6. Rewrite the Header_Html__c / Footer_Html__c fields on the new
+                // template. Word templates carry HTML header/footer bands too, so this
+                // is NOT gated on isHtmlBacked:
+                //   1. re-key any exported shepherd asset URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a self-contained export
+                //      carries them in the bands too, not just the body) out into
+                //      ContentVersions so Blob.toPdf can render them. No-op on a band
+                //      with no inline image.
+                String h0 = tmpl.Header_Html__c;
+                String f0 = tmpl.Footer_Html__c;
+                String h1 = cvIdMap.isEmpty() ? h0 : rewriteShepherdCvIds(h0, cvIdMap);
+                String f1 = cvIdMap.isEmpty() ? f0 : rewriteShepherdCvIds(f0, cvIdMap);
+                h1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, h1);
+                f1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, f1);
+                if (h1 != h0 || f1 != f0) {
+                    tmpl.Header_Html__c = h1;
+                    tmpl.Footer_Html__c = f1;
                     /* code-analyzer-suppress ApexFlsViolation */
                     Database.update(tmpl, AccessLevel.USER_MODE);
                 }
