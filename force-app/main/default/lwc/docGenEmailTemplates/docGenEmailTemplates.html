@@ -76,8 +76,20 @@
                                     label="Logo URL"
                                     value={newBrandLogoUrl}
                                     oninput={handleNewBrandLogoChange}
+                                    field-level-help="Must be a PUBLIC image URL, or pick a Portwood Asset below instead."
                                     class="slds-p-bottom_x-small"
                                 ></lightning-input>
+                                <lightning-combobox
+                                    data-field="logoAssetKey"
+                                    label="…or override with an Asset file"
+                                    value={newBrandLogoAssetKey}
+                                    options={logoAssetOptions}
+                                    onchange={handleNewBrandLogoAssetChange}
+                                    placeholder="Pick a Shared Asset image…"
+                                    disabled={logoAssetsUnavailable}
+                                    field-level-help="Links the logo to a Shared Asset (Command Hub → Assets). Typing a URL above unlinks the asset."
+                                    class="slds-p-bottom_x-small"
+                                ></lightning-combobox>
                                 <lightning-input
                                     data-field="footerText"
                                     type="text"

@@ -56,6 +56,7 @@ export default class DocGenEmailTemplates extends LightningElement {
     @track newBrandColor = '#5A4FCF';
     @track newBrandCompany = '';
     @track newBrandLogoUrl = '';
+    @track newBrandLogoAssetKey = '';
     @track newBrandFooter = '';
     @track owaOptions = [];
 
@@ -269,7 +270,27 @@ export default class DocGenEmailTemplates extends LightningElement {
         this.newBrandCompany = e.target.value;
     }
     handleNewBrandLogoChange(e) {
+        // Typing a URL manually supersedes the asset link (which would otherwise win).
         this.newBrandLogoUrl = e.target.value;
+        this.newBrandLogoAssetKey = '';
+    }
+    async handleNewBrandLogoAssetChange(e) {
+        const assetKey = e.detail.value;
+        if (!assetKey) {
+            this.newBrandLogoAssetKey = '';
+            return;
+        }
+        const asset = this.logoAssets.find((a) => a.assetKey === assetKey);
+        try {
+            // Same asset-linking pattern as the per-type Logo field below and the
+            // full Brands screen — publishes the asset's current file now (admin
+            // session) and lands the resulting URL as a visible fallback/preview.
+            const url = await resolveAssetPublicUrl({ assetId: asset.id });
+            this.newBrandLogoAssetKey = assetKey;
+            this.newBrandLogoUrl = url;
+        } catch (error) {
+            this.toast('Could not use this asset', this.errMsg(error), 'error');
+        }
     }
     handleNewBrandFooterChange(e) {
         this.newBrandFooter = e.target.value;
@@ -282,6 +303,7 @@ export default class DocGenEmailTemplates extends LightningElement {
         this.newBrandColor = '#5A4FCF';
         this.newBrandCompany = '';
         this.newBrandLogoUrl = '';
+        this.newBrandLogoAssetKey = '';
         this.newBrandFooter = '';
     }
 
@@ -309,6 +331,7 @@ export default class DocGenEmailTemplates extends LightningElement {
                     brandColor: this.newBrandFieldValue('brandColor'),
                     companyName: this.newBrandFieldValue('companyName'),
                     logoUrl: this.newBrandFieldValue('logoUrl'),
+                    logoAssetKey: this.newBrandFieldValue('logoAssetKey'),
                     footerText: this.newBrandFieldValue('footerText'),
                     isActive: true
                 }

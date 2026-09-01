@@ -158,8 +158,6 @@ public without sharing class DocGenSignatureEmailService {
         String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
             ? activeBrand.OWA_Id__c
             : (settings == null ? null : settings.Signature_OWA_Id__c);
-        String senderName = UserInfo.getName();
-        String senderEmail = UserInfo.getUserEmail();
 
         // OWA is required for signature emails — guest users cannot send without one,
         // and consistent branding requires all emails come from the same address.
@@ -168,6 +166,49 @@ public without sharing class DocGenSignatureEmailService {
             System.debug(LoggingLevel.ERROR, 'Portwood: ' + errMsg);
             updateEmailStatus(requestId, errMsg);
             return;
+        }
+
+        // Sender identity for the {SenderName} token and Reply-To. Resolve from the
+        // request CREATOR, not UserInfo — this method also runs from
+        // DocGenSignaturePdfTrigger as the Automated Process user (sequential signing,
+        // #379), whose non-routable noreply@<orgId> address makes Messaging.sendEmail
+        // reject the whole message on Reply-To. The running user is only the fallback
+        // when there is no request context (or the creator has no email).
+        String senderName = UserInfo.getName();
+        String senderEmail = UserInfo.getUserEmail();
+        if (requestId != null) {
+            try {
+                DocGenFlsGuard.guestAssertAccessible(
+                    DocGen_Signature_Request__c.sObjectType,
+                    new Set<String>{ 'CreatedById' }
+                );
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                DocGen_Signature_Request__c creatorRow = [
+                    SELECT CreatedById
+                    FROM DocGen_Signature_Request__c
+                    WHERE Id = :requestId
+                    WITH SYSTEM_MODE
+                    LIMIT 1
+                ]; // NOPMD
+                DocGenFlsGuard.guestAssertAccessible(User.sObjectType, new Set<String>{ 'Name', 'Email' });
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                User creator = [
+                    SELECT Name, Email
+                    FROM User
+                    WHERE Id = :creatorRow.CreatedById
+                    WITH SYSTEM_MODE
+                    LIMIT 1
+                ]; // NOPMD
+                if (String.isNotBlank(creator.Email)) {
+                    senderName = creator.Name;
+                    senderEmail = creator.Email;
+                }
+            } catch (Exception resolveEx) {
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: could not resolve request creator for Reply-To: ' + resolveEx.getMessage()
+                );
+            }
         }
 
         // {ExpirationHours} reflects the request's actual signing window (stamped
@@ -218,7 +259,10 @@ public without sharing class DocGenSignatureEmailService {
             email.setOrgWideEmailAddressId(owaId);
 
             // Reply-to the creating user so signer replies reach a human, not the OWA.
-            if (String.isNotBlank(senderEmail)) {
+            // Never set a non-routable noreply@<orgId> address (the Automated Process
+            // user's, when this runs from the platform-event trigger) — Messaging.sendEmail
+            // rejects the whole message with INVALID_EMAIL_ADDRESS (#379).
+            if (String.isNotBlank(senderEmail) && !senderEmail.startsWithIgnoreCase('noreply@')) {
                 email.setReplyTo(senderEmail);
             }
 
