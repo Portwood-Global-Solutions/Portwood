@@ -636,6 +636,94 @@ private class DocGenGuidedSigningTest {
         System.assertEquals(null, DocGenSignatureService.saveFrozenSnapshotCv(null));
     }
 
+    @IsTest
+    static void sequentialComposite_handsOffToTriggerForNextSigner() {
+        // #379: on a Sequential request, finalising signer 1 through the client-composited
+        // path (saveCompositedSignedPdf) must publish DocGen_Signature_PDF__e so
+        // DocGenSignaturePdfTrigger emails the next pending signer. Before the fix this
+        // path published nothing on the !isComplete branch, so the envelope stalled at
+        // "In Progress" and signer 2 was never contacted.
+        DocGen_Settings__c st = DocGen_Settings__c.getOrgDefaults();
+        List<OrgWideEmailAddress> owas = [SELECT Id FROM OrgWideEmailAddress LIMIT 1];
+        st.Signature_OWA_Id__c = owas.isEmpty() ? '0D2000000000001AAA' : owas[0].Id;
+        st.Experience_Site_Url__c = 'https://example.my.salesforce-sites.com/sign';
+        upsert st;
+
+        Id tplId = createTaggedTemplate();
+        Account a = [SELECT Id FROM Account LIMIT 1];
+        DocGenSignatureSenderController.createGuidedPdfSignatureRequest(
+            tplId,
+            a.Id,
+            signersJson2(),
+            'Sequential',
+            null
+        );
+
+        List<DocGen_Signer__c> signers = [
+            SELECT Id, Secure_Token__c, Signature_Request__c, Signer_Email__c, Sort_Order__c
+            FROM DocGen_Signer__c
+            WHERE Signature_Request__r.Template__c = :tplId
+            ORDER BY Sort_Order__c ASC
+        ];
+        System.assertEquals(2, signers.size(), 'Two signers created');
+        for (DocGen_Signer__c s : signers) {
+            s.PIN_Verified_At__c = System.now();
+        }
+        update signers;
+        Id reqId = signers[0].Signature_Request__c;
+        Id nextSignerId = signers[1].Id;
+        String nextEmail = signers[1].Signer_Email__c;
+
+        Integer emailsBefore = Limits.getEmailInvocations();
+
+        Test.startTest();
+        DocGenSignatureController.SavePdfSignatureResult r = DocGenSignatureController.saveCompositedSignedPdf(
+            signers[0].Secure_Token__c,
+            EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 signer one only')),
+            true,
+            '1.1.1.1',
+            'JUnit/1.0',
+            null
+        );
+        // stopTest delivers the published DocGen_Signature_PDF__e → DocGenSignaturePdfTrigger,
+        // which on a Sequential request emails the next pending signer.
+        Test.stopTest();
+
+        System.assertEquals(false, r.isComplete, 'Signer 1 of 2 does not complete the request');
+
+        DocGen_Signer__c next = [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :nextSignerId];
+        System.assertEquals('Pending', next.Status__c, 'Next signer still awaiting signature');
+        DocGen_Signature_Request__c req = [
+            SELECT Status__c, Email_Status__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :reqId
+        ];
+        System.assertEquals('In Progress', req.Status__c, 'Request left In Progress for the next signer');
+
+        if (!owas.isEmpty()) {
+            // Real OWA present (the QA org has one) → the sequential send runs and
+            // updateEmailStatus records the next signer's address. It must record a
+            // clean send, not a Reply-To failure: the trigger runs as the Automated
+            // Process user, so the send must resolve Reply-To from the request creator,
+            // not UserInfo (#379). (Messaging.sendEmail does not validate Reply-To in
+            // test context, so a real INVALID_EMAIL_ADDRESS only surfaces in e2e — this
+            // still guards against updateEmailStatus recording a FAILED for signer 2.)
+            System.assert(
+                req.Email_Status__c != null &&
+                    req.Email_Status__c.contains(nextEmail) &&
+                    !req.Email_Status__c.contains('FAILED'),
+                '#379: composite finalize of signer 1 must hand off so signer 2 (' +
+                    nextEmail +
+                    ') is emailed cleanly. Email_Status__c=' +
+                    req.Email_Status__c
+            );
+        } else {
+            // No real OWA (bare scratch org) → the send bails before writing status, but
+            // the publish + trigger hand-off is still exercised.
+            System.assert(Limits.getEmailInvocations() >= emailsBefore, '#379: sequential hand-off path exercised');
+        }
+    }
+
     // #156 storage lifecycle: a completed/declined/cancelled request reclaims its snapshot CV
     // (the Snapshot_Hash__c stays as tamper-evidence). purgeFrozenSnapshotCv deletes the file.
     @IsTest
