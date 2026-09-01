@@ -5695,6 +5695,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false, contentVersionId: null });
             this.showToast('Success', 'Template Details saved.', 'success');
+            // The modal stays open after a details save; re-baseline the
+            // unsaved-changes snapshot so a following Close doesn't warn about
+            // edits that are now persisted on the record (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
@@ -5850,6 +5854,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.loadVersions(this.editTemplateId);
             }
             this.activeEditTab = this.editTemplateType === 'PDF' ? 'pdfFields' : 'document';
+            // "Save as New Version" deliberately leaves the modal open (authors
+            // want to preview/test the new version straight away). Re-baseline the
+            // unsaved-changes snapshot against the just-saved values so clicking
+            // Close afterwards doesn't falsely prompt to discard changes (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
