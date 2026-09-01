@@ -2697,10 +2697,23 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Record_Filter__c')) {
                 template.Record_Filter__c = (String) fields.get('Record_Filter__c');
             }
+            // #377 — a data: URI pasted into the header/footer band renders blank
+            // in Blob.toPdf; pull it into a CV at save time. Written back into the
+            // fields map so the version snapshot below (which reads from `fields`,
+            // not from `template`) also stores the materialised markup. templateId
+            // is null on first create — the render-path fallback covers that.
             if (fields.containsKey('Header_Html__c')) {
+                fields.put(
+                    'Header_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Header_Html__c'))
+                );
                 template.Header_Html__c = (String) fields.get('Header_Html__c');
             }
             if (fields.containsKey('Footer_Html__c')) {
+                fields.put(
+                    'Footer_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Footer_Html__c'))
+                );
                 template.Footer_Html__c = (String) fields.get('Footer_Html__c');
             }
             // 1.68 — page orientation, size, margins
@@ -3443,6 +3456,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (!DocGenService.isHtmlBacked(tpls[0].Type__c)) {
             throw new DocGenException('saveHtmlTemplateBody is for HTML-backed templates only.');
         }
+
+        // #377 — pull any `data:` URI images out into ContentVersions and rewrite
+        // <img src> to relative /sfc/ URLs BEFORE the body is stored (and before
+        // any whole-body regex below, which a large inline base64 blob would trip).
+        // Blob.toPdf can't render inline base64, and it can't fetch a CV created in
+        // the same transaction as the render — so this has to happen here, at save
+        // time. The Designer's upload path already does this client-side; this
+        // covers every other caller (AI generation, a direct API save). No-op when
+        // the body has no inline images.
+        htmlContent = DocGenService.materialiseInlineHtmlImages(templateId, htmlContent);
 
         // Refuse to overwrite a real body with an empty one.
         //
@@ -7832,14 +7855,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            // 1.6. If any asset URLs were referenced in Header_Html__c or
-            // Footer_Html__c, rewrite them to point at the newly-inserted CVs.
-            if (!cvIdMap.isEmpty()) {
-                String rewrittenHeader = rewriteShepherdCvIds(tmpl.Header_Html__c, cvIdMap);
-                String rewrittenFooter = rewriteShepherdCvIds(tmpl.Footer_Html__c, cvIdMap);
-                if (rewrittenHeader != tmpl.Header_Html__c || rewrittenFooter != tmpl.Footer_Html__c) {
-                    tmpl.Header_Html__c = rewrittenHeader;
-                    tmpl.Footer_Html__c = rewrittenFooter;
+            {
+                // 1.6. Rewrite the Header_Html__c / Footer_Html__c fields on the new
+                // template. Word templates carry HTML header/footer bands too, so this
+                // is NOT gated on isHtmlBacked:
+                //   1. re-key any exported shepherd asset URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a self-contained export
+                //      carries them in the bands too, not just the body) out into
+                //      ContentVersions so Blob.toPdf can render them. No-op on a band
+                //      with no inline image.
+                String h0 = tmpl.Header_Html__c;
+                String f0 = tmpl.Footer_Html__c;
+                String h1 = cvIdMap.isEmpty() ? h0 : rewriteShepherdCvIds(h0, cvIdMap);
+                String f1 = cvIdMap.isEmpty() ? f0 : rewriteShepherdCvIds(f0, cvIdMap);
+                h1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, h1);
+                f1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, f1);
+                if (h1 != h0 || f1 != f0) {
+                    tmpl.Header_Html__c = h1;
+                    tmpl.Footer_Html__c = f1;
                     /* code-analyzer-suppress ApexFlsViolation */
                     Database.update(tmpl, AccessLevel.USER_MODE);
                 }
@@ -7860,14 +7893,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     : tmpl.Name;
                 cv.PathOnClient = tmpl.Name + '.' + (String) fileData.get('fileExtension');
                 Blob bodyBytes = EncodingUtil.base64Decode((String) fileData.get('base64'));
-                // For HTML templates, rewrite embedded shepherd URLs in the body
-                // bytes BEFORE upload (ContentVersion.VersionData is immutable
-                // post-insert). Word/Excel/PowerPoint templates carry their
-                // image references inside docx-internal relationships, not
-                // shepherd URLs, so they pass through untouched.
-                if (DocGenService.isHtmlBacked(tmpl.Type__c) && !cvIdMap.isEmpty()) {
+                // For HTML templates, rewrite the body bytes BEFORE upload
+                // (ContentVersion.VersionData is immutable post-insert):
+                //   1. re-key exported shepherd image URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a "self-contained" export)
+                //      out into ContentVersions and rewrite <img src> to /sfc/ URLs,
+                //      so Blob.toPdf can actually render them. Must happen here at
+                //      import time — a CV created during a render is invisible to
+                //      Blob.toPdf's fetch in that same transaction.
+                // Word/Excel/PowerPoint templates carry image references inside
+                // docx-internal relationships, not shepherd URLs, so they pass
+                // through untouched.
+                if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
                     String htmlBody = bodyBytes.toString();
-                    String rewrittenBody = rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    String rewrittenBody = cvIdMap.isEmpty() ? htmlBody : rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    rewrittenBody = DocGenService.materialiseInlineHtmlImages(tmpl.Id, rewrittenBody);
                     if (rewrittenBody != htmlBody) {
                         bodyBytes = Blob.valueOf(rewrittenBody);
                     }
