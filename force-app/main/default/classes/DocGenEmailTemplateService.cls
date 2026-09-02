@@ -564,19 +564,17 @@ global with sharing class DocGenEmailTemplateService {
             if (cvId == null) {
                 return null;
             }
+            // Content Deliveries disabled (issue #384): no public URL — caller
+            // falls back to the stored URL.
+            if (!DocGenContentDelivery.isAvailable()) {
+                return null;
+            }
             DocGenFlsGuard.guestAssertAccessible(
-                ContentDistribution.sObjectType,
+                DocGenContentDelivery.sObjectType(),
                 new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId' }
             );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<ContentDistribution> dists = [
-                SELECT ContentDownloadUrl
-                FROM ContentDistribution
-                WHERE ContentVersionId = :cvId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            return dists.isEmpty() ? null : dists[0].ContentDownloadUrl;
+            SObject dist = DocGenContentDelivery.findByContentVersion(cvId);
+            return dist == null ? null : (String) dist.get('ContentDownloadUrl');
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: logo asset resolution fell back to URL: ' + e.getMessage());
             return null;

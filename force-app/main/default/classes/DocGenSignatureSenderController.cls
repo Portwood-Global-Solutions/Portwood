@@ -3117,20 +3117,29 @@ public with sharing class DocGenSignatureSenderController {
             previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, previewImageMap.get(cvId));
             return;
         }
+        // Content Deliveries disabled (issue #384): preview images stay on their
+        // relative /sfc/servlet.shepherd URLs.
+        if (!DocGenContentDelivery.isAvailable()) {
+            return;
+        }
         try {
-            ContentDistribution dist = new ContentDistribution();
-            dist.Name = 'sig_preview_' + (String.isBlank(key) ? cvId : key).left(80);
-            dist.ContentVersionId = cvId;
-            dist.PreferencesAllowViewInBrowser = true;
-            dist.PreferencesLinkLatestVersion = false;
-            dist.PreferencesExpires = false;
+            SObject dist = DocGenContentDelivery.newDistribution(
+                new Map<String, Object>{
+                    'Name' => 'sig_preview_' + (String.isBlank(key) ? cvId : key).left(80),
+                    'ContentVersionId' => (Id) cvId,
+                    'PreferencesAllowViewInBrowser' => true,
+                    'PreferencesLinkLatestVersion' => false,
+                    'PreferencesExpires' => false
+                }
+            );
             Database.insert(dist, AccessLevel.USER_MODE);
-            dist = [SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = :dist.Id WITH USER_MODE];
+            SObject reloaded = DocGenContentDelivery.reload((Id) dist.get('Id'));
+            String downloadUrl = reloaded == null ? null : (String) reloaded.get('ContentDownloadUrl');
             if (String.isNotBlank(key)) {
-                previewImageMap.put(key, dist.ContentDownloadUrl);
+                previewImageMap.put(key, downloadUrl);
             }
-            previewImageMap.put(cvId, dist.ContentDownloadUrl);
-            previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, dist.ContentDownloadUrl);
+            previewImageMap.put(cvId, downloadUrl);
+            previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, downloadUrl);
         } catch (Exception e) {
             System.debug(
                 LoggingLevel.WARN,

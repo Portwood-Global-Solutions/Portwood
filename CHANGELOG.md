@@ -56,6 +56,21 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Portwood installs and runs with "Content Deliveries and Public Links" disabled (#384).**
+  Five classes named the `ContentDistribution` SObject as a compile-time type. Security-
+  hardened orgs that turn that org preference off remove the type, so those classes would
+  not compile — which aborted package install/upgrade and, in an installed org, took the
+  "Generate Document" Flow action down with "No Apex action available for 'Apex method'"
+  (`DocGenFlowAction` → `DocGenService` → `DocGenController`). Every reference now goes
+  through a new `DocGenContentDelivery` shim that resolves the type dynamically
+  (`Schema.getGlobalDescribe` + `Database.query` + `SObject.newSObject`), so the package
+  compiles either way. With the feature off, public-link creation is skipped and callers
+  fall back to relative `/sfc/servlet.shepherd/version/download/<cvId>` URLs; the one
+  path that genuinely needs an anonymously-fetchable URL — the email branded-header logo
+  — now fails with an actionable "enable Content Deliveries" message instead of a raw
+  error. Reproduces only in a real subscriber install (or a namespaced scratch org) with
+  the preference disabled, not in a default staging org.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said

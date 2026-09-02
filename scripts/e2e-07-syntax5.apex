@@ -260,6 +260,38 @@ try {
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
 }
 
+// ============================================================
+// #384 — DocGenContentDelivery shim degrades cleanly when
+// "Content Deliveries and Public Links" is disabled. The type
+// is referenced dynamically so the package still compiles.
+// ============================================================
+try {
+    // Real org describe: must not throw, must return a Boolean.
+    Boolean live = DocGenContentDelivery.isAvailable();
+
+    // Forced "feature off": every entry point is a safe no-op, never a throw.
+    DocGenContentDelivery.availabilityOverride = false;
+    Boolean ok =
+        DocGenContentDelivery.isAvailable() == false &&
+        DocGenContentDelivery.sObjectType() == null &&
+        DocGenContentDelivery.newDistribution(new Map<String, Object>{ 'Name' => 'x' }) == null &&
+        DocGenContentDelivery.findByContentVersion(null) == null &&
+        DocGenContentDelivery.findByContentVersions(new Set<Id>()).isEmpty() &&
+        DocGenContentDelivery.reload(null) == null;
+    DocGenContentDelivery.availabilityOverride = null;
+
+    if (ok) {
+        pass++;
+        System.debug('CONTENT DELIVERY SHIM (#384): PASS — live=' + live + ', feature-off contract holds');
+    } else {
+        fail++;
+        System.debug('CONTENT DELIVERY SHIM (#384): FAIL — feature-off path is not a clean no-op');
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CONTENT DELIVERY SHIM (#384): FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')
