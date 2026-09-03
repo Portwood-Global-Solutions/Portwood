@@ -9378,12 +9378,17 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String openTag = '{#' + relationshipName + '}';
         Integer openIdx = xml.indexOf(openTag);
         if (openIdx == -1) {
-            // Try with whitespace variations
-            Pattern openPattern = Pattern.compile('\\{\\s*#\\s*' + Pattern.quote(relationshipName) + '\\s*\\}');
-            Matcher openMatcher = openPattern.matcher(xml);
-            if (openMatcher.find()) {
-                openIdx = openMatcher.start();
-                openTag = openMatcher.group();
+            // Whitespace variations ({ # Rel }). This used a whole-document
+            // Matcher, which threw the uncatchable System.LimitException: Regex
+            // too complicated once document.xml passed ~900K chars — and every
+            // caller here is the giant-query path, where document.xml is
+            // routinely largest (#362). Scan for it linearly instead, the same
+            // instrument findBalancedEnd (below) and applyRepeatHeaderMarkers
+            // already use. Accepts exactly what '\{\s*#\s*' + Rel + '\s*\}' did.
+            Integer[] wsHit = findLoopOpenTag(xml, relationshipName);
+            if (wsHit != null) {
+                openIdx = wsHit[0];
+                openTag = xml.substring(wsHit[0], wsHit[1]);
             } else {
                 return null;
             }
@@ -9454,6 +9459,56 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         result.put('afterLoop', xml.substring(containerEnd));
 
         return result;
+    }
+
+    /**
+     * Linear scan for a loop OPEN tag written with whitespace — the exact set
+     * the Pattern '\{\s*#\s*' + Pattern.quote(rel) + '\s*\}' accepted, minus its
+     * uncatchable "Regex too complicated" ceiling on a large document.xml (#362).
+     * indexOf-based, so there is no regex step budget to exceed.
+     *
+     * @return [start, endExclusive] offsets of the tag, or null if not present.
+     */
+    @TestVisible
+    private static Integer[] findLoopOpenTag(String xml, String relationshipName) {
+        Integer n = xml.length();
+        Integer relLen = relationshipName.length();
+        Integer scan = 0;
+        while (scan < n) {
+            Integer brace = xml.indexOf('{', scan);
+            if (brace == -1) {
+                return null;
+            }
+            Integer p = skipTagWhitespace(xml, brace + 1, n); // \s* after {
+            if (p < n && xml.substring(p, p + 1) == '#') {
+                p = skipTagWhitespace(xml, p + 1, n); // \s* after #
+                if (p + relLen <= n && xml.substring(p, p + relLen) == relationshipName) {
+                    Integer q = skipTagWhitespace(xml, p + relLen, n); // \s* after the name
+                    if (q < n && xml.substring(q, q + 1) == '}') {
+                        return new List<Integer>{ brace, q + 1 };
+                    }
+                }
+            }
+            scan = brace + 1;
+        }
+        return null;
+    }
+
+    /**
+     * First index at or after startIdx that is not a Java-regex \s character —
+     * space (32), tab (9), LF (10), VT (11), FF (12), CR (13) — the whitespace
+     * class the old open-tag Pattern's \s* quantifiers used.
+     */
+    private static Integer skipTagWhitespace(String s, Integer startIdx, Integer endIdx) {
+        Integer i = startIdx;
+        while (i < endIdx) {
+            Integer c = s.charAt(i);
+            if (c != 32 && c != 9 && c != 10 && c != 11 && c != 12 && c != 13) {
+                break;
+            }
+            i++;
+        }
+        return i;
     }
 
     /**

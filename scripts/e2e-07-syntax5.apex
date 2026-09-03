@@ -260,6 +260,24 @@ try {
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
 }
 
+// #362 — extractLoopBody's whitespace open-tag fallback (giant-query path).
+// The tag is written with whitespace so the fallback branch is taken; it must
+// still locate the loop and extract its body.
+try {
+    String gx = '<w:body><w:tbl><w:tr><w:tc><w:p>{ #Items}<w:r><w:t>{Name}</w:t></w:r>{ /Items}</w:p></w:tc></w:tr></w:tbl></w:body>';
+    Map<String, String> lb = DocGenService.extractLoopBody(gx, 'Items');
+    if (lb != null && lb.get('innerXml').contains('{Name}') && lb.get('beforeLoop').contains('<w:tbl>')) {
+        pass++;
+        System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): PASS');
+    } else {
+        fail++;
+        System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): FAIL — ' + lb);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')
