@@ -1,0 +1,30 @@
+name: Format Apply Temp
+
+on:
+    push:
+        branches:
+            - 'fix/375-rich-text-inherit-styling'
+
+jobs:
+    apply:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - run: npm ci
+
+            - run: npx prettier --write force-app/main/default/classes/DocGenService.cls force-app/main/default/classes/DocGenSignatureController.cls
+
+            - run: git diff --stat
+
+            - run: git diff > format-ci.patch
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: format-patch
+                  path: format-ci.patch
