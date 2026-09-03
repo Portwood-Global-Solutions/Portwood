@@ -790,34 +790,36 @@ public without sharing class DocGenSignatureController {
 
     // CxSAST: Apex_CRUD_ContentDistribution — SYSTEM_MODE required for guest user context; ContentDistribution created for signature document preview
     private static String getOrCreatePublicLink(ContentVersion cv, Datetime requestExpiresAt) {
+        if (!DocGenService.isContentDistributionAvailable()) {
+            return null; // #384: deliveries disabled — preview link is optional (caller try/catch)
+        }
         DocGenFlsGuard.guestAssertAccessible(
-            ContentDistribution.sObjectType,
+            DocGenService.contentDistributionType(),
             new Set<String>{ 'DistributionPublicUrl', 'ContentVersionId' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        List<ContentDistribution> dists = [
-            SELECT DistributionPublicUrl
-            FROM ContentDistribution
-            WHERE ContentVersionId = :cv.Id
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
+        List<SObject> dists = Database.query(
+            'SELECT DistributionPublicUrl FROM ContentDistribution WHERE ContentVersionId = \'' +
+                String.escapeSingleQuotes((String) cv.Id) +
+                '\' WITH SYSTEM_MODE LIMIT 1'
+        );
         if (!dists.isEmpty()) {
-            return dists[0].DistributionPublicUrl;
+            return (String) dists[0].get('DistributionPublicUrl');
         }
-        ContentDistribution cd = new ContentDistribution();
-        cd.Name = 'Signature Preview - ' + cv.Title;
-        cd.ContentVersionId = cv.Id;
-        cd.PreferencesAllowViewInBrowser = true;
-        cd.PreferencesLinkLatestVersion = true;
-        // Expire the public link in line with the signing window so a signed
-        // (or cancelled) request can't be re-fetched anonymously afterwards.
-        // Legacy requests (no stamped expiry) keep the historical 48 hours.
-        cd.PreferencesExpires = true;
-        cd.ExpiryDate = requestExpiresAt != null ? requestExpiresAt : System.now().addHours(TOKEN_EXPIRATION_HOURS);
-        cd.PreferencesNotifyOnVisit = false;
-        cd.PreferencesAllowOriginalDownload = false;
-        cd.PreferencesAllowPDFDownload = false;
+        Datetime linkExpiry = requestExpiresAt != null ? requestExpiresAt : System.now().addHours(TOKEN_EXPIRATION_HOURS);
+        SObject cd = DocGenService.newContentDistribution(
+            new Map<String, Object>{
+                'Name' => 'Signature Preview - ' + cv.Title,
+                'ContentVersionId' => cv.Id,
+                'PreferencesAllowViewInBrowser' => true,
+                'PreferencesLinkLatestVersion' => true,
+                'PreferencesExpires' => true,
+                'ExpiryDate' => linkExpiry,
+                'PreferencesNotifyOnVisit' => false,
+                'PreferencesAllowOriginalDownload' => false,
+                'PreferencesAllowPDFDownload' => false
+            }
+        );
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Create").
         DocGenFlsGuard.guestAssertCreateable(
             cd,
@@ -834,16 +836,19 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<ContentDistribution>{ cd }, false, AccessLevel.SYSTEM_MODE);
+        Database.insert(new List<SObject>{ cd }, false, AccessLevel.SYSTEM_MODE);
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
-        cd = new ContentDistribution(Id = cd.Id);
         DocGenFlsGuard.guestAssertAccessible(
-            ContentDistribution.sObjectType,
+            DocGenService.contentDistributionType(),
             new Set<String>{ 'DistributionPublicUrl' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        cd = [SELECT DistributionPublicUrl FROM ContentDistribution WHERE Id = :cd.Id WITH SYSTEM_MODE LIMIT 1];
-        return cd.DistributionPublicUrl;
+        List<SObject> created = Database.query(
+            'SELECT DistributionPublicUrl FROM ContentDistribution WHERE Id = \'' +
+                String.escapeSingleQuotes((String) cd.get('Id')) +
+                '\' WITH SYSTEM_MODE LIMIT 1'
+        );
+        return created.isEmpty() ? null : (String) created[0].get('DistributionPublicUrl');
     }
 
     /**

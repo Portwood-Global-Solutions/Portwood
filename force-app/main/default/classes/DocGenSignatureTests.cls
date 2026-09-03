@@ -5509,6 +5509,9 @@ private class DocGenSignatureTests {
             '<html><body><img src="' + sourceUrl + '"/>{@Signature_Customer}</body></html>'
         );
         Test.stopTest();
+        if (!DocGenService.isContentDistributionAvailable()) {
+            return; // org without Content Deliveries — creation path covered elsewhere
+        }
 
         System.assert(previewMap.containsKey(sourceUrl), 'HTML image source should be mapped for signer preview');
         System.assert(
@@ -5517,7 +5520,11 @@ private class DocGenSignatureTests {
         );
         System.assertEquals(
             1,
-            [SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = :imgCv.Id],
+            Database.countQuery(
+                'SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = \'' +
+                    String.escapeSingleQuotes((String) imgCv.Id) +
+                    '\''
+            ),
             'A public distribution should be created for the HTML template image'
         );
     }
@@ -6034,18 +6041,21 @@ private class DocGenSignatureTests {
         Test.startTest();
         DocGenSignatureController.fetchDocumentData(signer.Secure_Token__c);
         Test.stopTest();
+        if (!DocGenService.isContentDistributionAvailable()) {
+            return; // org without Content Deliveries — preview link skipped by design
+        }
 
-        List<ContentDistribution> dists = [
-            SELECT PreferencesExpires, ExpiryDate, PreferencesAllowOriginalDownload
-            FROM ContentDistribution
-            WHERE ContentVersionId = :srcId
-        ];
+        List<SObject> dists = Database.query(
+            'SELECT PreferencesExpires, ExpiryDate, PreferencesAllowOriginalDownload FROM ContentDistribution WHERE ContentVersionId = \'' +
+                String.escapeSingleQuotes((String) srcId) +
+                '\''
+        );
         System.assertEquals(1, dists.size(), 'Should create exactly one public link for source doc');
-        System.assertEquals(true, dists[0].PreferencesExpires, 'Public link must expire');
-        System.assertNotEquals(null, dists[0].ExpiryDate, 'ExpiryDate must be set');
+        System.assertEquals(true, dists[0].get('PreferencesExpires'), 'Public link must expire');
+        System.assertNotEquals(null, dists[0].get('ExpiryDate'), 'ExpiryDate must be set');
         System.assertEquals(
             false,
-            dists[0].PreferencesAllowOriginalDownload,
+            dists[0].get('PreferencesAllowOriginalDownload'),
             'Original download must be disabled for the preview link'
         );
     }
