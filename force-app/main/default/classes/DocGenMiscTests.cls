@@ -7460,6 +7460,67 @@ private class DocGenMiscTests {
     // =========================================================================
 
     @IsTest
+    static void testFindLoopOpenTagHugeInputNoRegexCeiling() {
+        // #362 — the whitespace-tolerant open-tag fallback was a whole-document
+        // Matcher and threw the uncatchable System.LimitException: Regex too
+        // complicated above ~900K chars. findLoopOpenTag is the linear
+        // replacement — feed it well past the old ceiling.
+        String unit = '{Field} lorem ipsum dolor sit amet consectetur '; // ~47 chars, 1 brace
+        String big = unit;
+        while (big.length() < 2000000) {
+            big += big;
+        }
+        String xml = big.substring(0, 2000000) + '<w:p>{ #LineItems }</w:p>';
+        System.assert(xml.length() > 1900000, 'fixture must dwarf the old ~900K ceiling: ' + xml.length());
+
+        Test.startTest();
+        Integer[] hit = DocGenService.findLoopOpenTag(xml, 'LineItems'); // must NOT throw
+        Test.stopTest();
+
+        System.assertNotEquals(null, hit, 'the whitespace open tag is located');
+        System.assertEquals('{ #LineItems }', xml.substring(hit[0], hit[1]), 'exact matched span');
+    }
+
+    @IsTest
+    static void testFindLoopOpenTagWhitespaceParity() {
+        // Accepts exactly what Pattern '\{\s*#\s*Rel\s*\}' accepted — no more.
+        System.assertNotEquals(null, DocGenService.findLoopOpenTag('a {#Rel} b', 'Rel'), 'no whitespace');
+        System.assertNotEquals(null, DocGenService.findLoopOpenTag('a { #Rel} b', 'Rel'), 'ws after {');
+        System.assertNotEquals(null, DocGenService.findLoopOpenTag('a {#Rel } b', 'Rel'), 'ws before }');
+        System.assertNotEquals(null, DocGenService.findLoopOpenTag('a {  #  Rel  } b', 'Rel'), 'ws everywhere');
+        System.assertNotEquals(null, DocGenService.findLoopOpenTag('x\n{\t#\nRel\r} y', 'Rel'), 'tab/newline/CR count');
+        System.assertEquals(null, DocGenService.findLoopOpenTag('a {#Other} b', 'Rel'), 'different relationship');
+        System.assertEquals(null, DocGenService.findLoopOpenTag('a {^Rel} b', 'Rel'), 'inverse marker is not #');
+        System.assertEquals(
+            null,
+            DocGenService.findLoopOpenTag('a {#RelExtra} b', 'Rel'),
+            'name is a prefix, not exact'
+        );
+        System.assertEquals(null, DocGenService.findLoopOpenTag('no braces here', 'Rel'), 'absent');
+    }
+
+    @IsTest
+    static void testExtractLoopBodyWhitespaceTagEndToEnd() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            // Whitespace next to the braces (the variation both the open scan and
+            // findBalancedEnd's trim-compare tolerate) still extracts end to end.
+            String xml =
+                '<w:body><w:tbl><w:tr><w:tc><w:p>' +
+                '{ #Contacts}<w:r><w:t>{FirstName}</w:t></w:r>{ /Contacts}' +
+                '</w:p></w:tc></w:tr></w:tbl></w:body>';
+
+            Test.startTest();
+            Map<String, String> result = DocGenService.extractLoopBody(xml, 'Contacts');
+            Test.stopTest();
+
+            System.assertNotEquals(null, result, 'whitespace-tagged loop body extracts');
+            System.assert(result.get('innerXml').contains('{FirstName}'), 'inner XML captured');
+            System.assert(result.get('beforeLoop').contains('<w:tbl>'), 'beforeLoop has the table start');
+        }
+    }
+
+    @IsTest
     static void testExtractLoopBodyWithWhitespace() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
