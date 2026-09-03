@@ -6376,13 +6376,14 @@ private class DocGenMiscTests {
         Map<String, Object> data = new Map<String, Object>{ 'Description__c' => '<div>Hello</div>' };
         String out = DocGenService.processXmlForTest(tpl, data);
         System.assert(out.contains('Hello'), 'value text must render: ' + out);
+        // Token run + injected run + trailing reopen run (which also inherits, #32).
         System.assertEquals(
-            3,
+            4,
             out.split('w:val="19"', -1).size(),
             'token run size must appear in the token run plus the injected run: ' + out
         );
         System.assertEquals(
-            3,
+            4,
             out.split('6B6660', -1).size(),
             'token run color must appear in the token run plus the injected run: ' + out
         );
@@ -6396,8 +6397,9 @@ private class DocGenMiscTests {
         Map<String, Object> data = new Map<String, Object>{ 'Description__c' => '<div>One</div><div>Two</div>' };
         String out = DocGenService.processXmlForTest(tpl, data);
         System.assert(out.contains('One') && out.contains('Two'), 'both paragraphs must render: ' + out);
+        // Token run + two injected paragraphs + trailing reopen run.
         System.assertEquals(
-            4,
+            5,
             out.split('w:val="19"', -1).size(),
             'token run size must appear in the token run plus both injected paragraphs: ' + out
         );
