@@ -178,7 +178,11 @@ private class DocGenEmailTemplateTest {
             System.assert(url.startsWith('http'), 'Public download URL returned: ' + url);
             System.assertEquals(
                 1,
-                [SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = :cv.Id],
+                Database.countQuery(
+                    'SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = \'' +
+                        String.escapeSingleQuotes((String) cv.Id) +
+                        '\''
+                ),
                 'Exactly one distribution per asset version'
             );
         } else {
@@ -315,12 +319,21 @@ private class DocGenEmailTemplateTest {
         Id newLatestCvId = DocGenController.addAssetVersion(asset.Id, v2.Id);
         Test.stopTest();
 
-        System.assertEquals(
-            1,
-            [SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = :newLatestCvId],
-            'Replacing a published asset image must publish the NEW file too, so ' +
-            'send-time logo resolution keeps working (guest senders cannot create deliveries)'
+        Integer carryCount = Database.countQuery(
+            'SELECT COUNT() FROM ContentDistribution WHERE ContentVersionId = \'' +
+                String.escapeSingleQuotes((String) newLatestCvId) +
+                '\''
         );
+        if (DocGenService.isContentDistributionAvailable()) {
+            System.assertEquals(
+                1,
+                carryCount,
+                'Replacing a published asset image must publish the NEW file too, so ' +
+                'send-time logo resolution keeps working (guest senders cannot create deliveries)'
+            );
+        } else {
+            System.assertEquals(0, carryCount, 'No deliveries when the feature is disabled');
+        }
     }
 
     // ---- {%asset:key} tags in email bodies resolve to public delivery URLs ----
@@ -351,11 +364,12 @@ private class DocGenEmailTemplateTest {
         DocGenEmailTemplateController.saveTemplate(data);
         Test.stopTest();
 
-        List<ContentDistribution> dists = [
-            SELECT ContentDownloadUrl
-            FROM ContentDistribution
-            WHERE Name LIKE 'Portwood Asset - Footer Banner%'
-        ];
+        List<SObject> dists = new List<SObject>();
+        if (DocGenService.isContentDistributionAvailable()) {
+            dists = Database.query(
+                'SELECT ContentDownloadUrl FROM ContentDistribution WHERE Name LIKE \'Portwood Asset - Footer Banner%\''
+            );
+        }
         if (dists.isEmpty()) {
             return; // org without Content Deliveries — publish path covered elsewhere
         }
@@ -369,9 +383,10 @@ private class DocGenEmailTemplateTest {
             !r.htmlBody.contains('{%asset:'),
             'Every asset tag must resolve or blank — none may leak: ' + r.htmlBody
         );
-        String expected = dists[0].ContentDownloadUrl.escapeHtml4();
+        String expectedUrl = (String) dists[0].get('ContentDownloadUrl');
+        String expected = expectedUrl.escapeHtml4();
         System.assert(
-            r.htmlBody.contains(expected) || r.htmlBody.contains(dists[0].ContentDownloadUrl),
+            r.htmlBody.contains(expected) || r.htmlBody.contains(expectedUrl),
             'Known asset tag resolves to its public delivery URL: ' + r.htmlBody
         );
         System.assert(r.htmlBody.contains('src=""'), 'Unknown asset key blanks cleanly');

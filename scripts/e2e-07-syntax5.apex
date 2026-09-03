@@ -260,6 +260,29 @@ try {
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
 }
 
+// ============================================================
+// Rich-text values inherit the token run's formatting (#375).
+// Same rule long text already follows (#32): a rich value in a styled
+// run must keep size/color instead of document defaults.
+// ============================================================
+try {
+    Map<String, Object> rd = new Map<String, Object>{ 'Description__c' => '<div>Hello</div>' };
+    r = DocGenService.processXmlForTest(
+        '<w:p><w:r><w:rPr><w:sz w:val="19"/><w:color w:val="6B6660"/></w:rPr><w:t>{Description__c}</w:t></w:r></w:p>',
+        rd
+    );
+    if (r.contains('Hello') && r.split('w:val="19"', -1).size() >= 3 && r.split('6B6660', -1).size() >= 3) {
+        pass++;
+        System.debug('RICH TEXT INHERIT RUN: PASS');
+    } else {
+        fail++;
+        System.debug('RICH TEXT INHERIT RUN: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICH TEXT INHERIT RUN: FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')

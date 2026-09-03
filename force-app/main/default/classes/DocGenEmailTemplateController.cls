@@ -303,44 +303,49 @@ public with sharing class DocGenEmailTemplateController {
             throw DocGenService.ahe('This asset has no published file version.');
         }
 
+        if (!DocGenService.isContentDistributionAvailable()) {
+            throw DocGenService.ahe(
+                'Public links are disabled in this org (Setup → Content Deliveries and Public Links) — enable them to use an asset file as the email logo.'
+            );
+        }
         DocGenFlsGuard.assertAccessible(
-            ContentDistribution.sObjectType,
+            DocGenService.contentDistributionType(),
             new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId', 'PreferencesExpires' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        List<ContentDistribution> existing = [
-            SELECT Id, ContentDownloadUrl, PreferencesExpires
-            FROM ContentDistribution
-            WHERE ContentVersionId = :cvId
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
+        String quotedCvId = '\'' + String.escapeSingleQuotes((String) cvId) + '\'';
+        List<SObject> existing = Database.query(
+            'SELECT Id, ContentDownloadUrl, PreferencesExpires FROM ContentDistribution WHERE ContentVersionId = ' +
+                quotedCvId +
+                ' WITH SYSTEM_MODE LIMIT 1'
+        );
         try {
             if (!existing.isEmpty()) {
-                if (existing[0].PreferencesExpires == true) {
+                if ((Boolean) existing[0].get('PreferencesExpires') == true) {
                     // A delivery created elsewhere (e.g. the signing flow) may carry an
                     // expiry — a logo link must not go dark, so clear it.
-                    ContentDistribution fix = new ContentDistribution(
-                        Id = existing[0].Id,
-                        PreferencesExpires = false,
-                        ExpiryDate = null
-                    );
+                    SObject fix = DocGenService.contentDistributionType().newSObject((Id) existing[0].get('Id'));
+                    fix.put('PreferencesExpires', false);
+                    fix.put('ExpiryDate', null);
                     DocGenFlsGuard.assertUpdateable(fix, new Set<String>{ 'PreferencesExpires', 'ExpiryDate' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                     Database.update(fix, AccessLevel.SYSTEM_MODE);
                 }
-                return existing[0].ContentDownloadUrl;
+                return (String) existing[0].get('ContentDownloadUrl');
             }
 
-            ContentDistribution cd = new ContentDistribution();
-            cd.Name = 'Portwood Asset - ' + assets[0].Name;
-            cd.ContentVersionId = cvId;
-            cd.PreferencesAllowViewInBrowser = true;
-            cd.PreferencesLinkLatestVersion = true;
-            cd.PreferencesAllowOriginalDownload = true;
-            cd.PreferencesExpires = false;
-            cd.PreferencesNotifyOnVisit = false;
-            cd.PreferencesAllowPDFDownload = false;
+            SObject cd = DocGenService.newContentDistribution(
+                new Map<String, Object>{
+                    'Name' => 'Portwood Asset - ' + assets[0].Name,
+                    'ContentVersionId' => cvId,
+                    'PreferencesAllowViewInBrowser' => true,
+                    'PreferencesLinkLatestVersion' => true,
+                    'PreferencesAllowOriginalDownload' => true,
+                    'PreferencesExpires' => false,
+                    'PreferencesNotifyOnVisit' => false,
+                    'PreferencesAllowPDFDownload' => false
+                }
+            );
             DocGenFlsGuard.assertCreateable(
                 cd,
                 new Set<String>{
@@ -358,19 +363,17 @@ public with sharing class DocGenEmailTemplateController {
             Database.insert(cd, AccessLevel.SYSTEM_MODE);
             // ContentDownloadUrl is generated server-side — re-query for it.
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            ContentDistribution created = [
-                SELECT ContentDownloadUrl
-                FROM ContentDistribution
-                WHERE Id = :cd.Id
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            if (String.isBlank(created.ContentDownloadUrl)) {
+            List<SObject> created = Database.query(
+                'SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = \'' +
+                    String.escapeSingleQuotes((String) cd.get('Id')) +
+                    '\' WITH SYSTEM_MODE LIMIT 1'
+            );
+            if (created.isEmpty() || String.isBlank((String) created[0].get('ContentDownloadUrl'))) {
                 throw DocGenService.ahe(
                     'The public file link was created but has no download URL yet — try again in a moment.'
                 );
             }
-            return created.ContentDownloadUrl;
+            return (String) created[0].get('ContentDownloadUrl');
         } catch (AuraHandledException ahe) {
             throw ahe;
         } catch (Exception e) {

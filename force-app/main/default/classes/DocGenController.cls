@@ -8367,6 +8367,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (newLatestCvId == null) {
                 return;
             }
+            if (!DocGenService.isContentDistributionAvailable()) {
+                return; // #384: deliveries disabled — nothing to carry forward
+            }
             // Every file ever linked to this asset → their latest version Ids.
             /* code-analyzer-suppress ApexFlsViolation */
             List<ContentDocumentLink> links = [
@@ -8385,15 +8388,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 return;
             }
             /* code-analyzer-suppress ApexFlsViolation */
-            List<ContentDistribution> dists = [
-                SELECT Id, ContentVersionId
-                FROM ContentDistribution
-                WHERE ContentVersionId IN :allCvIds
-                WITH SYSTEM_MODE
-            ]; // NOPMD ApexCRUDViolation - internal plumbing behind the addAssetVersion guards
+            List<String> quotedCvIds = new List<String>();
+            for (Id cvId : allCvIds) {
+                quotedCvIds.add('\'' + String.escapeSingleQuotes((String) cvId) + '\'');
+            }
+            List<SObject> dists = Database.query(
+                'SELECT Id, ContentVersionId FROM ContentDistribution WHERE ContentVersionId IN (' +
+                    String.join(quotedCvIds, ',') +
+                    ') WITH SYSTEM_MODE'
+            ); // NOPMD ApexCRUDViolation - internal plumbing behind the addAssetVersion guards
             Boolean anyPublished = false;
-            for (ContentDistribution d : dists) {
-                if (d.ContentVersionId == newLatestCvId) {
+            for (SObject d : dists) {
+                if ((Id) d.get('ContentVersionId') == newLatestCvId) {
                     return; // new file already has its delivery
                 }
                 anyPublished = true;
@@ -8409,15 +8415,17 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 WITH SYSTEM_MODE
                 LIMIT 1
             ]; // NOPMD ApexCRUDViolation - internal plumbing behind the addAssetVersion guards
-            ContentDistribution cd = new ContentDistribution(
-                Name = 'Portwood Asset - ' + (named.isEmpty() ? 'Logo' : named[0].Name),
-                ContentVersionId = newLatestCvId,
-                PreferencesAllowViewInBrowser = true,
-                PreferencesLinkLatestVersion = true,
-                PreferencesAllowOriginalDownload = true,
-                PreferencesExpires = false,
-                PreferencesNotifyOnVisit = false,
-                PreferencesAllowPDFDownload = false
+            SObject cd = DocGenService.newContentDistribution(
+                new Map<String, Object>{
+                    'Name' => 'Portwood Asset - ' + (named.isEmpty() ? 'Logo' : named[0].Name),
+                    'ContentVersionId' => newLatestCvId,
+                    'PreferencesAllowViewInBrowser' => true,
+                    'PreferencesLinkLatestVersion' => true,
+                    'PreferencesAllowOriginalDownload' => true,
+                    'PreferencesExpires' => false,
+                    'PreferencesNotifyOnVisit' => false,
+                    'PreferencesAllowPDFDownload' => false
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(cd, AccessLevel.SYSTEM_MODE);

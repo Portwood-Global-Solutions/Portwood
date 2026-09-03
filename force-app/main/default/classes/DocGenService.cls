@@ -4611,7 +4611,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                                 // rewrite rtaImage URLs so Blob.toPdf can fetch the images.
                                 output += convertRichTextToHtml(strVal);
                             } else {
-                                output += convertRichTextToDocxXml(strVal);
+                                // Carry forward run properties so rich-text values
+                                // inherit the token run's formatting (#375, #32)
+                                output += convertRichTextToDocxXml(strVal, extractCurrentRunProperties(output));
                             }
                         } else {
                             if (currentTemplateType == 'PowerPoint') {
@@ -5887,6 +5889,46 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return templateType == 'HTML' || templateType == 'Canvas';
     }
 
+    /**
+     * Whether the org supports ContentDistribution (Setup → Content Deliveries and
+     * Public Links, #384). When disabled the SObject is not a compilable type, so
+     * every reference must stay dynamic (Schema describe + Database.query +
+     * SObject.put) and callers must degrade: preview/logo URLs fall back to the
+     * relative /sfc/ form or raise an actionable error. Cached per transaction.
+     */
+    @TestVisible
+    static Boolean contentDistributionAvailableCache;
+    public static Boolean isContentDistributionAvailable() {
+        if (contentDistributionAvailableCache == null) {
+            contentDistributionAvailableCache = Schema.getGlobalDescribe().containsKey('ContentDistribution');
+        }
+        return contentDistributionAvailableCache;
+    }
+
+    /**
+     * Dynamic SObjectType for ContentDistribution, or null when deliveries are
+     * disabled. Use for FLS guards instead of a static type token.
+     */
+    public static Schema.SObjectType contentDistributionType() {
+        return Schema.getGlobalDescribe().get('ContentDistribution');
+    }
+
+    /**
+     * Builds a ContentDistribution SObject without a static type reference.
+     * Throws an actionable error when deliveries are disabled.
+     */
+    public static SObject newContentDistribution(Map<String, Object> fieldValues) {
+        Schema.SObjectType t = contentDistributionType();
+        if (t == null) {
+            throw ahe('Public links are disabled in this org (Setup → Content Deliveries and Public Links).');
+        }
+        SObject cd = t.newSObject();
+        for (String f : fieldValues.keySet()) {
+            cd.put(f, fieldValues.get(f));
+        }
+        return cd;
+    }
+
     private static Boolean isNumericFormat(String fmt) {
         if (fmt == null) {
             return false;
@@ -6383,11 +6425,20 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
+     * Converts rich text HTML to DOCX XML without run context (no inheritance).
+     */
+    private static String convertRichTextToDocxXml(String html) {
+        return convertRichTextToDocxXml(html, '');
+    }
+
+    /**
      * Converts rich text HTML to DOCX XML (w:p, w:r, w:t elements).
      * Preserves text, basic formatting (bold/italic/underline), multiple images, and paragraphs.
      * Returns DOCX XML that closes the current run/paragraph context and reopens it after.
+     * When tokenRPr carries the merge tag run's <w:rPr> block, every emitted run
+     * inherits it so values render in the token's formatting (#375, #32).
      */
-    private static String convertRichTextToDocxXml(String html) {
+    private static String convertRichTextToDocxXml(String html, String tokenRPr) {
         // Normalize: named entities first, then numeric character references.
         // The Lightning RTE stores apostrophes as &#39;, smart quotes as &#8217;
         // /&#8220;/&#8221;, em/en dashes as &#8212;/&#8211;, accented chars as
@@ -6416,6 +6467,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Build DOCX XML: close current context, emit paragraphs, reopen context
         String result = '</w:t></w:r>'; // close current run
+        String rPrXml = String.isNotBlank(tokenRPr) ? tokenRPr : '';
 
         Boolean firstPara = true;
         for (String para : paragraphs) {
@@ -6432,7 +6484,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
 
             // Process inline content within this paragraph
-            result += processInlineHtml(trimmed);
+            result += processInlineHtml(trimmed, rPrXml);
         }
 
         // If we never output anything, just return empty text
@@ -6441,7 +6493,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Reopen run/text context for any content after the merge tag
-        result += '<w:r><w:t xml:space="preserve">';
+        result += '<w:r>' + rPrXml + '<w:t xml:space="preserve">';
         return result;
     }
 
@@ -6449,7 +6501,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Processes inline HTML elements within a paragraph into DOCX w:r elements.
      * Handles <b>, <i>, <u>, <strong>, <em>, <span>, <img>, and plain text.
      */
-    private static String processInlineHtml(String html) {
+    private static String processInlineHtml(String html, String tokenRPr) {
         String result = '';
         Integer cursor = 0;
 
@@ -6469,7 +6521,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // Remaining plain text
                 String text = html.substring(cursor).trim();
                 if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                    result += buildRun(stripTags(text), tokenRPr, isBold, isItalic, isUnderline);
                 }
                 break;
             }
@@ -6478,7 +6530,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             if (nextTag > cursor) {
                 String text = html.substring(cursor, nextTag);
                 if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                    result += buildRun(stripTags(text), tokenRPr, isBold, isItalic, isUnderline);
                 }
             }
 
@@ -6528,7 +6580,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                             '</w:t></w:r>' +
                             '</w:hyperlink>';
                     } else {
-                        result += buildRun(linkText, isBold, isItalic, true);
+                        result += buildRun(linkText, tokenRPr, isBold, isItalic, true);
                     }
                     cursor = closeA + 4; // skip past </a>
                     continue;
@@ -6566,7 +6618,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 } else {
                     marker = indent + '• ';
                 }
-                result += '</w:p><w:p><w:r><w:t xml:space="preserve">' + marker + '</w:t></w:r>';
+                result += '</w:p><w:p><w:r>' + tokenRPr + '<w:t xml:space="preserve">' + marker + '</w:t></w:r>';
             } else if (tag.startsWith('</li>')) {
                 // No-op; next <li> or list close handles boundaries.
             }
@@ -6580,25 +6632,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
     /**
      * Builds a DOCX w:r (run) element with optional formatting.
+     * When tokenRPr carries the merge tag run's <w:rPr> block, its properties
+     * are reused so the run inherits the token's formatting; HTML-level
+     * bold/italic/underline are added only when not already present (#375).
      */
     private static String buildRun(String text, Boolean bold, Boolean italic, Boolean underline) {
+        return buildRun(text, '', bold, italic, underline);
+    }
+
+    private static String buildRun(String text, String tokenRPr, Boolean bold, Boolean italic, Boolean underline) {
         if (String.isBlank(text)) {
             return '';
         }
-        String rPr = '';
-        if (bold || italic || underline) {
-            rPr = '<w:rPr>';
-            if (bold) {
-                rPr += '<w:b/>';
+        String rPrInner = '';
+        if (String.isNotBlank(tokenRPr)) {
+            Integer openEnd = tokenRPr.indexOf('>');
+            Integer closeStart = tokenRPr.lastIndexOf('</w:rPr>');
+            if (openEnd != -1 && closeStart > openEnd) {
+                rPrInner = tokenRPr.substring(openEnd + 1, closeStart);
             }
-            if (italic) {
-                rPr += '<w:i/>';
-            }
-            if (underline) {
-                rPr += '<w:u w:val="single"/>';
-            }
-            rPr += '</w:rPr>';
         }
+        if (bold && !rPrInner.contains('<w:b')) {
+            rPrInner += '<w:b/>';
+        }
+        if (italic && !rPrInner.contains('<w:i')) {
+            rPrInner += '<w:i/>';
+        }
+        if (underline && !rPrInner.contains('<w:u')) {
+            rPrInner += '<w:u w:val="single"/>';
+        }
+        String rPr = String.isBlank(rPrInner) ? '' : '<w:rPr>' + rPrInner + '</w:rPr>';
         return '<w:r>' + rPr + '<w:t xml:space="preserve">' + text.escapeXml() + '</w:t></w:r>';
     }
 
