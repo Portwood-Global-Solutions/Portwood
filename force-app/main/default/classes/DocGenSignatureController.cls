@@ -806,7 +806,9 @@ public without sharing class DocGenSignatureController {
         if (!dists.isEmpty()) {
             return (String) dists[0].get('DistributionPublicUrl');
         }
-        Datetime linkExpiry = requestExpiresAt != null ? requestExpiresAt : System.now().addHours(TOKEN_EXPIRATION_HOURS);
+        Datetime linkExpiry = requestExpiresAt != null
+            ? requestExpiresAt
+            : System.now().addHours(TOKEN_EXPIRATION_HOURS);
         SObject cd = DocGenService.newContentDistribution(
             new Map<String, Object>{
                 'Name' => 'Signature Preview - ' + cv.Title,

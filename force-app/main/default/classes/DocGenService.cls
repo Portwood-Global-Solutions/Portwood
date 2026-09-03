@@ -4613,10 +4613,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                             } else {
                                 // Carry forward run properties so rich-text values
                                 // inherit the token run's formatting (#375, #32)
-                                output += convertRichTextToDocxXml(
-                                    strVal,
-                                    extractCurrentRunProperties(output)
-                                );
+                                output += convertRichTextToDocxXml(strVal, extractCurrentRunProperties(output));
                             }
                         } else {
                             if (currentTemplateType == 'PowerPoint') {
@@ -6643,13 +6640,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return buildRun(text, '', bold, italic, underline);
     }
 
-    private static String buildRun(
-        String text,
-        String tokenRPr,
-        Boolean bold,
-        Boolean italic,
-        Boolean underline
-    ) {
+    private static String buildRun(String text, String tokenRPr, Boolean bold, Boolean italic, Boolean underline) {
         if (String.isBlank(text)) {
             return '';
         }
