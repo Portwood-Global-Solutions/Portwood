@@ -3117,20 +3117,34 @@ public with sharing class DocGenSignatureSenderController {
             previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, previewImageMap.get(cvId));
             return;
         }
+        if (!DocGenService.isContentDistributionAvailable()) {
+            return; // #384: deliveries disabled — preview keeps relative /sfc/ URLs
+        }
         try {
-            ContentDistribution dist = new ContentDistribution();
-            dist.Name = 'sig_preview_' + (String.isBlank(key) ? cvId : key).left(80);
-            dist.ContentVersionId = cvId;
-            dist.PreferencesAllowViewInBrowser = true;
-            dist.PreferencesLinkLatestVersion = false;
-            dist.PreferencesExpires = false;
+            SObject dist = DocGenService.newContentDistribution(
+                new Map<String, Object>{
+                    'Name' => 'sig_preview_' + (String.isBlank(key) ? cvId : key).left(80),
+                    'ContentVersionId' => cvId,
+                    'PreferencesAllowViewInBrowser' => true,
+                    'PreferencesLinkLatestVersion' => false,
+                    'PreferencesExpires' => false
+                }
+            );
             Database.insert(dist, AccessLevel.USER_MODE);
-            dist = [SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = :dist.Id WITH USER_MODE];
-            if (String.isNotBlank(key)) {
-                previewImageMap.put(key, dist.ContentDownloadUrl);
+            List<SObject> created = Database.query(
+                'SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = \'' +
+                    String.escapeSingleQuotes((String) dist.get('Id')) +
+                    '\' WITH USER_MODE'
+            );
+            if (created.isEmpty()) {
+                return;
             }
-            previewImageMap.put(cvId, dist.ContentDownloadUrl);
-            previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, dist.ContentDownloadUrl);
+            String downloadUrl = (String) created[0].get('ContentDownloadUrl');
+            if (String.isNotBlank(key)) {
+                previewImageMap.put(key, downloadUrl);
+            }
+            previewImageMap.put(cvId, downloadUrl);
+            previewImageMap.put('/sfc/servlet.shepherd/version/download/' + cvId, downloadUrl);
         } catch (Exception e) {
             System.debug(
                 LoggingLevel.WARN,

@@ -5887,6 +5887,46 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return templateType == 'HTML' || templateType == 'Canvas';
     }
 
+    /**
+     * Whether the org supports ContentDistribution (Setup → Content Deliveries and
+     * Public Links, #384). When disabled the SObject is not a compilable type, so
+     * every reference must stay dynamic (Schema describe + Database.query +
+     * SObject.put) and callers must degrade: preview/logo URLs fall back to the
+     * relative /sfc/ form or raise an actionable error. Cached per transaction.
+     */
+    @TestVisible
+    static Boolean contentDistributionAvailableCache;
+    public static Boolean isContentDistributionAvailable() {
+        if (contentDistributionAvailableCache == null) {
+            contentDistributionAvailableCache = Schema.getGlobalDescribe().containsKey('ContentDistribution');
+        }
+        return contentDistributionAvailableCache;
+    }
+
+    /**
+     * Dynamic SObjectType for ContentDistribution, or null when deliveries are
+     * disabled. Use for FLS guards instead of a static type token.
+     */
+    public static Schema.SObjectType contentDistributionType() {
+        return Schema.getGlobalDescribe().get('ContentDistribution');
+    }
+
+    /**
+     * Builds a ContentDistribution SObject without a static type reference.
+     * Throws an actionable error when deliveries are disabled.
+     */
+    public static SObject newContentDistribution(Map<String, Object> fieldValues) {
+        Schema.SObjectType t = contentDistributionType();
+        if (t == null) {
+            throw ahe('Public links are disabled in this org (Setup → Content Deliveries and Public Links).');
+        }
+        SObject cd = t.newSObject();
+        for (String f : fieldValues.keySet()) {
+            cd.put(f, fieldValues.get(f));
+        }
+        return cd;
+    }
+
     private static Boolean isNumericFormat(String fmt) {
         if (fmt == null) {
             return false;
