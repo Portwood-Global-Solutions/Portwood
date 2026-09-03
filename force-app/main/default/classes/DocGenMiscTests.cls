@@ -6362,6 +6362,47 @@ private class DocGenMiscTests {
         System.assert(out.contains('é'), 'e-acute literal present: ' + out);
     }
 
+    // =========================================================================
+    // DocGenService — rich-text values inherit the token run's formatting
+    // (issue #375). A rich-text value in a styled run must keep the run's
+    // size/color instead of falling back to document defaults (~11pt black),
+    // the same rule convertMultilineToXml already applies to long text (#32).
+    // =========================================================================
+    @IsTest
+    static void testRichTextInheritsTokenRunFormatting() {
+        String tpl =
+            '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:color w:val="6B6660"/></w:rPr>' +
+            '<w:t>{Description__c}</w:t></w:r></w:p>';
+        Map<String, Object> data = new Map<String, Object>{ 'Description__c' => '<div>Hello</div>' };
+        String out = DocGenService.processXmlForTest(tpl, data);
+        System.assert(out.contains('Hello'), 'value text must render: ' + out);
+        System.assertEquals(
+            3,
+            out.split('w:val="19"', -1).size(),
+            'token run size must appear in the token run plus the injected run: ' + out
+        );
+        System.assertEquals(
+            3,
+            out.split('6B6660', -1).size(),
+            'token run color must appear in the token run plus the injected run: ' + out
+        );
+    }
+
+    @IsTest
+    static void testRichTextMultiParagraphInheritsTokenRunFormatting() {
+        String tpl =
+            '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:color w:val="6B6660"/></w:rPr>' +
+            '<w:t>{Description__c}</w:t></w:r></w:p>';
+        Map<String, Object> data = new Map<String, Object>{ 'Description__c' => '<div>One</div><div>Two</div>' };
+        String out = DocGenService.processXmlForTest(tpl, data);
+        System.assert(out.contains('One') && out.contains('Two'), 'both paragraphs must render: ' + out);
+        System.assertEquals(
+            4,
+            out.split('w:val="19"', -1).size(),
+            'token run size must appear in the token run plus both injected paragraphs: ' + out
+        );
+    }
+
     @IsTest
     static void testIfConditionalInsideTableRowDoesNotCorruptDocx() {
         // Issue #53: {#IF X = Y}…{/IF} placed inside a <w:tr> caused the
