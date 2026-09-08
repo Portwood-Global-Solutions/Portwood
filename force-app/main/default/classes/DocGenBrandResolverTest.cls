@@ -157,4 +157,56 @@ private class DocGenBrandResolverTest {
             'repeated resolveBrandForRequest calls must not issue new queries'
         );
     }
+
+    // ---- Guest context (#390 shape): brand resolution must survive the GUEST
+    //      signing transaction, not just an internal admin one. Before this fix
+    //      a throwing guard under the Automated Process user (not testable here
+    //      — same documented limitation as DocGenEmailTemplateTest's guest test)
+    //      would abandon resolution; this proves the guest-sharing half of the
+    //      same mechanism (DocGen_Signature_Request__c / DocGen_Brand__c are both
+    //      externalSharingModel=Private with no guest sharing rule).
+    @IsTest
+    static void resolveBrandForRequest_survivesGuestContext() {
+        Account acc = new Account(Name = 'Brand Resolver Guest Test Acct');
+        insert acc;
+        DocGen_Brand__c brand = new DocGen_Brand__c(
+            Name = 'Guest Context Brand',
+            Brand_Color__c = '#654321',
+            Is_Active__c = true
+        );
+        insert brand;
+        DocGen_Template__c tmpl = newTemplate('Guest Context Template', brand.Id);
+        DocGen_Signature_Request__c req = newRequest(tmpl.Id, acc.Id);
+
+        User guest = getGuestUser();
+        Id resolvedBrandId;
+        DocGen_Brand__c resolvedBrand;
+        Test.startTest();
+        if (guest != null) {
+            System.runAs(guest) {
+                DocGenBrandResolver.clearCache();
+                resolvedBrandId = DocGenBrandResolver.resolveBrandForRequest(req.Id);
+                resolvedBrand = DocGenBrandResolver.getBrand(resolvedBrandId);
+            }
+        } else {
+            DocGenBrandResolver.clearCache();
+            resolvedBrandId = DocGenBrandResolver.resolveBrandForRequest(req.Id);
+            resolvedBrand = DocGenBrandResolver.getBrand(resolvedBrandId);
+        }
+        Test.stopTest();
+
+        System.assertEquals(brand.Id, resolvedBrandId, 'guest context must still resolve the request’s brand');
+        System.assertNotEquals(null, resolvedBrand, 'guest context must still load the brand row');
+        System.assertEquals('#654321', resolvedBrand.Brand_Color__c);
+    }
+
+    /**
+     * An active Site Guest user for true guest-context assertions, or null when
+     * the org has no Site (some package-build orgs) — the caller then falls back
+     * to the current user so the test never fails merely for lack of a guest user.
+     */
+    private static User getGuestUser() {
+        List<User> guests = [SELECT Id FROM User WHERE UserType = 'Guest' AND IsActive = TRUE LIMIT 1];
+        return guests.isEmpty() ? null : guests[0];
+    }
 }

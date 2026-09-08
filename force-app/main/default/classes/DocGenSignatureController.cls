@@ -396,11 +396,25 @@ public without sharing class DocGenSignatureController {
 
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Signer__c.sObjectType,
-            new Set<String>{ 'Signer_Email__c', 'PIN_Attempts__c', 'Status__c', 'CreatedDate', 'Secure_Token__c' }
+            new Set<String>{
+                'Signer_Email__c',
+                'PIN_Attempts__c',
+                'Status__c',
+                'CreatedDate',
+                'Secure_Token__c',
+                'Signature_Request__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
-            SELECT Id, Signer_Email__c, PIN_Attempts__c, Status__c, CreatedDate, Signature_Request__r.Expires_At__c
+            SELECT
+                Id,
+                Signer_Email__c,
+                PIN_Attempts__c,
+                Status__c,
+                CreatedDate,
+                Signature_Request__c,
+                Signature_Request__r.Expires_At__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -461,7 +475,7 @@ public without sharing class DocGenSignatureController {
         Database.update(signer, false, AccessLevel.SYSTEM_MODE);
 
         // Send PIN via email
-        String emailError = sendPinEmail(signer.Signer_Email__c, pinStr);
+        String emailError = sendPinEmail(signer.Signer_Email__c, pinStr, signer.Signature_Request__c);
         if (emailError != null) {
             result.put('success', false);
             result.put('message', 'Failed to send verification email. Please contact the sender.');
@@ -598,11 +612,21 @@ public without sharing class DocGenSignatureController {
     /**
      * Sends the 6-digit PIN to the signer's email.
      */
-    private static String sendPinEmail(String email, String pin) {
+    private static String sendPinEmail(String email, String pin, Id requestId) {
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
 
+        // #369 — the request's template's Brand, if any, supplies its own OWA
+        // ahead of the org default; getBrand() already excludes inactive brands.
+        // This was previously missing entirely — the PIN email never resolved a
+        // brand at all, always rendering the shared/no-brand template regardless
+        // of what the signing template's Sending Brand was set to.
+        Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+        DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
+        String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+            ? activeBrand.OWA_Id__c
+            : (settings == null ? null : settings.Signature_OWA_Id__c);
+
         // OWA is required for guest user context — warn if not configured
-        String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
         if (String.isBlank(owaId) && UserInfo.getUserType() == 'Guest') {
             System.debug(
                 LoggingLevel.ERROR,
@@ -615,7 +639,9 @@ public without sharing class DocGenSignatureController {
         // (built-in default falls back automatically if no record exists).
         DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
             DocGenEmailTemplateService.TYPE_PIN,
-            new Map<String, String>{ 'Pin' => pin, 'ExpirationMinutes' => String.valueOf(PIN_EXPIRATION_MINUTES) }
+            new Map<String, String>{ 'Pin' => pin, 'ExpirationMinutes' => String.valueOf(PIN_EXPIRATION_MINUTES) },
+            null,
+            brandId
         );
 
         Messaging.SingleEmailMessage email2 = new Messaging.SingleEmailMessage();

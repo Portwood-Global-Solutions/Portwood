@@ -30,8 +30,16 @@ public without sharing class DocGenBrandResolver {
             return requestBrandCache.get(requestId);
         }
 
-        DocGenFlsGuard.guestAssertAccessible(DocGen_Signature_Request__c.sObjectType, new Set<String>{ 'Template__c' });
-        DocGenFlsGuard.guestAssertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Brand__c' });
+        // Advisory only (#390 shape) — a throwing guard under the Automated
+        // Process user (platform-event trigger / async finalizer, no permission
+        // set and not 'Guest' either) abandoned brand resolution entirely rather
+        // than falling back to the org default, dropping the sequential
+        // next-signer email in the caller that doesn't catch it locally.
+        DocGenFlsGuard.advisoryAssertAccessible(
+            DocGen_Signature_Request__c.sObjectType,
+            new Set<String>{ 'Template__c' }
+        );
+        DocGenFlsGuard.advisoryAssertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Brand__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Signature_Request__c> reqs = [
             SELECT Template__c, Template__r.Brand__c
@@ -59,7 +67,8 @@ public without sharing class DocGenBrandResolver {
             return brandCache.get(brandId);
         }
 
-        DocGenFlsGuard.guestAssertAccessible(
+        // Advisory only — same #390 shape as resolveBrandForRequest above.
+        DocGenFlsGuard.advisoryAssertAccessible(
             DocGen_Brand__c.sObjectType,
             new Set<String>{
                 'OWA_Id__c',
