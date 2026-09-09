@@ -6587,6 +6587,125 @@ private class DocGenControllerTests {
     }
 
     // -----------------------------------------------------------------------
+    // getWatermarkSource / getWatermarkOpacity — #313 read endpoints
+    // -----------------------------------------------------------------------
+
+    @IsTest
+    static void testGetWatermarkOpacity_readsBakedPercentFromFileName() {
+        User admin = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(admin) {
+            DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+            String pngB64 = EncodingUtil.base64Encode(Blob.valueOf('PNG'));
+
+            Test.startTest();
+            DocGenController.saveWatermarkImage(ver.Id, 'watermark-p50.png', pngB64, pngB64);
+            Integer pct = DocGenController.getWatermarkOpacity(ver.Id);
+            Test.stopTest();
+
+            System.assertEquals(50, pct, 'Opacity must come back from the encoded file name');
+        }
+    }
+
+    @IsTest
+    static void testGetWatermarkOpacity_nullWhenNoPercentEncoded() {
+        User admin = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(admin) {
+            DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+            String pngB64 = EncodingUtil.base64Encode(Blob.valueOf('PNG'));
+
+            Test.startTest();
+            DocGenController.saveWatermarkImage(ver.Id, 'legacy-logo.png', pngB64, null);
+            Integer pct = DocGenController.getWatermarkOpacity(ver.Id);
+            Test.stopTest();
+
+            System.assertEquals(null, pct, 'A watermark with no encoded percent reports null, not a guess');
+        }
+    }
+
+    @IsTest
+    static void testGetWatermarkSource_roundtripsTheOriginal() {
+        User admin = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(admin) {
+            DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+            String washed = EncodingUtil.base64Encode(Blob.valueOf('WASHED'));
+            String original = EncodingUtil.base64Encode(Blob.valueOf('ORIGINAL'));
+
+            Test.startTest();
+            DocGenController.saveWatermarkImage(ver.Id, 'watermark-p30.png', washed, original);
+            String back = DocGenController.getWatermarkSource(ver.Id);
+            Test.stopTest();
+
+            System.assertEquals(original, back, 'getWatermarkSource must return the unbaked original, not the wash');
+        }
+    }
+
+    @IsTest
+    static void testGetWatermarkSource_unauthorizedAccessDenied() {
+        DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+        Id targetId = ver.Id;
+
+        User low = buildLowPrivUser();
+        System.runAs(low) {
+            Test.startTest();
+            Boolean threw = false;
+            try {
+                DocGenController.getWatermarkSource(targetId);
+            } catch (AuraHandledException e) {
+                threw = true;
+            }
+            Test.stopTest();
+            System.assert(threw, 'Low-priv user must not read another template version watermark source by Id');
+        }
+    }
+
+    @IsTest
+    static void testGetWatermarkOpacity_unauthorizedAccessDenied() {
+        DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+        Id targetId = ver.Id;
+
+        User low = buildLowPrivUser();
+        System.runAs(low) {
+            Test.startTest();
+            Boolean threw = false;
+            try {
+                DocGenController.getWatermarkOpacity(targetId);
+            } catch (AuraHandledException e) {
+                threw = true;
+            }
+            Test.stopTest();
+            System.assert(threw, 'Low-priv user must not probe another template version watermark opacity by Id');
+        }
+    }
+
+    @IsTest
+    static void testSaveWatermarkImage_purgesPriorSourceAndImage() {
+        User admin = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(admin) {
+            DocGen_Template_Version__c ver = TestDataFactory.getTestTemplateVersion();
+            String b64 = EncodingUtil.base64Encode(Blob.valueOf('PNG'));
+
+            Test.startTest();
+            DocGenController.saveWatermarkImage(ver.Id, 'watermark-p30.png', b64, b64);
+            DocGenController.saveWatermarkImage(ver.Id, 'watermark-p50.png', b64, b64);
+            DocGenController.saveWatermarkImage(ver.Id, 'watermark-p15.png', b64, b64);
+            Test.stopTest();
+
+            Integer washed = [
+                SELECT COUNT()
+                FROM ContentVersion
+                WHERE Title = :('docgen_watermark_' + ver.Id) AND IsLatest = TRUE
+            ];
+            Integer sources = [
+                SELECT COUNT()
+                FROM ContentVersion
+                WHERE Title = :('docgen_watermark_src_' + ver.Id) AND IsLatest = TRUE
+            ];
+            System.assertEquals(1, washed, 'Three opacity changes must leave exactly one baked image');
+            System.assertEquals(1, sources, 'Three opacity changes must leave exactly one retained source');
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // saveHtmlTemplateImage / saveHtmlTemplateBody — template-binding fix
     // -----------------------------------------------------------------------
 

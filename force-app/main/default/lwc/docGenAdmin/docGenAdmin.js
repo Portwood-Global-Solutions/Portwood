@@ -84,6 +84,7 @@ import getChildRelationships from '@salesforce/apex/DocGenController.getChildRel
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import saveWatermarkImage from '@salesforce/apex/DocGenController.saveWatermarkImage';
 import getWatermarkSource from '@salesforce/apex/DocGenController.getWatermarkSource';
+import getWatermarkOpacity from '@salesforce/apex/DocGenController.getWatermarkOpacity';
 import clearWatermarkImage from '@salesforce/apex/DocGenController.clearWatermarkImage';
 import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
@@ -5380,6 +5381,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
+                this._watermarkSourceFile = null;
+                // Seed the strength control from what's actually stored, so it
+                // doesn't report the default over an image at another value (#313).
+                if (this.editTemplateWatermarkCvId && active) {
+                    getWatermarkOpacity({ versionId: active.Id })
+                        .then((pct) => {
+                            if (pct) {
+                                this.watermarkOpacityPct = String(pct);
+                            }
+                        })
+                        .catch(() => {
+                            // Non-fatal — leave the control at its default.
+                        });
+                }
 
                 // Enrich with the body ContentVersion's number + filename so the table
                 // shows which underlying file each version points at (diagnostic).
@@ -15273,7 +15288,31 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (!this.editTemplateWatermarkCvId) {
             return;
         }
+        // Already re-baking a previous change — let it finish; the select is
+        // disabled in the template while isUploadingWatermark is true.
+        if (this.isUploadingWatermark) {
+            return;
+        }
         await this._reuploadWatermarkAtCurrentOpacity();
+    }
+
+    /** The saved file name encodes the wash so the control can seed from it on
+     *  reload — "watermark-p50.png" (#313). */
+    _watermarkFileName(pct) {
+        return 'watermark-p' + (parseInt(pct, 10) || 100) + '.png';
+    }
+
+    /** base64 PNG -> Blob, without fetch() on a data: URI (awkward under the
+     *  managed-package security sandbox). _bakeWatermarkOpacity tolerates a
+     *  nameless Blob; the upload name is passed explicitly. Mirrors
+     *  docGenButton.base64ToBlob. */
+    _base64ToBlob(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: 'image/png' });
     }
 
     /** Re-bakes the retained original at the current setting and replaces the stored image. */
@@ -15300,13 +15339,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     );
                     return;
                 }
-                source = await (await fetch('data:image/png;base64,' + stored)).blob();
+                source = this._base64ToBlob(stored);
             }
             const baked = await this._bakeWatermarkOpacity(source, pct);
             const original = await this._bakeWatermarkOpacity(source, 100);
             this.editTemplateWatermarkCvId = await saveWatermarkImage({
                 versionId: active.Id,
-                fileName: baked.fileName || 'watermark.png',
+                fileName: this._watermarkFileName(pct),
                 base64Data: baked.base64,
                 sourceBase64: original.base64
             });
@@ -15334,8 +15373,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 reader.onerror = () => reject(new Error('FileReader failed'));
                 reader.readAsDataURL(blobOrFile);
             });
+        const baseName = (file.name || 'watermark').replace(/\.[^.]+$/, '');
         if (pct >= 100) {
-            return { base64: await readAsBase64(file), fileName: file.name };
+            return { base64: await readAsBase64(file), fileName: baseName + '.png' };
         }
         const url = URL.createObjectURL(file);
         try {
@@ -15355,7 +15395,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const commaIdx = dataUrl.indexOf(',');
             return {
                 base64: dataUrl.substring(commaIdx + 1),
-                fileName: file.name.replace(/\.[^.]+$/, '') + '.png'
+                fileName: baseName + '.png'
             };
         } finally {
             URL.revokeObjectURL(url);
@@ -15391,7 +15431,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const source = await this._bakeWatermarkOpacity(file, 100);
             const newCvId = await saveWatermarkImage({
                 versionId: active.Id,
-                fileName: baked.fileName,
+                // Encode the wash into the name so the control seeds from it on
+                // reload rather than snapping to the default (#313).
+                fileName: this._watermarkFileName(pct),
                 base64Data: baked.base64,
                 sourceBase64: source.base64
             });
