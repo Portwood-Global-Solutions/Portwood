@@ -56,6 +56,24 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **`{...:currency:auto}` printed `$` and 2 decimals for ISK and VND (#395).** Customer
+  reported an Icelandic Króna (ISK) quote rendering `$1,545,000.00` instead of
+  `kr 1,545,001`; Vietnamese Dong (VND) had the same fault. Both are zero-decimal
+  currencies, and `DocGenService` already knew that — but the `:auto` guard first checks
+  the resolved ISO code against the `CURRENCY_SYMBOLS` map and, finding no symbol for it,
+  falls back to a safe hardcoded `$` + `setScale(2)` before the zero-decimal handling is
+  ever reached. `CURRENCY_SYMBOLS` had 40 entries and was simply missing these two. JPY
+  and the other zero-decimal currencies were unaffected because their symbols _are_ in
+  the map. Fix is the two missing entries (`ISK → kr`, `VND → ₫`); the map and formatter
+  are shared across the inline, aggregate and giant-query grand-total paths, so one entry
+  corrects all of them. The guard's intent — never emit a raw ISO code for an unknown or
+  typo'd currency — is unchanged, and `XYZ` still falls back to `$`.
+
+    **Behaviour change for existing workarounds:** a template that pins the currency
+    explicitly as a workaround (`{...:currency:ISK}`) currently prints `ISK 1,545,001`
+    (the literal code, for the same missing-symbol reason). After this release it prints
+    `kr 1,545,001`. The number and decimals do not change; only the prefix.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said
