@@ -166,4 +166,70 @@ private class DocGenPdfMergerTest {
                 ')'
         );
     }
+
+    // A page of mixed CJK / Cyrillic / accented-Latin / symbols. Non-Latin content
+    // makes Flying Saucer embed an Arial Unicode MS CID (Type0) font subset — the
+    // exact case the font-program dedup targets.
+    private static Blob nonLatinDoc(String text) {
+        return Blob.toPdf(
+            '<html><head><style>body{font-family:"Arial Unicode MS",sans-serif;font-size:14pt}' +
+                '.pb{page-break-before:always}</style></head><body>' +
+                '<p>' +
+                text +
+                '</p><div class="pb"></div><p>page two ' +
+                text +
+                '</p></body></html>'
+        );
+    }
+
+    @IsTest
+    static void identicalNonLatinDocumentsDedupeFontWithoutCorruption() {
+        // #382 — a static contract in Japanese generated for many records: the
+        // embedded CID font subsets are byte-identical, so the dedup collapses
+        // them. It must keep every page and every glyph — only the font *program*
+        // is shared, never the CID→GID map, widths or ToUnicode CMap (those ride
+        // with the per-document font dict).
+        Blob jp = nonLatinDoc('販売店契約書 税込 ¥1,000,000 — 支払は30日以内');
+        Blob single = DocGenPdfMerger.mergePdfs(new List<Blob>{ jp }, false);
+
+        Test.startTest();
+        Blob merged = DocGenPdfMerger.mergePdfs(new List<Blob>{ jp, jp, jp, jp, jp }, true);
+        Test.stopTest();
+
+        // 5 two-page docs, each even → no padding.
+        System.assertEquals(10, DocGenPdfMerger.pageCount(merged), '5 x 2 pages, no blanks (even docs)');
+        System.assertEquals(0, DocGenPdfMerger.blankPageCount(merged), 'even non-Latin docs are never padded');
+        // Re-parse proves the object graph, xref and repointed font refs are sound.
+        System.assertEquals(
+            20,
+            DocGenPdfMerger.pageCount(DocGenPdfMerger.mergePdfs(new List<Blob>{ merged, merged }, false)),
+            'the merged non-Latin packet must itself re-parse cleanly'
+        );
+        // The font dedup fired: 5 identical subsets collapse toward one embedded
+        // program, so the packet is far smaller than five standalone copies.
+        System.assert(
+            merged.size() < single.size() * 3,
+            'identical CID font subsets should be deduplicated (got ' + merged.size() + ' vs 5x ' + single.size() + ')'
+        );
+    }
+
+    @IsTest
+    static void differentNonLatinCharsetsAreNotDeduped() {
+        // Different scripts → different font subsets → different fingerprints. The
+        // dedup must leave both programs in place; collapsing them would render the
+        // wrong glyphs.
+        Blob jp = nonLatinDoc('日本語 テキスト こんにちは');
+        Blob cy = nonLatinDoc('Привет мир Δοκιμή № 7 Übermäßig');
+
+        Test.startTest();
+        Blob merged = DocGenPdfMerger.mergePdfs(new List<Blob>{ jp, cy }, false);
+        Test.stopTest();
+
+        System.assertEquals(4, DocGenPdfMerger.pageCount(merged), 'both 2-page docs survive');
+        System.assertEquals(
+            0,
+            DocGenPdfMerger.blankPageCount(merged),
+            'no page loses its content stream when subsets differ'
+        );
+    }
 }
