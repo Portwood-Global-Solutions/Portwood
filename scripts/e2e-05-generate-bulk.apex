@@ -257,15 +257,33 @@ try {
     }
     delete [SELECT Id FROM DocGen_Job__c WHERE Id = :noMergeJob];
 
-    // analyzeJob accepts the duplex flag without faulting (ceiling logic itself is
-    // unit-tested in DocGenBulkControllerTest — it needs a template Test Record).
-    DocGenBulkController.JobAnalysis dpxAnalysis = DocGenBulkController.analyzeJob(tmplId, 10, 1, true, true);
-    if (dpxAnalysis != null) {
+    // analyzeJob: the duplex packet ceiling is a hard block above ~400 documents,
+    // and it must fire regardless of whether the template has a Test Record.
+    DocGenBulkController.JobAnalysis dpxSmall = DocGenBulkController.analyzeJob(tmplId, 10, 1, true, true);
+    DocGenBulkController.JobAnalysis dpxHuge = DocGenBulkController.analyzeJob(tmplId, 5000, 1, true, true);
+    Boolean smallOk = dpxSmall != null && dpxSmall.canProceed == true;
+    Boolean hugeBlocked = dpxHuge != null && dpxHuge.canProceed == false;
+    Boolean hasDuplexItem = false;
+    if (dpxHuge != null && dpxHuge.items != null) {
+        for (DocGenBulkController.AnalysisItem it : dpxHuge.items) {
+            if (it.label == 'Duplex Packet' && it.status == 'error') {
+                hasDuplexItem = true;
+            }
+        }
+    }
+    if (smallOk && hugeBlocked && hasDuplexItem) {
         pass++;
-        System.debug('DUPLEX ANALYZE OK: PASS');
+        System.debug('DUPLEX CEILING: PASS');
     } else {
         fail++;
-        System.debug('DUPLEX ANALYZE OK: FAIL — null analysis for duplex job');
+        System.debug(
+            'DUPLEX CEILING: FAIL — small.canProceed=' +
+                (dpxSmall == null ? 'null' : String.valueOf(dpxSmall.canProceed)) +
+                ' huge.canProceed=' +
+                (dpxHuge == null ? 'null' : String.valueOf(dpxHuge.canProceed)) +
+                ' duplexErrorItem=' +
+                hasDuplexItem
+        );
     }
 } catch (Exception e) {
     fail++;

@@ -195,6 +195,81 @@ public with sharing class DocGenBulkControllerTest {
         System.assertEquals(false, analysis.canProceed, 'Should not proceed with >50k records');
     }
 
+    // ── Duplex packet ceiling (#382) ──────────────────────────────────────
+    // A duplex Combined PDF assembles every record's PDF in one Queueable, so
+    // it has a hard record ceiling. analyzeJob must warn above ~250 and block
+    // above ~400 — and, unlike the heap estimate, this check depends only on
+    // record count, so it must fire even for a template with no Test Record.
+
+    @IsTest
+    static void analyzeJobDuplexSmallPacketIsOk() {
+        DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        Test.startTest();
+        DocGenBulkController.JobAnalysis a = DocGenBulkController.analyzeJob(temp.Id, 50, 1, true, true);
+        Test.stopTest();
+        System.assertEquals(true, a.canProceed, '50 documents is well within the duplex ceiling');
+        System.assertEquals('ok', duplexItemStatus(a), 'Duplex Packet item should be ok');
+    }
+
+    @IsTest
+    static void analyzeJobDuplexLargePacketWarns() {
+        DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        Test.startTest();
+        DocGenBulkController.JobAnalysis a = DocGenBulkController.analyzeJob(temp.Id, 300, 1, true, true);
+        Test.stopTest();
+        System.assertEquals(true, a.canProceed, '300 documents warns but does not block');
+        System.assertEquals('warning', duplexItemStatus(a), 'Duplex Packet item should warn at 300');
+    }
+
+    @IsTest
+    static void analyzeJobDuplexOversizePacketBlocks() {
+        DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        Test.startTest();
+        DocGenBulkController.JobAnalysis a = DocGenBulkController.analyzeJob(temp.Id, 5000, 1, true, true);
+        Test.stopTest();
+        System.assertEquals(false, a.canProceed, '5000 documents exceeds the one-job duplex ceiling');
+        System.assertEquals('error', duplexItemStatus(a), 'Duplex Packet item should be an error at 5000');
+    }
+
+    @IsTest
+    static void analyzeJobDuplexCeilingFiresWithoutTestRecord() {
+        // The heap estimate is skipped when a template has no Test Record; the
+        // duplex ceiling must NOT be — a missing hard block is a trap.
+        DocGen_Template__c noTr = new DocGen_Template__c(
+            Name = 'DocGen Test Template No TR',
+            Base_Object_API__c = 'Account',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name'
+        );
+        Database.insert(noTr, AccessLevel.SYSTEM_MODE);
+
+        Test.startTest();
+        DocGenBulkController.JobAnalysis a = DocGenBulkController.analyzeJob(noTr.Id, 5000, 1, true, true);
+        Test.stopTest();
+
+        System.assertEquals(false, a.canProceed, 'The duplex ceiling must block even without a Test Record');
+        System.assertEquals('error', duplexItemStatus(a), 'Duplex Packet error item must be present');
+    }
+
+    @IsTest
+    static void analyzeJobNonDuplexMergeHasNoDuplexItem() {
+        DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        Test.startTest();
+        DocGenBulkController.JobAnalysis a = DocGenBulkController.analyzeJob(temp.Id, 300, 1, true, false);
+        Test.stopTest();
+        System.assertEquals(null, duplexItemStatus(a), 'A non-duplex merge job carries no Duplex Packet item');
+    }
+
+    private static String duplexItemStatus(DocGenBulkController.JobAnalysis a) {
+        for (DocGenBulkController.AnalysisItem it : a.items) {
+            if (it.label == 'Duplex Packet') {
+                return it.status;
+            }
+        }
+        return null;
+    }
+
     @IsTest
     static void testSubmitJob() {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];

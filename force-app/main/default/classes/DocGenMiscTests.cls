@@ -8187,6 +8187,28 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void mergeFinalizerTranslatesLimitFailuresForTheJobOwner() {
+        // #382 — an uncatchable heap/CPU/SOQL limit during assembly means the packet
+        // was too big for one job. Anything else is passed through. A FinalizerContext
+        // cannot be built in a test, so the message logic is exercised directly.
+        String heap = DocGenMergeJob.describeMergeFailure('System.LimitException: Apex heap size too large');
+        System.assert(heap.contains('too large to assemble in one job'), heap);
+        System.assert(heap.contains('Individual Files'), heap);
+
+        String cpu = DocGenMergeJob.describeMergeFailure('Apex CPU time limit exceeded');
+        System.assert(cpu.contains('too large to assemble in one job'), cpu);
+
+        String soql = DocGenMergeJob.describeMergeFailure('Too many SOQL queries: 201');
+        System.assert(soql.contains('too large to assemble in one job'), soql);
+
+        String other = DocGenMergeJob.describeMergeFailure('Something unrelated broke');
+        System.assertEquals('Merge failed: Something unrelated broke', other);
+
+        System.assertEquals('', DocGenMergeJob.describeMergeFailure(''));
+        System.assertEquals('', DocGenMergeJob.describeMergeFailure(null));
+    }
+
+    @IsTest
     static void testMergeJobWithEmptySnippets() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {

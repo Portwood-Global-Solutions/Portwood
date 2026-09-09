@@ -283,16 +283,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             String reason = '';
             try {
                 Exception e = ctx.getException();
-                String m = (e == null) ? '' : String.valueOf(e.getMessage());
-                if (m.containsIgnoreCase('heap') || m.containsIgnoreCase('CPU') || m.containsIgnoreCase('SOQL')) {
-                    reason =
-                        'The combined PDF was too large to assemble in one job. ' +
-                        'Run this as Individual Files, or split it with a tighter filter. (' +
-                        m.abbreviate(120) +
-                        ')';
-                } else if (String.isNotBlank(m)) {
-                    reason = 'Merge failed: ' + m.abbreviate(180);
-                }
+                reason = DocGenMergeJob.describeMergeFailure((e == null) ? '' : String.valueOf(e.getMessage()));
             } catch (Exception ignored) {
                 reason = '';
             }
@@ -307,5 +298,28 @@ public with sharing class DocGenMergeJob implements Queueable {
                 String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
             }
         }
+    }
+
+    /**
+     * Turns an uncatchable-limit message into a job-owner-friendly Error_Log__c
+     * line. A heap/CPU/SOQL exhaustion during assembly means the packet was too big
+     * for one job; anything else is passed through abbreviated. Returns '' when
+     * there is nothing useful to say. On the outer class (inner classes cannot hold
+     * static members) and @TestVisible — a FinalizerContext cannot be built in a
+     * test, so the message logic is exercised directly.
+     */
+    @TestVisible
+    private static String describeMergeFailure(String exceptionMessage) {
+        String m = (exceptionMessage == null) ? '' : exceptionMessage;
+        if (m.containsIgnoreCase('heap') || m.containsIgnoreCase('CPU') || m.containsIgnoreCase('SOQL')) {
+            return 'The combined PDF was too large to assemble in one job. ' +
+                'Run this as Individual Files, or split it with a tighter filter. (' +
+                m.abbreviate(120) +
+                ')';
+        }
+        if (String.isNotBlank(m)) {
+            return 'Merge failed: ' + m.abbreviate(180);
+        }
+        return '';
     }
 }

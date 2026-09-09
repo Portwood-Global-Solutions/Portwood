@@ -685,6 +685,37 @@ public with sharing class DocGenBulkController {
             }
             analysis.items.add(countItem);
 
+            // --- 3b. Duplex packet ceiling (#382) ---
+            // A duplex packet renders a PDF per record and assembles them all in
+            // ONE Queueable, which is heavier than the HTML-concat merge. The
+            // ceiling depends only on record count, so this check runs
+            // unconditionally — it must NOT sit behind the Test_Record_Id__c gate
+            // below, or a template without a test record gets no block at all.
+            if (isMerge && duplexPadding == true) {
+                AnalysisItem dItem = new AnalysisItem();
+                dItem.label = 'Duplex Packet';
+                dItem.estimated = recordCount;
+                dItem.limitVal = 400;
+                if (recordCount > 400) {
+                    dItem.status = 'error';
+                    dItem.message =
+                        recordCount +
+                        ' documents — a duplex packet is assembled in one job and cannot exceed ~400 documents. ' +
+                        'Turn off Duplex Padding, switch to Individual Files, or narrow the filter.';
+                    analysis.canProceed = false;
+                } else if (recordCount > 250) {
+                    dItem.status = 'warning';
+                    dItem.message =
+                        recordCount +
+                        ' documents — large duplex packet. Assembly may fail near the ~400 ceiling; if it does, ' +
+                        'run Individual Files or split the filter.';
+                } else {
+                    dItem.status = 'ok';
+                    dItem.message = recordCount + ' documents — within the duplex packet limit.';
+                }
+                analysis.items.add(dItem);
+            }
+
             // --- 4. Heap estimation ---
             if (isMerge && isFillablePdfTemplate) {
                 AnalysisItem heapItem = new AnalysisItem();
@@ -704,35 +735,9 @@ public with sharing class DocGenBulkController {
                     // Merge Queueable only reads back saved HTML snippets, not full generation heap
                     Long snippetBytes = html.length() * 2; // UTF-16
 
-                    if (isMerge && duplexPadding == true) {
-                        // Duplex padding (#382): the merge renders a PDF per record
-                        // and stitches them in one Queueable. Measured ceiling is
-                        // ~350 records for a heavy template (CPU-bound on the byte
-                        // assembly, not heap after font dedup). Cap conservatively.
-                        AnalysisItem dItem = new AnalysisItem();
-                        dItem.label = 'Duplex Packet';
-                        dItem.estimated = recordCount;
-                        dItem.limitVal = 400;
-                        if (recordCount > 400) {
-                            dItem.status = 'error';
-                            dItem.message =
-                                recordCount +
-                                ' documents — a duplex packet is assembled in one job and cannot exceed ~400 documents. ' +
-                                'Turn off Duplex Padding, switch to Individual Files, or narrow the filter.';
-                            analysis.canProceed = false;
-                        } else if (recordCount > 250) {
-                            dItem.status = 'warning';
-                            dItem.message =
-                                recordCount +
-                                ' documents — large duplex packet. Assembly may fail near the ~400 ceiling; if it does, ' +
-                                'run Individual Files or split the filter.';
-                        } else {
-                            dItem.status = 'ok';
-                            dItem.message = recordCount + ' documents — within the duplex packet limit.';
-                        }
-                        analysis.items.add(dItem);
-                    } else if (isMerge) {
+                    if (isMerge && duplexPadding != true) {
                         // Merge heap: Queueable reads all HTML snippets + concatenates + Blob.toPdf()
+                        // (Duplex packets are sized by the unconditional 3b check above.)
                         AnalysisItem heapItem = new AnalysisItem();
                         heapItem.label = 'Merge Heap';
                         heapItem.limitVal = 12;
