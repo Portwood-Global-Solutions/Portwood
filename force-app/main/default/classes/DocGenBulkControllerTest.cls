@@ -261,6 +261,32 @@ public with sharing class DocGenBulkControllerTest {
         System.assertEquals(null, duplexItemStatus(a), 'A non-duplex merge job carries no Duplex Packet item');
     }
 
+    @IsTest
+    static void duplexPacketMaxDocsScalesInverselyWithDocumentSize() {
+        // #382 — the ceiling is driven by output size, not record count. A
+        // lightweight text document packs the full 400; a branded template with
+        // a logo + embedded font (~180 KB/doc) tops out near 60.
+        System.assertEquals(400, DocGenBulkController.duplexPacketMaxDocs(null), 'no measurement → count-based cap');
+        System.assertEquals(400, DocGenBulkController.duplexPacketMaxDocs(0L), 'zero bytes → count-based cap');
+        System.assertEquals(
+            400,
+            DocGenBulkController.duplexPacketMaxDocs(8000L),
+            'a light 8 KB document → the full cap'
+        );
+
+        Integer heavy = DocGenBulkController.duplexPacketMaxDocs(180000L);
+        System.assert(heavy > 20 && heavy < 90, 'a 180 KB branded document should cap near 60, got ' + heavy);
+
+        Integer huge = DocGenBulkController.duplexPacketMaxDocs(1500000L);
+        System.assert(huge < 10, 'a 1.5 MB document should cap in single digits, got ' + huge);
+
+        // Monotonic: bigger documents never allow more of them.
+        System.assert(
+            DocGenBulkController.duplexPacketMaxDocs(50000L) >= DocGenBulkController.duplexPacketMaxDocs(120000L),
+            'the cap must not increase as per-document size grows'
+        );
+    }
+
     private static String duplexItemStatus(DocGenBulkController.JobAnalysis a) {
         for (DocGenBulkController.AnalysisItem it : a.items) {
             if (it.label == 'Duplex Packet') {

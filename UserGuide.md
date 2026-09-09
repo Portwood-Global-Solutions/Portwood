@@ -2765,7 +2765,9 @@ When a **Combined PDF** is printed double-sided, a document with an **odd** page
 - Documents with an **even** page count are never touched.
 - **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
 
-**Scale.** A duplex packet is assembled in a single background job, which is more work than the normal merge — the pre-run analysis warns above ~250 documents and blocks above ~400. For a packet larger than that, run **Individual Files** (each already starts on its own sheet) or split the filter.
+**Scale.** A duplex packet is assembled entirely in memory in a single background job, so the ceiling depends on how big each document is — not just the record count. A lightweight text statement can pack **300–400** documents; a template with a **logo and/or non-Latin text** (which embeds a font) produces much larger PDFs and tops out closer to **50–100**. The pre-run analysis panel shows a **Duplex Packet** row with the specific limit it estimates for _your_ template (it measures the template's Test Record) and blocks the Run button above it. If a large job does slip through and fails, the job's error log says so and tells you to run **Individual Files** — where each document already starts on its own sheet — or split the filter.
+
+> Set a **Test Record** on the template (§5.3) so the analysis can size the limit accurately. Without one it falls back to a flat ~400, which is optimistic for a branded template.
 
 **In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
 

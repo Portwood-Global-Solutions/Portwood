@@ -686,32 +686,70 @@ public with sharing class DocGenBulkController {
             analysis.items.add(countItem);
 
             // --- 3b. Duplex packet ceiling (#382) ---
-            // A duplex packet renders a PDF per record and assembles them all in
-            // ONE Queueable, which is heavier than the HTML-concat merge. The
-            // ceiling depends only on record count, so this check runs
-            // unconditionally — it must NOT sit behind the Test_Record_Id__c gate
-            // below, or a template without a test record gets no block at all.
+            // A duplex packet renders a PDF per record and assembles them ALL in
+            // one Queueable (12 MB async heap). The real ceiling is driven by
+            // output SIZE, not record count — a lightweight text document packs
+            // ~400, a branded template with a logo and an embedded font
+            // (~180 KB/doc) fails near 60. When the template has a Test Record we
+            // render one and size the ceiling to it; otherwise we fall back to a
+            // conservative record-count cap. This runs unconditionally — it must
+            // NOT sit behind the Test_Record_Id__c gate below, or a template with
+            // no test record gets no block at all.
             if (isMerge && duplexPadding == true) {
                 AnalysisItem dItem = new AnalysisItem();
                 dItem.label = 'Duplex Packet';
                 dItem.estimated = recordCount;
-                dItem.limitVal = 400;
-                if (recordCount > 400) {
+
+                Integer maxDocs = 400; // count-based fallback / absolute cap
+                Long perDocBytes = null;
+                if (String.isNotBlank(temp.Test_Record_Id__c)) {
+                    try {
+                        Blob part = (Blob) DocGenService.generatePdfBlob(templateId, temp.Test_Record_Id__c)
+                            .get('blob');
+                        perDocBytes = (part == null) ? null : (Long) part.size();
+                        part = null;
+                        maxDocs = duplexPacketMaxDocs(perDocBytes);
+                    } catch (Exception e) {
+                        // A heap failure rendering ONE record is itself a signal the
+                        // template is heavy — cap hard rather than fall back to 400.
+                        String m = (e.getMessage() == null) ? '' : e.getMessage().toLowerCase();
+                        maxDocs = m.contains('heap') ? 50 : 400;
+                    }
+                }
+                Integer warnDocs = Math.max(1, (Integer) (maxDocs * 0.65));
+                dItem.limitVal = maxDocs;
+                String sizeNote = (perDocBytes != null)
+                    ? ' (~' + ((Integer) (perDocBytes / 1024)) + ' KB per document)'
+                    : '';
+
+                if (recordCount > maxDocs) {
                     dItem.status = 'error';
                     dItem.message =
                         recordCount +
-                        ' documents — a duplex packet is assembled in one job and cannot exceed ~400 documents. ' +
-                        'Turn off Duplex Padding, switch to Individual Files, or narrow the filter.';
+                        ' documents' +
+                        sizeNote +
+                        ' — a duplex packet is assembled in one job, and this template tops out near ' +
+                        maxDocs +
+                        '. Turn off Duplex Padding, switch to Individual Files, or narrow the filter.';
                     analysis.canProceed = false;
-                } else if (recordCount > 250) {
+                } else if (recordCount > warnDocs) {
                     dItem.status = 'warning';
                     dItem.message =
                         recordCount +
-                        ' documents — large duplex packet. Assembly may fail near the ~400 ceiling; if it does, ' +
-                        'run Individual Files or split the filter.';
+                        ' documents' +
+                        sizeNote +
+                        ' — large duplex packet, near this template\'s ~' +
+                        maxDocs +
+                        ' ceiling. If assembly fails, run Individual Files or split the filter.';
                 } else {
                     dItem.status = 'ok';
-                    dItem.message = recordCount + ' documents — within the duplex packet limit.';
+                    dItem.message =
+                        recordCount +
+                        ' documents' +
+                        sizeNote +
+                        ' — within the duplex packet limit (~' +
+                        maxDocs +
+                        ').';
                 }
                 analysis.items.add(dItem);
             }
@@ -838,6 +876,28 @@ public with sharing class DocGenBulkController {
             analysis.summary = 'Analysis error: ' + e.getMessage();
         }
         return analysis;
+    }
+
+    /**
+     * The largest duplex packet this template can assemble in one Queueable,
+     * from the byte size of one rendered PDF (#382). The merge job holds the
+     * whole packet as a hex string inside the 12 MB async heap; ~11 MB is the
+     * safe budget after GC variance. The merged output is smaller than the sum
+     * of the parts (font deduplication, structural overlap), so the peak works
+     * out near ~1.2x a part per document — calibrated against measured runs:
+     * a ~70 KB/doc statement clears 150, a ~180 KB/doc branded template fails
+     * near 65. Never returns above 400 (the count-based cap that's actually
+     * been load-tested) or below 1.
+     */
+    @TestVisible
+    private static Integer duplexPacketMaxDocs(Long perDocBytes) {
+        if (perDocBytes == null || perDocBytes <= 0) {
+            return 400;
+        }
+        Long budgetBytes = 11L * 1024 * 1024;
+        Long peakPerDoc = (perDocBytes * 12) / 10;
+        Integer bySize = (Integer) (budgetBytes / peakPerDoc);
+        return Math.max(1, Math.min(400, bySize));
     }
 
     /**
