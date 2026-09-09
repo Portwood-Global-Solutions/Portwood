@@ -2755,6 +2755,20 @@ Sorting applies to Individual Files too — it decides the order records are pro
 
 > **If your Flow passes a Record IDs collection:** SOQL does not preserve the order of that collection, so sorting the collection in the Flow has no effect on the document. Use **Sort Order**.
 
+### 9.1.2 Duplex Padding — every document starts on a fresh sheet
+
+When a **Combined PDF** is printed double-sided, a document with an **odd** page count leaves its last sheet half-used, and the next document starts on the back of it. **Duplex Padding** fixes that: before the merge, Portwood checks each document's page count and appends **one blank page** to any document that has an odd number of pages, so every document begins on the front of a sheet.
+
+- The toggle appears under the output mode once you pick **Combined PDF** or **Both** (it does nothing for Individual Files, so it is hidden there and forced off).
+- The filler page is **completely blank** — no header, no footer, no watermark, no page number.
+- **Page numbers count real pages only.** Because each record is rendered as its own document and then stitched, `{PageNumber}` / `{TotalPages}` (and the `Page X of Y` header/footer fields) read per-document — a 3-page statement numbers `1 of 3, 2 of 3, 3 of 3`, and the blank filler after it carries no number. This is different from a plain Combined PDF, which numbers continuously across the whole bundle.
+- Documents with an **even** page count are never touched.
+- **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
+
+**Scale.** A duplex packet is assembled in a single background job, which is more work than the normal merge — the pre-run analysis warns above ~250 documents and blocks above ~400. For a packet larger than that, run **Individual Files** (each already starts on its own sheet) or split the filter.
+
+**In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
+
 ### 9.2 Saved queries
 
 Save a filter as a reusable `DocGen_Saved_Query__c`. Gives non-technical users a drop-down of pre-built filters without writing SOQL. Created and managed in the Bulk Generation UI.
