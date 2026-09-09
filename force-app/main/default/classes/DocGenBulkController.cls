@@ -529,10 +529,19 @@ public with sharing class DocGenBulkController {
      * @param recordCount Total number of records to be processed
      * @param batchSize Records per batch execution
      * @param mergePdf Whether merge mode is enabled
+     * @param duplexPadding Whether Combined-PDF duplex padding is on (#382) — its
+     *        merge renders a PDF per record and stitches them, which has a much
+     *        lower record ceiling than the HTML-concatenation merge.
      * @return JobAnalysis with per-check results and overall verdict
      */
     @AuraEnabled
-    public static JobAnalysis analyzeJob(Id templateId, Integer recordCount, Integer batchSize, Boolean mergePdf) {
+    public static JobAnalysis analyzeJob(
+        Id templateId,
+        Integer recordCount,
+        Integer batchSize,
+        Boolean mergePdf,
+        Boolean duplexPadding
+    ) {
         // canProceed gates the Run button and is reserved for HARD blockers only —
         // conditions no batch size or record set can work around (unsupported
         // template/mode combination, or the platform's own QueryLocator ceiling).
@@ -695,7 +704,34 @@ public with sharing class DocGenBulkController {
                     // Merge Queueable only reads back saved HTML snippets, not full generation heap
                     Long snippetBytes = html.length() * 2; // UTF-16
 
-                    if (isMerge) {
+                    if (isMerge && duplexPadding == true) {
+                        // Duplex padding (#382): the merge renders a PDF per record
+                        // and stitches them in one Queueable. Measured ceiling is
+                        // ~350 records for a heavy template (CPU-bound on the byte
+                        // assembly, not heap after font dedup). Cap conservatively.
+                        AnalysisItem dItem = new AnalysisItem();
+                        dItem.label = 'Duplex Packet';
+                        dItem.estimated = recordCount;
+                        dItem.limitVal = 400;
+                        if (recordCount > 400) {
+                            dItem.status = 'error';
+                            dItem.message =
+                                recordCount +
+                                ' documents — a duplex packet is assembled in one job and cannot exceed ~400 documents. ' +
+                                'Turn off Duplex Padding, switch to Individual Files, or narrow the filter.';
+                            analysis.canProceed = false;
+                        } else if (recordCount > 250) {
+                            dItem.status = 'warning';
+                            dItem.message =
+                                recordCount +
+                                ' documents — large duplex packet. Assembly may fail near the ~400 ceiling; if it does, ' +
+                                'run Individual Files or split the filter.';
+                        } else {
+                            dItem.status = 'ok';
+                            dItem.message = recordCount + ' documents — within the duplex packet limit.';
+                        }
+                        analysis.items.add(dItem);
+                    } else if (isMerge) {
                         // Merge heap: Queueable reads all HTML snippets + concatenates + Blob.toPdf()
                         AnalysisItem heapItem = new AnalysisItem();
                         heapItem.label = 'Merge Heap';
@@ -867,7 +903,7 @@ public with sharing class DocGenBulkController {
     // Keep for backward compatibility — delegates to analyzeJob
     @AuraEnabled
     public static HeapEstimate estimateHeapUsage(Id templateId, Integer recordCount) {
-        JobAnalysis analysis = analyzeJob(templateId, recordCount, 1, true);
+        JobAnalysis analysis = analyzeJob(templateId, recordCount, 1, true, false);
         HeapEstimate estimate = new HeapEstimate();
         for (AnalysisItem item : analysis.items) {
             if (item.label == 'Merge Heap') {
@@ -899,6 +935,8 @@ public with sharing class DocGenBulkController {
      * @param batchSize Number of records per batch execution (1-200)
      * @param mergeOnly Whether to only generate merged PDF without individual files
      * @param sortOrder Optional SOQL ORDER BY clause controlling processing (and merged page) order
+     * @param duplexPadding Combined-PDF only (#382): when true, each odd-length document gets a
+     *        blank page before the merge so it starts on the front of a sheet. Null = off.
      * @return The DocGen_Job__c record ID
      */
     @AuraEnabled
@@ -909,11 +947,21 @@ public with sharing class DocGenBulkController {
         Boolean mergePdf,
         Integer batchSize,
         Boolean mergeOnly,
-        String sortOrder
+        String sortOrder,
+        Boolean duplexPadding
     ) {
         // The LWC boundary, and the ONLY place AuraHandledException may be raised.
         try {
-            return submitJobInternal(templateId, condition, jobLabel, mergePdf, batchSize, mergeOnly, sortOrder);
+            return submitJobInternal(
+                templateId,
+                condition,
+                jobLabel,
+                mergePdf,
+                batchSize,
+                mergeOnly,
+                sortOrder,
+                duplexPadding
+            );
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error starting bulk generation job.');
         }
@@ -946,7 +994,7 @@ public with sharing class DocGenBulkController {
         Integer batchSize,
         Boolean mergeOnly
     ) {
-        return submitJobInternal(templateId, condition, jobLabel, mergePdf, batchSize, mergeOnly, null);
+        return submitJobInternal(templateId, condition, jobLabel, mergePdf, batchSize, mergeOnly, null, null);
     }
 
     /**
@@ -961,6 +1009,22 @@ public with sharing class DocGenBulkController {
         Integer batchSize,
         Boolean mergeOnly,
         String sortOrder
+    ) {
+        return submitJobInternal(templateId, condition, jobLabel, mergePdf, batchSize, mergeOnly, sortOrder, null);
+    }
+
+    /**
+     * As above, with Combined-PDF duplex padding (#382).
+     */
+    public static Id submitJobInternal(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Boolean mergePdf,
+        Integer batchSize,
+        Boolean mergeOnly,
+        String sortOrder,
+        Boolean duplexPadding
     ) {
         try {
             Boolean isMergeOnly = (mergeOnly == true);
@@ -991,13 +1055,19 @@ public with sharing class DocGenBulkController {
                 ? null
                 : normalizeSortOrder(templateBaseObject(templateId), sortOrder);
 
+            // Duplex padding (#382) only applies to a Combined PDF; it is
+            // meaningless on an Individual-Files job, so it's dropped there
+            // rather than errored.
+            Boolean safeDuplex = isMergeMode && duplexPadding == true;
+
             // 1. Create Job Record
             DocGen_Job__c job = new DocGen_Job__c(
                 Template__c = templateId,
                 Query_Condition__c = condition,
                 Status__c = 'Queued',
                 Merge_Only__c = isMergeOnly,
-                Sort_Order__c = safeSortOrder
+                Sort_Order__c = safeSortOrder,
+                Duplex_Padding__c = safeDuplex
             );
             if (String.isNotBlank(jobLabel)) {
                 job.Label__c = jobLabel;
@@ -1017,7 +1087,8 @@ public with sharing class DocGenBulkController {
                     'Status__c',
                     'Merge_Only__c',
                     'Label__c',
-                    'Sort_Order__c'
+                    'Sort_Order__c',
+                    'Duplex_Padding__c'
                 }
             );
             /* code-analyzer-suppress ApexFlsViolation */

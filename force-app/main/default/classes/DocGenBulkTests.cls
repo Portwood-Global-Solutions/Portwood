@@ -67,8 +67,8 @@ private class DocGenBulkTests {
             DocGen_Template__c t = makeTypedTemplate('Excel');
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis merged = DocGenBulkController.analyzeJob(t.Id, 10, 1, true);
-            DocGenBulkController.JobAnalysis individual = DocGenBulkController.analyzeJob(t.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis merged = DocGenBulkController.analyzeJob(t.Id, 10, 1, true, false);
+            DocGenBulkController.JobAnalysis individual = DocGenBulkController.analyzeJob(t.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertEquals(false, merged.canProceed, 'Excel + combined PDF is a genuine hard blocker');
@@ -380,6 +380,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -405,6 +406,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -449,7 +451,7 @@ private class DocGenBulkTests {
         System.runAs(u) {
             DocGen_Template__c t = prepareAcroFormBulkTemplate();
 
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(t.Id, 1, 1, true);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(t.Id, 1, 1, true, false);
             System.assertEquals(false, analysis.canProceed, 'Analyzer should block merged bulk AcroForm output.');
 
             Boolean sawFormatError = false;
@@ -468,6 +470,7 @@ private class DocGenBulkTests {
                     true,
                     1,
                     false,
+                    null,
                     null
                 );
                 System.assert(false, 'Merged AcroForm bulk jobs should be rejected before the batch queues.');
@@ -1241,6 +1244,7 @@ private class DocGenBulkTests {
                 true,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1382,6 +1386,7 @@ private class DocGenBulkTests {
                 true,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1424,6 +1429,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 true,
+                null,
                 null
             );
             Test.stopTest();
@@ -1456,6 +1462,7 @@ private class DocGenBulkTests {
                 false,
                 50,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1479,7 +1486,7 @@ private class DocGenBulkTests {
 
             Test.startTest();
             // null batchSize should default to 1
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Id, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -1740,6 +1747,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 true,
+                null,
                 null
             );
             Test.stopTest();
@@ -1761,7 +1769,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Id, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -1983,7 +1991,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'My Custom Label', false, 5, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'My Custom Label', false, 5, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Label__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2002,7 +2010,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, '', false, 1, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, '', false, 1, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Label__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2218,7 +2226,7 @@ private class DocGenBulkTests {
             Test.startTest();
             // startTest/stopTest runs the batch, so this also proves DocGenBatch
             // .start() builds a QueryLocator the platform accepts with the clause on it.
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Sorted Job', false, 1, false, 'name desc');
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Sorted Job', false, 1, false, 'name desc', null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Sort_Order__c, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2239,7 +2247,7 @@ private class DocGenBulkTests {
             Boolean caught = false;
             Test.startTest();
             try {
-                DocGenBulkController.submitJob(t.Id, null, 'Bad Sort', false, 1, false, 'Bogus__c ASC');
+                DocGenBulkController.submitJob(t.Id, null, 'Bad Sort', false, 1, false, 'Bogus__c ASC', null);
             } catch (AuraHandledException e) {
                 caught = true;
             }
@@ -2260,7 +2268,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Unsorted Job', false, 1, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Unsorted Job', false, 1, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Sort_Order__c FROM DocGen_Job__c WHERE Id = :jobId];

@@ -118,7 +118,7 @@ public with sharing class DocGenBulkControllerTest {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 
         Test.startTest();
-        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 10, 1, false);
+        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 10, 1, false, false);
         Test.stopTest();
 
         System.assertNotEquals(null, analysis, 'Analysis should not be null');
@@ -140,7 +140,7 @@ public with sharing class DocGenBulkControllerTest {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 
         Test.startTest();
-        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 10, 1, true);
+        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 10, 1, true, false);
         Test.stopTest();
 
         System.assertNotEquals(null, analysis, 'Analysis should not be null');
@@ -159,7 +159,7 @@ public with sharing class DocGenBulkControllerTest {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 
         Test.startTest();
-        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 100, 200, false);
+        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 100, 200, false, false);
         Test.stopTest();
 
         System.assertNotEquals(null, analysis, 'Analysis should not be null');
@@ -189,7 +189,7 @@ public with sharing class DocGenBulkControllerTest {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 
         Test.startTest();
-        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 60000, 1, false);
+        DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(temp.Id, 60000, 1, false, false);
         Test.stopTest();
 
         System.assertEquals(false, analysis.canProceed, 'Should not proceed with >50k records');
@@ -200,7 +200,7 @@ public with sharing class DocGenBulkControllerTest {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 
         Test.startTest();
-        Id jobId = DocGenBulkController.submitJob(temp.Id, 'Name != null', 'Test Job', true, 10, false, null);
+        Id jobId = DocGenBulkController.submitJob(temp.Id, 'Name != null', 'Test Job', true, 10, false, null, null);
         Test.stopTest();
 
         System.assertNotEquals(null, jobId, 'Job ID should be returned');

@@ -28,6 +28,43 @@ public with sharing class DocGenMergeJob implements Queueable {
     public void execute(QueueableContext ctx) {
         System.attachFinalizer(new DocGenMergeJobFinalizer(this.jobId));
         try {
+            // Get job + template details (template type drives the merge strategy)
+            // v2.0.1 — per-field FLS enforcement on SOQL reads (see DocGenFlsGuard).
+            DocGenFlsGuard.assertAccessible(
+                DocGen_Job__c.sObjectType,
+                new Set<String>{
+                    'Label__c',
+                    'Name',
+                    'Success_Count__c',
+                    'Total_Records__c',
+                    'Template__c',
+                    'Duplex_Padding__c'
+                }
+            );
+            DocGen_Job__c job = [
+                SELECT
+                    Label__c,
+                    Name,
+                    CreatedById,
+                    Success_Count__c,
+                    Total_Records__c,
+                    Duplex_Padding__c,
+                    Template__r.Type__c
+                FROM DocGen_Job__c
+                WHERE Id = :jobId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+
+            // Duplex padding (#382): the batch saved a PDF per record, not HTML
+            // snippets. Stitch them in Apex with DocGenPdfMerger, padding any
+            // odd-length document with a blank page. Falls through to the
+            // historical HTML-concatenation merge for every non-duplex job.
+            if (job.Duplex_Padding__c == true) {
+                mergeDuplexParts(job);
+                return;
+            }
+
             // Read all HTML snippets in order
             String prefix = 'docgen_merge_' + jobId + '_';
             List<ContentVersion> snippets = [
@@ -43,19 +80,6 @@ public with sharing class DocGenMergeJob implements Queueable {
                 return;
             }
 
-            // Get job + template details (template type drives the merge strategy)
-            // v2.0.1 — per-field FLS enforcement on SOQL reads (see DocGenFlsGuard).
-            DocGenFlsGuard.assertAccessible(
-                DocGen_Job__c.sObjectType,
-                new Set<String>{ 'Label__c', 'Name', 'Success_Count__c', 'Total_Records__c', 'Template__c' }
-            );
-            DocGen_Job__c job = [
-                SELECT Label__c, Name, CreatedById, Success_Count__c, Total_Records__c, Template__r.Type__c
-                FROM DocGen_Job__c
-                WHERE Id = :jobId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
             Boolean isHtmlTemplate = job.Template__r != null && DocGenService.isHtmlBacked(job.Template__r.Type__c);
 
             // Concatenate snippets. For DOCX-source snippets, naive concat of
@@ -142,6 +166,77 @@ public with sharing class DocGenMergeJob implements Queueable {
         }
     }
 
+    /**
+     * Duplex-padding merge (#382). Reads the per-record PDF parts saved by
+     * DocGenBatch, hands them to DocGenPdfMerger with the job's padding mode, and
+     * saves the result as Merged_PDF_CV__c — same delivery as the HTML path.
+     */
+    private void mergeDuplexParts(DocGen_Job__c job) {
+        // IDs only — never `SELECT VersionData` for every part at once: the LOB
+        // query itself heap-crashes past ~400 parts. DocGenPdfMerger loads each
+        // blob by Id inside its streaming loop and releases it (#382).
+        List<ContentVersion> parts = [
+            SELECT Id, ContentDocumentId
+            FROM ContentVersion
+            WHERE Title LIKE :('docgen_pdfpart_' + jobId + '_%')
+            WITH USER_MODE
+            ORDER BY Title
+        ];
+        if (parts.isEmpty()) {
+            update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            return;
+        }
+
+        List<Id> partIds = new List<Id>();
+        Set<Id> docIdsToDelete = new Set<Id>();
+        for (ContentVersion cv : parts) {
+            partIds.add(cv.Id);
+            docIdsToDelete.add(cv.ContentDocumentId);
+        }
+        Integer partCount = parts.size();
+        parts = null;
+
+        // Sweep any HTML snippets too, in case a job predates the DocGenBatch
+        // guard that stops "Combined + Individual" writing them under duplex.
+        for (ContentVersion snip : [
+            SELECT ContentDocumentId
+            FROM ContentVersion
+            WHERE Title LIKE :('docgen_merge_' + jobId + '_%')
+            WITH USER_MODE
+        ]) {
+            docIdsToDelete.add(snip.ContentDocumentId);
+        }
+
+        Blob merged = DocGenPdfMerger.mergePdfCvs(partIds, true);
+
+        String fileName = String.isNotBlank(job.Label__c) ? job.Label__c : 'Bulk Generation ' + job.Name;
+        ContentVersion pdfCv = new ContentVersion(
+            Title = fileName,
+            PathOnClient = fileName + '.pdf',
+            VersionData = merged,
+            IsMajorVersion = true,
+            FirstPublishLocationId = jobId
+        );
+        SObjectAccessDecision cvDec = Security.stripInaccessible(
+            AccessType.CREATABLE,
+            new List<ContentVersion>{ pdfCv }
+        );
+        insert cvDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+        pdfCv.Id = cvDec.getRecords()[0].Id;
+
+        update new DocGen_Job__c(Id = jobId, Status__c = 'Completed', Merged_PDF_CV__c = pdfCv.Id); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+
+        List<ContentDocument> docsToDelete = new List<ContentDocument>();
+        for (Id docId : docIdsToDelete) {
+            docsToDelete.add(new ContentDocument(Id = docId));
+        }
+        if (Schema.sObjectType.ContentDocument.isDeletable()) {
+            delete docsToDelete; // NOPMD ApexCRUDViolation — CRUD checked above
+        }
+
+        sendCompletionNotification(job, fileName, partCount);
+    }
+
     private void sendCompletionNotification(DocGen_Job__c job, String fileName, Integer pageCount) {
         try {
             // Look up the custom notification type
@@ -179,13 +274,37 @@ public with sharing class DocGenMergeJob implements Queueable {
             this.jobId = jobId;
         }
         public void execute(FinalizerContext ctx) {
-            if (ctx.getResult() == ParentJobResult.UNHANDLED_EXCEPTION) {
-                try {
-                    update new DocGen_Job__c(Id = jobId, Status__c = 'Failed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
-                } catch (Exception e) {
-                    // Intentionally swallowed — best-effort; job record may not exist
-                    String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
+            if (ctx.getResult() != ParentJobResult.UNHANDLED_EXCEPTION) {
+                return;
+            }
+            // Heap / CPU LimitExceptions during the merge are uncatchable, so the
+            // job's own try/catch never runs — the reason only lands here. Surface
+            // it on Error_Log__c instead of leaving a bare "Failed" (#382).
+            String reason = '';
+            try {
+                Exception e = ctx.getException();
+                String m = (e == null) ? '' : String.valueOf(e.getMessage());
+                if (m.containsIgnoreCase('heap') || m.containsIgnoreCase('CPU') || m.containsIgnoreCase('SOQL')) {
+                    reason =
+                        'The combined PDF was too large to assemble in one job. ' +
+                        'Run this as Individual Files, or split it with a tighter filter. (' +
+                        m.abbreviate(120) +
+                        ')';
+                } else if (String.isNotBlank(m)) {
+                    reason = 'Merge failed: ' + m.abbreviate(180);
                 }
+            } catch (Exception ignored) {
+                reason = '';
+            }
+            try {
+                DocGen_Job__c u = new DocGen_Job__c(Id = jobId, Status__c = 'Failed');
+                if (String.isNotBlank(reason)) {
+                    u.Error_Log__c = reason;
+                }
+                update u; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            } catch (Exception e) {
+                // Intentionally swallowed — best-effort; job record may not exist
+                String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
             }
         }
     }

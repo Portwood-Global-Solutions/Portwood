@@ -38,8 +38,15 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
     public Id dataCacheCvId;
     public String cachedDataJson;
 
-    // Merge mode: sequence counter for HTML snippet ordering
+    // Merge mode: sequence counter for HTML snippet / PDF part ordering
     public Integer htmlSequence = 0;
+
+    // Duplex padding (#382). When true the batch renders each record as its own
+    // PDF part instead of an HTML snippet, and DocGenMergeJob stitches the parts
+    // with DocGenPdfMerger — appending one blank page to any odd-length document
+    // so it starts on a sheet front under duplex printing. False keeps the
+    // historical HTML-concatenation merge unchanged.
+    public Boolean duplexPadding = false;
 
     // Chart rasterization (Stateful — resolved once, reused across execute() chunks).
     //
@@ -94,7 +101,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         // DocGenFlsGuard.cls.
         DocGenFlsGuard.assertAccessible(
             DocGen_Job__c.sObjectType,
-            new Set<String>{ 'Template__c', 'Query_Condition__c', 'Sort_Order__c' }
+            new Set<String>{ 'Template__c', 'Query_Condition__c', 'Sort_Order__c', 'Duplex_Padding__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Job__c job = [
@@ -103,7 +110,8 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 Template__r.Base_Object_API__c,
                 Template__r.Query_Config__c,
                 Query_Condition__c,
-                Sort_Order__c
+                Sort_Order__c,
+                Duplex_Padding__c
             FROM DocGen_Job__c
             WHERE Id = :jobId
             WITH SYSTEM_MODE
@@ -113,6 +121,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         this.condition = job.Query_Condition__c;
         this.queryConfig = job.Template__r.Query_Config__c;
         this.sortOrder = job.Sort_Order__c;
+        this.duplexPadding = job.Duplex_Padding__c == true;
     }
 
     /**
@@ -352,8 +361,11 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             DocGenService.generateDocument(templateId, recordId);
         }
 
-        // Merge mode (not merge-only): also capture HTML snippet for merged PDF
-        if (mergeMode && DocGenService.lastRenderedHtml != null) {
+        // Merge mode (not merge-only): also capture HTML snippet for merged PDF.
+        // Skipped under duplex padding — that path merges from per-record PDF
+        // parts saved in execute(), so an HTML snippet here would just be an
+        // orphaned ContentVersion the merge job never reads (#382).
+        if (mergeMode && !duplexPadding && DocGenService.lastRenderedHtml != null) {
             saveHtmlSnippet(DocGenService.lastRenderedHtml);
             DocGenService.lastRenderedHtml = null;
         }
@@ -369,6 +381,24 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             Title = 'docgen_merge_' + jobId + '_' + seq,
             PathOnClient = 'docgen_merge_' + jobId + '_' + seq + '.html',
             VersionData = Blob.valueOf(html),
+            IsMajorVersion = false,
+            FirstPublishLocationId = jobId
+        );
+        SObjectAccessDecision cvDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
+        insert cvDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+    }
+
+    /**
+     * Writes one rendered PDF as a tiny ContentVersion linked to the Job, ordered
+     * by the same sequence counter as saveHtmlSnippet. DocGenMergeJob reads these
+     * by title prefix and hands them to DocGenPdfMerger. Duplex-padding path only.
+     */
+    private void savePdfPart(Blob pdf) {
+        String seq = String.valueOf(htmlSequence++).leftPad(5, '0');
+        ContentVersion cv = new ContentVersion(
+            Title = 'docgen_pdfpart_' + jobId + '_' + seq,
+            PathOnClient = 'docgen_pdfpart_' + jobId + '_' + seq + '.pdf',
+            VersionData = pdf,
             IsMajorVersion = false,
             FirstPublishLocationId = jobId
         );
@@ -442,7 +472,18 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                     }
                 }
 
-                if (mergeOnly) {
+                if (duplexPadding) {
+                    // Duplex padding (#382): render this record as its own PDF part.
+                    // DocGenMergeJob stitches the parts and pads odd-length documents.
+                    // In "Combined + Individual" mode the per-record file is still saved.
+                    Map<String, Object> res = (recordData != null)
+                        ? DocGenService.generatePdfBlobFromData(templateId, rec.Id, recordData)
+                        : DocGenService.generatePdfBlob(templateId, rec.Id);
+                    savePdfPart((Blob) res.get('blob'));
+                    if (!mergeOnly) {
+                        generateIndividualDocument(rec.Id, recordData);
+                    }
+                } else if (mergeOnly) {
                     // Merge-only: generate HTML, save snippet — no Blob.toPdf(), no individual file
                     String html = DocGenService.generateHtmlForRecord(templateId, rec.Id, recordData);
                     saveHtmlSnippet(html);

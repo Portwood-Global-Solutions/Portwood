@@ -8393,7 +8393,7 @@ private class DocGenMiscTests {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(null, 0, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(null, 0, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return an analysis even with null template');
@@ -8408,7 +8408,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 0, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 0, 1, false, false);
             Test.stopTest();
 
             System.assertEquals('No records to process.', analysis.summary, 'Should report no records for zero count');
@@ -8422,7 +8422,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, -5, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, -5, 1, false, false);
             Test.stopTest();
 
             System.assertEquals(
@@ -8440,7 +8440,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 60000, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 60000, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8519,7 +8519,7 @@ private class DocGenMiscTests {
             insert new ContentDocumentLink(LinkedEntityId = tpl.Id, ContentDocumentId = conDocId, ShareType = 'V');
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 100, 5, true);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 100, 5, true, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8541,7 +8541,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8582,7 +8582,7 @@ private class DocGenMiscTests {
             );
             Database.insert(tpl, AccessLevel.SYSTEM_MODE);
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis for V2 config');
@@ -8637,7 +8637,7 @@ private class DocGenMiscTests {
             );
             Database.insert(tpl, AccessLevel.SYSTEM_MODE);
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis for V3 config');
@@ -8652,7 +8652,7 @@ private class DocGenMiscTests {
 
             Test.startTest();
             // Invalid batch size (0 or negative) should default to 1
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 0, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 0, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis with defaulted batch size');
