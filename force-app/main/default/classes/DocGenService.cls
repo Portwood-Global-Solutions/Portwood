@@ -398,7 +398,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         'PEN' => 'S/',
         'ARS' => 'ARS$',
         'EGP' => 'E\u00A3',
-        'GHS' => 'GH\u20B5'
+        'GHS' => 'GH\u20B5',
+        // #395 - zero-decimal currencies whose symbol was missing here. Without an
+        // entry, {...:currency:auto} treated them as unknown and fell back to $ + 2dp,
+        // never reaching the zero-decimal handling below.
+        'ISK' => 'kr ',
+        'VND' => '\u20AB'
     };
 
     // Currencies that use 0 decimal places

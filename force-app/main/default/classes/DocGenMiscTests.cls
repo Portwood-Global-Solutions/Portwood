@@ -4481,6 +4481,29 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testCurrencyAutoISKNoDecimals() {
+        // #395 - ISK is a zero-decimal currency. Before the CURRENCY_SYMBOLS entry was
+        // added, :auto rejected it as unknown and fell back to '$' + setScale(2).
+        Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'ISK' };
+        String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+        System.assert(result.contains('kr'), 'auto ISK should emit the kr symbol, got: ' + result);
+        System.assert(!result.contains('$'), 'auto ISK must not fall back to $, got: ' + result);
+        System.assert(!result.contains('.'), 'auto ISK should have no decimals, got: ' + result);
+        System.assert(result.contains('1,545,001'), 'auto ISK should round to a whole number, got: ' + result);
+    }
+
+    @IsTest
+    static void testCurrencyAutoVNDNoDecimals() {
+        // #395 - same fix as ISK, VND is the other zero-decimal currency that was
+        // missing from CURRENCY_SYMBOLS.
+        Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'VND' };
+        String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+        System.assert(result.contains('₫'), 'auto VND should emit the dong symbol, got: ' + result);
+        System.assert(!result.contains('$'), 'auto VND must not fall back to $, got: ' + result);
+        System.assert(!result.contains('.'), 'auto VND should have no decimals, got: ' + result);
+    }
+
+    @IsTest
     static void testCurrencyAutoFallbackNoSourceField() {
         Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1000 };
         String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
