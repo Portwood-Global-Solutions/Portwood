@@ -66,6 +66,20 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **Large Word and PowerPoint templates no longer crash generation with a
+  `Regex too complicated` error (#325).** `mergeRunsInTags` — which rejoins a merge tag
+  split across formatting runs — and the `{RepeatHeader}` probe next to it each scanned
+  the whole document with a regex `Matcher`. Apex spends a `Matcher`'s step budget on **input
+  length**, not pattern complexity, and throws the **uncatchable**
+  `System.LimitException: Regex too complicated` once `word/document.xml` passes roughly
+  500K characters — so a long multi-page form failed regardless of how few merge tags it
+  held (the reference case is an ACORD 125 with 966K characters of XML and eight tags).
+  The exception isn't caught by `catch (Exception)` either, so a background PDF job just
+  died with a platform error ID. Both scans are now linear `indexOf` passes with no step
+  budget; the match is byte-identical (verified against the real 966K-character file and
+  a 16-shape differential test). Three customers had reported it as "is this template too
+  complicated?" when it was purely size.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage
