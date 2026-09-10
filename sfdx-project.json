@@ -1,14 +1,14 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.56.0",
-      "versionNumber": "3.56.0.NEXT",
+      "versionName": "v3.57.0",
+      "versionNumber": "3.57.0.NEXT",
       "path": "force-app",
       "default": true,
       "definitionFile": "config/build-def.json",
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
-      "ancestorVersion": "3.55.0",
+      "ancestorVersion": "3.56.0",
       "versionDescription": "Turn any Salesforce record into a finished document — quotes, invoices, contracts, certificates, letters, statements and reports. Build your template in Word, Excel or PowerPoint, or design one right in your browser, then drop in the fields you want and Portwood fills them in. Tables grow with your data, charts draw themselves, and images, barcodes and QR codes come along too. Send a document for signature and track it to completion. Generate one from a record, thousands at once, or let a Flow do it automatically overnight. Everything runs inside your own Salesforce org — no external services and no data leaving the platform. Free for every user."
     },
     {

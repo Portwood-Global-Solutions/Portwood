@@ -1,93 +1,49 @@
 # Changelog
 
-## v3.56.0 — Chart label size, and bold that tells the truth
+## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
-Released 2026-08-08 · `04tVx0000010fnNIAQ` · ancestor 3.55.0.2 · 1,961 tests, 78% coverage
+Released 2026-09-11 · `04t… — assigned at release` · ancestor 3.56.0 · ~2,111 tests, 79%
+coverage
 
-Two small fixes where the editor promised something the PDF did not deliver.
-
-### Added
-
-- **Label size on charts.** `fontSize=` on a `{Chart:...}` tag, and a **Label size** box
-  in the Canvas chart properties, honoured by **all three chart renderers** — Chart.js in
-  the browser, the SVG serializer behind Word and PowerPoint, and the HTML/CSS bars
-  behind HTML-to-PDF. It reached them one at a time, and each time the feature looked
-  finished until someone generated through the path that had been missed; two
-  byte-identical PDFs at `fontSize=10` and `fontSize=26` is what found the last one.
-  Titles and other text scale with the label size, so the hierarchy survives an
-  override — which is what makes it reachable, since a Canvas
-  author never writes the tag by hand. The live preview honours it, so the artboard and
-  the PDF agree.
-
-    Sizes are absolute canvas pixels, deliberately. Scaling them with `width=` was tried
-    first and reverted: it is right for PowerPoint, where the shape stretches the image
-    independently, and wrong for the Canvas, where `chartToHtml` emits
-    `width=inToCssPx(box.w)` and the image is placed at exactly its own size. There 12px
-    has always meant a steady ~9pt; scaling would have made a 3-inch chart print ~5pt
-    labels. One rule cannot serve both, so the size is now something you set rather than
-    something guessed at.
-
-### Fixed
-
-- **Watermark strength now changes after the image is uploaded** (#313). Opacity is baked
-  into the watermark PNG's pixels at upload (Flying Saucer has no CSS opacity), so once an
-  image was stored the strength dropdown had nothing to act on — changing it did nothing,
-  silently, and the reporter's workaround was to set the value _before_ uploading. The
-  unbaked original is now kept: in memory for the session and persisted as
-  `docgen_watermark_src_<versionId>`, so a later change re-bakes from the original rather
-  than washing an already-washed image (30% of an already-30% image is 9%, and every
-  change would compound). The chosen wash is encoded into the baked file name
-  (`watermark-p50.png`) and `getWatermarkOpacity` reads it back, so the dropdown reflects
-  what is stored after a reload instead of snapping to the default. Extends the work on
-  the closed PR #357: the persisted-source path now decodes the stored bytes to a `Blob`
-  directly (the old `fetch('data:…')` produced a nameless blob that threw in the bake for
-  every wash but 100%); `getWatermarkSource` / `getWatermarkOpacity` enforce the same
-  per-version access check as `saveWatermarkImage` (an unauthenticated-read IDOR
-  otherwise); each save sweeps the previous baked image + source so opacity changes don't
-  accumulate ContentVersions; Save-as-New-Version and cross-org export/import carry the
-  source forward; and Clear Watermark drops it. Pixel-alpha correctness of the re-bake is
-  unchanged and still verified by hand (it needs a real canvas). New
-  `scripts/qa/watermark-opacity-route-check.mjs`; `DocGenControllerTests` gains the two
-  IDOR-denial cases, the file-name round-trip, and the accumulation sweep.
-
-- **Bold on `'Arial Unicode MS'` was a no-op** (#281, PR #286 by @ssk42). The PDF engine
-  embeds that family with no bold face, so a bold it carried printed regular — the
-  control looked on and did nothing. It is now disabled for that font, and no bold is
-  emitted for it. Established by reading `/BaseFont` out of a rendered PDF: the generic
-  families _do_ register bold (`Helvetica-Bold`, `Times-Bold`, `Courier-Bold`), so the
-  issue's suggested fix — disabling bold everywhere — would have been wrong. Generic
-  families are untouched.
-
-### Changed
-
-- **The package description is static and written for customers.** It was a per-release
-  changelog, which is the wrong thing to put on the screen someone reads while deciding
-  whether to install. Release detail lives here and in the GitHub release.
-
-### Internal
-
-- `canRenderBold` has one definition. The Bold control's copy was a hand-maintained
-  inverse with a comment asking editors to keep the two in sync — the same shape as the
-  `layerLabel`/`boxLabel` drift found in v3.55.
-- Claude review skips fork PRs rather than failing them. GitHub withholds secrets and
-  `id-token: write` from fork runs, so the check could never pass and gated merges it
-  had no bearing on.
-
-## Unreleased
+One org can now run two entities without their signature emails crossing; Combined-PDF
+bulk output can be padded for double-sided printing; and a batch of uncatchable
+`System.LimitException` crashes on large Word/PDF templates and heavy Flow datasets is
+closed.
 
 ### Added
 
-- **Duplex Padding for Combined PDF bulk output (#382).** A new **Duplex
-  Padding** toggle in the Bulk Generation runner (and a matching checkbox on the
-  **Generate Bulk Documents** Flow action) makes every document in a Combined PDF start
-  on the front of a sheet when the packet is printed double-sided. With it on, each
-  record is rendered as its own PDF and a new Apex merger (`DocGenPdfMerger`) stitches
-  them, appending one completely blank page — no header, footer, watermark, or number —
-  after any document with an odd page count. Off by default; left off, the Combined PDF
-  is built by the existing HTML-concatenation path, byte-for-byte unchanged.
-  `{PageNumber}` / `{TotalPages}` count per document in a padded packet — a 3-page
-  statement reads `1 of 3 … 3 of 3` — whereas a plain Combined PDF numbers continuously
-  across the bundle.
+- **Per-brand sender identity for signature emails (#369).** A **Portwood Brand** is a
+  reusable sender identity — a **Send emails from** address (Org-Wide Email Address),
+  logo, color, company name, and footer — created on the new **Brands** tab in the
+  Command Hub. Point a Portwood Template at one with its **Sending Brand** field, and
+  every email a signature request triggers directly — request, verification PIN,
+  signer-completed, all-signed, declined, completion — uses that brand's identity. (The
+  scheduled reminder email still sends from the org-wide identity; making it brand-aware
+  is a fast-follow — it batches signers across many requests into one send.) Unset,
+  everything falls back to the org-wide Signature Settings exactly as before, so a
+  single-brand org sees no change. A customer running two entities from one org — the
+  case this was built for — assigns a different brand per template and the two never
+  cross. The full resolution order is: a per-(email type, brand) override on the Email
+  Templates tab → the brand's own identity → org-wide Signature Settings → the built-in
+  default.
+
+    The Email Templates tab gains a **Brand** selector so an admin can customize the
+    wording of one email type for one brand without touching the shared copy, plus
+    inline **+ New Brand…** and **Manage brands…** shortcuts. Each brand's OWA needs the
+    same production setup as the org-wide one — verified, **Allow All Profiles**, and a
+    DKIM-authenticated sending domain.
+
+- **Duplex Padding for Combined PDF bulk output (#382).** A new **Duplex Padding** toggle
+  in the Bulk Generation runner (and a matching checkbox on the **Generate Bulk
+  Documents** Flow action) makes every document in a Combined PDF start on the front of a
+  sheet when the packet is printed double-sided. With it on, each record is rendered as
+  its own PDF and a new Apex merger (`DocGenPdfMerger`) stitches them, appending one
+  completely blank page — no header, footer, watermark, or number — after any document
+  with an odd page count. Off by default; left off, the Combined PDF is built by the
+  existing HTML-concatenation path, byte-for-byte unchanged. `{PageNumber}` /
+  `{TotalPages}` count per document in a padded packet — a 3-page statement reads
+  `1 of 3 … 3 of 3` — whereas a plain Combined PDF numbers continuously across the
+  bundle.
 
     The packet assembles in a single 12 MB background job, so it has a size ceiling of
     roughly 50–400 records depending on how heavy each rendered document is. The pre-run
@@ -107,6 +63,121 @@ Two small fixes where the editor promised something the PDF did not deliver.
   switch alone.
 
 ### Fixed
+
+- **Every signature email after the first ignored the admin's saved templates and
+  branding in guest and Automated Process contexts (#390).** Only the initial
+  signature-request email rendered the customized `DocGen_Email_Template__c`; the
+  verification PIN, completion confirmation, all-signed, signer-completed,
+  signer-declined, and sequential next-signer emails silently fell back to the built-in
+  wording and the org-wide fallback color (or `#1589EE` when the org set none), and
+  dropped the logo. Two independent causes. First, `DocGen_Email_Template__c` and
+  `DocGen_Asset__c` ship `externalSharingModel = Private` with no guest sharing rule, and
+  `WITH SYSTEM_MODE` bypasses CRUD/FLS but **not record sharing** — so a **guest** sender
+  (the PIN and guided-completion paths) read zero rows and fell through to the built-in
+  default. The three internal-config reads now run in a private `without sharing` inner
+  reader. Second, the `DocGen_Signature_PDF__e` trigger and the async finalizer run as
+  the **Automated Process** user, which holds no permission set;
+  `DocGenFlsGuard.guestAssertAccessible` self-bypasses only for `Guest`, so it threw and
+  abandoned the load for the signer-completed / declined / all-signed / next-signer
+  emails. The FLS describe check is now an advisory signal
+  (`DocGenFlsGuard.advisoryAssertAccessible`) that logs instead of throwing; the reads
+  stay `SYSTEM_MODE` and read-only — package-internal branding config with no per-record
+  confidentiality model. Found by rendering a stored PIN template as a real Site guest
+  user and getting back "Your Signature Verification Code", the built-in.
+
+- **The verification PIN email never resolved a brand (#369).** `sendPinEmail` in
+  `DocGenSignatureController` still called the pre-#369 two-argument `render()` and read
+  the OWA straight from Signature Settings — the one send site in the codebase that was
+  never updated for the Brand cascade. It always rendered the shared template and always
+  used the org-default sender, whatever the signing template's Sending Brand was set to.
+  It now threads the request through from the signer row, resolves the brand, and uses
+  its OWA and its `render()` overload — verified by a live `sendPin()` against a
+  brand-assigned template queueing the PIN email with that brand's color and footer, and
+  by two brands with distinct OWAs (`support@` vs `hello@`) resolving to their own
+  addresses.
+
+- **Sequential signing no longer stalls after the first signer (#379).** A sequential
+  request stopped dead at _In Progress_ once signer 1 finished — signer 2 was never
+  emailed and no error surfaced. Two independent causes, both fixed. First, the two
+  client-side finalize paths never handed off to `DocGenSignaturePdfTrigger` for a
+  non-final signer: `saveCompositedSignedPdf` (the guided draw/type path) had no publish
+  at all on that branch, and `savePdfSignature` (the flat-PDF path) gated its publish on
+  `snapshotBacked` alone. Since that trigger is the only sender of the next-signer email,
+  the chain never advanced; both now publish `DocGen_Signature_PDF__e` there the same way
+  `saveSignature` already did, and the trigger still gates PDF generation on
+  `remaining == 0` so an intermediate signer only fires notifications. Second, even once
+  the trigger ran the send was rejected: Reply-To was `UserInfo.getUserEmail()`, which
+  inside the platform-event trigger resolves to the Automated Process user
+  (`noreply@<orgId>`), and `Messaging.sendEmail` drops the whole message with
+  `INVALID_EMAIL_ADDRESS` — this also broke the pre-existing typed-name sequential path.
+  Reply-To and `{SenderName}` now come from the request creator (`CreatedBy`), falling
+  back to the running user when there is no request context or the creator has no email,
+  and a `noreply@` address is never set as Reply-To. Invisible to unit tests —
+  `Messaging.sendEmail` skips Reply-To validation in test context — so it was caught by
+  end-to-end sends in two orgs.
+
+- **Inline (`data:` URI) images in HTML templates now render instead of coming out blank
+  (#377).** `Blob.toPdf` (Flying Saucer) silently drops `<img src="data:image/…;base64,…">`
+  — the page renders with an empty gap where the image should be — and a large inline
+  blob also trips a "Regex too complicated" limit further down the HTML pipeline. The
+  Designer's upload flow already extracts inline images to ContentVersions client-side,
+  but a "self-contained" body that reaches storage another way did not: a **cross-org
+  template-bundle import** (the reported case), LLM generation, or a direct
+  `saveHtmlTemplateBody` call. New `DocGenService.materialiseInlineHtmlImages` pulls each
+  inline image into a `docgen_html_img_<templateId>_<sha256>` ContentVersion — the title
+  prefix the image picker, the clone re-key, and the signature image allowlist already
+  match on — and rewrites the `<img src>` to the relative
+  `/sfc/servlet.shepherd/version/download/<cvId>` form the renderer can fetch. Images are
+  deduplicated by content hash, so the same logo is one file across every template and
+  every render.
+
+    It runs at **save** time — `saveHtmlTemplateBody` and the bundle importer — because
+    `Blob.toPdf`'s server-side image fetch cannot see a ContentVersion inserted in the
+    same transaction as the `toPdf` call (a committed image embeds at full size; a
+    same-transaction one renders blank — established by isolating the two).
+    `mergeHtmlTemplate` calls it too, as a self-healing fallback for a body that never
+    passed a write path (a file attached straight to the record, a metadata deploy, or a
+    body stored before this change): that first render still shows blank images, but the
+    CVs are now committed, so every later render resolves them. The scan is
+    `indexOf`-based, never a whole-string `Matcher`, so a hundreds-of-KB payload does not
+    throw; malformed base64 and a DML failure both leave the affected `data:` URI in
+    place rather than erroring; a per-image cap skips a single oversized payload and a
+    heap-scaled total-decoded cap (1.5 MB on the synchronous save path, 5 MB when there
+    is async headroom) keeps a pathological body from a mid-run heap crash; and one bad
+    image no longer rolls back the rest (`allOrNone=false`). A body with no `data:image/`
+    marker is returned untouched at zero cost.
+
+- **Large Word and PowerPoint templates no longer crash generation with a
+  `Regex too complicated` error (#325, #362).** Three separate whole-document regex
+  `Matcher` scans on the merge path each threw the **uncatchable**
+  `System.LimitException: Regex too complicated` once `word/document.xml` grew past a few
+  hundred thousand characters — a long multi-page form, regardless of how few merge tags
+  it held (the reference case is an ACORD 125 with 966 K characters of XML and eight
+  tags), and any large giant-query document. Apex spends a `Matcher`'s step budget on
+  **input length**, not pattern complexity, and the exception isn't caught by
+  `catch (Exception)` either, so a background PDF job just died with a platform error ID.
+  All three are now linear `indexOf` passes with no step budget: `mergeRunsInTags`
+  (rejoins a merge tag split across formatting runs) and the `{RepeatHeader}` probe next
+  to it (#325), and the whitespace-tolerant `{ #Loop }` open-tag fallback in
+  `extractLoopBody` on the giant-query path (#362). Match semantics are byte-identical —
+  verified against the real 966 K-character file, a 16-shape differential test, and the
+  exact spacing set the old `{ #Rel }` pattern accepted; and the tag-name / relationship
+  comparisons are case-sensitive as before (Apex `==` is not).
+
+- **`:convert` was silently ignored on a plain currency field (#297).** It worked on
+  aggregates and nowhere else — on a plain field the `convert` segment landed in the
+  locale slot, was parsed as a bogus locale name and dropped, so
+  `{Amount:currency:EUR:convert}` on a USD-100 record printed `€100.00`: the euro symbol
+  with the dollar figure, wrong by the exchange rate with nothing in the document to flag
+  it. It now strips `:convert` before the locale slot and converts from the record's own
+  `CurrencyIsoCode` into the tag's target, reusing `DocGenCurrency.wantsConversion` /
+  `stripConvertSegment` so the plain-field and aggregate paths can't drift on what
+  `:convert` means. It composes with locale (`:EUR:de_DE:convert`) and the `auto` forms.
+  A record with no source currency passes through unconverted rather than having a rate
+  invented for it; a missing rate raises the same actionable error the aggregate path
+  already does. Applies on the giant-query parent path (>2000 child rows) as well as the
+  normal path, and a stray `:convert` no longer leaks into a `{COUNT:…:currency:…}` tag's
+  formatting.
 
 - **`{...:currency:auto}` printed `$` and 2 decimals for ISK and VND (#395).** Customer
   reported an Icelandic Króna (ISK) quote rendering `$1,545,000.00` instead of
@@ -142,15 +213,17 @@ Two small fixes where the editor promised something the PDF did not deliver.
     targets. `TargetMode="External"` is required, since an internal target is a file path
     rather than a URL, and only real link schemes (`http`, `https`, `mailto`, `tel`,
     `ftp`) are emitted: the same HTML renders in the signature viewer, so a hand-built
-    `.docx` pointing a relationship at `javascript:` keeps the styled-text fallback.
+    `.docx` pointing a relationship at `javascript:` keeps the styled-text fallback. The
+    URL is decoded and re-escaped exactly once on the way into the attribute, so a bare
+    `&` in a hand-built relationship no longer breaks the downstream parse.
 
     Two cases are deliberately unchanged. In-document bookmarks — a `w:anchor` link with
     no `r:id`, which is what a TOC or cross-reference emits — still render as styled
-    text; in-document navigation needs matching anchors and is its own piece of work.
-    And on the heap-efficient pre-decomposed PDF path only `document.xml.rels` is stored
-    at template-save time, so a link in a **header or footer** resolves on the full-ZIP
-    path but not there until those parts are decomposed too. Word `.docx` output was
-    never affected: it keeps the native relationship.
+    text; in-document navigation needs matching anchors and is its own piece of work. And
+    on the heap-efficient pre-decomposed PDF path only `document.xml.rels` is stored at
+    template-save time, so a link in a **header or footer** resolves on the full-ZIP path
+    but not there until those parts are decomposed too. Word `.docx` output was never
+    affected: it keeps the native relationship.
 
 - **Rich-text field values that are a bare `<table>` or `<h1>` now render instead of
   printing as raw markup (#399).** `processXml`'s "is this HTML or plain text?" gate
@@ -160,102 +233,51 @@ Two small fixes where the editor promised something the PDF did not deliver.
   Salesforce Rich Text editor — was classified as plain text and XML-escaped, so the PDF
   showed `<table>...</table>` literally. The gate moved into `looksLikeRichTextHtml`,
   which recognises the table family, `<h1>`–`<h6>`, `<a>`, `<blockquote>`, `<pre>` and
-  `<hr>` as well. `<script>`/`<style>`/`<iframe>` and friends are deliberately still
-  escaped. HTML templates now render the table (the renderer always supported it — the
-  value just never reached it as HTML); `<br>` was already handled and is unchanged. In
-  Word, PowerPoint and Excel output these values now come through as flattened text
-  rather than raw tags; an HTML table is not reconstructed as a native table in those
-  formats.
-- **Per-brand sender identity for signature emails (#369).** A **Portwood Brand** is a
-  reusable sender identity — a **Send emails from** address (Org-Wide Email Address),
-  logo, color, company name, and footer — created on the new **Brands** tab in the
-  Command Hub. Point a Portwood Template at one with its **Sending Brand** field, and
-  every email a signature request triggers directly — request, verification PIN,
-  signer-completed, all-signed, declined, completion — uses that brand's identity. (The
-  scheduled reminder email still sends from the org-wide identity; making it brand-aware
-  is a fast-follow — it batches signers across many requests into one send.)
-  Unset, everything falls back to the org-wide Signature Settings exactly as before, so
-  a single-brand org sees no change. A customer running two entities from one org — the
-  case this was built for — assigns a different brand per template and the two never
-  cross. The full resolution order is: a per-(email type, brand) override on the Email
-  Templates tab → the brand's own identity → org-wide Signature Settings → the built-in
-  default.
+  `<hr>` as well, and anchors the short tag names to a tag boundary so prose like
+  `the <threshold> parameter` or `a < b` stays escaped instead of vanishing.
+  `<script>`/`<style>`/`<iframe>` and friends are deliberately still escaped. HTML
+  templates now render the table (the renderer always supported it — the value just
+  never reached it as HTML); `<br>` was already handled and is unchanged. In Word,
+  PowerPoint and Excel output these values now come through as flattened text rather than
+  raw tags; an HTML table is not reconstructed as a native table in those formats.
 
-    The Email Templates tab gains a **Brand** selector so an admin can customize the
-    wording of one email type for one brand without touching the shared copy, plus
-    inline **+ New Brand…** and **Manage brands…** shortcuts. Each brand's OWA needs the
-    same production setup as the org-wide one — verified, **Allow All Profiles**, and a
-    DKIM-authenticated sending domain.
+- **The Auto Giant Query Flow action no longer crashes on a heavy dataset that stays
+  under the row-count threshold (#374).** It chose between synchronous and background
+  generation on a child **row count over 2,000** alone, so a record with a few hundred
+  rows carrying large rich-text fields — tens of MB of data — ran synchronously and hit
+  the **uncatchable** `System.LimitException: Apex heap size too large`. It now routes on
+  estimated peak heap: when a dataset is borderline on row count it measures one real
+  child row and trusts that measurement, so a few hundred rows that each carry a 30 KB
+  field route to the background while a few hundred skinny rows stay synchronous. A new
+  `DocGenGiantQueryRouter` is the single decision point; the on-screen Runner's pre-flight
+  shares its estimator and constants (the Runner's inline warning stays row-count-based —
+  it doesn't sample). An over-budget job that can't be auto-routed now fails with a clear
+  message instead of the heap crash: a V1 or V2 query config is told to re-save as V3
+  (auto-routing needs V3 — the background path skips `processXml`, which would drop
+  parent-level `{#IF}` and secondary loops), and non-Word templates or already-async
+  contexts are pointed to the Runner.
 
-### Fixed
+    **Existing Flows:** a dataset that is heavy per-row but under 2,000 rows now routes
+    to the background where it used to run inline — returning `Is Giant Query = true` and
+    a **Job ID** with no **Content Document ID** yet. A Flow that uses the generated file
+    immediately after this action should branch on `Is Giant Query` and poll the job.
+    Datasets with ordinary-sized rows are unaffected.
 
-- **Every signature email after the first ignored the admin's saved templates and
-  branding in guest / system context (#390).** Only the initial request email — sent in
-  the internal Flow user's transaction — rendered the customized `DocGen_Email_Template__c`.
-  The verification PIN and the guided-path completion / all-signed emails are sent from
-  the **Site guest user's** transaction, where the template read inherited the service
-  class's `with sharing`; `DocGen_Email_Template__c` / `DocGen_Asset__c` ship
-  `externalSharingModel=Private` with no guest sharing rule, so `WITH SYSTEM_MODE` (which
-  bypasses CRUD/FLS but not record sharing) returned **zero rows** — the cache stayed
-  empty and every render fell through to the built-in wording, the org-wide fallback
-  color (or `#1589EE` when the org set none), and no logo. The signer-completed /
-  declined / all-signed and sequential next-signer emails fail the same way from the
-  **Automated Process** user (platform-event trigger, async finalizer): that user holds
-  no permission set, and the FLS guard only self-bypasses its verdict for `Guest`, so it
-  threw and the load was abandoned. A private `without sharing` inner reader now isolates
-  the three internal-config reads, and the FLS guard runs as a log-not-throw advisory
-  (`DocGenFlsGuard.advisoryAssertAccessible`) — the describe call the analysers
-  pattern-match on still runs; the reads stay `SYSTEM_MODE` and read-only. Found by
-  rendering a custom PIN template as a real Site guest user and getting back "Your
-  Signature Verification Code" — the built-in.
-
-- **The verification PIN email never resolved a brand (#369).** `sendPinEmail` in
-  `DocGenSignatureController` still called the pre-#369 two-argument `render()` and read
-  the OWA straight from Signature Settings — the one send site in the codebase that was
-  never updated for the Brand cascade. It always rendered the shared template and always
-  used the org-default sender, whatever the signing template's Sending Brand was set to.
-  It now threads the request through from the signer row, resolves the brand, and uses
-  its OWA and its `render()` overload — verified by a live `sendPin()` against a
-  brand-assigned template queueing the PIN email with that brand's color and footer, and
-  by two brands with distinct OWAs (`support@` vs `hello@`) resolving to their own
-  addresses.
-- **Inline (`data:` URI) images in HTML templates now render instead of coming out blank
-  (#377).** `Blob.toPdf` (Flying Saucer) silently drops `<img src="data:image/…;base64,…">`
-  — the page renders with an empty gap where the image should be — and a large inline
-  blob also trips a "Regex too complicated" limit further down the HTML pipeline. The
-  Designer's upload flow already extracts inline images to ContentVersions client-side,
-  but a "self-contained" body that reaches storage another way did not: a **cross-org
-  template-bundle import** (the reported case), LLM generation, or a direct
-  `saveHtmlTemplateBody` call. New `DocGenService.materialiseInlineHtmlImages` pulls each
-  inline image into a `docgen_html_img_<templateId>_<sha256>` ContentVersion — the title
-  prefix the image picker, the clone re-key, and the signature image allowlist already
-  match on — and rewrites the `<img src>` to the relative
-  `/sfc/servlet.shepherd/version/download/<cvId>` form the renderer can fetch. Images are
-  deduplicated by content hash, so the same logo is one file across every template and
-  every render.
-
-    It runs at **save** time — `saveHtmlTemplateBody` and the bundle importer — because
-    `Blob.toPdf`'s server-side image fetch cannot see a ContentVersion inserted in the
-    same transaction as the `toPdf` call (a committed image embeds at full size; a
-    same-transaction one renders blank — established by isolating the two). `mergeHtml-`
-    `Template` calls it too, as a self-healing fallback for a body that never passed a
-    write path (a file attached straight to the record, a metadata deploy, or a body
-    stored before this change): that first render still shows blank images, but the CVs
-    are now committed, so every later render resolves them. The scan is `indexOf`-based,
-    never a whole-string `Matcher`, so a hundreds-of-KB payload does not throw; malformed
-    base64 and a DML failure both leave the affected `data:` URI in place rather than
-    erroring; and a ~5 MB total-decoded cap keeps a pathological body from a mid-run heap
-    crash. A body with no `data:image/` marker is returned untouched at zero cost.
-
-- **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
-  engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
-  bold box set to it printed regular while the canvas showed bold — WYSIWYG said
-  "weight" where the PDF could not deliver. The Bold control is now disabled for that
-  font (and cleared if you switch a bold box to it), the canvas stops showing it as on,
-  and the serializer stops emitting the no-op `font-weight: bold`. The corrected
-  `FONT_CHOICES` note no longer claims bold. The generic families are unaffected: they
-  resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
-  Courier-Bold in a real org).
+- **The watermark strength control now takes effect after the image is uploaded (#313).**
+  Opacity is baked into the watermark PNG's pixels at upload (Flying Saucer has no CSS
+  opacity), so once an image was stored the strength dropdown had nothing to act on —
+  changing it did nothing, silently, and the reporter's workaround was to set the value
+  _before_ uploading. The unbaked original is now retained (in memory for the session and
+  persisted as `docgen_watermark_src_<versionId>`) and a later change re-bakes from it
+  rather than washing an already-washed image; the chosen wash is encoded into the baked
+  file name and read back so the dropdown reflects what is stored after a reload. The
+  reload path (fixed regression from the closed #357) no longer throws, `getWatermark*`
+  enforce the same per-version access check as the save endpoint (an unauthenticated-read
+  IDOR otherwise), each save sweeps the prior baked image + source so opacity changes
+  don't accumulate ContentVersions, Save-as-New-Version and cross-org export/import carry
+  the source forward, and Clear Watermark drops it. The two-image save is bounded against
+  the synchronous heap — payloads over ~3 MB are rejected with a clear message and the
+  two images are decoded one at a time.
 
 - **The template editor no longer warns about unsaved changes right after a save
   (#370).** "Save Template Details" and "Save as New Version" both deliberately leave the
@@ -264,108 +286,57 @@ Two small fixes where the editor promised something the PDF did not deliver.
   record. Both save paths now re-snapshot after a successful save; a genuine edit made
   _after_ the save still moves the snapshot and still warns.
 
-- **The Auto Giant Query Flow action no longer crashes on a heavy dataset that stays
-  under the row-count threshold (#374).** It chose between synchronous and background
-  generation on a child **row count over 2,000** alone, so a record with a few hundred
-  rows carrying large rich-text fields — tens of MB of data — ran synchronously and hit
-  the **uncatchable** `System.LimitException: Apex heap size too large`. It now routes on
-  estimated peak heap: when a dataset is borderline on row count it measures one real
-  child row, so a few hundred rows that each carry a 30 KB field are costed accordingly
-  and route to the background. A new `DocGenGiantQueryRouter` is the single decision
-  point; the on-screen Runner's pre-flight shares its estimator and constants (the
-  Runner's inline warning stays row-count-based — it doesn't sample). An over-budget job
-  that can't be auto-routed now fails with a clear message instead of the heap crash: a
-  V1 or V2 query config is told to re-save as V3 (auto-routing needs V3 — the background
-  path skips `processXml`, which would drop parent-level `{#IF}` and secondary loops),
-  and non-Word templates or already-async contexts are pointed to the Runner.
+## v3.56.0 — Chart label size, and bold that tells the truth
 
-    **Existing Flows:** a dataset that is heavy per-row but under 2,000 rows now routes
-    to the background where it used to run inline — returning `Is Giant Query = true` and
-    a **Job ID** with no **Content Document ID** yet. A Flow that uses the generated file
-    immediately after this action should branch on `Is Giant Query` and poll the job.
-    Datasets with ordinary-sized rows are unaffected.
+Released 2026-08-08 · `04tVx0000010fnNIAQ` · ancestor 3.55.0.2 · 1,961 tests, 78% coverage
 
-- **Large Word and PowerPoint templates no longer crash generation with a
-  `Regex too complicated` error (#325).** `mergeRunsInTags` — which rejoins a merge tag
-  split across formatting runs — and the `{RepeatHeader}` probe next to it each scanned
-  the whole document with a regex `Matcher`. Apex spends a `Matcher`'s step budget on **input
-  length**, not pattern complexity, and throws the **uncatchable**
-  `System.LimitException: Regex too complicated` once `word/document.xml` passes roughly
-  500K characters — so a long multi-page form failed regardless of how few merge tags it
-  held (the reference case is an ACORD 125 with 966K characters of XML and eight tags).
-  The exception isn't caught by `catch (Exception)` either, so a background PDF job just
-  died with a platform error ID. Both scans are now linear `indexOf` passes with no step
-  budget; the match is byte-identical (verified against the real 966K-character file and
-  a 16-shape differential test). Three customers had reported it as "is this template too
-  complicated?" when it was purely size. A third scan of the same shape — the
-  whitespace-tolerant `{ #Loop }` open-tag fallback in `extractLoopBody` — is converted
-  in #362, shipping in this same release; a template that hits both needs both.
-- **A loop tag written with spaces no longer crashes generation of a large Word document
-  (#362).** When `{ #Relationship }` was written with spaces, `extractLoopBody` fell back
-  to a whole-document regex `Matcher` to find it — and Apex throws the uncatchable
-  `System.LimitException: Regex too complicated` once a single `Matcher` crosses ~900K
-  characters, a size a large document's `document.xml` on the giant-query path (2,000+
-  child rows) can reach. It is now a linear scan that accepts exactly the same spacing
-  the pattern did (`{#Rel}`, `{ #Rel}`, `{#Rel }`, `{ # Rel }`, tabs and newlines
-  included), so whitespace tolerance is unchanged and literal `{#Relationship}` tags
-  still take the `indexOf` fast path. This is the third scan of this shape; the other
-  two (`mergeRunsInTags` and the `{RepeatHeader}` probe) are converted in #325, shipping
-  in the same release — a template that hits more than one needs all of them.
-- **`:convert` was silently ignored on a plain currency field (#297).** It worked on
-  aggregates and nowhere else — on a plain field the `convert` segment landed in the
-  locale slot, was parsed as a bogus locale name and dropped, so
-  `{Amount:currency:EUR:convert}` on a USD-100 record printed `€100.00`: the euro symbol
-  with the dollar figure, wrong by the exchange rate with nothing in the document to flag
-  it. It now strips `:convert` before the locale slot and converts from the record's own
-  `CurrencyIsoCode` into the tag's target, reusing `DocGenCurrency.wantsConversion` /
-  `stripConvertSegment` so the plain-field and aggregate paths can't drift on what
-  `:convert` means. It composes with locale (`:EUR:de_DE:convert`) and the `auto` forms.
-  A record with no source currency passes through unconverted rather than having a rate
-  invented for it; a missing rate raises the same actionable error the aggregate path
-  already does. Applies on the giant-query parent path (>2000 child rows) as well as the
-  normal path, and a stray `:convert` no longer leaks into a `{COUNT:…:currency:…}` tag's
-  formatting.
-- **Every signature email after the first ignored the admin's saved template and branding
-  in guest and Automated Process contexts (#390).** Only the initial signature-request
-  email rendered the customised `DocGen_Email_Template__c`; the verification PIN,
-  completion confirmation, all-signed, signer-completed, signer-declined, and sequential
-  next-signer emails silently fell back to the built-in wording and the org-wide fallback
-  colour (or `#1589EE` when the org set none), and dropped the logo. Two independent
-  causes. First, `DocGen_Email_Template__c` and `DocGen_Asset__c` ship
-  `externalSharingModel = Private` with no guest sharing rule, and `WITH SYSTEM_MODE`
-  bypasses CRUD/FLS but **not record sharing** — so a **guest** sender (the PIN and
-  guided-completion paths) read zero rows and fell through to the built-in default. The
-  three reads now run in a private `without sharing` inner reader.
+Two small fixes where the editor promised something the PDF did not deliver.
 
-    Second, the `DocGen_Signature_PDF__e` trigger and the async finalizer run as the
-    **Automated Process** user, which holds no permission set;
-    `DocGenFlsGuard.guestAssertAccessible` self-bypasses only for `Guest`, so it threw
-    and abandoned the load for the signer-completed / declined / all-signed / next-signer
-    emails. The FLS describe check is now an advisory signal (`flsSignalOnly`) that logs
-    instead of throwing. Reads stay `SYSTEM_MODE` and read-only — package-internal
-    branding config with no per-record confidentiality model. Found by rendering a stored
-    PIN template as a real Site guest user and getting back "Your Signature Verification
-    Code", the built-in.
+### Added
 
-- **Sequential signing no longer stalls after the first signer (#379).** A
-  sequential request stopped dead at _In Progress_ once signer 1 finished — signer 2 was
-  never emailed and no error surfaced. Two independent causes, both fixed. First, the two
-  client-side finalize paths never handed off to `DocGenSignaturePdfTrigger` for a
-  non-final signer: `saveCompositedSignedPdf` (the guided draw/type path) had no publish
-  at all on that branch, and `savePdfSignature` (the flat-PDF path) gated its publish on
-  `snapshotBacked` alone. Since that trigger is the only sender of the next-signer email,
-  the chain never advanced; both now publish `DocGen_Signature_PDF__e` there the same way
-  `saveSignature` already did, and the trigger still gates PDF generation on
-  `remaining == 0` so an intermediate signer only fires notifications. Second, even once
-  the trigger ran the send was rejected: Reply-To was `UserInfo.getUserEmail()`, which
-  inside the platform-event trigger resolves to the Automated Process user
-  (`noreply@<orgId>`), and `Messaging.sendEmail` drops the whole message with
-  `INVALID_EMAIL_ADDRESS` — this also broke the pre-existing typed-name sequential path.
-  Reply-To and `{SenderName}` now come from the request creator (`CreatedBy`), falling
-  back to the running user when there is no request context or the creator has no email,
-  and a `noreply@` address is never set as Reply-To. Invisible to unit tests —
-  `Messaging.sendEmail` skips Reply-To validation in test context — so it was caught by
-  end-to-end sends in two orgs.
+- **Label size on charts.** `fontSize=` on a `{Chart:...}` tag, and a **Label size** box
+  in the Canvas chart properties, honoured by **all three chart renderers** — Chart.js in
+  the browser, the SVG serializer behind Word and PowerPoint, and the HTML/CSS bars
+  behind HTML-to-PDF. It reached them one at a time, and each time the feature looked
+  finished until someone generated through the path that had been missed; two
+  byte-identical PDFs at `fontSize=10` and `fontSize=26` is what found the last one.
+  Titles and other text scale with the label size, so the hierarchy survives an
+  override — which is what makes it reachable, since a Canvas
+  author never writes the tag by hand. The live preview honours it, so the artboard and
+  the PDF agree.
+
+    Sizes are absolute canvas pixels, deliberately. Scaling them with `width=` was tried
+    first and reverted: it is right for PowerPoint, where the shape stretches the image
+    independently, and wrong for the Canvas, where `chartToHtml` emits
+    `width=inToCssPx(box.w)` and the image is placed at exactly its own size. There 12px
+    has always meant a steady ~9pt; scaling would have made a 3-inch chart print ~5pt
+    labels. One rule cannot serve both, so the size is now something you set rather than
+    something guessed at.
+
+### Fixed
+
+- **Bold on `'Arial Unicode MS'` was a no-op** (#281, PR #286 by @ssk42). The PDF engine
+  embeds that family with no bold face, so a bold it carried printed regular — the
+  control looked on and did nothing. It is now disabled for that font, and no bold is
+  emitted for it. Established by reading `/BaseFont` out of a rendered PDF: the generic
+  families _do_ register bold (`Helvetica-Bold`, `Times-Bold`, `Courier-Bold`), so the
+  issue's suggested fix — disabling bold everywhere — would have been wrong. Generic
+  families are untouched.
+
+### Changed
+
+- **The package description is static and written for customers.** It was a per-release
+  changelog, which is the wrong thing to put on the screen someone reads while deciding
+  whether to install. Release detail lives here and in the GitHub release.
+
+### Internal
+
+- `canRenderBold` has one definition. The Bold control's copy was a hand-maintained
+  inverse with a comment asking editors to keep the two in sync — the same shape as the
+  `layerLabel`/`boxLabel` drift found in v3.55.
+- Claude review skips fork PRs rather than failing them. GitHub withholds secrets and
+  `id-token: write` from fork runs, so the check could never pass and gated merges it
+  had no bearing on.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
