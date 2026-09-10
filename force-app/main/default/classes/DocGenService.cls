@@ -398,7 +398,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         'PEN' => 'S/',
         'ARS' => 'ARS$',
         'EGP' => 'E\u00A3',
-        'GHS' => 'GH\u20B5'
+        'GHS' => 'GH\u20B5',
+        // #395 - zero-decimal currencies whose symbol was missing here. Without an
+        // entry, {...:currency:auto} treated them as unknown and fell back to $ + 2dp,
+        // never reaching the zero-decimal handling below.
+        'ISK' => 'kr ',
+        'VND' => '\u20AB'
     };
 
     // Currencies that use 0 decimal places
@@ -3065,6 +3070,21 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
+     * Renders a PDF blob (no save) from pre-cached record data, keeping the real
+     * recordId so chart context and image tags resolve as they do for a live
+     * record. Used by DocGenBatch's duplex-padding path (#382).
+     * @return Map with keys: blob (PDF Blob), title (String)
+     */
+    global static Map<String, Object> generatePdfBlobFromData(
+        Id templateId,
+        Id recordId,
+        Map<String, Object> preloadedRecordData
+    ) {
+        preloadedRecordDataOverride = preloadedRecordData;
+        return generatePdfBlob(templateId, recordId);
+    }
+
+    /**
      * Renders a PDF directly from a caller-supplied data map — no SOQL, no recordId required.
      * Lets Flows/Apex assemble custom data wrappers (external API responses, computed totals,
      * cross-object aggregations) and render them straight into a template without persisting
@@ -3187,7 +3207,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
     private static String combineXmlWithHeadersFooters(MergeResult mr) {
         if (mr.processedXmlEntries == null) {
-            return mr.documentXml;
+            return DocGenHtmlRenderer.resolveHyperlinkRelIds(mr.documentXml, mr.relsXml);
         }
 
         // Map each header/footer file → its sectPr type (default/first/even).
@@ -3211,7 +3231,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 continue;
             }
             String partPrefix = key.substringAfterLast('/').substringBefore('.xml');
-            String partXml = namespaceImageRelIds(mr.processedXmlEntries.get(key), partPrefix);
+            // #363 — resolve Word-authored hyperlinks against THIS part's own rels
+            // (r:id values are per-part, so the document rels must not be used here).
+            // Only the full-ZIP path carries header/footer rels; the pre-decomposed
+            // PDF path stores document.xml.rels alone, so a header link there stays
+            // styled-but-dead until those parts are decomposed too.
+            String partXml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                mr.processedXmlEntries.get(key),
+                relsXmlForPart(mr, key)
+            );
+            partXml = namespaceImageRelIds(partXml, partPrefix);
             // Default to "default" when unmapped (older templates without sectPr refs).
             String partType = partTypeByFile.containsKey(partPrefix) ? partTypeByFile.get(partPrefix) : 'default';
             Boolean isHeader = key.startsWith('word/header');
@@ -3255,7 +3284,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isNotBlank(headersEven)) {
             combinedXml += '<!-- DOCGEN_HEADER_EVEN_START -->' + headersEven + '<!-- DOCGEN_HEADER_EVEN_END -->';
         }
-        combinedXml += mr.documentXml;
+        combinedXml += DocGenHtmlRenderer.resolveHyperlinkRelIds(mr.documentXml, mr.relsXml);
         if (String.isNotBlank(footersDefault)) {
             combinedXml += '<!-- DOCGEN_FOOTER_START -->' + footersDefault + '<!-- DOCGEN_FOOTER_END -->';
         }
@@ -3266,6 +3295,25 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             combinedXml += '<!-- DOCGEN_FOOTER_EVEN_START -->' + footersEven + '<!-- DOCGEN_FOOTER_EVEN_END -->';
         }
         return combinedXml;
+    }
+
+    /**
+     * Returns the rels part belonging to a processed XML entry, so hyperlink r:id
+     * values resolve against their own part rather than the document's (#363).
+     * "word/header2.xml" → the passthrough "word/_rels/header2.xml.rels".
+     * Returns null when that part wasn't carried through, which leaves those
+     * hyperlinks unresolved rather than resolving them to the wrong target.
+     */
+    private static String relsXmlForPart(MergeResult mr, String partPath) {
+        if (partPath == 'word/document.xml') {
+            return mr.relsXml;
+        }
+        if (mr.passthroughEntries == null) {
+            return null;
+        }
+        String relsPath = 'word/_rels/' + partPath.substringAfterLast('/') + '.rels';
+        Blob relsBlob = mr.passthroughEntries.get(relsPath);
+        return relsBlob == null ? null : relsBlob.toString();
     }
 
     /**
@@ -3614,20 +3662,100 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return applyRepeatHeaderMarkers(mergeRunsInTagsCore(xml));
     }
 
+    /**
+     * Collects every <w:t...>text</w:t> / <a:t...>text</a:t> body, recording the
+     * absolute offsets of the text so the caller can splice the XML back together.
+     *
+     * This replaces the equivalent regex, which was
+     * `<[wa]:t(?:\s[^>]*)?>([^<]*)</[wa]:t>`, and it is a LINEAR SCAN on purpose.
+     *
+     * Apex throws `System.LimitException: Regex too complicated` once a single
+     * Matcher exceeds its internal step budget, and that exception is NOT caught
+     * by `catch (Exception)` — it kills the whole transaction. The budget is
+     * spent by INPUT LENGTH, not by how the pattern is written: a pattern that
+     * does per-position work across the string blows up regardless of how simple
+     * it looks. Measured on the reported ACORD 125 template (issue #325), the old
+     * regex completed at 400,000 characters of word/document.xml and threw at
+     * 500,000; the customer's file is 966,143. Word generation was therefore
+     * impossible above roughly 450K of document.xml, no matter how few merge tags
+     * the template contained — that template has eight braces in the whole file.
+     *
+     * Every Word and PowerPoint merge runs through here, so this is the site that
+     * has to be budget-free rather than merely cheaper. `indexOf` has no such
+     * budget, so the ceiling goes away entirely instead of moving.
+     *
+     * Match semantics are kept identical to the regex it replaces, deliberately
+     * including the two quirks: the opening and closing prefixes are matched
+     * independently (`<w:t>x</a:t>` matched before and still does), and the
+     * closing tag admits no whitespace.
+     */
+    @TestVisible
+    private static void collectTextRunBodies(
+        String xml,
+        List<Integer> contentStarts,
+        List<Integer> contentEnds,
+        List<String> contents
+    ) {
+        Integer n = xml.length();
+        Integer i = 0;
+        while (i < n) {
+            Integer lt = xml.indexOf('<', i);
+            // Shortest possible match is '<w:t>' + '</w:t>' — no room left to match.
+            if (lt == -1 || lt + 5 > n) {
+                return;
+            }
+            String name = xml.substring(lt + 1, lt + 4);
+            // .equals(), not ==: Apex String == / != are case-INSENSITIVE, but the
+            // regex this replaced (`<[wa]:t…`) was case-sensitive. OOXML tag names
+            // are case-sensitive, so keep exact parity and don't treat <W:T> as text.
+            if (!name.equals('w:t') && !name.equals('a:t')) {
+                i = lt + 1;
+                continue;
+            }
+            // Distinguish <w:t> / <w:t xml:space="preserve"> from <w:tbl>, <w:tc>, <w:tr>.
+            Integer afterName = lt + 4;
+            String ch = xml.substring(afterName, afterName + 1);
+            Integer gt;
+            if (ch == '>') {
+                gt = afterName;
+            } else if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+                // Mirrors `(?:\s[^>]*)?>` — attributes run to the first '>'.
+                gt = xml.indexOf('>', afterName);
+                if (gt == -1) {
+                    return;
+                }
+            } else {
+                i = lt + 1;
+                continue;
+            }
+            // Mirrors `([^<]*)` — the body ends at the next '<', whatever it is.
+            Integer contentStart = gt + 1;
+            Integer nextLt = xml.indexOf('<', contentStart);
+            if (nextLt == -1) {
+                return;
+            }
+            if (nextLt + 6 <= n) {
+                String closeTag = xml.substring(nextLt, nextLt + 6);
+                // .equals() — case-sensitive, matching the replaced regex `</[wa]:t>`.
+                if (closeTag.equals('</w:t>') || closeTag.equals('</a:t>')) {
+                    contentStarts.add(contentStart);
+                    contentEnds.add(nextLt);
+                    contents.add(xml.substring(contentStart, nextLt));
+                    i = nextLt + 6;
+                    continue;
+                }
+            }
+            // Not a text run after all — resume scanning inside it, never before it.
+            i = contentStart;
+        }
+    }
+
     private static String mergeRunsInTagsCore(String xml) {
         // 1. Find all <w:t...>text</w:t> and <a:t>text</a:t> elements (Word + PowerPoint)
-        Pattern wtPattern = Pattern.compile('<[wa]:t(?:\\s[^>]*)?>([^<]*)</[wa]:t>');
-        Matcher m = wtPattern.matcher(xml);
-
         List<Integer> contentStarts = new List<Integer>();
         List<Integer> contentEnds = new List<Integer>();
         List<String> contents = new List<String>();
-
-        while (m.find()) {
-            contentStarts.add(m.start(1));
-            contentEnds.add(m.end(1));
-            contents.add(m.group(1));
-        }
+        collectTextRunBodies(xml, contentStarts, contentEnds, contents);
 
         if (contents.isEmpty()) {
             return xml;
@@ -3712,6 +3840,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return result;
     }
 
+    /** Lowercase form of the {RepeatHeader} marker — all probes case-fold the document. */
+    private static final String REPEAT_HEADER_MARKER = '{repeatheader}';
+
     /**
      * {RepeatHeader} marker → Word's native repeat-header. For each table row whose text
      * contains the (case-insensitive) {RepeatHeader} marker, strips the marker and ensures
@@ -3722,18 +3853,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * reprints it per chunk. Cheap guard: no-op when the marker is absent.
      */
     private static String applyRepeatHeaderMarkers(String xml) {
-        if (String.isBlank(xml) || !Pattern.compile('(?i)\\{repeatheader\\}').matcher(xml).find()) {
+        if (String.isBlank(xml)) {
+            return xml;
+        }
+
+        // Presence probe by indexOf, NOT by Matcher.find(). This guard runs on EVERY
+        // Word/PowerPoint merge — including the templates that never use
+        // {RepeatHeader}, because it is the check for whether the template uses it —
+        // so a whole-document Matcher here re-imposes the same `Regex too complicated`
+        // ceiling that mergeRunsInTagsCore was rewritten to remove (#325). A 14-char
+        // case-insensitive literal is far cheaper per character than the old
+        // <[wa]:t…> pattern, so it survives further rather than not at all: measured
+        // in-org to pass at 999,991 chars and throw at 1,040,000 on brace-free markup,
+        // and to throw by 1,000,000 once the markup carries merge-tag braces. That put
+        // the reference 966,143-char ACORD 125 about 3% under the wall, not clear of
+        // it. indexOf has no step budget, so this probe has no ceiling at all.
+        // The lowercased copy was already being built three lines below the old guard;
+        // this hoists it and reuses it, which also drops a redundant full-document pass.
+        String lower = xml.toLowerCase();
+        if (lower.indexOf(REPEAT_HEADER_MARKER) == -1) {
             return xml;
         }
 
         // Collect the start of every <w:tr that directly encloses a marker. Match
         // '<w:tr>' / '<w:tr ' (not '<w:trPr') and require the marker to fall before the
         // row's first </w:tr> so a marker outside any row never mis-flags a prior row.
-        String lower = xml.toLowerCase();
         Set<Integer> rowStarts = new Set<Integer>();
         Integer scan = 0;
         while (true) {
-            Integer hit = lower.indexOf('{repeatheader}', scan);
+            Integer hit = lower.indexOf(REPEAT_HEADER_MARKER, scan);
             if (hit == -1) {
                 break;
             }
@@ -3744,7 +3892,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     rowStarts.add(trStart);
                 }
             }
-            scan = hit + 14; // length of '{repeatheader}'
+            scan = hit + REPEAT_HEADER_MARKER.length();
         }
 
         // Inject <w:tblHeader/> descending by position so earlier offsets stay valid.
@@ -3754,8 +3902,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             xml = injectTblHeader(xml, ordered[i]);
         }
 
-        // Strip the marker text everywhere (any case).
-        return Pattern.compile('(?i)\\{repeatheader\\}').matcher(xml).replaceAll('');
+        // Strip the marker text everywhere (any case) — indexOf splice rather than
+        // replaceAll, for the same step-budget reason as the guard above. This one only
+        // runs when a marker was actually found, so it is the lesser exposure of the
+        // two, but it is the same shape and the same document.
+        return stripMarkerAnyCase(xml, REPEAT_HEADER_MARKER);
+    }
+
+    /**
+     * Removes every case-insensitive occurrence of a literal marker, by linear scan.
+     * The regex equivalent (`Pattern.compile('(?i)' + marker).matcher(xml).replaceAll('')`)
+     * carries Apex's per-operation input-sequence budget and throws the uncatchable
+     * `System.LimitException: Regex too complicated` on a large enough document — see
+     * the note in applyRepeatHeaderMarkers. `marker` must already be lowercase.
+     */
+    private static String stripMarkerAnyCase(String xml, String marker) {
+        String lower = xml.toLowerCase();
+        Integer hit = lower.indexOf(marker);
+        if (hit == -1) {
+            return xml;
+        }
+        Integer markerLen = marker.length();
+        List<String> parts = new List<String>();
+        Integer scan = 0;
+        while (hit != -1) {
+            parts.add(xml.substring(scan, hit));
+            scan = hit + markerLen;
+            hit = lower.indexOf(marker, scan);
+        }
+        parts.add(xml.substring(scan));
+        return String.join(parts, '');
     }
 
     /**
@@ -9468,12 +9644,17 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String openTag = '{#' + relationshipName + '}';
         Integer openIdx = xml.indexOf(openTag);
         if (openIdx == -1) {
-            // Try with whitespace variations
-            Pattern openPattern = Pattern.compile('\\{\\s*#\\s*' + Pattern.quote(relationshipName) + '\\s*\\}');
-            Matcher openMatcher = openPattern.matcher(xml);
-            if (openMatcher.find()) {
-                openIdx = openMatcher.start();
-                openTag = openMatcher.group();
+            // Whitespace variations ({ # Rel }). This used a whole-document
+            // Matcher, which threw the uncatchable System.LimitException: Regex
+            // too complicated once document.xml passed ~900K chars — and every
+            // caller here is the giant-query path, where document.xml is
+            // routinely largest (#362). Scan for it linearly instead, the same
+            // instrument findBalancedEnd (below) and applyRepeatHeaderMarkers
+            // already use. Accepts exactly what '\{\s*#\s*' + Rel + '\s*\}' did.
+            Integer[] wsHit = findLoopOpenTag(xml, relationshipName);
+            if (wsHit != null) {
+                openIdx = wsHit[0];
+                openTag = xml.substring(wsHit[0], wsHit[1]);
             } else {
                 return null;
             }
@@ -9544,6 +9725,60 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         result.put('afterLoop', xml.substring(containerEnd));
 
         return result;
+    }
+
+    /**
+     * Linear scan for a loop OPEN tag written with whitespace — the exact set
+     * the Pattern '\{\s*#\s*' + Pattern.quote(rel) + '\s*\}' accepted, minus its
+     * uncatchable "Regex too complicated" ceiling on a large document.xml (#362).
+     * indexOf-based, so there is no regex step budget to exceed.
+     *
+     * @return [start, endExclusive] offsets of the tag, or null if not present.
+     */
+    @TestVisible
+    private static Integer[] findLoopOpenTag(String xml, String relationshipName) {
+        Integer n = xml.length();
+        Integer relLen = relationshipName.length();
+        Integer scan = 0;
+        while (scan < n) {
+            Integer brace = xml.indexOf('{', scan);
+            if (brace == -1) {
+                return null;
+            }
+            Integer p = skipTagWhitespace(xml, brace + 1, n); // \s* after {
+            if (p < n && xml.substring(p, p + 1) == '#') {
+                p = skipTagWhitespace(xml, p + 1, n); // \s* after #
+                // .equals(), not ==: Apex == is case-insensitive, but the old
+                // Pattern (no (?i)) and the exact-match fast path above
+                // (xml.indexOf('{#' + relationshipName + '}')) are both
+                // case-sensitive — keep the fallback consistent with them.
+                if (p + relLen <= n && xml.substring(p, p + relLen).equals(relationshipName)) {
+                    Integer q = skipTagWhitespace(xml, p + relLen, n); // \s* after the name
+                    if (q < n && xml.substring(q, q + 1) == '}') {
+                        return new List<Integer>{ brace, q + 1 };
+                    }
+                }
+            }
+            scan = brace + 1;
+        }
+        return null;
+    }
+
+    /**
+     * First index at or after startIdx that is not a Java-regex \s character —
+     * space (32), tab (9), LF (10), VT (11), FF (12), CR (13) — the whitespace
+     * class the old open-tag Pattern's \s* quantifiers used.
+     */
+    private static Integer skipTagWhitespace(String s, Integer startIdx, Integer endIdx) {
+        Integer i = startIdx;
+        while (i < endIdx) {
+            Integer c = s.charAt(i);
+            if (c != 32 && c != 9 && c != 10 && c != 11 && c != 12 && c != 13) {
+                break;
+            }
+            i++;
+        }
+        return i;
     }
 
     /**
