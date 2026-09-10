@@ -3113,7 +3113,7 @@ _New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point
 **Setting up a second sending identity (walkthrough).** To run a second entity out of the same org:
 
 1. **Set up the entity's email address** — create and verify an Org-Wide Email Address for it, with **Allow All Profiles** enabled and DKIM configured on its domain, exactly as for the org-wide sender (§13.2). Until that's done, the brand's emails fall back to the org-wide address.
-2. **Add the brand** — Command Hub → Brands → **+ Add Brand**. Give it a **Brand name** (e.g. "Temple View Capital"), pick its **Send emails from** address, and set the **company name**, **logo**, **footer**, and **brand color**. Leave **Active** on. Save.
+2. **Add the brand** — Command Hub → Brands → **+ Add Brand**. Give it a **Brand name** (e.g. "Acme Advisors"), pick its **Send emails from** address, and set the **company name**, **logo**, **footer**, and **brand color**. Leave **Active** on. Save.
 3. **Point a template at it** — Command Hub → My Templates → open a template → in the editor's configuration panel, set **Sending Brand** → Save. Every request, reminder, PIN, and completion email sent from that template now uses the brand.
 4. _(Optional)_ **Tweak wording per email** — Command Hub → Email Templates → pick an email → set the **Brand** dropdown to that brand → edit the subject / body → Save.
 5. **Test** — send a signature request from that template and confirm the From address, logo, and color. Repeat 2–3 for each entity.
