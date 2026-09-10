@@ -67,8 +67,8 @@ private class DocGenBulkTests {
             DocGen_Template__c t = makeTypedTemplate('Excel');
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis merged = DocGenBulkController.analyzeJob(t.Id, 10, 1, true);
-            DocGenBulkController.JobAnalysis individual = DocGenBulkController.analyzeJob(t.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis merged = DocGenBulkController.analyzeJob(t.Id, 10, 1, true, false);
+            DocGenBulkController.JobAnalysis individual = DocGenBulkController.analyzeJob(t.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertEquals(false, merged.canProceed, 'Excel + combined PDF is a genuine hard blocker');
@@ -380,6 +380,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -405,6 +406,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -449,7 +451,7 @@ private class DocGenBulkTests {
         System.runAs(u) {
             DocGen_Template__c t = prepareAcroFormBulkTemplate();
 
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(t.Id, 1, 1, true);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(t.Id, 1, 1, true, false);
             System.assertEquals(false, analysis.canProceed, 'Analyzer should block merged bulk AcroForm output.');
 
             Boolean sawFormatError = false;
@@ -468,6 +470,7 @@ private class DocGenBulkTests {
                     true,
                     1,
                     false,
+                    null,
                     null
                 );
                 System.assert(false, 'Merged AcroForm bulk jobs should be rejected before the batch queues.');
@@ -1241,6 +1244,7 @@ private class DocGenBulkTests {
                 true,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1382,6 +1386,7 @@ private class DocGenBulkTests {
                 true,
                 1,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1424,6 +1429,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 true,
+                null,
                 null
             );
             Test.stopTest();
@@ -1456,6 +1462,7 @@ private class DocGenBulkTests {
                 false,
                 50,
                 false,
+                null,
                 null
             );
             Test.stopTest();
@@ -1479,7 +1486,7 @@ private class DocGenBulkTests {
 
             Test.startTest();
             // null batchSize should default to 1
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Id, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -1740,6 +1747,7 @@ private class DocGenBulkTests {
                 false,
                 1,
                 true,
+                null,
                 null
             );
             Test.stopTest();
@@ -1761,7 +1769,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, null, false, null, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Id, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -1973,6 +1981,109 @@ private class DocGenBulkTests {
     }
 
     // =========================================================================
+    // Duplex padding (#382) — batch writes PDF parts, merge job stitches them
+    // =========================================================================
+
+    @IsTest
+    static void submitJobPersistsDuplexFlagForMergeOnly() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c t = TestDataFactory.getTestTemplate();
+
+            Test.startTest();
+            Id mergeJob = DocGenBulkController.submitJobInternal(
+                t.Id,
+                null,
+                'DPX merge-only',
+                true,
+                1,
+                true,
+                null,
+                true
+            );
+            Id individualJob = DocGenBulkController.submitJobInternal(
+                t.Id,
+                null,
+                'DPX individual',
+                false,
+                1,
+                false,
+                null,
+                true
+            );
+            Test.stopTest();
+
+            System.assertEquals(
+                true,
+                [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :mergeJob].Duplex_Padding__c,
+                'A Combined-PDF job keeps the duplex flag'
+            );
+            System.assertNotEquals(
+                true,
+                [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :individualJob].Duplex_Padding__c,
+                'An Individual Files job forces the duplex flag off — there is nothing to pad'
+            );
+        }
+    }
+
+    @IsTest
+    static void duplexMergeJobStitchesPartsAndCleansUp() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c t = TestDataFactory.getTestTemplate();
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = t.Id,
+                Status__c = 'Merging',
+                Success_Count__c = 2,
+                Total_Records__c = 2,
+                Duplex_Padding__c = true
+            );
+            Database.insert(job, AccessLevel.SYSTEM_MODE);
+
+            // Two real one-page PDFs as the per-record parts.
+            Blob p1 = Blob.toPdf('<html><body><h1>Part one</h1></body></html>');
+            Blob p2 = Blob.toPdf('<html><body><h1>Part two</h1></body></html>');
+            insert new List<ContentVersion>{
+                new ContentVersion(
+                    Title = 'docgen_pdfpart_' + job.Id + '_00000',
+                    PathOnClient = 'p0.pdf',
+                    VersionData = p1,
+                    IsMajorVersion = false,
+                    FirstPublishLocationId = job.Id
+                ),
+                new ContentVersion(
+                    Title = 'docgen_pdfpart_' + job.Id + '_00001',
+                    PathOnClient = 'p1.pdf',
+                    VersionData = p2,
+                    IsMajorVersion = false,
+                    FirstPublishLocationId = job.Id
+                )
+            };
+
+            Test.startTest();
+            System.enqueueJob(new DocGenMergeJob(job.Id));
+            Test.stopTest();
+
+            DocGen_Job__c done = [SELECT Status__c, Merged_PDF_CV__c FROM DocGen_Job__c WHERE Id = :job.Id];
+            System.assertNotEquals('Merging', done.Status__c, 'The merge job must move the status off Merging');
+            System.assertNotEquals(null, done.Merged_PDF_CV__c, 'A merged PDF should be produced from the parts');
+            System.assertEquals(
+                0,
+                [SELECT COUNT() FROM ContentVersion WHERE Title LIKE :('docgen_pdfpart_' + job.Id + '_%')],
+                'The per-record parts must be deleted after the merge'
+            );
+
+            ContentVersion merged = [
+                SELECT VersionData
+                FROM ContentVersion
+                WHERE Id = :done.Merged_PDF_CV__c
+            ];
+            // Both single-page parts are odd, so each gets a blank filler: 2 + 2 = 4.
+            System.assertEquals(4, DocGenPdfMerger.pageCount(merged.VersionData), 'padded: (1+1) + (1+1)');
+        }
+    }
+
+    // =========================================================================
     // DocGenBulkController — submitJob with label
     // =========================================================================
 
@@ -1983,7 +2094,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'My Custom Label', false, 5, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'My Custom Label', false, 5, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Label__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2002,7 +2113,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, '', false, 1, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, '', false, 1, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Label__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2218,7 +2329,7 @@ private class DocGenBulkTests {
             Test.startTest();
             // startTest/stopTest runs the batch, so this also proves DocGenBatch
             // .start() builds a QueryLocator the platform accepts with the clause on it.
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Sorted Job', false, 1, false, 'name desc');
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Sorted Job', false, 1, false, 'name desc', null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Sort_Order__c, Status__c FROM DocGen_Job__c WHERE Id = :jobId];
@@ -2239,7 +2350,7 @@ private class DocGenBulkTests {
             Boolean caught = false;
             Test.startTest();
             try {
-                DocGenBulkController.submitJob(t.Id, null, 'Bad Sort', false, 1, false, 'Bogus__c ASC');
+                DocGenBulkController.submitJob(t.Id, null, 'Bad Sort', false, 1, false, 'Bogus__c ASC', null);
             } catch (AuraHandledException e) {
                 caught = true;
             }
@@ -2260,7 +2371,7 @@ private class DocGenBulkTests {
             DocGen_Template__c t = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Unsorted Job', false, 1, false, null);
+            Id jobId = DocGenBulkController.submitJob(t.Id, null, 'Unsorted Job', false, 1, false, null, null);
             Test.stopTest();
 
             DocGen_Job__c job = [SELECT Sort_Order__c FROM DocGen_Job__c WHERE Id = :jobId];

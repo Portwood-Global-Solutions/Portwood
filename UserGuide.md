@@ -1579,7 +1579,7 @@ Locale defaults: `en_US` → `MM/dd/yyyy`; `en_GB/AU/NZ/IE/IN` → `dd/MM/yyyy`;
 {Amount:currency:GBP}           £500,000.00
 ```
 
-Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS.
+Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS, ISK, VND.
 
 Zero-decimal currencies (JPY, KRW, CLP, VND, HUF, ISK, TWD) format without decimals automatically.
 
@@ -2436,7 +2436,7 @@ Plain multiline (long text, textarea) fields work too — newlines in the field 
 
 Two ways to add a full-page watermark or background image to your PDF output:
 
-**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output.
+**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output. A **Watermark strength** control (Light 15% / Medium 30% / Strong 50% / Original) fades the image — the opacity is baked into the stored PNG because Flying Saucer has no CSS opacity, and Portwood keeps the unfaded original so changing the strength after upload re-fades from it rather than compounding. The new setting applies immediately and survives a page reload (v3.57+).
 
 **Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
 
@@ -2754,6 +2754,23 @@ Sorting applies to Individual Files too — it decides the order records are pro
 **In Flows**, the `Portwood: Generate Bulk Documents` action takes the same thing as a **Sort Order** text input, written as a SOQL `ORDER BY` clause without the keywords: `Account.Name ASC`, `CloseDate DESC`, or up to three comma-separated fields (`Account.Name ASC, Amount DESC`). Field API names only; `ASC`/`DESC` and `NULLS FIRST`/`NULLS LAST` are supported. An unknown or unsortable field fails the action with a message on **Error Message** rather than faulting the interview.
 
 > **If your Flow passes a Record IDs collection:** SOQL does not preserve the order of that collection, so sorting the collection in the Flow has no effect on the document. Use **Sort Order**.
+
+### 9.1.2 Duplex Padding — every document starts on a fresh sheet
+
+When a **Combined PDF** is printed double-sided, a document with an **odd** page count leaves its last sheet half-used, and the next document starts on the back of it. **Duplex Padding** fixes that: before the merge, Portwood checks each document's page count and appends **one blank page** to any document that has an odd number of pages, so every document begins on the front of a sheet.
+
+- The toggle appears under the output mode once you pick **Combined PDF** or **Both** (it does nothing for Individual Files, so it is hidden there and forced off).
+- In **Both** mode only the combined bundle is padded — the individual per-record files come out standalone and unpadded (each one already starts on its own sheet).
+- The filler page is **completely blank** — no header, no footer, no watermark, no page number.
+- **Page numbers count real pages only.** Because each record is rendered as its own document and then stitched, `{PageNumber}` / `{TotalPages}` in the Header/Footer HTML fields ([§5.7.5](#575-page-numbers)) count per-document — a 3-page statement numbers `1 of 3, 2 of 3, 3 of 3`, and the blank filler after it carries no number. A plain Combined PDF, by contrast, numbers continuously across the whole bundle.
+- Documents with an **even** page count are never touched.
+- **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
+
+**Scale.** A duplex packet is assembled entirely in memory in one background job, so the ceiling depends on how large each rendered document is — not just the record count. A plain text document (a few KB per page) can reach the low hundreds; a branded template with a logo and/or non-Latin text — which embeds a font, often 60+ KB per record — can top out below 100, sometimes near 50. The pre-run analysis panel measures your template's Test Record, shows a **Duplex Packet** row with the specific limit it estimates, and disables the Run button above it. If a job does exceed the limit at run time, it ends as **Failed** with an error-log message telling you to run **Individual Files** — where each document already starts on its own sheet — or split the filter with a tighter query.
+
+> Set a **Test Record** on the template ([§5.3](#53-test-record)) so the analysis can size the limit to it. Without one it falls back to a flat ~400, which is optimistic for a branded template.
+
+**In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
 
 ### 9.2 Saved queries
 
@@ -3150,7 +3167,7 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 
 ### 11.5 Recipe — Generate when dataset size is unpredictable
 
-**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+. You can't know at design time which path is right.
+**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+ — or a normal count with very large line-item descriptions. You can't know at design time which path is right.
 
 **Step:** **Portwood — Generate Document (Auto Giant Query)**.
 
@@ -3167,6 +3184,8 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 - `isGiantQuery` — boolean so your Flow can branch
 
 **Pattern:** add a Decision element after the action. If `isGiantQuery = true`, send the user to a "your invoice is being prepared" screen with a polling component that watches the job. If `false`, present the file immediately.
+
+**How it routes (v3.57+).** The action estimates peak memory rather than counting rows alone — and when a dataset is borderline it measures one real child row, so a record with only a few hundred line items still routes async when each row carries a large rich-text description. Auto-routing to the background needs a **V3 query config**: a V1 or V2 query config that's over budget returns an error asking you to re-save it as V3 or use the Runner, and a non-Word template is pointed to the Runner (the background path is Word-only). The Runner's own on-screen size warning is based on row count and is advisory — it doesn't block generation.
 
 ### 11.6 Recipe — Send a contract for signature on Opportunity approval
 

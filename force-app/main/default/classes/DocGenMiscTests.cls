@@ -4481,6 +4481,29 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testCurrencyAutoISKNoDecimals() {
+        // #395 - ISK is a zero-decimal currency. Before the CURRENCY_SYMBOLS entry was
+        // added, :auto rejected it as unknown and fell back to '$' + setScale(2).
+        Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'ISK' };
+        String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+        System.assert(result.contains('kr'), 'auto ISK should emit the kr symbol, got: ' + result);
+        System.assert(!result.contains('$'), 'auto ISK must not fall back to $, got: ' + result);
+        System.assert(!result.contains('.'), 'auto ISK should have no decimals, got: ' + result);
+        System.assert(result.contains('1,545,001'), 'auto ISK should round to a whole number, got: ' + result);
+    }
+
+    @IsTest
+    static void testCurrencyAutoVNDNoDecimals() {
+        // #395 - same fix as ISK, VND is the other zero-decimal currency that was
+        // missing from CURRENCY_SYMBOLS.
+        Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'VND' };
+        String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+        System.assert(result.contains('₫'), 'auto VND should emit the dong symbol, got: ' + result);
+        System.assert(!result.contains('$'), 'auto VND must not fall back to $, got: ' + result);
+        System.assert(!result.contains('.'), 'auto VND should have no decimals, got: ' + result);
+    }
+
+    @IsTest
     static void testCurrencyAutoFallbackNoSourceField() {
         Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1000 };
         String result = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
@@ -4977,6 +5000,97 @@ private class DocGenMiscTests {
 
         System.assertNotEquals(null, html, 'Should return HTML');
         System.assert(html.contains('<html'), 'Should be valid HTML');
+    }
+
+    /**
+     * #363 — a Word-authored hyperlink (Insert → Link) survives the real merge path
+     * as a clickable <a href>, in the body and in a header.
+     *
+     * Both parts deliberately use r:id="rId5" for DIFFERENT targets, which is exactly
+     * how Word numbers relationships: r:id values are scoped to their own part. If the
+     * resolver ever reached for document.xml.rels while rewriting a header, the header
+     * link would silently point at the body's URL — the assertions below catch that.
+     */
+    @IsTest
+    static void testWordHyperlinkResolvesThroughRenderPath() {
+        String docXml =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:body><w:p><w:r><w:t xml:space="preserve">{Name}: complete </w:t></w:r>' +
+            '<w:hyperlink r:id="rId5"><w:r><w:t>form X</w:t></w:r></w:hyperlink>' +
+            '<w:r><w:t> today.</w:t></w:r></w:p>' +
+            '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
+            '<w:pgSz w:w="12240" w:h="15840"/>' +
+            '<w:pgMar w:top="1440" w:right="720" w:bottom="1440" w:left="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String docRels =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="https://example.com/formX" TargetMode="External"/>' +
+            '<Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"' +
+            ' Target="header1.xml"/>' +
+            '</Relationships>';
+        String headerXml =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:p><w:hyperlink r:id="rId5"><w:r><w:t>Support</w:t></w:r></w:hyperlink></w:p></w:hdr>';
+        String headerRels =
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="https://example.com/support" TargetMode="External"/>' +
+            '</Relationships>';
+
+        Compression.ZipWriter zw = new Compression.ZipWriter();
+        zw.addEntry(
+            '[Content_Types].xml',
+            Blob.valueOf(
+                '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+                    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+                    '<Default Extension="xml" ContentType="application/xml"/></Types>'
+            )
+        );
+        zw.addEntry(
+            '_rels/.rels',
+            Blob.valueOf(
+                '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+                    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+                    '</Relationships>'
+            )
+        );
+        zw.addEntry('word/document.xml', Blob.valueOf(docXml));
+        zw.addEntry('word/_rels/document.xml.rels', Blob.valueOf(docRels));
+        zw.addEntry('word/header1.xml', Blob.valueOf(headerXml));
+        zw.addEntry('word/_rels/header1.xml.rels', Blob.valueOf(headerRels));
+
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        ContentVersion cv = new ContentVersion(
+            Title = 'Issue363Hyperlink',
+            PathOnClient = 'Issue363Hyperlink.docx',
+            VersionData = zw.getArchive()
+        );
+        insert cv;
+        Id conDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id].ContentDocumentId;
+        insert new ContentDocumentLink(LinkedEntityId = tpl.Id, ContentDocumentId = conDocId, ShareType = 'V');
+
+        Account acc = TestDataFactory.getTestAccount();
+
+        Test.startTest();
+        String html = DocGenService.renderPreviewHtml(tpl.Id, acc.Id);
+        Test.stopTest();
+
+        System.assert(
+            html.contains('<a href="https://example.com/formX"'),
+            'Body hyperlink should resolve from document.xml.rels. Got: ' + html
+        );
+        System.assert(
+            html.contains('<a href="https://example.com/support"'),
+            'Header hyperlink should resolve from header1.xml.rels. Got: ' + html
+        );
+        System.assert(html.contains('form X') && html.contains('Support'), 'Link text should survive');
     }
 
     @IsTest
@@ -8248,6 +8362,28 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void mergeFinalizerTranslatesLimitFailuresForTheJobOwner() {
+        // #382 — an uncatchable heap/CPU/SOQL limit during assembly means the packet
+        // was too big for one job. Anything else is passed through. A FinalizerContext
+        // cannot be built in a test, so the message logic is exercised directly.
+        String heap = DocGenMergeJob.describeMergeFailure('System.LimitException: Apex heap size too large');
+        System.assert(heap.contains('too large to assemble in one job'), heap);
+        System.assert(heap.contains('Individual Files'), heap);
+
+        String cpu = DocGenMergeJob.describeMergeFailure('Apex CPU time limit exceeded');
+        System.assert(cpu.contains('too large to assemble in one job'), cpu);
+
+        String soql = DocGenMergeJob.describeMergeFailure('Too many SOQL queries: 201');
+        System.assert(soql.contains('too large to assemble in one job'), soql);
+
+        String other = DocGenMergeJob.describeMergeFailure('Something unrelated broke');
+        System.assertEquals('Merge failed: Something unrelated broke', other);
+
+        System.assertEquals('', DocGenMergeJob.describeMergeFailure(''));
+        System.assertEquals('', DocGenMergeJob.describeMergeFailure(null));
+    }
+
+    @IsTest
     static void testMergeJobWithEmptySnippets() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
@@ -8454,7 +8590,7 @@ private class DocGenMiscTests {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(null, 0, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(null, 0, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return an analysis even with null template');
@@ -8469,7 +8605,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 0, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 0, 1, false, false);
             Test.stopTest();
 
             System.assertEquals('No records to process.', analysis.summary, 'Should report no records for zero count');
@@ -8483,7 +8619,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, -5, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, -5, 1, false, false);
             Test.stopTest();
 
             System.assertEquals(
@@ -8501,7 +8637,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 60000, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 60000, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8580,7 +8716,7 @@ private class DocGenMiscTests {
             insert new ContentDocumentLink(LinkedEntityId = tpl.Id, ContentDocumentId = conDocId, ShareType = 'V');
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 100, 5, true);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 100, 5, true, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8602,7 +8738,7 @@ private class DocGenMiscTests {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis');
@@ -8643,7 +8779,7 @@ private class DocGenMiscTests {
             );
             Database.insert(tpl, AccessLevel.SYSTEM_MODE);
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis for V2 config');
@@ -8698,7 +8834,7 @@ private class DocGenMiscTests {
             );
             Database.insert(tpl, AccessLevel.SYSTEM_MODE);
             Test.startTest();
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 1, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis for V3 config');
@@ -8713,7 +8849,7 @@ private class DocGenMiscTests {
 
             Test.startTest();
             // Invalid batch size (0 or negative) should default to 1
-            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 0, false);
+            DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tpl.Id, 10, 0, false, false);
             Test.stopTest();
 
             System.assertNotEquals(null, analysis, 'Should return analysis with defaulted batch size');
@@ -11099,5 +11235,168 @@ private class DocGenMiscTests {
             saved.PathOnClient.endsWith('.xlsm'),
             'Macro-enabled template must save as .xlsm, got: ' + saved.PathOnClient
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Issue #325 — Word generation above ~450K of document.xml.
+    //
+    // collectTextRunBodies replaced the `<[wa]:t(?:\s[^>]*)?>([^<]*)</[wa]:t>`
+    // regex with a linear scan, because Apex throws an UNCATCHABLE
+    // `System.LimitException: Regex too complicated` once a Matcher exceeds its
+    // step budget, and that budget is spent by input length. Three community
+    // reporters hit it; one attached a 966,143-char ACORD 125 template with only
+    // eight merge braces in it.
+    //
+    // The first test is the equivalence proof — the scanner must agree with the
+    // regex it replaced, quirks included. The second is the ceiling itself.
+    // -----------------------------------------------------------------------
+
+    /** The exact regex collectTextRunBodies replaced, for differential testing. */
+    private static List<String> textRunsViaOldRegex(String xml) {
+        List<String> out = new List<String>();
+        Matcher m = Pattern.compile('<[wa]:t(?:\\s[^>]*)?>([^<]*)</[wa]:t>').matcher(xml);
+        while (m.find()) {
+            out.add(m.start(1) + ':' + m.group(1));
+        }
+        return out;
+    }
+
+    @isTest
+    static void textRunScannerMatchesTheRegexItReplaced() {
+        // Every shape the old pattern could and could not match, including the
+        // two quirks that were deliberately preserved: mismatched w/a prefixes
+        // match, and the closing tag admits no whitespace.
+        List<String> cases = new List<String>{
+            '<w:t>Hello</w:t>',
+            '<w:t xml:space="preserve"> padded </w:t>',
+            '<a:t>PowerPoint</a:t>',
+            '<w:t></w:t>',
+            '<w:t>a</w:t><w:t>b</w:t><w:t>c</w:t>',
+            '<w:tbl><w:tr><w:tc><w:t>in a table</w:t></w:tc></w:tr></w:tbl>',
+            '<w:t>x</a:t>',
+            '<w:t/>',
+            '<w:t >spaced attr region</w:t>',
+            '<w:t>unclosed',
+            '<w:t>a</w:t ><w:t>b</w:t>',
+            '<w:tab/><w:t>after a tab</w:t>',
+            '<w:t>{Na</w:t><w:t>me}</w:t>',
+            'no tags at all',
+            '<w:t>&amp;amp; entity</w:t>',
+            '<'
+        };
+        for (String c : cases) {
+            List<Integer> starts = new List<Integer>();
+            List<Integer> ends = new List<Integer>();
+            List<String> contents = new List<String>();
+            DocGenService.collectTextRunBodies(c, starts, ends, contents);
+
+            List<String> viaScanner = new List<String>();
+            for (Integer i = 0; i < contents.size(); i++) {
+                viaScanner.add(starts[i] + ':' + contents[i]);
+            }
+            System.assertEquals(
+                String.join(textRunsViaOldRegex(c), '|'),
+                String.join(viaScanner, '|'),
+                'Scanner must agree with the replaced regex for: ' + c
+            );
+            // The offsets must address the real text, or the caller splices garbage.
+            for (Integer i = 0; i < contents.size(); i++) {
+                System.assertEquals(
+                    contents[i],
+                    c.substring(starts[i], ends[i]),
+                    'Recorded offsets must bracket the recorded text for: ' + c
+                );
+            }
+        }
+    }
+
+    @isTest
+    static void mergeSurvivesADocumentXmlPastTheOldRegexCeiling() {
+        // The old regex completed at 400,000 characters of this shape and threw
+        // at 500,000. Anything above that is a size the merge could not reach.
+        String cell = '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Line item description</w:t></w:r></w:p>';
+        String xml = '<?xml version="1.0"?><w:document><w:body>';
+        while (xml.length() < 700000) {
+            xml += cell;
+        }
+        // One tag split across runs, so the merge has real work to do at this size
+        // and we can prove it still did it.
+        xml += '<w:p><w:r><w:t>{Acc</w:t></w:r><w:r><w:t>ount.Name}</w:t></w:r></w:p></w:body></w:document>';
+
+        Test.startTest();
+        String merged = DocGenService.mergeRunsInTagsForTest(xml);
+        Test.stopTest();
+
+        System.assert(
+            merged.contains('{Account.Name}'),
+            'A tag split across runs must still be rejoined above the old ceiling.'
+        );
+        System.assert(merged.contains('Line item description'), 'Body text must survive the merge.');
+    }
+
+    /**
+     * The SECOND ceiling, found in review of #341 (thanks @ECG).
+     *
+     * Rewriting mergeRunsInTagsCore to a linear scan lifted the ~450K wall, but
+     * mergeRunsInTags calls applyRepeatHeaderMarkers straight afterwards, and that
+     * began with a whole-document `Pattern.compile('(?i)\\{repeatheader\\}').matcher(xml).find()`
+     * — the probe for whether the template uses the feature, so it ran on EVERY Word and
+     * PowerPoint merge regardless. A 14-char literal is cheaper per character than the old
+     * `<[wa]:t…>` pattern, so it moved the wall rather than removing it. Measured in-org:
+     * the literal passes at 999,991 characters and throws `Regex too complicated` at
+     * 1,040,000 on brace-free markup, and throws by 1,000,000 once the markup carries
+     * merge-tag braces. That left the 966,143-character reference document ~3% under it.
+     *
+     * These two tests sit ABOVE that second wall. The pre-existing 700K test above passes
+     * with or without the fix, which is precisely why the regression escaped.
+     *
+     * Run density matters here: real Word packs a lot of text into each run, so these
+     * fixtures use long runs. A fixture with one tiny run every ~60 characters makes the
+     * linear scan itself CPU-bound and would fail for an unrelated reason.
+     */
+    @isTest
+    static void mergeSurvivesPastTheRepeatHeaderProbeCeiling() {
+        String prose = 'The Insured shall maintain commercial general liability coverage in the amounts set forth in the accompanying schedule. ';
+        String unit =
+            '<w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">' +
+            prose.repeat(3) +
+            '</w:t></w:r></w:p>';
+        String xml = '<?xml version="1.0"?><w:document><w:body>' + unit.repeat(1200000 / unit.length());
+        // Real work to do at this size, so a no-op cannot masquerade as a pass.
+        xml += '<w:p><w:r><w:t>{Acc</w:t></w:r><w:r><w:t>ount.Name}</w:t></w:r></w:p></w:body></w:document>';
+        System.assert(xml.length() > 1040000, 'Fixture must clear the measured probe ceiling: ' + xml.length());
+
+        Test.startTest();
+        String merged = DocGenService.mergeRunsInTagsForTest(xml);
+        Test.stopTest();
+
+        System.assert(merged.contains('{Account.Name}'), 'Split tag must still be rejoined above the probe ceiling.');
+        System.assert(merged.contains('commercial general liability'), 'Body text must survive the merge.');
+    }
+
+    @isTest
+    static void repeatHeaderStillInjectsAndStripsPastTheProbeCeiling() {
+        // Same size, but the marker is actually present — so this also covers the trailing
+        // strip, which was a replaceAll over the same document and is the same shape.
+        String prose = 'Coverage is subject to the terms, conditions and exclusions of the policy as issued. ';
+        String unit = '<w:p><w:r><w:t xml:space="preserve">' + prose.repeat(4) + '</w:t></w:r></w:p>';
+        String xml =
+            '<?xml version="1.0"?><w:document><w:body><w:tbl>' +
+            '<w:tr><w:tc><w:p><w:r><w:t>{RepeatHeader}Short Code</w:t></w:r></w:p></w:tc></w:tr>' +
+            '<w:tr><w:tc>' +
+            unit.repeat(1200000 / unit.length()) +
+            '</w:tc></w:tr></w:tbl></w:body></w:document>';
+        System.assert(xml.length() > 1040000, 'Fixture must clear the measured probe ceiling: ' + xml.length());
+
+        Test.startTest();
+        String merged = DocGenService.mergeRunsInTagsForTest(xml);
+        Test.stopTest();
+
+        System.assert(merged.contains('<w:tblHeader/>'), 'Header row must still be flagged above the probe ceiling.');
+        System.assert(
+            !merged.toLowerCase().contains('{repeatheader}'),
+            'Marker text must still be stripped above the probe ceiling.'
+        );
+        System.assert(merged.contains('Short Code'), 'Header label must survive the strip.');
     }
 }
