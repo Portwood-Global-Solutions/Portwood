@@ -734,6 +734,60 @@ private class DocGenEmailTemplateTest {
         System.assert(r.htmlBody.contains('#AB12CD'), 'guest render must carry the saved brand color into the chrome');
     }
 
+    // ---- #369 extension of the above: a per-(type, brand) template override
+    //      must ALSO survive guest context, not just the shared/no-brand one.
+    @IsTest
+    static void brandSpecificTemplate_reachesGuestContext() {
+        DocGen_Brand__c brand = new DocGen_Brand__c(
+            Name = 'Guest Test Brand',
+            Brand_Color__c = '#123ABC',
+            Is_Active__c = true
+        );
+        insert brand;
+        insert new DocGen_Email_Template__c(
+            Name = 'Brand PIN',
+            Type__c = DocGenEmailTemplateService.TYPE_PIN,
+            Subject__c = 'Brand-specific verification code',
+            Body_Html__c = '<p data-marker="brand-pin">Your code: {Pin}</p>',
+            Brand__c = brand.Id,
+            Is_Active__c = true
+        );
+
+        User guest = getGuestUser();
+        DocGenEmailTemplateService.RenderedEmail r;
+        Test.startTest();
+        if (guest != null) {
+            System.runAs(guest) {
+                DocGenEmailTemplateService.clearCache();
+                r = DocGenEmailTemplateService.render(
+                    DocGenEmailTemplateService.TYPE_PIN,
+                    sampleTokens(DocGenEmailTemplateService.TYPE_PIN),
+                    null,
+                    brand.Id
+                );
+            }
+        } else {
+            DocGenEmailTemplateService.clearCache();
+            r = DocGenEmailTemplateService.render(
+                DocGenEmailTemplateService.TYPE_PIN,
+                sampleTokens(DocGenEmailTemplateService.TYPE_PIN),
+                null,
+                brand.Id
+            );
+        }
+        Test.stopTest();
+
+        System.assertEquals(
+            'Brand-specific verification code',
+            r.subject,
+            'guest render must use the (type, brand) saved subject, not the shared/built-in default'
+        );
+        System.assert(
+            r.htmlBody.contains('data-marker="brand-pin"'),
+            'guest render must use the (type, brand) saved body: ' + r.htmlBody
+        );
+        System.assert(r.htmlBody.contains('#123ABC'), 'guest render must carry the BRAND color into the chrome');
+    }
     // ---- helpers ----
     /**
      * An active Site Guest user for true guest-context assertions, or null when

@@ -41,6 +41,10 @@
                     <lightning-icon icon-name="utility:email" size="x-small" class="nav-icon"></lightning-icon>
                     <span>Email Templates</span>
                 </button>
+                <button class={brandsTabClass} onclick={handleShowBrands}>
+                    <lightning-icon icon-name="utility:apps" size="x-small" class="nav-icon"></lightning-icon>
+                    <span>Brands</span>
+                </button>
                 <button class={helpTabClass} onclick={handleShowHelp}>
                     <lightning-icon icon-name="utility:knowledge_base" size="x-small" class="nav-icon"></lightning-icon>
                     <span>Learning Center</span>
@@ -93,7 +97,7 @@
                             <p>Manage your document designs and create new ones.</p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-admin></c-doc-gen-admin>
+                            <c-doc-gen-admin onmanagebrands={handleShowBrands}></c-doc-gen-admin>
                         </div>
                     </template>
 
@@ -153,7 +157,21 @@
                             </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-email-templates></c-doc-gen-email-templates>
+                            <c-doc-gen-email-templates onmanagebrands={handleShowBrands}></c-doc-gen-email-templates>
+                        </div>
+                    </template>
+
+                    <!-- BRANDS -->
+                    <template if:true={isBrands}>
+                        <div class="panel-header">
+                            <h2>Brands</h2>
+                            <p>
+                                Set up a reusable sender identity — address, logo, and color — for each business unit,
+                                then choose it on any Portwood Template.
+                            </p>
+                        </div>
+                        <div class="panel-body">
+                            <c-doc-gen-brands></c-doc-gen-brands>
                         </div>
                     </template>
 

@@ -181,9 +181,93 @@ try {
     System.debug('ATTACHMENT OVERLOADS NO-THROW: FAIL — ' + e.getMessage());
 }
 
+// ===== 8. #369 — per-brand sender identity =====
+// A template's Sending Brand resolves for its requests and drives the
+// signature email's colour + footer + OWA. Sending Brand blank = unchanged.
+Id brandTmplId = tmpls[0].Id;
+DocGen_Brand__c e2eBrand = new DocGen_Brand__c(
+    Name = 'E2E Brand ' + Datetime.now().getTime(),
+    Brand_Color__c = '#AB12CD',
+    Footer_Text__c = 'E2E brand footer line',
+    Company_Name__c = 'E2E Brand Co',
+    OWA_Id__c = '0D2000000000001AAA',
+    Is_Active__c = true
+);
+try {
+    insert e2eBrand;
+    update new DocGen_Template__c(Id = brandTmplId, Brand__c = e2eBrand.Id);
+
+    DocGen_Signature_Request__c brandReq = new DocGen_Signature_Request__c(
+        Status__c = 'Sent',
+        Template__c = brandTmplId,
+        Related_Record_Id__c = acctId,
+        Expires_At__c = System.now().addDays(30)
+    );
+    insert brandReq;
+
+    Boolean resolves = DocGenBrandResolver.resolveBrandForRequest(brandReq.Id) == e2eBrand.Id;
+    DocGen_Brand__c got = DocGenBrandResolver.getBrand(e2eBrand.Id);
+    Boolean brandRead = got != null && got.Brand_Color__c == '#AB12CD' && got.OWA_Id__c == '0D2000000000001AAA';
+
+    DocGenEmailTemplateService.RenderedEmail em = DocGenEmailTemplateService.render(
+        DocGenEmailTemplateService.TYPE_REQUEST,
+        new Map<String, String>{
+            'SignerName' => 'E2E',
+            'CompanyName' => 'x',
+            'DocumentTitle' => 'Doc',
+            'SignatureUrl' => 'https://example.com/s',
+            'ExpirationHours' => '48'
+        },
+        null,
+        e2eBrand.Id
+    );
+    Boolean colourInEmail = em != null && em.htmlBody != null && em.htmlBody.containsIgnoreCase('AB12CD');
+    Boolean footerInEmail = em != null && em.htmlBody != null && em.htmlBody.contains('E2E brand footer line');
+
+    // Sending Brand blank → a fresh request resolves to no brand (default path).
+    update new DocGen_Template__c(Id = brandTmplId, Brand__c = null);
+    DocGen_Signature_Request__c noBrandReq = new DocGen_Signature_Request__c(
+        Status__c = 'Sent',
+        Template__c = brandTmplId,
+        Related_Record_Id__c = acctId,
+        Expires_At__c = System.now().addDays(30)
+    );
+    insert noBrandReq;
+    Boolean blankIsNull = DocGenBrandResolver.resolveBrandForRequest(noBrandReq.Id) == null;
+
+    delete [SELECT Id FROM DocGen_Signature_Request__c WHERE Id IN (:brandReq.Id, :noBrandReq.Id)];
+
+    if (resolves && brandRead && colourInEmail && footerInEmail && blankIsNull) {
+        pass++;
+        System.debug('PER-BRAND SENDER IDENTITY: PASS');
+    } else {
+        fail++;
+        System.debug(
+            'PER-BRAND SENDER IDENTITY: FAIL — resolves=' +
+                resolves +
+                ' brandRead=' +
+                brandRead +
+                ' colour=' +
+                colourInEmail +
+                ' footer=' +
+                footerInEmail +
+                ' blankNull=' +
+                blankIsNull
+        );
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('PER-BRAND SENDER IDENTITY: FAIL — ' + e.getMessage());
+}
+
 // ===== Cleanup: delete lifecycle request, restore settings =====
 try {
     delete [SELECT Id FROM DocGen_Signature_Request__c WHERE Id = :lifecycleReqId];
+    // #369 — the shared template must not leak a Sending Brand to later scripts.
+    update new DocGen_Template__c(Id = tmpls[0].Id, Brand__c = null);
+    if (e2eBrand.Id != null) {
+        delete [SELECT Id FROM DocGen_Brand__c WHERE Id = :e2eBrand.Id];
+    }
     DocGen_Settings__c restore = DocGen_Settings__c.getOrgDefaults();
     restore.Signature_Reminder_Enabled__c = prevEnabled;
     restore.Signature_Reminder_Hours__c = prevHours;

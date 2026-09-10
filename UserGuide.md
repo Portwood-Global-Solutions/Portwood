@@ -3064,6 +3064,17 @@ Salesforce hides the guest user behind a few clicks. The full path:
 
 The **Signature Settings** page now covers setup only: public site URL, the **Send Emails From** address (Org-Wide Email Address), automated reminders, and signer verification defaults. Any branding values previously saved there are preserved and still act as the org-wide fallback when a template doesn't override them. Reply-to is automatically set to the request creator so signer replies route correctly.
 
+**Per-brand identity (v3.57+).** A **Portwood Brand** bundles a **Send emails from** address (its own Org-Wide Email Address), logo, color, company name, and footer into one reusable sender identity — set up on the **Brands** tab (§10.15). Point a Portwood Template at one with its **Sending Brand** field and every email in that template's signature workflow uses that brand. This is how one org runs two entities without their emails ever crossing: a different brand per template. Leave **Sending Brand** blank and everything behaves exactly as before.
+
+Resolution order for the **visual and wording pieces** (subject, body, color, logo, footer):
+
+1. a per-**(email type, brand)** override you saved on the Email Templates tab (§10.14) — the most specific
+2. the **Sending Brand**'s own identity
+3. the org-wide **Signature Settings** value
+4. the built-in default
+
+The **sender address** has no per-email-type layer — it's just the **Sending Brand**'s **Send emails from**, then the org-wide one.
+
 ### 10.14 Email Templates (Command Hub tab)
 
 Every email Portwood sends is a fully editable, brandable template — open **Portwood Command Hub → Email Templates**. Pick the email to edit from the dropdown:
@@ -3079,6 +3090,8 @@ Every email Portwood sends is a fully editable, brandable template — open **Po
 | Completion Confirmation | Signer  | Everyone has signed                   |
 
 For each template you can edit the **subject** and **body**, preview it live with sample data, send a **test email**, and **Reset to Default**. Leave the body blank to use the built-in default.
+
+**Brand selector (v3.57+).** Above the layout mode is a **Brand** dropdown. Leave it on **Shared / Default** to edit the copy every brand uses. Pick a brand to save a wording override for that one **(email type, brand)** pair — the most specific layer of the branding cascade (§10.13) — without touching the shared copy. The dropdown also has **+ New Brand…** to create one inline and **Manage brands…** to jump to the Brands tab (§10.15).
 
 **Two layout modes** (per template):
 
@@ -3150,6 +3163,34 @@ Use **Full custom HTML** layout mode (above) when you're replacing widgets whole
 **Send-time customization.** When sending a single-template request (from the Signature Sender or the `Portwood: Create Signature Request` Flow action), you can type a **Custom Email Subject** and/or **Custom Email Message** that override the saved template for that one send. The subject supports merge tokens; the branded layout and signing button are always kept. Bulk/packet sends always use the saved templates.
 
 **Per-template default message (v3.28+).** Each Portwood Template has a **Default Email Message** field (Command Hub → template editor). When set, it becomes the `{Message}` text for signature requests sent from that template — pre-filled in the sender so you see exactly what will go out, and used automatically by Flow sends that leave the message blank. Resolution order: send-time custom message → template default → the email template's generic text. A quote template can say "Please see the attached proposal…" while an NDA template carries different copy, with no per-send typing.
+
+### 10.15 Brands (Command Hub tab)
+
+_New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point any Portwood Template at. Open **Portwood Command Hub → Brands**, then **+ Add Brand**:
+
+| Field                         | What it does                                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Brand name**                | Internal label only — how you pick this brand on a template. Not shown to signers.                                                                                                   |
+| **Send emails from**          | The Org-Wide Email Address every email in this brand's workflow sends from. Blank falls back to the org-wide **Send Emails From** in Signature Settings.                             |
+| **Company name**              | Shown in the branded header when there's no logo, and available as `{CompanyName}` in the body / subject.                                                                            |
+| **Logo URL** / **Asset file** | Same options as a per-template logo (§10.14) — a public URL of any length, or a linked Shared Asset that always resolves to its latest image.                                        |
+| **Footer text**               | The small line at the bottom of the branded chrome.                                                                                                                                  |
+| **Brand color**               | The header / button color.                                                                                                                                                           |
+| **Active**                    | An inactive brand can't be selected on a template, but templates already pointing at it keep the assignment and simply fall through to the org-wide default until you reactivate it. |
+
+**Assigning a brand.** Open a Portwood Template (Command Hub → My Templates → edit) and set its **Sending Brand** field. From then on the request, verification PIN, signer-completed, all-signed, declined, and completion emails for that template all use that brand — its address, logo, color, company name, and footer — unless a more specific per-(email type, brand) override exists on the Email Templates tab (§10.14). See §10.13 for the full cascade. (The automated reminder email is not yet brand-aware — it still sends from the org-wide **Send Emails From** identity.)
+
+**Setting up a second sending identity (walkthrough).** To run a second entity out of the same org:
+
+1. **Set up the entity's email address** — create and verify an Org-Wide Email Address for it, with **Allow All Profiles** enabled and DKIM configured on its domain, exactly as for the org-wide sender (§13.2). Until that's done, the brand's emails fall back to the org-wide address.
+2. **Add the brand** — Command Hub → Brands → **+ Add Brand**. Give it a **Brand name** (e.g. "Acme Advisors"), pick its **Send emails from** address, and set the **company name**, **logo**, **footer**, and **brand color**. Leave **Active** on. Save.
+3. **Point a template at it** — Command Hub → My Templates → open a template → in the editor's configuration panel, set **Sending Brand** → Save. Every request, PIN, and completion email sent from that template now uses the brand (the automated reminder email still uses the org-wide identity).
+4. _(Optional)_ **Tweak wording per email** — Command Hub → Email Templates → pick an email → set the **Brand** dropdown to that brand → edit the subject / body → Save.
+5. **Test** — send a signature request from that template and confirm the From address, logo, and color. Repeat 2–3 for each entity.
+
+**Per-brand OWA setup.** Each brand's **Send emails from** address needs the same production setup as the org-wide one (§13.2): a verified Org-Wide Email Address with **Allow All Profiles** enabled, on a DKIM-authenticated sending domain. Until then that brand's emails fall back to the org-wide sender.
+
+**Signing page and certificate.** The public signing page and the verification-certificate PDF stay on the org-wide branding — a brand controls the **emails**, not the guest-facing signing experience.
 
 ---
 
@@ -3640,6 +3681,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
 - **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
+- **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.
 
 Worth knowing inside My Templates:
@@ -3656,14 +3698,14 @@ Location: Portwood app → Command Hub → Signature Settings.
 Covers:
 
 - Site URL configuration
-- OWA (Org-Wide Email Address) selection
+- OWA (Org-Wide Email Address) selection — the org-wide sender; a template's **Sending Brand** (§10.15) can override it per brand
 - Signing-link expiration default (days; individual sends and the Flow action can override — §10.8)
 - Reminder enable/disable + comma-separated hour schedule (§10.8)
 - Signer verification org defaults — **Require Email Verification** and **Pre-fill Signer Email** (templates and individual sends can override; see §10.5)
 - **Hide Decline Button** (v3.57+) — turns the signer's **Decline** button off on every signing page; off by default, and a template can also hide it just for itself (§10.11)
 - Setup validation checklist (pass/fail for each prerequisite)
 
-Email branding (colors, logo, subject lines, body copy) lives in **Command Hub → Email Templates** (§10.14) as of v3.27 — it's no longer on this page.
+Email branding (colors, logo, subject lines, body copy) lives in **Command Hub → Email Templates** (§10.14) as of v3.27 — it's no longer on this page. Per-brand sender identity (address, logo, color, company name, footer) lives on the **Brands** tab (§10.15).
 
 ### 13.2.1 Error Logs
 

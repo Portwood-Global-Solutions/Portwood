@@ -331,8 +331,60 @@
          Read-only for guest (editable=false). -->
     <fieldPermissions>
         <editable>false</editable>
-        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
+        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>        <readable>true</readable>
+    </fieldPermissions>
+    <!-- Portwood Brand (#369): completion/PIN/all-signed emails can finish inside the
+         guest signer's own session (see DocGenSignatureEmailService's without-sharing
+         note), so DocGenBrandResolver's SYSTEM_MODE reads need guest FLS the same way
+         every other guest-reachable internal read here does. Read-only. -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Template__c.Brand__c</field>
         <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.OWA_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Brand_Color__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Logo_Url__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Logo_Url_Extended__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Logo_Asset_Key__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Logo_Height__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Company_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Footer_Text__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Brand__c.Is_Active__c</field>        <readable>true</readable>
     </fieldPermissions>
     <!-- New audit fields for guest -->
     <fieldPermissions>
@@ -427,6 +479,16 @@
         <allowRead>true</allowRead>
         <modifyAllRecords>false</modifyAllRecords>
         <object>DocGen_Email_Template__c</object>
+        <viewAllFields>false</viewAllFields>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>false</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>DocGen_Brand__c</object>
         <viewAllFields>false</viewAllFields>
         <viewAllRecords>false</viewAllRecords>
     </objectPermissions>
