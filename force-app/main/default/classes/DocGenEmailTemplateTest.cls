@@ -680,7 +680,71 @@ private class DocGenEmailTemplateTest {
         }
     }
 
+    // ---- Guest / system context: the admin's saved template + branding must
+    //      reach emails sent from the GUEST signing transaction (Verification
+    //      PIN, guided-path Completion / All-Signed) and — by the same fix — the
+    //      Automated Process trigger/finalizer emails (#390).
+    //
+    //      Before the fix DocGenEmailTemplateService was `with sharing`, and
+    //      DocGen_Email_Template__c ships externalSharingModel=Private, so a guest
+    //      render read zero rows and silently fell back to builtInDef(). The
+    //      Automated Process leg (guestAssertAccessible throwing its object-level
+    //      verdict for a user with no permission set) can't be simulated in a
+    //      test — same limitation noted on the #227 guest-email fix.
+    @IsTest
+    static void storedTemplate_reachesGuestContext() {
+        insert new DocGen_Email_Template__c(
+            Name = 'Custom PIN',
+            Type__c = DocGenEmailTemplateService.TYPE_PIN,
+            Subject__c = 'ACME verification code',
+            Body_Html__c = '<p data-marker="acme-pin">Your code: {Pin}</p>',
+            Brand_Color__c = '#AB12CD',
+            Is_Active__c = true
+        );
+
+        User guest = getGuestUser();
+        DocGenEmailTemplateService.RenderedEmail r;
+        Test.startTest();
+        if (guest != null) {
+            System.runAs(guest) {
+                DocGenEmailTemplateService.clearCache();
+                r = DocGenEmailTemplateService.render(
+                    DocGenEmailTemplateService.TYPE_PIN,
+                    sampleTokens(DocGenEmailTemplateService.TYPE_PIN)
+                );
+            }
+        } else {
+            DocGenEmailTemplateService.clearCache();
+            r = DocGenEmailTemplateService.render(
+                DocGenEmailTemplateService.TYPE_PIN,
+                sampleTokens(DocGenEmailTemplateService.TYPE_PIN)
+            );
+        }
+        Test.stopTest();
+
+        System.assertEquals(
+            'ACME verification code',
+            r.subject,
+            'guest render must use the saved subject, not the built-in default'
+        );
+        System.assert(
+            r.htmlBody.contains('data-marker="acme-pin"'),
+            'guest render must use the saved body: ' + r.htmlBody
+        );
+        System.assert(r.htmlBody.contains('#AB12CD'), 'guest render must carry the saved brand color into the chrome');
+    }
+
     // ---- helpers ----
+    /**
+     * An active Site Guest user for true guest-context assertions, or null when
+     * the org has no Site (some package-build orgs) — callers then fall back to
+     * the current user so the test never fails merely for lack of a guest user.
+     */
+    private static User getGuestUser() {
+        List<User> guests = [SELECT Id FROM User WHERE UserType = 'Guest' AND IsActive = TRUE LIMIT 1];
+        return guests.isEmpty() ? null : guests[0];
+    }
+
     private static Map<String, String> sampleTokens(String type) {
         return new Map<String, String>{
             'SignerName' => 'Jordan Rivera',

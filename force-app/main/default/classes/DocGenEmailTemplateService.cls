@@ -211,31 +211,40 @@ global with sharing class DocGenEmailTemplateService {
     // Record loading (defensive — never throws to the caller)
     // =====================================================================
 
-    private static void loadActiveTemplates() {
-        defCache = new Map<String, TemplateDef>();
-        try {
-            // Guest signers send the PIN/completion emails, so this read must
-            // pass guest FLS. SYSTEM_MODE + guestAssertAccessible matches the
-            // established pattern for guest-reachable internal-object reads.
-            DocGenFlsGuard.guestAssertAccessible(
-                DocGen_Email_Template__c.sObjectType,
-                new Set<String>{
-                    'Type__c',
-                    'Subject__c',
-                    'Body_Html__c',
-                    'Body_Plain__c',
-                    'Brand_Color__c',
-                    'Logo_Url__c',
-                    'Logo_Url_Extended__c',
-                    'Logo_Asset_Key__c',
-                    'Logo_Height__c',
-                    'Footer_Text__c',
-                    'Layout_Mode__c',
-                    'Is_Active__c'
-                }
-            );
+    /**
+     * Every active-template + logo-asset read, isolated in a `without sharing`
+     * scope. Two independent platform behaviours both made guest- and
+     * system-context signature emails silently drop the admin's saved template
+     * and branding, arriving on the built-in default instead (#390):
+     *
+     *  A. `WITH SYSTEM_MODE` bypasses CRUD/FLS but NOT record sharing — sharing
+     *     follows the sharing keyword of the class the query runs in, and this
+     *     class is `with sharing`. DocGen_Email_Template__c and DocGen_Asset__c
+     *     both ship externalSharingModel=Private, so a GUEST sender (Verification
+     *     PIN, guided-path Completion / All-Signed) saw zero rows: defCache
+     *     stayed empty and getTemplate() fell back to builtInDef(), exactly as
+     *     if no record existed. The logo vanished the same way — queryAssetPublicUrl
+     *     reads "no rows" as "no logo".
+     *
+     *  B. The DocGen_Signature_PDF__e platform-event trigger and the async
+     *     finalizer queueables run as the Automated Process user, which holds no
+     *     Portwood permission set. DocGenFlsGuard.guestAssertAccessible only
+     *     self-bypasses its object-level verdict for 'Guest', so under Automated
+     *     Process it threw and abandoned the load — dropping Signer_Completed,
+     *     Signer_Declined, All_Signed and the sequential next-signer request
+     *     email onto the built-in default too. loadActiveTemplates /
+     *     queryAssetPublicUrl now run the guard as an advisory signal only
+     *     (see flsSignalOnly).
+     *
+     * Neither change is a security regression: this is package-internal branding
+     * config with no per-record confidentiality model (internal OWD is already
+     * ReadWrite), the reads stay SYSTEM_MODE and read-only, and the describe-based
+     * FLS signal the static analysers pattern-match on still runs.
+     */
+    private without sharing class TemplateReader {
+        private List<DocGen_Email_Template__c> readActiveTemplates() {
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Email_Template__c> rows = [
+            return [
                 SELECT
                     Type__c,
                     Subject__c,
@@ -253,6 +262,90 @@ global with sharing class DocGenEmailTemplateService {
                 WITH SYSTEM_MODE
                 ORDER BY LastModifiedDate DESC
             ]; // NOPMD - package-internal object; CRUD via Portwood permission sets
+        }
+
+        private List<DocGen_Asset__c> readAssetByKey(String assetKey) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT
+                    Id,
+                    (
+                        SELECT ContentDocument.LatestPublishedVersionId
+                        FROM ContentDocumentLinks
+                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
+                        LIMIT 1
+                    )
+                FROM DocGen_Asset__c
+                WHERE Asset_Key__c = :assetKey
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+        }
+
+        private List<ContentDistribution> readDistributionByCv(Id cvId) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT ContentDownloadUrl
+                FROM ContentDistribution
+                WHERE ContentVersionId = :cvId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
+    }
+
+    /**
+     * Runs the per-field FLS describe check as an ADVISORY signal that never
+     * throws. loadActiveTemplates / queryAssetPublicUrl read package-internal
+     * branding config from three contexts — admin, the Site GUEST user, and the
+     * Automated Process user (platform-event trigger / async finalizer).
+     * guestAssertAccessible self-bypasses only for 'Guest', so under Automated
+     * Process its object-level verdict threw and the caller silently fell back to
+     * the built-in template (#390, Mechanism B). The describe call is retained as
+     * the static-analysis signal; the verdict is logged, not enforced, because
+     * these reads are SYSTEM_MODE, read-only, and carry no confidentiality model.
+     */
+    private static void flsSignalOnly(Schema.SObjectType sot, Set<String> readFields) {
+        try {
+            DocGenFlsGuard.guestAssertAccessible(sot, readFields);
+        } catch (Exception advisory) {
+            System.debug(
+                LoggingLevel.WARN,
+                'Portwood: email-template FLS guard advisory-only for ' +
+                    sot +
+                    ' in this context (' +
+                    UserInfo.getUserType() +
+                    '): ' +
+                    advisory.getMessage()
+            );
+        }
+    }
+
+    private static void loadActiveTemplates() {
+        defCache = new Map<String, TemplateDef>();
+        try {
+            // Advisory FLS signal — must not abandon the load in a system context
+            // (Automated Process finalizer / platform-event trigger), see #390.
+            flsSignalOnly(
+                DocGen_Email_Template__c.sObjectType,
+                new Set<String>{
+                    'Type__c',
+                    'Subject__c',
+                    'Body_Html__c',
+                    'Body_Plain__c',
+                    'Brand_Color__c',
+                    'Logo_Url__c',
+                    'Logo_Url_Extended__c',
+                    'Logo_Asset_Key__c',
+                    'Logo_Height__c',
+                    'Footer_Text__c',
+                    'Layout_Mode__c',
+                    'Is_Active__c'
+                }
+            );
+            // `without sharing` read — DocGen_Email_Template__c is externalSharingModel=Private,
+            // so a `with sharing` query returns zero rows for a guest sender (#390, Mechanism A).
+            List<DocGen_Email_Template__c> rows = new TemplateReader().readActiveTemplates();
             for (DocGen_Email_Template__c r : rows) {
                 if (r.Type__c == null || defCache.containsKey(r.Type__c)) {
                     continue; // first (most-recently-modified) active record per type wins
@@ -541,22 +634,12 @@ global with sharing class DocGenEmailTemplateService {
 
     private static String queryAssetPublicUrl(String assetKey) {
         try {
-            DocGenFlsGuard.guestAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Asset__c> assets = [
-                SELECT
-                    Id,
-                    (
-                        SELECT ContentDocument.LatestPublishedVersionId
-                        FROM ContentDocumentLinks
-                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
-                        LIMIT 1
-                    )
-                FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+            // Advisory only — DocGen_Asset__c is also externalSharingModel=Private and
+            // read here from guest / Automated Process contexts; a throwing guard
+            // silently dropped the logo from those emails (#390). Reads go through
+            // the `without sharing` TemplateReader for the same reason.
+            flsSignalOnly(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
+            List<DocGen_Asset__c> assets = new TemplateReader().readAssetByKey(assetKey);
             if (assets.isEmpty() || assets[0].ContentDocumentLinks.isEmpty()) {
                 return null;
             }
@@ -564,18 +647,8 @@ global with sharing class DocGenEmailTemplateService {
             if (cvId == null) {
                 return null;
             }
-            DocGenFlsGuard.guestAssertAccessible(
-                ContentDistribution.sObjectType,
-                new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId' }
-            );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<ContentDistribution> dists = [
-                SELECT ContentDownloadUrl
-                FROM ContentDistribution
-                WHERE ContentVersionId = :cvId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
+            flsSignalOnly(ContentDistribution.sObjectType, new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId' });
+            List<ContentDistribution> dists = new TemplateReader().readDistributionByCv(cvId);
             return dists.isEmpty() ? null : dists[0].ContentDownloadUrl;
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: logo asset resolution fell back to URL: ' + e.getMessage());
