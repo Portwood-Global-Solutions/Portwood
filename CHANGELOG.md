@@ -150,6 +150,17 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **A loop tag written with spaces no longer crashes generation of a large Word document
+  (#362).** When `{ #Relationship }` was written with spaces, `extractLoopBody` fell back
+  to a whole-document regex `Matcher` to find it — and Apex throws the uncatchable
+  `System.LimitException: Regex too complicated` once a single `Matcher` crosses ~900K
+  characters, a size a large document's `document.xml` on the giant-query path (2,000+
+  child rows) can reach. It is now a linear scan that accepts exactly the same spacing
+  the pattern did (`{#Rel}`, `{ #Rel}`, `{#Rel }`, `{ # Rel }`, tabs and newlines
+  included), so whitespace tolerance is unchanged and literal `{#Relationship}` tags
+  still take the `indexOf` fast path. This is the third scan of this shape; the other
+  two (`mergeRunsInTags` and the `{RepeatHeader}` probe) are converted in #325, shipping
+  in the same release — a template that hits more than one needs all of them.
 - **Large Word and PowerPoint templates no longer crash generation with a
   `Regex too complicated` error (#325).** `mergeRunsInTags` — which rejoins a merge tag
   split across formatting runs — and the `{RepeatHeader}` probe next to it each scanned
