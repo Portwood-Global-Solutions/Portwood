@@ -1484,8 +1484,10 @@
 
                         // Wire the action bar.
                         document.getElementById('btn-open-sign').addEventListener('click', openSignModal);
-                        // #367 — hidden by default; shown only when both the org-wide
-                        // setting and this template's own opt-in are on.
+                        // #367 — Decline shows by default. The server sets
+                        // showDecline=false only when an admin turned on "Hide Decline
+                        // Button" org-wide or on this request's template; the gate is
+                        // re-enforced in declineSignature so hiding it can't be bypassed.
                         if (!data || !data.showDecline) {
                             document.getElementById('btn-decline').style.display = 'none';
                         }

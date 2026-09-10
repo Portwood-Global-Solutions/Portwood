@@ -165,6 +165,45 @@ private class DocGenDeclineToggleTest {
         );
     }
 
+    // ---- Legacy request path (no signer rows, request-level Secure_Token__c) ----
+    // validateLegacyRequest carries no template, so the org-wide switch alone
+    // decides — and it must still default to shown (regression: it left
+    // showDecline null, hiding the button on every legacy signing page).
+    private static String insertLegacyRequest() {
+        String token = EncodingUtil.convertToHex(Crypto.generateAesKey(256));
+        insert new DocGen_Signature_Request__c(
+            Status__c = 'Sent',
+            Signer_Name__c = 'Legacy Signer',
+            Secure_Token__c = token,
+            Expires_At__c = System.now().addDays(7)
+        );
+        return token;
+    }
+
+    @IsTest
+    static void legacyRequest_declineShowsByDefault() {
+        String token = insertLegacyRequest();
+
+        Test.startTest();
+        DocGenSignatureController.SignatureInitResponse res = DocGenSignatureController.validateToken(token);
+        Test.stopTest();
+
+        System.assertEquals(true, res.isValid, 'legacy request resolves');
+        System.assertEquals(true, res.showDecline, 'legacy signing page shows Decline by default');
+    }
+
+    @IsTest
+    static void legacyRequest_orgSwitchHidesDecline() {
+        String token = insertLegacyRequest();
+        DocGenSetupController.saveDeclineSettings(true);
+
+        Test.startTest();
+        DocGenSignatureController.SignatureInitResponse res = DocGenSignatureController.validateToken(token);
+        Test.stopTest();
+
+        System.assertEquals(false, res.showDecline, 'the org-wide switch hides Decline on the legacy path too');
+    }
+
     // ---- Org settings round-trip ----
     @IsTest
     static void saveDeclineSettings_roundTrips() {

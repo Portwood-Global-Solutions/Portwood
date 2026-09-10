@@ -788,6 +788,12 @@ public without sharing class DocGenSignatureController {
         res.totalSigners = 1;
         res.signedCount = 0;
 
+        // #367 — Decline shows by default. A legacy request carries no template,
+        // so only the org-wide "Hide Decline Button" switch can turn it off.
+        // Reads false when unset, so an upgrade never silently drops the button.
+        DocGen_Settings__c legacyDeclineSettings = DocGen_Settings__c.getOrgDefaults();
+        res.showDecline = !(legacyDeclineSettings != null && legacyDeclineSettings.Signature_Hide_Decline__c == true);
+
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
         DocGenFlsGuard.guestAssertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */

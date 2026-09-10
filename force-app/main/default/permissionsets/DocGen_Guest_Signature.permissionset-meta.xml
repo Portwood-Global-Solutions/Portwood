@@ -326,6 +326,14 @@
         <field>DocGen_Template__c.Form_Fields_Config__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Decline-button visibility: validateSignerToken/declineSignature read
+         Template__r.Hide_Signer_Decline__c under SYSTEM_MODE + guestAssertAccessible.
+         Read-only for guest (editable=false). -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <!-- New audit fields for guest -->
     <fieldPermissions>
         <editable>true</editable>
