@@ -54,7 +54,59 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+### Added
+
+- **Per-brand sender identity for signature emails (#369).** A **Portwood Brand** is a
+  reusable sender identity — a **Send emails from** address (Org-Wide Email Address),
+  logo, color, company name, and footer — created on the new **Brands** tab in the
+  Command Hub. Point a Portwood Template at one with its **Sending Brand** field, and
+  every email in that template's signature workflow (request, reminder, verification
+  PIN, signer-completed, all-signed, declined, completion) uses that brand's identity.
+  Unset, everything falls back to the org-wide Signature Settings exactly as before, so
+  a single-brand org sees no change. A customer running two entities from one org — the
+  case this was built for — assigns a different brand per template and the two never
+  cross. The full resolution order is: a per-(email type, brand) override on the Email
+  Templates tab → the brand's own identity → org-wide Signature Settings → the built-in
+  default.
+
+    The Email Templates tab gains a **Brand** selector so an admin can customize the
+    wording of one email type for one brand without touching the shared copy, plus
+    inline **+ New Brand…** and **Manage brands…** shortcuts. Each brand's OWA needs the
+    same production setup as the org-wide one — verified, **Allow All Profiles**, and a
+    DKIM-authenticated sending domain.
+
 ### Fixed
+
+- **Every signature email after the first ignored the admin's saved templates and
+  branding in guest / system context (#390).** Only the initial request email — sent in
+  the internal Flow user's transaction — rendered the customized `DocGen_Email_Template__c`.
+  The verification PIN and the guided-path completion / all-signed emails are sent from
+  the **Site guest user's** transaction, where the template read inherited the service
+  class's `with sharing`; `DocGen_Email_Template__c` / `DocGen_Asset__c` ship
+  `externalSharingModel=Private` with no guest sharing rule, so `WITH SYSTEM_MODE` (which
+  bypasses CRUD/FLS but not record sharing) returned **zero rows** — the cache stayed
+  empty and every render fell through to the built-in wording, the org-wide fallback
+  color (or `#1589EE` when the org set none), and no logo. The signer-completed /
+  declined / all-signed and sequential next-signer emails fail the same way from the
+  **Automated Process** user (platform-event trigger, async finalizer): that user holds
+  no permission set, and the FLS guard only self-bypasses its verdict for `Guest`, so it
+  threw and the load was abandoned. A private `without sharing` inner reader now isolates
+  the three internal-config reads, and the FLS guard runs as a log-not-throw advisory
+  (`DocGenFlsGuard.advisoryAssertAccessible`) — the describe call the analysers
+  pattern-match on still runs; the reads stay `SYSTEM_MODE` and read-only. Found by
+  rendering a custom PIN template as a real Site guest user and getting back "Your
+  Signature Verification Code" — the built-in.
+
+- **The verification PIN email never resolved a brand (#369).** `sendPinEmail` in
+  `DocGenSignatureController` still called the pre-#369 two-argument `render()` and read
+  the OWA straight from Signature Settings — the one send site in the codebase that was
+  never updated for the Brand cascade. It always rendered the shared template and always
+  used the org-default sender, whatever the signing template's Sending Brand was set to.
+  It now threads the request through from the signer row, resolves the brand, and uses
+  its OWA and its `render()` overload — verified by a live `sendPin()` against a
+  brand-assigned template queueing the PIN email with that brand's color and footer, and
+  by two brands with distinct OWAs (`support@` vs `hello@`) resolving to their own
+  addresses.
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
