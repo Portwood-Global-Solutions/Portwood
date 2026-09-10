@@ -65,6 +65,21 @@ private class DocGenGiantQueryRouterTest {
     }
 
     @IsTest
+    static void estimateSampledSkinnyRowDropsBelowTheDefault() {
+        // A measured 250-byte row -> 250 * 5 = 1250/row, well under the 10000
+        // PDF default. The sample must be TRUSTED, not floored up to the default:
+        // 300 such rows are ~1.4MB, nowhere near the 3.6MB budget, so they must
+        // stay synchronous (the #374 fix must not over-route skinny datasets).
+        Integer est = DocGenGiantQueryRouter.estimatePeakHeapBytes(300, 250, 'PDF');
+        System.assertEquals(
+            1000000 + (300 * 1250),
+            est,
+            'sampled per-row cost is used even when smaller than the default'
+        );
+        System.assert(est < DocGenGiantQueryRouter.safeHeapBytes(), 'skinny rows stay under the sync budget');
+    }
+
+    @IsTest
     static void decideStaysSyncWhenNoChildren() {
         Id acctId = makeAccountWithContacts(0, 0);
         Test.startTest();
@@ -83,12 +98,31 @@ private class DocGenGiantQueryRouterTest {
     }
 
     @IsTest
-    static void decideRoutesGiantOnEstimatedHeapForV3() {
+    static void decideStaysSyncForManySkinnyRows() {
+        // 300 rows with no large field — the row-count-only estimate (4MB) is
+        // over budget, but sampling a real 200-ish-byte row shows the dataset
+        // is actually ~1.4MB. It must stay SYNCHRONOUS: routing it async would
+        // hand a PDF template to the Word-only batch (#374 must not over-route).
         Id acctId = makeAccountWithContacts(300, 0);
         Test.startTest();
         DocGenGiantQueryRouter.Decision d = DocGenGiantQueryRouter.decide(acctId, V3_CONTACTS, 'PDF');
         Test.stopTest();
-        System.assertEquals(true, d.useGiantPath, '300 rows * PDF per-row cost exceeds the safe sync budget');
+        System.assertEquals(
+            false,
+            d.useGiantPath,
+            '300 skinny rows fit the sync heap budget once a real row is measured'
+        );
+    }
+
+    @IsTest
+    static void decideRoutesGiantOverTheRowCeiling() {
+        // Above GIANT_ROW_CEILING (2,000) it routes on count alone, no sampling —
+        // matching the historical threshold so V3 templates behave as before at scale.
+        Id acctId = makeAccountWithContacts(2100, 0);
+        Test.startTest();
+        DocGenGiantQueryRouter.Decision d = DocGenGiantQueryRouter.decide(acctId, V3_CONTACTS, 'PDF');
+        Test.stopTest();
+        System.assertEquals(true, d.useGiantPath, '2,100 rows exceed the row-count ceiling');
         System.assertEquals('Contacts', d.giantRelationship, 'the offending relationship');
         System.assertNotEquals(null, d.giantNodeConfig, 'node config resolved for the batch');
         System.assertEquals('Contact', (String) d.giantNodeConfig.get('object'), 'V3 node carries the child object');
@@ -98,7 +132,7 @@ private class DocGenGiantQueryRouterTest {
     static void decideScoutsAndResolvesAV1FlatConfig() {
         // The old Flow action gated scouting on configVersion >= 3, so a V1 flat
         // string was NEVER checked and always ran synchronously (#374).
-        Id acctId = makeAccountWithContacts(300, 0);
+        Id acctId = makeAccountWithContacts(2100, 0);
         String v1 = 'Name, (SELECT LastName FROM Contacts)';
         Test.startTest();
         DocGenGiantQueryRouter.Decision d = DocGenGiantQueryRouter.decide(acctId, v1, 'PDF');
@@ -144,7 +178,7 @@ private class DocGenGiantQueryRouterTest {
             '{"id":"n0","object":"Account","fields":["Name"],"parentNode":null,"lookupField":null,"relationshipName":null},' +
             '{"id":"n1","alias":"BigItems","object":"Contact","fields":["LastName"],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Contacts"}' +
             ']}';
-        Id acctId = makeAccountWithContacts(300, 0);
+        Id acctId = makeAccountWithContacts(2100, 0);
         Test.startTest();
         DocGenGiantQueryRouter.Decision d = DocGenGiantQueryRouter.decide(acctId, aliased, 'PDF');
         Test.stopTest();

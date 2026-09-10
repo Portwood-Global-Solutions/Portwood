@@ -76,12 +76,20 @@ public with sharing class DocGenGiantQueryRouter {
     public static Integer estimatePeakHeapBytes(Integer rowCount, Integer sampleRowBytes, String outputFormat) {
         Boolean isPdf = String.isBlank(outputFormat) || 'PDF'.equalsIgnoreCase(outputFormat);
         Long baseBytes = isPdf ? PDF_BASE_BYTES : DOCX_BASE_BYTES;
-        Long perRow = isPdf ? PDF_BYTES_PER_ROW : DOCX_BYTES_PER_ROW;
+        Long perRow;
         if (sampleRowBytes != null && sampleRowBytes > 0) {
+            // We measured a real child row — trust it (scaled by the format's
+            // render blow-up), rather than ratcheting up to the pessimistic
+            // per-format default. The default over-costs skinny rows: at
+            // 10 KB/row a PDF crosses the heap ceiling near 260 rows even when
+            // every row is a few hundred bytes, routing a template the async
+            // batch can't process (it only takes Word) to a hard error. A small
+            // floor covers per-row merge/parse overhead.
             Long sampled = (Long) sampleRowBytes * (isPdf ? PDF_ROW_BLOWUP : DOCX_ROW_BLOWUP);
-            if (sampled > perRow) {
-                perRow = sampled;
-            }
+            Long floorPerRow = isPdf ? 1200L : 400L;
+            perRow = sampled > floorPerRow ? sampled : floorPerRow;
+        } else {
+            perRow = isPdf ? PDF_BYTES_PER_ROW : DOCX_BYTES_PER_ROW;
         }
         Long rows = rowCount == null ? 0 : rowCount;
         // Long math + clamp: rows * a sampled fat per-row cost overflows a
@@ -108,6 +116,16 @@ public with sharing class DocGenGiantQueryRouter {
         }
 
         Integer safe = safeHeapBytes();
+        // Sample a real child row for any relationship in the "not tiny, not
+        // certainly-giant" band — that is where a row's true payload decides
+        // sync vs async, in BOTH directions: a few hundred rows carrying 30 KB
+        // fields must route async (the #374 crash), and a few hundred skinny
+        // rows must stay sync (or a PDF template is handed to the Word-only
+        // batch). SOQL is bounded by sampleBudget, not by the relationship
+        // count, because decide() runs once per Request in the Flow bulk loop —
+        // a relationship past the budget falls back to the row-count estimate,
+        // which errs toward async (safe).
+        Integer sampleBudget = 2;
         for (String relKey : d.counts.keySet()) {
             Integer rows = d.counts.get(relKey);
             if (rows == null || rows == 0) {
@@ -115,10 +133,15 @@ public with sharing class DocGenGiantQueryRouter {
             }
 
             Map<String, Object> nodeConfig = resolveNodeConfig(parentRecordId, queryConfig, relKey);
-            Integer sampleBytes = (rows >= SAMPLE_MIN_ROWS) ? sampleChildRowBytes(parentRecordId, nodeConfig) : 0;
-            Integer estPeak = estimatePeakHeapBytes(rows, sampleBytes, outputFormat);
 
             Boolean overCeiling = rows > GIANT_ROW_CEILING;
+            Integer sampleBytes = 0;
+            if (!overCeiling && sampleBudget > 0 && rows >= SAMPLE_MIN_ROWS) {
+                sampleBytes = sampleChildRowBytes(parentRecordId, nodeConfig);
+                sampleBudget--;
+            }
+            Integer estPeak = estimatePeakHeapBytes(rows, sampleBytes, outputFormat);
+
             Boolean overHeap = estPeak > safe;
             if (overCeiling || overHeap) {
                 d.useGiantPath = true;

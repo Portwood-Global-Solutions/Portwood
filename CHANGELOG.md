@@ -71,19 +71,21 @@ Two small fixes where the editor promised something the PDF did not deliver.
   generation on a child **row count over 2,000** alone, so a record with a few hundred
   rows carrying large rich-text fields — tens of MB of data — ran synchronously and hit
   the **uncatchable** `System.LimitException: Apex heap size too large`. It now routes on
-  estimated peak heap, sampling one real child row so rows that each carry a 30 KB field
-  are costed accordingly. A new `DocGenGiantQueryRouter` is the single decision point,
-  shared with the on-screen Runner's pre-flight so the two can't drift apart again. An
-  over-budget job that can't be auto-routed now fails with a clear message instead of the
-  heap crash: a V1 or V2 query config is told to re-save as V3 (auto-routing needs V3 —
-  the background path skips `processXml`, which would drop parent-level `{#IF}` and
-  secondary loops), and non-Word templates or already-async contexts are pointed to the
-  Runner.
+  estimated peak heap: when a dataset is borderline on row count it measures one real
+  child row, so a few hundred rows that each carry a 30 KB field are costed accordingly
+  and route to the background. A new `DocGenGiantQueryRouter` is the single decision
+  point; the on-screen Runner's pre-flight shares its estimator and constants (the
+  Runner's inline warning stays row-count-based — it doesn't sample). An over-budget job
+  that can't be auto-routed now fails with a clear message instead of the heap crash: a
+  V1 or V2 query config is told to re-save as V3 (auto-routing needs V3 — the background
+  path skips `processXml`, which would drop parent-level `{#IF}` and secondary loops),
+  and non-Word templates or already-async contexts are pointed to the Runner.
 
-    **Existing Flows:** more documents now route to the background, returning
-    `Is Giant Query = true` and a **Job ID** with no **Content Document ID** yet. A Flow
-    that uses the generated file immediately after this action should branch on
-    `Is Giant Query` and poll the job.
+    **Existing Flows:** a dataset that is heavy per-row but under 2,000 rows now routes
+    to the background where it used to run inline — returning `Is Giant Query = true` and
+    a **Job ID** with no **Content Document ID** yet. A Flow that uses the generated file
+    immediately after this action should branch on `Is Giant Query` and poll the job.
+    Datasets with ordinary-sized rows are unaffected.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
