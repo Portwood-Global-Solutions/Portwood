@@ -66,6 +66,26 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **Sequential signing no longer stalls after the first signer (#379).** A
+  sequential request stopped dead at _In Progress_ once signer 1 finished — signer 2 was
+  never emailed and no error surfaced. Two independent causes, both fixed. First, the two
+  client-side finalize paths never handed off to `DocGenSignaturePdfTrigger` for a
+  non-final signer: `saveCompositedSignedPdf` (the guided draw/type path) had no publish
+  at all on that branch, and `savePdfSignature` (the flat-PDF path) gated its publish on
+  `snapshotBacked` alone. Since that trigger is the only sender of the next-signer email,
+  the chain never advanced; both now publish `DocGen_Signature_PDF__e` there the same way
+  `saveSignature` already did, and the trigger still gates PDF generation on
+  `remaining == 0` so an intermediate signer only fires notifications. Second, even once
+  the trigger ran the send was rejected: Reply-To was `UserInfo.getUserEmail()`, which
+  inside the platform-event trigger resolves to the Automated Process user
+  (`noreply@<orgId>`), and `Messaging.sendEmail` drops the whole message with
+  `INVALID_EMAIL_ADDRESS` — this also broke the pre-existing typed-name sequential path.
+  Reply-To and `{SenderName}` now come from the request creator (`CreatedBy`), falling
+  back to the running user when there is no request context or the creator has no email,
+  and a `noreply@` address is never set as Reply-To. Invisible to unit tests —
+  `Messaging.sendEmail` skips Reply-To validation in test context — so it was caught by
+  end-to-end sends in two orgs.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage
