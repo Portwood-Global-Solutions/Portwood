@@ -66,6 +66,16 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **A loop tag written with spaces no longer crashes generation of a large Word document
+  (#362).** When `{ #Relationship }` was written with spaces, `extractLoopBody` fell back
+  to a whole-document regex `Matcher` to find it — and Apex throws the uncatchable
+  `System.LimitException: Regex too complicated` once a single `Matcher` crosses ~900K
+  characters, a size a large document's `document.xml` on the giant-query path (2,000+
+  child rows) can reach. It is now a linear scan that accepts exactly the same spacing
+  the pattern did (`{#Rel}`, `{ #Rel}`, `{#Rel }`, `{ # Rel }`, tabs and newlines
+  included), so whitespace tolerance is unchanged and literal `{#Relationship}` tags
+  still take the `indexOf` fast path.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage
