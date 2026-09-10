@@ -3070,6 +3070,21 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
+     * Renders a PDF blob (no save) from pre-cached record data, keeping the real
+     * recordId so chart context and image tags resolve as they do for a live
+     * record. Used by DocGenBatch's duplex-padding path (#382).
+     * @return Map with keys: blob (PDF Blob), title (String)
+     */
+    global static Map<String, Object> generatePdfBlobFromData(
+        Id templateId,
+        Id recordId,
+        Map<String, Object> preloadedRecordData
+    ) {
+        preloadedRecordDataOverride = preloadedRecordData;
+        return generatePdfBlob(templateId, recordId);
+    }
+
+    /**
      * Renders a PDF directly from a caller-supplied data map — no SOQL, no recordId required.
      * Lets Flows/Apex assemble custom data wrappers (external API responses, computed totals,
      * cross-object aggregations) and render them straight into a template without persisting

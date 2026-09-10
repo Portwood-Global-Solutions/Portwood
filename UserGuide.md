@@ -2755,6 +2755,23 @@ Sorting applies to Individual Files too — it decides the order records are pro
 
 > **If your Flow passes a Record IDs collection:** SOQL does not preserve the order of that collection, so sorting the collection in the Flow has no effect on the document. Use **Sort Order**.
 
+### 9.1.2 Duplex Padding — every document starts on a fresh sheet
+
+When a **Combined PDF** is printed double-sided, a document with an **odd** page count leaves its last sheet half-used, and the next document starts on the back of it. **Duplex Padding** fixes that: before the merge, Portwood checks each document's page count and appends **one blank page** to any document that has an odd number of pages, so every document begins on the front of a sheet.
+
+- The toggle appears under the output mode once you pick **Combined PDF** or **Both** (it does nothing for Individual Files, so it is hidden there and forced off).
+- In **Both** mode only the combined bundle is padded — the individual per-record files come out standalone and unpadded (each one already starts on its own sheet).
+- The filler page is **completely blank** — no header, no footer, no watermark, no page number.
+- **Page numbers count real pages only.** Because each record is rendered as its own document and then stitched, `{PageNumber}` / `{TotalPages}` in the Header/Footer HTML fields ([§5.7.5](#575-page-numbers)) count per-document — a 3-page statement numbers `1 of 3, 2 of 3, 3 of 3`, and the blank filler after it carries no number. A plain Combined PDF, by contrast, numbers continuously across the whole bundle.
+- Documents with an **even** page count are never touched.
+- **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
+
+**Scale.** A duplex packet is assembled entirely in memory in one background job, so the ceiling depends on how large each rendered document is — not just the record count. A plain text document (a few KB per page) can reach the low hundreds; a branded template with a logo and/or non-Latin text — which embeds a font, often 60+ KB per record — can top out below 100, sometimes near 50. The pre-run analysis panel measures your template's Test Record, shows a **Duplex Packet** row with the specific limit it estimates, and disables the Run button above it. If a job does exceed the limit at run time, it ends as **Failed** with an error-log message telling you to run **Individual Files** — where each document already starts on its own sheet — or split the filter with a tighter query.
+
+> Set a **Test Record** on the template ([§5.3](#53-test-record)) so the analysis can size the limit to it. Without one it falls back to a flat ~400, which is optimistic for a branded template.
+
+**In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
+
 ### 9.2 Saved queries
 
 Save a filter as a reusable `DocGen_Saved_Query__c`. Gives non-technical users a drop-down of pre-built filters without writing SOQL. Created and managed in the Bulk Generation UI.
