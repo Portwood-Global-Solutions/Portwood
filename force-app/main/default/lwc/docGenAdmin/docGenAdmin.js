@@ -15412,6 +15412,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             event.target.value = '';
             return;
         }
+        // The save carries the baked image AND the unbaked source; both are
+        // base64 in the synchronous Apex heap. Keep watermarks small (#313).
+        if (file.size > 3 * 1024 * 1024) {
+            this.showToast(
+                'Image too large',
+                'Use a watermark image under 3 MB — a logo or stamp at screen resolution is plenty.',
+                'error'
+            );
+            event.target.value = '';
+            return;
+        }
         const active = (this.versions || []).find((v) => v[F.VerIsActive]);
         if (!active) {
             this.showToast(

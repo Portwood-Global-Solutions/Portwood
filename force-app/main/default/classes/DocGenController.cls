@@ -998,6 +998,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /**
+     * Ceiling on each base64 watermark payload (#313). saveWatermarkImage runs in
+     * the synchronous 6 MB heap and now carries TWO images (baked + unbaked
+     * source); a base64 string is ~2.6x the image and Apex holds it as UTF-16, so
+     * even one large payload can blow the governor. ~4 MB of base64 ≈ a ~3 MB
+     * image — far more than any real watermark logo/stamp.
+     */
+    private static final Integer WATERMARK_BASE64_MAX = 4 * 1024 * 1024;
+
     @AuraEnabled
     public static Id saveWatermarkImage(Id versionId, String fileName, String base64Data, String sourceBase64) {
         if (versionId == null) {
@@ -1005,6 +1014,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         if (String.isBlank(base64Data)) {
             throw new DocGenException('Image data is required.');
+        }
+        if (
+            base64Data.length() > WATERMARK_BASE64_MAX ||
+            (String.isNotBlank(sourceBase64) && sourceBase64.length() > WATERMARK_BASE64_MAX)
+        ) {
+            throw new DocGenException(
+                'Watermark image is too large. Use an image under ~3 MB — a logo or stamp at screen resolution is plenty.'
+            );
         }
         // SECURITY (v1.75): verify the caller actually has access to this template
         // version before attaching anything to it. Extracted to a shared helper so
@@ -1016,7 +1033,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // ContentVersions (#313).
         purgePriorWatermarkFiles(versionId);
 
+        // Decode + insert one image at a time, releasing each base64 string and
+        // blob before touching the next — never hold both in the 6 MB sync heap.
         Blob imgBlob = EncodingUtil.base64Decode(base64Data);
+        base64Data = null;
         ContentVersion cv = new ContentVersion(
             Title = WATERMARK_PREFIX + versionId,
             PathOnClient = String.isNotBlank(fileName) ? fileName : 'watermark.png',
@@ -1024,6 +1044,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             FirstPublishLocationId = versionId
         );
         Database.insert(cv, AccessLevel.USER_MODE);
+        imgBlob = null;
 
         // Keep the UNBAKED original alongside the washed image (#313).
         //
@@ -1034,10 +1055,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // lets the opacity control keep working after the page is reloaded, or in
         // a later session, instead of asking the author to upload the file again.
         if (String.isNotBlank(sourceBase64)) {
+            Blob srcBlob = EncodingUtil.base64Decode(sourceBase64);
+            sourceBase64 = null;
             ContentVersion src = new ContentVersion(
                 Title = WATERMARK_SOURCE_PREFIX + versionId,
                 PathOnClient = 'watermark-source.png',
-                VersionData = EncodingUtil.base64Decode(sourceBase64),
+                VersionData = srcBlob,
                 FirstPublishLocationId = versionId
             );
             Database.insert(src, AccessLevel.USER_MODE);
