@@ -1,17 +1,22 @@
 /**
  * Invocable action for generating documents that may have large child datasets.
- * Auto-detects whether Giant Query is needed by scouting child record counts.
+ * Auto-detects whether Giant Query (async batch) is needed.
  *
- * Under 2,000 child records: generates synchronously (same as DocGenFlowAction).
- * Over 2,000 child records: launches async batch. PDF is saved to the record
- * when complete. Returns the Job ID for status tracking.
+ * The decision is a HEAP estimate, not a raw row count (#374): a Quote with a
+ * few hundred line items carrying large descriptions is well under any row
+ * threshold but tens of MB of data, and running it synchronously blew the 6 MB
+ * Apex heap governor with an uncatchable System.LimitException. Routing is
+ * delegated to DocGenGiantQueryRouter, shared with the on-screen Runner so the
+ * two cannot diverge again.
+ *
+ *   Fits the synchronous heap budget -> generate now (same as DocGenFlowAction).
+ *   Over the budget (or > 2,000 rows) -> launch async batch, PDF saved to the
+ *   record when complete, Job ID returned for status tracking.
  *
  * Ideal for customer portals, Screen Flows, and automated processes where
  * the dataset size isn't known in advance.
  */
 global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModifier — global required for @InvocableMethod visibility in subscriber orgs
-    private static final Integer GIANT_THRESHOLD = 2000;
-
     global class Request {
         @InvocableVariable(label='Template ID' required=true description='The Portwood Template record ID')
         global Id templateId;
@@ -44,7 +49,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
 
         @InvocableVariable(
             label='Is Giant Query'
-            description='True if the dataset exceeded 2,000 rows and generation is async'
+            description='True if the dataset was too large for synchronous generation and is being processed by the async batch (poll Job ID)'
         )
         global Boolean isGiantQuery;
 
@@ -57,7 +62,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
 
     @InvocableMethod(
         label='Generate Document (Auto Giant Query)'
-        description='Generates a document, automatically using async Giant Query for datasets over 2,000 child records. PDF is saved to the record when complete.'
+        description='Generates a document, automatically switching to async Giant Query when the dataset is too large for synchronous generation. PDF is saved to the record when complete.'
     )
     global static List<Response> generateDocument(List<Request> requests) {
         List<Response> responses = new List<Response>();
@@ -92,37 +97,67 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                 DocGen_Template__c template = templates[0];
                 String queryConfig = template.Query_Config__c;
 
-                // Scout child counts to decide sync vs async
-                String giantRelationship = null;
-                Map<String, Object> giantNodeConfig = null;
+                // Sync vs async is a HEAP decision, not a row-count one. The
+                // shared router estimates peak synchronous heap (sampling one
+                // real child row so heavy rich-text rows are not under-counted).
+                // It scouts every config format for the estimate; only V3 is
+                // auto-routed to the batch (see the guard below) (#374).
+                DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
+                    req.recordId,
+                    queryConfig,
+                    template.Output_Format__c
+                );
 
-                Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
-                if (configVersion >= 3) {
-                    Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(req.recordId, queryConfig);
-                    Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
-                    List<Object> nodesJson = (List<Object>) config.get('nodes');
-
-                    for (String relName : counts.keySet()) {
-                        if (counts.get(relName) > GIANT_THRESHOLD) {
-                            giantRelationship = relName;
-                            if (nodesJson != null) {
-                                for (Object nodeObj : nodesJson) {
-                                    Map<String, Object> n = (Map<String, Object>) nodeObj;
-                                    if (relName.equals((String) n.get('relationshipName'))) {
-                                        giantNodeConfig = n;
-                                        break;
-                                    }
-                                }
-                            }
-                            break;
-                        }
+                if (route.useGiantPath) {
+                    // Predicted to exceed the synchronous heap governor. The heap
+                    // LimitException is uncatchable, so this MUST be a decision
+                    // made before generation, not a try/catch after it.
+                    if (template.Type__c != 'Word') {
+                        throw new DocGenException(
+                            'This ' +
+                                template.Type__c +
+                                ' template produces a document too large for synchronous generation (' +
+                                route.reason +
+                                '). The Auto Giant Query Flow action can only background-process Word templates — ' +
+                                'generate it from the Portwood Runner instead.'
+                        );
                     }
-                }
-
-                if (giantRelationship != null && giantNodeConfig != null) {
-                    // Async Giant Query path
+                    // Only V3 (tree) query configs are auto-routed to the batch.
+                    // The batch path skips processXml, so parent-level {#IF} /
+                    // inverse tags / secondary child loops would leak as raw text
+                    // — routing a large V1/V2 template there could silently
+                    // corrupt the output. Fail loud with a route instead (#374).
+                    if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3) {
+                        throw new DocGenException(
+                            'This template is too large for synchronous generation (' +
+                                route.reason +
+                                '). Background generation from this Flow action needs a tree-style (V3) query ' +
+                                'configuration — re-save the template in the Query Builder, or generate it from the Portwood Runner.'
+                        );
+                    }
+                    if (route.giantNodeConfig == null) {
+                        throw new DocGenException(
+                            'This document is too large to generate inside the Flow (' +
+                                route.reason +
+                                ') and Portwood could not prepare it for background generation. Reduce the fields ' +
+                                'queried for the large related list, or generate it from the Portwood Runner.'
+                        );
+                    }
+                    if (System.isBatch() || System.isFuture() || System.isQueueable() || System.isScheduled()) {
+                        throw new DocGenException(
+                            'This document needs background generation (' +
+                                route.reason +
+                                ') but the Flow is already running asynchronously, which cannot start a batch job. ' +
+                                'Run this Generate Document step from a screen or record-triggered (synchronous) Flow.'
+                        );
+                    }
                     res.isGiantQuery = true;
-                    res.jobId = launchGiantBatch(req.templateId, req.recordId, giantRelationship, giantNodeConfig);
+                    res.jobId = launchGiantBatch(
+                        req.templateId,
+                        req.recordId,
+                        route.giantRelationship,
+                        route.giantNodeConfig
+                    );
                     res.success = true;
                 } else {
                     // Sync path — same as DocGenFlowAction. attachmentRecordId is null when
@@ -167,7 +202,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
     private static Id launchGiantBatch(
         Id templateId,
         Id recordId,
-        String giantRelationship,
+        String giantRelationshipKey,
         Map<String, Object> childNodeConfig
     ) {
         // Get document XML from pre-decomposed parts
@@ -208,10 +243,12 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
             throw new DocGenException('Pre-decomposed template parts not found. Please re-save the template.');
         }
 
-        Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationship);
+        // The loop tag in the template body is keyed by the alias when the node
+        // has one (e.g. {#SubscriptionItems}), which is the effective key.
+        Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationshipKey);
         documentXml = null;
         if (loopParts == null) {
-            throw new DocGenException('Could not find loop for relationship: ' + giantRelationship);
+            throw new DocGenException('Could not find loop for relationship: ' + giantRelationshipKey);
         }
 
         // Create Job record
@@ -225,7 +262,13 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
         );
         insert job; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
-        childNodeConfig.put('relationshipName', giantRelationship);
+        // The router's node config already carries the real relationshipName
+        // (and alias, if any) for DocGenGiantQueryBatch — only fill it in if a
+        // V1-parsed config somehow left it blank. Never overwrite: the effective
+        // key can be an alias, which would break the batch's SOQL FROM.
+        if (String.isBlank((String) childNodeConfig.get('relationshipName'))) {
+            childNodeConfig.put('relationshipName', giantRelationshipKey);
+        }
 
         DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
             job.Id,

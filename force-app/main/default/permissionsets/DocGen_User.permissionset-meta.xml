@@ -247,6 +247,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Job__c.Duplex_Padding__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Job__c.Error_Count__c</field>
         <readable>true</readable>
     </fieldPermissions>
