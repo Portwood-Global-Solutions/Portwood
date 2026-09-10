@@ -66,6 +66,28 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **Every signature email after the first ignored the admin's saved template and branding
+  in guest and Automated Process contexts (#390).** Only the initial signature-request
+  email rendered the customised `DocGen_Email_Template__c`; the verification PIN,
+  completion confirmation, all-signed, signer-completed, signer-declined, and sequential
+  next-signer emails silently fell back to the built-in wording and the org-wide fallback
+  colour (or `#1589EE` when the org set none), and dropped the logo. Two independent
+  causes. First, `DocGen_Email_Template__c` and `DocGen_Asset__c` ship
+  `externalSharingModel = Private` with no guest sharing rule, and `WITH SYSTEM_MODE`
+  bypasses CRUD/FLS but **not record sharing** — so a **guest** sender (the PIN and
+  guided-completion paths) read zero rows and fell through to the built-in default. The
+  three reads now run in a private `without sharing` inner reader.
+
+    Second, the `DocGen_Signature_PDF__e` trigger and the async finalizer run as the
+    **Automated Process** user, which holds no permission set;
+    `DocGenFlsGuard.guestAssertAccessible` self-bypasses only for `Guest`, so it threw
+    and abandoned the load for the signer-completed / declined / all-signed / next-signer
+    emails. The FLS describe check is now an advisory signal (`flsSignalOnly`) that logs
+    instead of throwing. Reads stay `SYSTEM_MODE` and read-only — package-internal
+    branding config with no per-record confidentiality model. Found by rendering a stored
+    PIN template as a real Site guest user and getting back "Your Signature Verification
+    Code", the built-in.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage
