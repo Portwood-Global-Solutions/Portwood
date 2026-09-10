@@ -78,7 +78,9 @@ Two small fixes where the editor promised something the PDF did not deliver.
   died with a platform error ID. Both scans are now linear `indexOf` passes with no step
   budget; the match is byte-identical (verified against the real 966K-character file and
   a 16-shape differential test). Three customers had reported it as "is this template too
-  complicated?" when it was purely size.
+  complicated?" when it was purely size. A third scan of the same shape — the
+  whitespace-tolerant `{ #Loop }` open-tag fallback in `extractLoopBody` — is converted
+  in #362, shipping in this same release; a template that hits both needs both.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 

@@ -3657,7 +3657,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 return;
             }
             String name = xml.substring(lt + 1, lt + 4);
-            if (name != 'w:t' && name != 'a:t') {
+            // .equals(), not ==: Apex String == / != are case-INSENSITIVE, but the
+            // regex this replaced (`<[wa]:t…`) was case-sensitive. OOXML tag names
+            // are case-sensitive, so keep exact parity and don't treat <W:T> as text.
+            if (!name.equals('w:t') && !name.equals('a:t')) {
                 i = lt + 1;
                 continue;
             }
@@ -3685,7 +3688,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
             if (nextLt + 6 <= n) {
                 String closeTag = xml.substring(nextLt, nextLt + 6);
-                if (closeTag == '</w:t>' || closeTag == '</a:t>') {
+                // .equals() — case-sensitive, matching the replaced regex `</[wa]:t>`.
+                if (closeTag.equals('</w:t>') || closeTag.equals('</a:t>')) {
                     contentStarts.add(contentStart);
                     contentEnds.add(nextLt);
                     contents.add(xml.substring(contentStart, nextLt));
