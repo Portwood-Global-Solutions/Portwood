@@ -3477,8 +3477,9 @@
                                                 >
                                                 <select
                                                     class="dg-page-select"
-                                                    title="Opacity is baked into the image on upload so the PDF matches exactly"
+                                                    title="Applied to the image and re-applied when you change it — the PDF matches exactly"
                                                     onchange={handleWatermarkOpacityChange}
+                                                    disabled={isUploadingWatermark}
                                                 >
                                                     <template for:each={watermarkOpacityOptions} for:item="opt">
                                                         <option
@@ -3776,6 +3777,20 @@
                                             field-level-help="When verification is on, auto-send the code to the signer's known email and skip the 'type your email' step. Inherit uses the org default."
                                             class="slds-var-m-top_medium"
                                         ></lightning-combobox>
+                                        <!-- #367 — hidden entirely once the org-wide switch already hides
+                                             Decline everywhere, since this toggle would then be a no-op. -->
+                                        <template if:false={orgHideDecline}>
+                                            <lightning-input
+                                                type="toggle"
+                                                label="Hide Decline Button"
+                                                checked={editTemplateHideDecline}
+                                                onchange={handleHideDeclineChange}
+                                                message-toggle-active="Decline is hidden for this template"
+                                                message-toggle-inactive="Signers can decline instead of signing"
+                                                field-level-help="Off by default — the Decline button shows on this template's signing pages. Turn this on to hide it for this template only, e.g. a formal or binding document."
+                                                class="slds-var-m-top_medium"
+                                            ></lightning-input>
+                                        </template>
                                     </div>
                                     <div class="slds-col slds-size_1-of-2">
                                         <!-- #208 — per-template default email message -->
@@ -4001,8 +4016,9 @@
                                             <label class="slds-form-element__label">Watermark strength</label>
                                             <select
                                                 class="dg-page-select"
-                                                title="Opacity is baked into the image on upload so the PDF matches exactly"
+                                                title="Applied to the image and re-applied when you change it — the PDF matches exactly"
                                                 onchange={handleWatermarkOpacityChange}
+                                                disabled={isUploadingWatermark}
                                             >
                                                 <template for:each={watermarkOpacityOptions} for:item="opt">
                                                     <option key={opt.value} value={opt.value} selected={opt.selected}>

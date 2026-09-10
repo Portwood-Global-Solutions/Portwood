@@ -306,6 +306,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Job__c.Duplex_Padding__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Job__c.Error_Count__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -435,6 +440,11 @@
     <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Settings__c.Signature_Expiration_Days__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Settings__c.Signature_Hide_Decline__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -582,6 +592,11 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.Header_Html__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

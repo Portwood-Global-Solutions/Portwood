@@ -788,7 +788,6 @@ private class DocGenEmailTemplateTest {
         );
         System.assert(r.htmlBody.contains('#123ABC'), 'guest render must carry the BRAND color into the chrome');
     }
-
     // ---- helpers ----
     /**
      * An active Site Guest user for true guest-context assertions, or null when
