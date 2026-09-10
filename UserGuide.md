@@ -3034,6 +3034,8 @@ Any signer can decline with an optional reason. On decline:
 - Pending signers are NOT emailed.
 - The creator receives a decline notification with the reason.
 
+**Hiding the Decline button (v3.57+).** For formal or binding documents where you don't want signers to have a one-click way to refuse, you can turn the signer's **Decline** button off. A **Hide Decline Button** switch in the Command Hub's **Signature Settings** tab (§13.2) hides it on every signing page; a matching switch on an individual Portwood Template (Command Hub → My Templates → edit) hides it just for that template's requests. Both are off by default, so the button shows everywhere unless you turn one on. The switch is checked each time a signer opens their link, so turning it on hides Decline on requests that already went out, not just new ones — and the button is genuinely disabled, not merely hidden from view. A request sent from a source document with no template follows the org-wide switch alone.
+
 ### 10.12 Admin setup (one-time)
 
 Before signatures work in production, complete the checklist in **Signature Settings**:
@@ -3658,6 +3660,7 @@ Covers:
 - Signing-link expiration default (days; individual sends and the Flow action can override — §10.8)
 - Reminder enable/disable + comma-separated hour schedule (§10.8)
 - Signer verification org defaults — **Require Email Verification** and **Pre-fill Signer Email** (templates and individual sends can override; see §10.5)
+- **Hide Decline Button** (v3.57+) — turns the signer's **Decline** button off on every signing page; off by default, and a template can also hide it just for itself (§10.11)
 - Setup validation checklist (pass/fail for each prerequisite)
 
 Email branding (colors, logo, subject lines, body copy) lives in **Command Hub → Email Templates** (§10.14) as of v3.27 — it's no longer on this page.

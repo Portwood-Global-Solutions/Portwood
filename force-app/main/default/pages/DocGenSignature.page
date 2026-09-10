@@ -1143,6 +1143,13 @@
                             .addEventListener('click', handleCompleteSigning);
 
                         // Decline button
+                        // #367 — Decline shows by default. The server sets
+                        // showDecline=false only when an admin turned on "Hide Decline
+                        // Button" org-wide or on this request's template; the gate is
+                        // re-enforced in declineSignature so hiding it can't be bypassed.
+                        if (!signerData || !signerData.showDecline) {
+                            document.getElementById('btn-decline').style.display = 'none';
+                        }
                         document.getElementById('btn-decline').addEventListener('click', function () {
                             showState('decline');
                         });

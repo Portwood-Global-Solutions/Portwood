@@ -667,7 +667,7 @@ private class DocGenSignatureTests {
         DocGen_Signer__c signer = getTestSigner();
         String signerToken = [SELECT Secure_Token__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Secure_Token__c;
 
-        // Decline the signer first.
+        // Decline the signer first. (#367 — Decline shows by default, so no setup needed.)
         DocGenSignatureController.declineSignature(signerToken, 'Wrong document', null, null);
 
         Test.startTest();
@@ -4398,6 +4398,8 @@ private class DocGenSignatureTests {
             Signature_Data__c = '{"previewHtml":"<html>Electronically signed by ...</html>"}'
         );
         update parentReqSeed;
+
+        // #367 — Decline shows by default, so no setup needed for this decline.
 
         Test.startTest();
         Map<String, Object> result = DocGenSignatureController.declineSignature(
