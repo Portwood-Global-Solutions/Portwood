@@ -1,4 +1,5 @@
-// DocGen E2E Test 07.5 — {RowNumber} loop counter via processXmlForTest()
+// DocGen E2E Test 07.5 — parser regressions via processXmlForTest()
+//   {RowNumber} loop counter · currency aggregate suffixes · rich-text HTML gate (#399)
 // Run: sf apex run --target-org <org> -f scripts/e2e-07-syntax5.apex
 // Depends on: nothing (uses DocGenService.processXmlForTest directly)
 // Expected: PASS: N  FAIL: 0
@@ -299,6 +300,161 @@ try {
 } catch (Exception e) {
     fail++;
     System.debug('CURRENCY PLAIN :convert WITH LOCALE: FAIL — ' + e.getMessage());
+}
+// ============================================================
+// #399 — rich-text field value that is a bare <table> or <h1>
+// must be recognised as HTML, not escaped as raw markup.
+// ============================================================
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{F}</w:t>',
+        new Map<String, Object>{ 'F' => '<table><tr><td>North</td><td>10</td></tr></table>' }
+    );
+    if (!r.contains('&lt;table') && r.contains('North')) {
+        pass++;
+        System.debug('RICHTEXT BARE TABLE NOT ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT BARE TABLE NOT ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT BARE TABLE NOT ESCAPED: FAIL — ' + e.getMessage());
+}
+
+// Angle brackets in prose must still be escaped, not read as a tag.
+try {
+    r = DocGenService.processXmlForTest('<w:t>{F}</w:t>', new Map<String, Object>{ 'F' => 'true if a < b and c > d' });
+    if (r.contains('a &lt; b') && r.contains('c &gt; d')) {
+        pass++;
+        System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: FAIL — ' + e.getMessage());
+}
+
+// An angle-bracketed word whose prefix collides with a short tag name
+// (<li> vs <link>, <tr> vs <transform>, <th> vs <threshold>) must NOT be
+// treated as HTML — the tag-name match is boundary-anchored.
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{F}</w:t>',
+        new Map<String, Object>{ 'F' => 'set the <threshold> and <transform> in the <link> block' }
+    );
+    if (r.contains('&lt;threshold&gt;') && r.contains('&lt;transform&gt;') && r.contains('&lt;link&gt;')) {
+        pass++;
+        System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: FAIL — ' + e.getMessage());
+}
+// #362 — extractLoopBody's whitespace open-tag fallback (giant-query path).
+// The tag is written with whitespace so the fallback branch is taken; it must
+// still locate the loop and extract its body.
+try {
+    String gx = '<w:body><w:tbl><w:tr><w:tc><w:p>{ #Items}<w:r><w:t>{Name}</w:t></w:r>{ /Items}</w:p></w:tc></w:tr></w:tbl></w:body>';
+    Map<String, String> lb = DocGenService.extractLoopBody(gx, 'Items');
+    if (lb != null && lb.get('innerXml').contains('{Name}') && lb.get('beforeLoop').contains('<w:tbl>')) {
+        pass++;
+        System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): PASS');
+    } else {
+        fail++;
+        System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): FAIL — ' + lb);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('GIANT extractLoopBody WHITESPACE TAG (#362): FAIL — ' + e.getMessage());
+}
+// ============================================================
+// #325 — the run-merge scan is linear, not a whole-document Matcher.
+// mergeRunsInTagsCore used to compile a Matcher over the entire
+// word/document.xml; Apex throws the uncatchable "Regex too complicated"
+// once a single Matcher passes ~500K chars, so a large Word template
+// failed no matter how few merge tags it held. A split tag past that
+// size must still rejoin, with no exception.
+// ============================================================
+try {
+    String unit = '<w:p><w:r><w:t xml:space="preserve">Coverage is subject to the terms of the policy. </w:t></w:r></w:p>';
+    String bigXml = '<?xml version="1.0"?><w:document><w:body>';
+    Integer reps = 650000 / unit.length();
+    for (Integer i = 0; i < reps; i++) {
+        bigXml += unit;
+    }
+    // The real work: a merge tag split across two runs, above the old ceiling.
+    bigXml += '<w:p><w:r><w:t>{Acc</w:t></w:r><w:r><w:t>ount.Name}</w:t></w:r></w:p></w:body></w:document>';
+
+    if (bigXml.length() <= 500000) {
+        fail++;
+        System.debug(
+            'MERGE-RUN SCAN LINEAR PAST 500K: FAIL — fixture only ' + bigXml.length() + ' chars, below the old ceiling'
+        );
+    } else {
+        String merged = DocGenService.mergeRunsInTagsForTest(bigXml);
+        if (merged.contains('{Account.Name}') && merged.contains('subject to the terms')) {
+            pass++;
+            System.debug(
+                'MERGE-RUN SCAN LINEAR PAST 500K: PASS — ' + bigXml.length() + ' chars merged, split tag rejoined'
+            );
+        } else {
+            fail++;
+            System.debug('MERGE-RUN SCAN LINEAR PAST 500K: FAIL — split tag not rejoined or body lost');
+        }
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('MERGE-RUN SCAN LINEAR PAST 500K: FAIL — ' + e.getMessage());
+}
+// #395 — {…:currency:auto} for a zero-decimal currency whose symbol lives in
+// CURRENCY_SYMBOLS. ISK/VND were missing from that map, so the :auto guard
+// rejected them and fell back to '$' + 2 decimals, never reaching the
+// zero-decimal handling. Symbol table and formatter are shared across every
+// resolution path (inline, aggregate, giant-query parent), so one map entry
+// fixes all of them — the aggregate assertion below is the giant-query guard.
+// ============================================================
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'ISK' };
+    r = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+    if (r.contains('kr') && !r.contains('$') && !r.contains('.') && r.contains('1,545,001')) {
+        pass++;
+        System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: FAIL — expected "kr 1,545,001", got: ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: FAIL — ' + e.getMessage());
+}
+
+try {
+    Map<String, Object> data = new Map<String, Object>{
+        'CurrencyIsoCode' => 'ISK',
+        'Items' => new Map<String, Object>{
+            'records' => new List<Object>{
+                new Map<String, Object>{ 'Amount' => 1000000 },
+                new Map<String, Object>{ 'Amount' => 545000.5 }
+            }
+        }
+    };
+    r = DocGenService.processXmlForTest('<w:t>{SUM:Items.Amount:currency:auto}</w:t>', data);
+    if (r.contains('kr') && !r.contains('$') && !r.contains('.') && r.contains('1,545,001')) {
+        pass++;
+        System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: FAIL — expected "kr 1,545,001", got: ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: FAIL — ' + e.getMessage());
 }
 
 System.debug('========================================');
