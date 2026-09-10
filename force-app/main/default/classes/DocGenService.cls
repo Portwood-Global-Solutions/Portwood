@@ -10038,8 +10038,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     // Total decoded bytes one call is allowed to pull out of `data:` URIs. Heap
     // guard: the caller already holds the full HTML string. Images over the cap
     // keep their `data:` URI (and render blank) rather than risking a mid-run
-    // heap crash.
-    private static final Integer MAX_INLINE_IMAGE_DECODED_BYTES = 5 * 1024 * 1024;
+    // heap crash. Scaled to the transaction's heap ceiling — the save path is
+    // synchronous (6 MB), so it gets a much smaller budget than an async render.
+    private static Integer maxInlineImageDecodedBytes() {
+        return Limits.getLimitHeapSize() > 6000000 ? 5 * 1024 * 1024 : 1536 * 1024;
+    }
+
+    // Largest single base64 payload to even hold as a substring — a bigger one is
+    // left as a `data:` URI. Bounds the peak of Pass 2's per-image slice.
+    private static final Integer MAX_INLINE_IMAGE_B64_CHARS = 2 * 1024 * 1024;
 
     /**
      * Rewrites every `<img src="data:image/...;base64,...">` in `html` to a
@@ -10091,6 +10098,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             if (b64Marker == -1 || b64Marker > valEnd) {
                 continue;
             }
+            // Leave an oversized single image as a `data:` URI (renders blank)
+            // rather than holding a multi-MB substring — and its decoded blob —
+            // in the synchronous heap.
+            if (valEnd - (b64Marker + 8) > MAX_INLINE_IMAGE_B64_CHARS) {
+                continue;
+            }
             valStarts.add(valStart);
             valEnds.add(valEnd);
             subtypes.add(html.substring(valStart + 11, b64Marker).toLowerCase());
@@ -10137,7 +10150,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     continue;
                 }
             }
-            if (ctx.decodedBytesUsed + bytes.size() > MAX_INLINE_IMAGE_DECODED_BYTES) {
+            if (ctx.decodedBytesUsed + bytes.size() > maxInlineImageDecodedBytes()) {
                 System.debug(
                     LoggingLevel.WARN,
                     '#377 inline-image budget exhausted on template ' +
@@ -10165,10 +10178,22 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // SYSTEM_MODE: package-managed image assets, and the render-path
                 // fallback can run as a guest user (public signing / guest-runner)
                 // where ContentVersion create FLS would otherwise block it.
+                // allOrNone=false: one bad image (storage limit, oversized blob)
+                // must not roll back the CVs for every other image on the page.
                 /* code-analyzer-suppress ApexFlsViolation */
-                Database.insert(toInsert, AccessLevel.SYSTEM_MODE); // NOPMD ApexCRUDViolation — package-internal template image assets
-                for (ContentVersion cv : toInsert) {
-                    ctx.cvIdByTitle.put(cv.Title, cv.Id);
+                List<Database.SaveResult> results = Database.insert(toInsert, false, AccessLevel.SYSTEM_MODE); // NOPMD ApexCRUDViolation — package-internal template image assets
+                for (Integer k = 0; k < results.size(); k++) {
+                    if (results[k].isSuccess()) {
+                        ctx.cvIdByTitle.put(toInsert[k].Title, results[k].getId());
+                    } else {
+                        System.debug(
+                            LoggingLevel.WARN,
+                            '#377 inline-image CV insert skipped for ' +
+                                toInsert[k].Title +
+                                ': ' +
+                                results[k].getErrors()[0].getMessage()
+                        );
+                    }
                 }
             } catch (Exception insertErr) {
                 // e.g. DML-after-callout, or a storage limit. Degrade: images not
