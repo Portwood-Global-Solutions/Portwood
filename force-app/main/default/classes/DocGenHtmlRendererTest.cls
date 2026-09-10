@@ -1671,6 +1671,29 @@ private class DocGenHtmlRendererTest {
         }
     }
 
+    // A hand-built .docx can write a bare & in the rels Target. It must be
+    // escaped on the way into w:docgen-url, not copied through raw (a bare &
+    // in combinedDocumentXml fails the strict downstream parse, blanking the PDF).
+    @IsTest
+    static void testHyperlinkRawAmpersandInRelsTargetGetsEscaped() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Report'),
+                hyperlinkRelsXml('https://example.com/r?a=1&b=2', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(
+                html.contains('<a href="https://example.com/r?a=1&amp;b=2"'),
+                'A raw ampersand from the rels target must be escaped exactly once. Got: ' + html
+            );
+            System.assert(!html.contains('a=1&b=2'), 'Bare ampersand must not survive. Got: ' + html);
+            System.assert(!html.contains('&amp;amp;'), 'Must not double-escape. Got: ' + html);
+        }
+    }
+
     // Internal (non-External) targets are file paths, not URLs — no anchor.
     @IsTest
     static void testHyperlinkInternalTargetNotLinked() {

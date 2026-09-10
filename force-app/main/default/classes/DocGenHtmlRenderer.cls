@@ -1965,7 +1965,14 @@ public with sharing class DocGenHtmlRenderer {
             if (url == null) {
                 parts.add(openTag);
             } else {
-                parts.add('<w:hyperlink w:docgen-url="' + url + '"' + openTag.substring('<w:hyperlink'.length()));
+                // The rels Target is normally XML-escaped already (`&amp;`), but a
+                // hand-built .docx can write a bare `&` — copied verbatim into
+                // w:docgen-url that becomes a bare `&` in combinedDocumentXml and
+                // fails the strict downstream parse, blanking the whole PDF. Decode
+                // then re-escape so the attribute (and the later `<a href>`) carries
+                // exactly-once-escaped markup regardless of how the Target arrived.
+                String safeUrl = unescapeXmlEntities(url).escapeXml();
+                parts.add('<w:hyperlink w:docgen-url="' + safeUrl + '"' + openTag.substring('<w:hyperlink'.length()));
             }
             cursor = tagEnd + 1;
         }
