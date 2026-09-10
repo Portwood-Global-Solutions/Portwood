@@ -398,7 +398,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         'PEN' => 'S/',
         'ARS' => 'ARS$',
         'EGP' => 'E\u00A3',
-        'GHS' => 'GH\u20B5'
+        'GHS' => 'GH\u20B5',
+        // #395 - zero-decimal currencies whose symbol was missing here. Without an
+        // entry, {...:currency:auto} treated them as unknown and fell back to $ + 2dp,
+        // never reaching the zero-decimal handling below.
+        'ISK' => 'kr ',
+        'VND' => '\u20AB'
     };
 
     // Currencies that use 0 decimal places
@@ -3062,6 +3067,21 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     global static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
         preloadedRecordDataOverride = preloadedRecordData;
         return generateDocument(templateId, recordId);
+    }
+
+    /**
+     * Renders a PDF blob (no save) from pre-cached record data, keeping the real
+     * recordId so chart context and image tags resolve as they do for a live
+     * record. Used by DocGenBatch's duplex-padding path (#382).
+     * @return Map with keys: blob (PDF Blob), title (String)
+     */
+    global static Map<String, Object> generatePdfBlobFromData(
+        Id templateId,
+        Id recordId,
+        Map<String, Object> preloadedRecordData
+    ) {
+        preloadedRecordDataOverride = preloadedRecordData;
+        return generatePdfBlob(templateId, recordId);
     }
 
     /**
