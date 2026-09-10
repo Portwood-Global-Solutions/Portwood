@@ -4585,23 +4585,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         }
                         // Rich text HTML — convert to DOCX XML preserving formatting, images, and paragraphs
                         // PowerPoint: strip HTML tags and output plain text (Word XML corrupts PPTX)
-                        if (
-                            strVal.contains('<') &&
-                            strVal.contains('>') &&
-                            (strVal.containsIgnoreCase('<p') ||
-                            strVal.containsIgnoreCase('<div') ||
-                            strVal.containsIgnoreCase('<span') ||
-                            strVal.containsIgnoreCase('<br') ||
-                            strVal.containsIgnoreCase('<img') ||
-                            strVal.containsIgnoreCase('<b>') ||
-                            strVal.containsIgnoreCase('<i>') ||
-                            strVal.containsIgnoreCase('<u>') ||
-                            strVal.containsIgnoreCase('<strong') ||
-                            strVal.containsIgnoreCase('<em') ||
-                            strVal.containsIgnoreCase('<ul') ||
-                            strVal.containsIgnoreCase('<ol') ||
-                            strVal.containsIgnoreCase('<li'))
-                        ) {
+                        // #399: table/heading-only values are rich text too — the gate lives in
+                        // looksLikeRichTextHtml so every caller agrees on what counts as markup.
+                        if (looksLikeRichTextHtml(strVal)) {
                             if (currentTemplateType == 'PowerPoint' || currentTemplateType == 'Excel') {
                                 // Strip HTML tags for plain text in PPTX/XLSX — DrawingML/
                                 // WordprocessingML rich-text runs don't exist in these parts
@@ -6623,6 +6609,71 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         String stripped = s.replaceAll('(?i)<[^>]+>', '').replace('&nbsp;', '').replace('&#160;', '').trim();
         return String.isBlank(stripped);
+    }
+
+    /**
+     * Returns true when a merge-field value should be treated as rich-text HTML
+     * (passed through to the renderer for HTML templates, converted to runs for
+     * DOCX) rather than plain text (XML-escaped so it prints literally).
+     *
+     * The test is "does it contain a recognised HTML element" — a known tag name
+     * that opens (`<td>`, `<td ...>`), closes (`</td>`) or self-closes (`<br/>`).
+     * It is anchored to tag names, and to the `<b>` / `<b ` forms for the
+     * ambiguous single letters, so prose such as `price < cost` or
+     * `a < b and c > d` is NOT mistaken for markup and stays escaped.
+     *
+     * Presentational tags only. `<script>`, `<style>`, `<iframe>`, `<object>`,
+     * `<form>`, `<input>`, `<link>`, `<meta>` are deliberately absent — a value
+     * containing one keeps getting escaped (defence in depth for the HTML/PDF
+     * sink). Do not add them.
+     *
+     * A plain substring scan, not a regex: this runs once per merge tag — inside
+     * a `{#Loop}` body that is once per child row — and a backtracking pattern on
+     * a 32 KB long-text value would be a CPU-limit risk on that path. Issue #399:
+     * `<table>` / `<h1>`-only values used to miss the old hand-list and render as
+     * raw markup even though the renderer handles them.
+     */
+    @TestVisible
+    private static Boolean looksLikeRichTextHtml(String s) {
+        if (String.isBlank(s) || !s.contains('<') || !s.contains('>')) {
+            return false;
+        }
+        String l = s.toLowerCase();
+        return l.contains('<p') ||
+            l.contains('<div') ||
+            l.contains('<span') ||
+            l.contains('<br') ||
+            l.contains('<img') ||
+            l.contains('<b>') ||
+            l.contains('<b ') ||
+            l.contains('<i>') ||
+            l.contains('<i ') ||
+            l.contains('<u>') ||
+            l.contains('<strong') ||
+            l.contains('<em') ||
+            l.contains('<ul') ||
+            l.contains('<ol') ||
+            l.contains('<li') ||
+            l.contains('<dl') ||
+            l.contains('<table') ||
+            l.contains('<thead') ||
+            l.contains('<tbody') ||
+            l.contains('<tfoot') ||
+            l.contains('<tr') ||
+            l.contains('<td') ||
+            l.contains('<th') ||
+            l.contains('<caption') ||
+            l.contains('<h1') ||
+            l.contains('<h2') ||
+            l.contains('<h3') ||
+            l.contains('<h4') ||
+            l.contains('<h5') ||
+            l.contains('<h6') ||
+            l.contains('<a>') ||
+            l.contains('<a ') ||
+            l.contains('<blockquote') ||
+            l.contains('<pre') ||
+            l.contains('<hr');
     }
 
     /**

@@ -6319,6 +6319,75 @@ private class DocGenMiscTests {
     }
 
     // =========================================================================
+    // DocGenService.looksLikeRichTextHtml — the rich-text vs plain-text gate.
+    // #399: a value whose only structural element is a <table> or an <h1>-<h6>
+    // used to fall through to the plain-text branch and get XML-escaped, so the
+    // markup printed literally in the document. The renderer handles those tags
+    // fine — the value just never reached it as HTML.
+    // =========================================================================
+    @IsTest
+    static void testLooksLikeRichTextHtmlGate() {
+        for (
+            String html : new List<String>{
+                '<p>hi</p>',
+                '<div>hi</div>',
+                '<span>hi</span>',
+                'one<br>two',
+                'one<br/>two',
+                'ONE<BR>TWO',
+                '<strong>x</strong>',
+                '<em>x</em>',
+                '<ul><li>a</li></ul>',
+                '<table><tr><td>a</td><td>b</td></tr></table>',
+                '<TABLE><TR><TD>a</TD></TR></TABLE>',
+                '<thead><tr><th>H</th></tr></thead>',
+                '<h1>Title</h1>',
+                '<h3>Sub</h3>',
+                '<blockquote>q</blockquote>',
+                '<pre>code</pre>',
+                'see <a href="https://example.test">link</a>',
+                'line<hr>rule',
+                '<img src="/x.png"/>'
+            }
+        ) {
+            System.assert(DocGenService.looksLikeRichTextHtml(html), 'should be treated as HTML: ' + html);
+        }
+
+        for (
+            String plain : new List<String>{
+                null,
+                '',
+                '   ',
+                'just plain text',
+                'true if a < b and c > d then done',
+                'price < cost > margin',
+                '5 < 3',
+                'x -> y',
+                '<notarealtag>hello</notarealtag>',
+                '<script>alert(1)</script>',
+                '<style>body{color:red}</style>',
+                '<iframe src="x"></iframe>'
+            }
+        ) {
+            System.assert(!DocGenService.looksLikeRichTextHtml(plain), 'should stay plain text: ' + plain);
+        }
+    }
+
+    // #399 — a bare <table> value on a DOCX template previously XML-escaped to
+    // literal `&lt;table&gt;` markup in the output. It now routes through the
+    // rich-text path; this pins only that the raw markup is no longer escaped.
+    // Reconstructing an HTML table as a native <w:tbl> is not attempted here.
+    @IsTest
+    static void testBareTableRichTextNotEscapedOnDocxPath() {
+        String out = DocGenService.processXmlForTest(
+            '<w:p><w:r><w:t>{F}</w:t></w:r></w:p>',
+            new Map<String, Object>{ 'F' => '<table><tr><td>North</td><td>10</td></tr></table>' }
+        );
+        System.assert(!out.contains('&lt;table'), 'bare table must not be escaped as raw markup: ' + out);
+        System.assert(out.contains('North'), 'cell text preserved: ' + out);
+    }
+
+    // =========================================================================
     // DocGenService — convertRichTextToDocxXml decodes &#39; and &quot;
     // (issue #51). Lightning RTE stores apostrophes as the numeric reference;
     // without decoding they render literally in the output document.

@@ -1,4 +1,5 @@
-// DocGen E2E Test 07.5 — {RowNumber} loop counter via processXmlForTest()
+// DocGen E2E Test 07.5 — parser regressions via processXmlForTest()
+//   {RowNumber} loop counter · currency aggregate suffixes · rich-text HTML gate (#399)
 // Run: sf apex run --target-org <org> -f scripts/e2e-07-syntax5.apex
 // Depends on: nothing (uses DocGenService.processXmlForTest directly)
 // Expected: PASS: N  FAIL: 0
@@ -258,6 +259,42 @@ try {
 } catch (Exception e) {
     fail++;
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
+}
+
+// ============================================================
+// #399 — rich-text field value that is a bare <table> or <h1>
+// must be recognised as HTML, not escaped as raw markup.
+// ============================================================
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{F}</w:t>',
+        new Map<String, Object>{ 'F' => '<table><tr><td>North</td><td>10</td></tr></table>' }
+    );
+    if (!r.contains('&lt;table') && r.contains('North')) {
+        pass++;
+        System.debug('RICHTEXT BARE TABLE NOT ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT BARE TABLE NOT ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT BARE TABLE NOT ESCAPED: FAIL — ' + e.getMessage());
+}
+
+// Angle brackets in prose must still be escaped, not read as a tag.
+try {
+    r = DocGenService.processXmlForTest('<w:t>{F}</w:t>', new Map<String, Object>{ 'F' => 'true if a < b and c > d' });
+    if (r.contains('a &lt; b') && r.contains('c &gt; d')) {
+        pass++;
+        System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: FAIL — ' + e.getMessage());
 }
 
 System.debug('========================================');
