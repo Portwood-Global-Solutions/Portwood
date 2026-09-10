@@ -150,6 +150,21 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **Large Word and PowerPoint templates no longer crash generation with a
+  `Regex too complicated` error (#325).** `mergeRunsInTags` — which rejoins a merge tag
+  split across formatting runs — and the `{RepeatHeader}` probe next to it each scanned
+  the whole document with a regex `Matcher`. Apex spends a `Matcher`'s step budget on **input
+  length**, not pattern complexity, and throws the **uncatchable**
+  `System.LimitException: Regex too complicated` once `word/document.xml` passes roughly
+  500K characters — so a long multi-page form failed regardless of how few merge tags it
+  held (the reference case is an ACORD 125 with 966K characters of XML and eight tags).
+  The exception isn't caught by `catch (Exception)` either, so a background PDF job just
+  died with a platform error ID. Both scans are now linear `indexOf` passes with no step
+  budget; the match is byte-identical (verified against the real 966K-character file and
+  a 16-shape differential test). Three customers had reported it as "is this template too
+  complicated?" when it was purely size. A third scan of the same shape — the
+  whitespace-tolerant `{ #Loop }` open-tag fallback in `extractLoopBody` — is converted
+  in #362, shipping in this same release; a template that hits both needs both.
 - **The Auto Giant Query Flow action no longer crashes on a heavy dataset that stays
   under the row-count threshold (#374).** It chose between synchronous and background
   generation on a child **row count over 2,000** alone, so a record with a few hundred

@@ -261,6 +261,44 @@ try {
 }
 
 // ============================================================
+// #325 — the run-merge scan is linear, not a whole-document Matcher.
+// mergeRunsInTagsCore used to compile a Matcher over the entire
+// word/document.xml; Apex throws the uncatchable "Regex too complicated"
+// once a single Matcher passes ~500K chars, so a large Word template
+// failed no matter how few merge tags it held. A split tag past that
+// size must still rejoin, with no exception.
+// ============================================================
+try {
+    String unit = '<w:p><w:r><w:t xml:space="preserve">Coverage is subject to the terms of the policy. </w:t></w:r></w:p>';
+    String bigXml = '<?xml version="1.0"?><w:document><w:body>';
+    Integer reps = 650000 / unit.length();
+    for (Integer i = 0; i < reps; i++) {
+        bigXml += unit;
+    }
+    // The real work: a merge tag split across two runs, above the old ceiling.
+    bigXml += '<w:p><w:r><w:t>{Acc</w:t></w:r><w:r><w:t>ount.Name}</w:t></w:r></w:p></w:body></w:document>';
+
+    if (bigXml.length() <= 500000) {
+        fail++;
+        System.debug(
+            'MERGE-RUN SCAN LINEAR PAST 500K: FAIL — fixture only ' + bigXml.length() + ' chars, below the old ceiling'
+        );
+    } else {
+        String merged = DocGenService.mergeRunsInTagsForTest(bigXml);
+        if (merged.contains('{Account.Name}') && merged.contains('subject to the terms')) {
+            pass++;
+            System.debug(
+                'MERGE-RUN SCAN LINEAR PAST 500K: PASS — ' + bigXml.length() + ' chars merged, split tag rejoined'
+            );
+        } else {
+            fail++;
+            System.debug('MERGE-RUN SCAN LINEAR PAST 500K: FAIL — split tag not rejoined or body lost');
+        }
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('MERGE-RUN SCAN LINEAR PAST 500K: FAIL — ' + e.getMessage());
+}
 // #395 — {…:currency:auto} for a zero-decimal currency whose symbol lives in
 // CURRENCY_SYMBOLS. ISK/VND were missing from that map, so the :auto guard
 // rejected them and fell back to '$' + 2 decimals, never reaching the
