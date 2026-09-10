@@ -3150,7 +3150,7 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 
 ### 11.5 Recipe — Generate when dataset size is unpredictable
 
-**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+. You can't know at design time which path is right.
+**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+ — or a normal count with very large line-item descriptions. You can't know at design time which path is right.
 
 **Step:** **Portwood — Generate Document (Auto Giant Query)**.
 
@@ -3167,6 +3167,8 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 - `isGiantQuery` — boolean so your Flow can branch
 
 **Pattern:** add a Decision element after the action. If `isGiantQuery = true`, send the user to a "your invoice is being prepared" screen with a polling component that watches the job. If `false`, present the file immediately.
+
+**How it routes (v3.57+).** The action estimates peak memory rather than counting rows alone — and when a dataset is borderline it measures one real child row, so a record with only a few hundred line items still routes async when each row carries a large rich-text description. Auto-routing to the background needs a **V3 query config**: a V1 or V2 query config that's over budget returns an error asking you to re-save it as V3 or use the Runner, and a non-Word template is pointed to the Runner (the background path is Word-only). The Runner's own on-screen size warning is based on row count and is advisory — it doesn't block generation.
 
 ### 11.6 Recipe — Send a contract for signature on Opportunity approval
 

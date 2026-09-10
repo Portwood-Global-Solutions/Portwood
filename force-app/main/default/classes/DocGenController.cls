@@ -1491,20 +1491,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param templateId The DocGen_Template__c record ID
      * @return Map of relationship name to child record count
      */
-    // Heap-pressure router constants — tuned from real-world breakage.
-    // Output format matters enormously: PDF rendering via Blob.toPdf() parses the
-    // entire HTML into an in-memory DOM, so peak heap is ~5-10× the raw expanded
-    // XML size. DOCX/Excel paths just write XML and ship base64 to the client.
-    private static final Integer SYNC_HEAP_LIMIT = 6000000; // Apex sync heap governor (6MB)
-    private static final Decimal SAFE_HEAP_RATIO = 0.6; // leave 40% headroom
-
-    // PDF: Blob.toPdf() holds full DOM + parse tree in heap
-    private static final Integer PDF_BASE_BYTES = 1000000; // template HTML + styles + parent data
-    private static final Integer PDF_BYTES_PER_ROW = 10000; // ~10KB per row after DOM/CSS parsing
-
-    // DOCX/Excel/PowerPoint: server merges XML, returns base64 to client
-    private static final Integer DOCX_BASE_BYTES = 200000;
-    private static final Integer DOCX_BYTES_PER_ROW = 2000;
+    // Heap-pressure routing is owned by DocGenGiantQueryRouter so this pre-flight
+    // and the "Auto Giant Query" Flow action share one estimator (#374).
 
     @AuraEnabled
     public static Map<String, Object> scoutChildCounts(Id recordId, Id templateId) {
@@ -1513,7 +1501,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         result.put('childNodes', new Map<String, Map<String, Object>>());
         result.put('heapEstimates', new Map<String, Integer>());
         result.put('useGiantPath', new Map<String, Boolean>());
-        result.put('heapLimitBytes', SYNC_HEAP_LIMIT);
+        result.put('heapLimitBytes', DocGenGiantQueryRouter.SYNC_HEAP_LIMIT);
 
         if (recordId == null || templateId == null) {
             return result;
@@ -1640,20 +1628,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         result.put('childNodes', childNodes);
 
-        // Heap-pressure pre-flight: for each relationship with a known count, estimate
-        // peak sync-path heap. Constants differ by output format because PDF's
-        // Blob.toPdf() holds the whole HTML DOM in heap while rendering.
+        // Heap-pressure pre-flight: for each relationship with a known count,
+        // estimate peak sync-path heap via the shared router (#374). Row-count
+        // only here (no per-row sampling) — the client just needs the flag.
         String outputFormat = templates[0].Output_Format__c;
-        Boolean isPdf = 'PDF'.equalsIgnoreCase(outputFormat);
-        Integer baseBytes = isPdf ? PDF_BASE_BYTES : DOCX_BASE_BYTES;
-        Integer bytesPerRow = isPdf ? PDF_BYTES_PER_ROW : DOCX_BYTES_PER_ROW;
-        Integer safeHeapBytes = (Integer) (SYNC_HEAP_LIMIT * SAFE_HEAP_RATIO);
+        Integer safeHeapBytes = DocGenGiantQueryRouter.safeHeapBytes();
 
         Map<String, Integer> heapEstimates = new Map<String, Integer>();
         Map<String, Boolean> useGiantPath = new Map<String, Boolean>();
         for (String relName : counts.keySet()) {
-            Integer rowCount = counts.get(relName);
-            Integer estimatedPeak = baseBytes + (rowCount * bytesPerRow);
+            Integer estimatedPeak = DocGenGiantQueryRouter.estimatePeakHeapBytes(counts.get(relName), 0, outputFormat);
             heapEstimates.put(relName, estimatedPeak);
             useGiantPath.put(relName, estimatedPeak > safeHeapBytes);
         }
@@ -5167,8 +5151,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * Builds a Giant Query child node config from a V1 flat query string.
      * Parses the subquery for the given relationship name and resolves
      * the child object + lookup field from the parent record's schema.
+     *
+     * Public so DocGenGiantQueryRouter can reuse it — the router is the single
+     * sync-vs-giant decision point shared with DocGenGiantQueryFlowAction (#374).
      */
-    private static Map<String, Object> buildNodeConfigFromFlat(
+    public static Map<String, Object> buildNodeConfigFromFlat(
         Id recordId,
         String queryConfig,
         String relationshipName
