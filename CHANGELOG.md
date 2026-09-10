@@ -29,6 +29,27 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Watermark strength now changes after the image is uploaded** (#313). Opacity is baked
+  into the watermark PNG's pixels at upload (Flying Saucer has no CSS opacity), so once an
+  image was stored the strength dropdown had nothing to act on — changing it did nothing,
+  silently, and the reporter's workaround was to set the value _before_ uploading. The
+  unbaked original is now kept: in memory for the session and persisted as
+  `docgen_watermark_src_<versionId>`, so a later change re-bakes from the original rather
+  than washing an already-washed image (30% of an already-30% image is 9%, and every
+  change would compound). The chosen wash is encoded into the baked file name
+  (`watermark-p50.png`) and `getWatermarkOpacity` reads it back, so the dropdown reflects
+  what is stored after a reload instead of snapping to the default. Extends the work on
+  the closed PR #357: the persisted-source path now decodes the stored bytes to a `Blob`
+  directly (the old `fetch('data:…')` produced a nameless blob that threw in the bake for
+  every wash but 100%); `getWatermarkSource` / `getWatermarkOpacity` enforce the same
+  per-version access check as `saveWatermarkImage` (an unauthenticated-read IDOR
+  otherwise); each save sweeps the previous baked image + source so opacity changes don't
+  accumulate ContentVersions; Save-as-New-Version and cross-org export/import carry the
+  source forward; and Clear Watermark drops it. Pixel-alpha correctness of the re-bake is
+  unchanged and still verified by hand (it needs a real canvas). New
+  `scripts/qa/watermark-opacity-route-check.mjs`; `DocGenControllerTests` gains the two
+  IDOR-denial cases, the file-name round-trip, and the accumulation sweep.
+
 - **Bold on `'Arial Unicode MS'` was a no-op** (#281, PR #286 by @ssk42). The PDF engine
   embeds that family with no bold face, so a bold it carried printed regular — the
   control looked on and did nothing. It is now disabled for that font, and no bold is
@@ -54,7 +75,112 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+### Added
+
+- **Duplex Padding for Combined PDF bulk output (#382).** A new **Duplex
+  Padding** toggle in the Bulk Generation runner (and a matching checkbox on the
+  **Generate Bulk Documents** Flow action) makes every document in a Combined PDF start
+  on the front of a sheet when the packet is printed double-sided. With it on, each
+  record is rendered as its own PDF and a new Apex merger (`DocGenPdfMerger`) stitches
+  them, appending one completely blank page — no header, footer, watermark, or number —
+  after any document with an odd page count. Off by default; left off, the Combined PDF
+  is built by the existing HTML-concatenation path, byte-for-byte unchanged.
+  `{PageNumber}` / `{TotalPages}` count per document in a padded packet — a 3-page
+  statement reads `1 of 3 … 3 of 3` — whereas a plain Combined PDF numbers continuously
+  across the bundle.
+
+    The packet assembles in a single 12 MB background job, so it has a size ceiling of
+    roughly 50–400 records depending on how heavy each rendered document is. The pre-run
+    analysis panel generates the template against its Test Record, shows a **Duplex
+    Packet** row with the limit it estimates, and blocks the Run button above it.
+
 ### Fixed
+
+- **Inline (`data:` URI) images in HTML templates now render instead of coming out blank
+  (#377).** `Blob.toPdf` (Flying Saucer) silently drops `<img src="data:image/…;base64,…">`
+  — the page renders with an empty gap where the image should be — and a large inline
+  blob also trips a "Regex too complicated" limit further down the HTML pipeline. The
+  Designer's upload flow already extracts inline images to ContentVersions client-side,
+  but a "self-contained" body that reaches storage another way did not: a **cross-org
+  template-bundle import** (the reported case), LLM generation, or a direct
+  `saveHtmlTemplateBody` call. New `DocGenService.materialiseInlineHtmlImages` pulls each
+  inline image into a `docgen_html_img_<templateId>_<sha256>` ContentVersion — the title
+  prefix the image picker, the clone re-key, and the signature image allowlist already
+  match on — and rewrites the `<img src>` to the relative
+  `/sfc/servlet.shepherd/version/download/<cvId>` form the renderer can fetch. Images are
+  deduplicated by content hash, so the same logo is one file across every template and
+  every render.
+
+    It runs at **save** time — `saveHtmlTemplateBody` and the bundle importer — because
+    `Blob.toPdf`'s server-side image fetch cannot see a ContentVersion inserted in the
+    same transaction as the `toPdf` call (a committed image embeds at full size; a
+    same-transaction one renders blank — established by isolating the two). `mergeHtml-`
+    `Template` calls it too, as a self-healing fallback for a body that never passed a
+    write path (a file attached straight to the record, a metadata deploy, or a body
+    stored before this change): that first render still shows blank images, but the CVs
+    are now committed, so every later render resolves them. The scan is `indexOf`-based,
+    never a whole-string `Matcher`, so a hundreds-of-KB payload does not throw; malformed
+    base64 and a DML failure both leave the affected `data:` URI in place rather than
+    erroring; and a ~5 MB total-decoded cap keeps a pathological body from a mid-run heap
+    crash. A body with no `data:image/` marker is returned untouched at zero cost.
+
+- **Rich-text field values that are a bare `<table>` or `<h1>` now render instead of
+  printing as raw markup (#399).** `processXml`'s "is this HTML or plain text?" gate
+  checked a hand-maintained list of tag substrings (`<p`, `<div`, `<br`, …) that never
+  included the table or heading tags. A rich-text / long-text field whose value had no
+  `<p>`/`<div>` wrapper — common when the value comes from an integration rather than the
+  Salesforce Rich Text editor — was classified as plain text and XML-escaped, so the PDF
+  showed `<table>...</table>` literally. The gate moved into `looksLikeRichTextHtml`,
+  which recognises the table family, `<h1>`–`<h6>`, `<a>`, `<blockquote>`, `<pre>` and
+  `<hr>` as well. `<script>`/`<style>`/`<iframe>` and friends are deliberately still
+  escaped. HTML templates now render the table (the renderer always supported it — the
+  value just never reached it as HTML); `<br>` was already handled and is unchanged. In
+  Word, PowerPoint and Excel output these values now come through as flattened text
+  rather than raw tags; an HTML table is not reconstructed as a native table in those
+  formats.
+- **Word-authored hyperlinks are clickable in the PDF again (#363).** A link inserted in
+  Word (**Insert → Link**) came out blue and underlined and did nothing — the styling
+  survived the DOCX→HTML conversion and the URL did not. Word keeps the target in
+  `word/_rels/document.xml.rels` and leaves only an `r:id` on the `<w:hyperlink>`; the
+  renderer only ever emitted an `<a href>` for the `w:docgen-url` attribute that
+  rich-text merge fields stamp, so a template link always fell through to a dead
+  `<span>`. The rels part is now resolved into that same attribute before rendering, so
+  both kinds of link take one proven path. Nothing was missing from the renderer or from
+  `Blob.toPdf` — a real `/Link` annotation with the right `/URI` comes out the far end,
+  confirmed by decoding the generated bytes.
+
+    Each part resolves against **its own** rels, so a header link and a body link that
+    both happen to be `rId5` — which is exactly how Word numbers them — reach their own
+    targets. `TargetMode="External"` is required, since an internal target is a file path
+    rather than a URL, and only real link schemes (`http`, `https`, `mailto`, `tel`,
+    `ftp`) are emitted: the same HTML renders in the signature viewer, so a hand-built
+    `.docx` pointing a relationship at `javascript:` keeps the styled-text fallback.
+
+    Two cases are deliberately unchanged. In-document bookmarks — a `w:anchor` link with
+    no `r:id`, which is what a TOC or cross-reference emits — still render as styled
+    text; in-document navigation needs matching anchors and is its own piece of work.
+    And on the heap-efficient pre-decomposed PDF path only `document.xml.rels` is stored
+    at template-save time, so a link in a **header or footer** resolves on the full-ZIP
+    path but not there until those parts are decomposed too. Word `.docx` output was
+    never affected: it keeps the native relationship.
+
+- **`{...:currency:auto}` printed `$` and 2 decimals for ISK and VND (#395).** Customer
+  reported an Icelandic Króna (ISK) quote rendering `$1,545,000.00` instead of
+  `kr 1,545,001`; Vietnamese Dong (VND) had the same fault. Both are zero-decimal
+  currencies, and `DocGenService` already knew that — but the `:auto` guard first checks
+  the resolved ISO code against the `CURRENCY_SYMBOLS` map and, finding no symbol for it,
+  falls back to a safe hardcoded `$` + `setScale(2)` before the zero-decimal handling is
+  ever reached. `CURRENCY_SYMBOLS` had 40 entries and was simply missing these two. JPY
+  and the other zero-decimal currencies were unaffected because their symbols _are_ in
+  the map. Fix is the two missing entries (`ISK → kr`, `VND → ₫`); the map and formatter
+  are shared across the inline, aggregate and giant-query grand-total paths, so one entry
+  corrects all of them. The guard's intent — never emit a raw ISO code for an unknown or
+  typo'd currency — is unchanged, and `XYZ` still falls back to `$`.
+
+    **Behaviour change for existing workarounds:** a template that pins the currency
+    explicitly as a workaround (`{...:currency:ISK}`) currently prints `ISK 1,545,001`
+    (the literal code, for the same missing-symbol reason). After this release it prints
+    `kr 1,545,001`. The number and decimals do not change; only the prefix.
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
@@ -87,6 +213,74 @@ Two small fixes where the editor promised something the PDF did not deliver.
     branding config with no per-record confidentiality model. Found by rendering a stored
     PIN template as a real Site guest user and getting back "Your Signature Verification
     Code", the built-in.
+
+- **`:convert` was silently ignored on a plain currency field (#297).** It worked on
+  aggregates and nowhere else — on a plain field the `convert` segment landed in the
+  locale slot, was parsed as a bogus locale name and dropped, so
+  `{Amount:currency:EUR:convert}` on a USD-100 record printed `€100.00`: the euro symbol
+  with the dollar figure, wrong by the exchange rate with nothing in the document to flag
+  it. It now strips `:convert` before the locale slot and converts from the record's own
+  `CurrencyIsoCode` into the tag's target, reusing `DocGenCurrency.wantsConversion` /
+  `stripConvertSegment` so the plain-field and aggregate paths can't drift on what
+  `:convert` means. It composes with locale (`:EUR:de_DE:convert`) and the `auto` forms.
+  A record with no source currency passes through unconverted rather than having a rate
+  invented for it; a missing rate raises the same actionable error the aggregate path
+  already does. Applies on the giant-query parent path (>2000 child rows) as well as the
+  normal path, and a stray `:convert` no longer leaks into a `{COUNT:…:currency:…}` tag's
+  formatting.
+- **A loop tag written with spaces no longer crashes generation of a large Word document
+  (#362).** When `{ #Relationship }` was written with spaces, `extractLoopBody` fell back
+  to a whole-document regex `Matcher` to find it — and Apex throws the uncatchable
+  `System.LimitException: Regex too complicated` once a single `Matcher` crosses ~900K
+  characters, a size a large document's `document.xml` on the giant-query path (2,000+
+  child rows) can reach. It is now a linear scan that accepts exactly the same spacing
+  the pattern did (`{#Rel}`, `{ #Rel}`, `{#Rel }`, `{ # Rel }`, tabs and newlines
+  included), so whitespace tolerance is unchanged and literal `{#Relationship}` tags
+  still take the `indexOf` fast path. This is the third scan of this shape; the other
+  two (`mergeRunsInTags` and the `{RepeatHeader}` probe) are converted in #325, shipping
+  in the same release — a template that hits more than one needs all of them.
+- **Large Word and PowerPoint templates no longer crash generation with a
+  `Regex too complicated` error (#325).** `mergeRunsInTags` — which rejoins a merge tag
+  split across formatting runs — and the `{RepeatHeader}` probe next to it each scanned
+  the whole document with a regex `Matcher`. Apex spends a `Matcher`'s step budget on **input
+  length**, not pattern complexity, and throws the **uncatchable**
+  `System.LimitException: Regex too complicated` once `word/document.xml` passes roughly
+  500K characters — so a long multi-page form failed regardless of how few merge tags it
+  held (the reference case is an ACORD 125 with 966K characters of XML and eight tags).
+  The exception isn't caught by `catch (Exception)` either, so a background PDF job just
+  died with a platform error ID. Both scans are now linear `indexOf` passes with no step
+  budget; the match is byte-identical (verified against the real 966K-character file and
+  a 16-shape differential test). Three customers had reported it as "is this template too
+  complicated?" when it was purely size. A third scan of the same shape — the
+  whitespace-tolerant `{ #Loop }` open-tag fallback in `extractLoopBody` — is converted
+  in #362, shipping in this same release; a template that hits both needs both.
+- **The Auto Giant Query Flow action no longer crashes on a heavy dataset that stays
+  under the row-count threshold (#374).** It chose between synchronous and background
+  generation on a child **row count over 2,000** alone, so a record with a few hundred
+  rows carrying large rich-text fields — tens of MB of data — ran synchronously and hit
+  the **uncatchable** `System.LimitException: Apex heap size too large`. It now routes on
+  estimated peak heap: when a dataset is borderline on row count it measures one real
+  child row, so a few hundred rows that each carry a 30 KB field are costed accordingly
+  and route to the background. A new `DocGenGiantQueryRouter` is the single decision
+  point; the on-screen Runner's pre-flight shares its estimator and constants (the
+  Runner's inline warning stays row-count-based — it doesn't sample). An over-budget job
+  that can't be auto-routed now fails with a clear message instead of the heap crash: a
+  V1 or V2 query config is told to re-save as V3 (auto-routing needs V3 — the background
+  path skips `processXml`, which would drop parent-level `{#IF}` and secondary loops),
+  and non-Word templates or already-async contexts are pointed to the Runner.
+
+    **Existing Flows:** a dataset that is heavy per-row but under 2,000 rows now routes
+    to the background where it used to run inline — returning `Is Giant Query = true` and
+    a **Job ID** with no **Content Document ID** yet. A Flow that uses the generated file
+    immediately after this action should branch on `Is Giant Query` and poll the job.
+    Datasets with ordinary-sized rows are unaffected.
+
+- **The template editor no longer warns about unsaved changes right after a save
+  (#370).** "Save Template Details" and "Save as New Version" both deliberately leave the
+  edit modal open, but neither re-baselined the modal's change-detection snapshot — so
+  the next **Close** always prompted to discard edits that were already persisted on the
+  record. Both save paths now re-snapshot after a successful save; a genuine edit made
+  _after_ the save still moves the snapshot and still warns.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
