@@ -9482,7 +9482,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             Integer p = skipTagWhitespace(xml, brace + 1, n); // \s* after {
             if (p < n && xml.substring(p, p + 1) == '#') {
                 p = skipTagWhitespace(xml, p + 1, n); // \s* after #
-                if (p + relLen <= n && xml.substring(p, p + relLen) == relationshipName) {
+                // .equals(), not ==: Apex == is case-insensitive, but the old
+                // Pattern (no (?i)) and the exact-match fast path above
+                // (xml.indexOf('{#' + relationshipName + '}')) are both
+                // case-sensitive — keep the fallback consistent with them.
+                if (p + relLen <= n && xml.substring(p, p + relLen).equals(relationshipName)) {
                     Integer q = skipTagWhitespace(xml, p + relLen, n); // \s* after the name
                     if (q < n && xml.substring(q, q + 1) == '}') {
                         return new List<Integer>{ brace, q + 1 };

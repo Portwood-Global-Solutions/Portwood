@@ -74,7 +74,9 @@ Two small fixes where the editor promised something the PDF did not deliver.
   child rows) can reach. It is now a linear scan that accepts exactly the same spacing
   the pattern did (`{#Rel}`, `{ #Rel}`, `{#Rel }`, `{ # Rel }`, tabs and newlines
   included), so whitespace tolerance is unchanged and literal `{#Relationship}` tags
-  still take the `indexOf` fast path.
+  still take the `indexOf` fast path. This is the third scan of this shape; the other
+  two (`mergeRunsInTags` and the `{RepeatHeader}` probe) are converted in #325, shipping
+  in the same release — a template that hits more than one needs all of them.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
