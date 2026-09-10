@@ -54,6 +54,25 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+### Added
+
+- **Duplex Padding for Combined PDF bulk output (#382).** A new **Duplex
+  Padding** toggle in the Bulk Generation runner (and a matching checkbox on the
+  **Generate Bulk Documents** Flow action) makes every document in a Combined PDF start
+  on the front of a sheet when the packet is printed double-sided. With it on, each
+  record is rendered as its own PDF and a new Apex merger (`DocGenPdfMerger`) stitches
+  them, appending one completely blank page — no header, footer, watermark, or number —
+  after any document with an odd page count. Off by default; left off, the Combined PDF
+  is built by the existing HTML-concatenation path, byte-for-byte unchanged.
+  `{PageNumber}` / `{TotalPages}` count per document in a padded packet — a 3-page
+  statement reads `1 of 3 … 3 of 3` — whereas a plain Combined PDF numbers continuously
+  across the bundle.
+
+    The packet assembles in a single 12 MB background job, so it has a size ceiling of
+    roughly 50–400 records depending on how heavy each rendered document is. The pre-run
+    analysis panel generates the template against its Test Record, shows a **Duplex
+    Packet** row with the limit it estimates, and blocks the Run button above it.
+
 ### Fixed
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
