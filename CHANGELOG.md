@@ -66,6 +66,13 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **The template editor no longer warns about unsaved changes right after a save
+  (#370).** "Save Template Details" and "Save as New Version" both deliberately leave the
+  edit modal open, but neither re-baselined the modal's change-detection snapshot — so
+  the next **Close** always prompted to discard edits that were already persisted on the
+  record. Both save paths now re-snapshot after a successful save; a genuine edit made
+  _after_ the save still moves the snapshot and still warns.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage
