@@ -2436,7 +2436,7 @@ Plain multiline (long text, textarea) fields work too — newlines in the field 
 
 Two ways to add a full-page watermark or background image to your PDF output:
 
-**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output.
+**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output. A **Watermark strength** control (Light 15% / Medium 30% / Strong 50% / Original) fades the image — the opacity is baked into the stored PNG because Flying Saucer has no CSS opacity, and Portwood keeps the unfaded original so changing the strength after upload re-fades from it rather than compounding. The new setting applies immediately and survives a page reload (v3.57+).
 
 **Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
 

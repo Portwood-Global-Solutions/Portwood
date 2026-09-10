@@ -29,6 +29,27 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Watermark strength now changes after the image is uploaded** (#313). Opacity is baked
+  into the watermark PNG's pixels at upload (Flying Saucer has no CSS opacity), so once an
+  image was stored the strength dropdown had nothing to act on — changing it did nothing,
+  silently, and the reporter's workaround was to set the value _before_ uploading. The
+  unbaked original is now kept: in memory for the session and persisted as
+  `docgen_watermark_src_<versionId>`, so a later change re-bakes from the original rather
+  than washing an already-washed image (30% of an already-30% image is 9%, and every
+  change would compound). The chosen wash is encoded into the baked file name
+  (`watermark-p50.png`) and `getWatermarkOpacity` reads it back, so the dropdown reflects
+  what is stored after a reload instead of snapping to the default. Extends the work on
+  the closed PR #357: the persisted-source path now decodes the stored bytes to a `Blob`
+  directly (the old `fetch('data:…')` produced a nameless blob that threw in the bake for
+  every wash but 100%); `getWatermarkSource` / `getWatermarkOpacity` enforce the same
+  per-version access check as `saveWatermarkImage` (an unauthenticated-read IDOR
+  otherwise); each save sweeps the previous baked image + source so opacity changes don't
+  accumulate ContentVersions; Save-as-New-Version and cross-org export/import carry the
+  source forward; and Clear Watermark drops it. Pixel-alpha correctness of the re-bake is
+  unchanged and still verified by hand (it needs a real canvas). New
+  `scripts/qa/watermark-opacity-route-check.mjs`; `DocGenControllerTests` gains the two
+  IDOR-denial cases, the file-name round-trip, and the accumulation sweep.
+
 - **Bold on `'Arial Unicode MS'` was a no-op** (#281, PR #286 by @ssk42). The PDF engine
   embeds that family with no bold face, so a bold it carried printed regular — the
   control looked on and did nothing. It is now disabled for that font, and no bold is
