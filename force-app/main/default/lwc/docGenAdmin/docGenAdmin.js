@@ -124,7 +124,7 @@ import CUSTOM_MARGINS_FIELD from '@salesforce/schema/DocGen_Template__c.Custom_M
 import SIGNER_VERIFICATION_FIELD from '@salesforce/schema/DocGen_Template__c.Signer_Verification__c';
 import PREFILL_SIGNER_EMAIL_FIELD from '@salesforce/schema/DocGen_Template__c.Prefill_Signer_Email__c';
 // #367
-import SHOW_SIGNER_DECLINE_FIELD from '@salesforce/schema/DocGen_Template__c.Show_Signer_Decline__c';
+import HIDE_SIGNER_DECLINE_FIELD from '@salesforce/schema/DocGen_Template__c.Hide_Signer_Decline__c';
 import getSettingsFresh from '@salesforce/apex/DocGenSetupController.getSettingsFresh';
 import testRecordFilter from '@salesforce/apex/DocGenController.testRecordFilter';
 // 1.61 — HTML zip sidesteps File Upload Security via client-side unzip + per-part upload
@@ -254,7 +254,7 @@ const F = {
     // #verification — template-level defaults
     SignerVerification: SIGNER_VERIFICATION_FIELD.fieldApiName,
     PrefillSignerEmail: PREFILL_SIGNER_EMAIL_FIELD.fieldApiName,
-    ShowSignerDecline: SHOW_SIGNER_DECLINE_FIELD.fieldApiName,
+    HideSignerDecline: HIDE_SIGNER_DECLINE_FIELD.fieldApiName,
     // PHD-9 — stable developer key for Flow lookups; namespace resolved from an
     // already-imported field (same pattern as FormFieldsConfig).
     ApiName:
@@ -482,11 +482,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // #208 — per-template default {Message} for signature emails
     @track editTemplateDefaultEmailMessage = '';
     @track editTemplatePrefillSignerEmail = 'Inherit';
-    // #367 — off by default; only takes effect when the org-wide switch is also on.
-    @track editTemplateShowDecline = false;
-    // #367 — org-wide switch, fetched once on mount so the template toggle above
-    // can hide itself when the org hasn't turned Decline on at all.
-    @track orgShowDecline = false;
+    // #367 — "Hide Decline Button" for this template; unchecked by default (Decline shown).
+    @track editTemplateHideDecline = false;
+    // #367 — org-wide "Hide Decline Button", fetched once on mount so this template
+    // toggle can hide itself when the org has already hidden Decline everywhere.
+    @track orgHideDecline = false;
     editTemplateSpecificRecordIds;
     editTemplateRequiredPermissionSets;
     editTemplateRecordFilter;
@@ -1481,19 +1481,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // never throws — an org without Einstein simply keeps the copy-paste
         // path as the only visible option.
         this._refreshAgentforceAvailability();
-        // #367 — the per-template Decline toggle is moot (and hidden) while the
-        // org-wide switch is off. Never awaited and never throws — worst case the
-        // template toggle stays hidden until the next load, it never blocks the editor.
-        this._refreshOrgShowDecline();
+        // #367 — the per-template Decline toggle is moot (and hidden) once the org
+        // has hidden Decline everywhere. Never awaited and never throws — worst case
+        // the template toggle stays visible until the next load, it never blocks the
+        // editor.
+        this._refreshOrgHideDecline();
     }
 
     // #367
-    async _refreshOrgShowDecline() {
+    async _refreshOrgHideDecline() {
         try {
             const data = await getSettingsFresh();
-            this.orgShowDecline = data.Signature_Show_Decline__c === true;
+            this.orgHideDecline = data.Signature_Hide_Decline__c === true;
         } catch (_err) {
-            // Leave the per-template toggle hidden if the org setting can't be read.
+            // Leave the per-template toggle visible if the org setting can't be read.
         }
     }
 
@@ -4494,8 +4495,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     // #367
-    handleShowDeclineChange(event) {
-        this.editTemplateShowDecline = event.target.checked;
+    handleHideDeclineChange(event) {
+        this.editTemplateHideDecline = event.target.checked;
     }
 
     get isBuilderDisabled() {
@@ -5201,7 +5202,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateLockOutputFormat = row[F.LockOutputFormat] || false;
             this.editTemplateSignerVerification = row[F.SignerVerification] || 'Inherit';
             this.editTemplatePrefillSignerEmail = row[F.PrefillSignerEmail] || 'Inherit';
-            this.editTemplateShowDecline = row[F.ShowSignerDecline] === true;
+            this.editTemplateHideDecline = row[F.HideSignerDecline] === true;
             this.editTemplateApiName = row[F.ApiName] || '';
             this.editTemplateDefaultEmailMessage = row[F.DefaultEmailMessage] || '';
             this.editTemplateSpecificRecordIds = row[F.SpecificRecordIds];
@@ -5326,7 +5327,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateCustomMargins,
             this.editTemplateSignerVerification,
             this.editTemplatePrefillSignerEmail,
-            this.editTemplateShowDecline,
+            this.editTemplateHideDecline,
             this.editTemplateApiName,
             this.editTemplateDefaultEmailMessage
         ]);
@@ -5716,7 +5717,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
-            Show_Signer_Decline__c: this.editTemplateShowDecline,
+            Hide_Signer_Decline__c: this.editTemplateHideDecline,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
@@ -5791,7 +5792,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
-            Show_Signer_Decline__c: this.editTemplateShowDecline,
+            Hide_Signer_Decline__c: this.editTemplateHideDecline,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };

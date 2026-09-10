@@ -2450,7 +2450,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Custom_Margins__c',
                 'Signer_Verification__c',
                 'Prefill_Signer_Email__c',
-                'Show_Signer_Decline__c',
+                'Hide_Signer_Decline__c',
                 'API_Name__c',
                 'Default_Email_Message__c'
             }
@@ -2484,7 +2484,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Custom_Margins__c,
                 Signer_Verification__c,
                 Prefill_Signer_Email__c,
-                Show_Signer_Decline__c,
+                Hide_Signer_Decline__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 CreatedDate,
@@ -2535,7 +2535,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Custom_Margins__c',
                 'Signer_Verification__c',
                 'Prefill_Signer_Email__c',
-                'Show_Signer_Decline__c',
+                'Hide_Signer_Decline__c',
                 'API_Name__c',
                 'Default_Email_Message__c'
             }
@@ -2569,7 +2569,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Custom_Margins__c,
                 Signer_Verification__c,
                 Prefill_Signer_Email__c,
-                Show_Signer_Decline__c,
+                Hide_Signer_Decline__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 CreatedDate,
@@ -2727,9 +2727,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Prefill_Signer_Email__c')) {
                 template.Prefill_Signer_Email__c = (String) fields.get('Prefill_Signer_Email__c');
             }
-            // #367 — per-template opt-out for the Decline to Sign button
-            if (fields.containsKey('Show_Signer_Decline__c')) {
-                template.Show_Signer_Decline__c = (Boolean) fields.get('Show_Signer_Decline__c');
+            // #367 — per-template "Hide Decline Button" switch
+            if (fields.containsKey('Hide_Signer_Decline__c')) {
+                template.Hide_Signer_Decline__c = (Boolean) fields.get('Hide_Signer_Decline__c');
             }
             // PHD-9 — stable developer key for Flow lookups. Blank means "leave
             // unchanged": Flows/buttons reference this key, and the create-wizard's
@@ -2807,7 +2807,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Custom_Margins__c',
                     'Signer_Verification__c',
                     'Prefill_Signer_Email__c',
-                    'Show_Signer_Decline__c',
+                    'Hide_Signer_Decline__c',
                     'API_Name__c',
                     'Default_Email_Message__c',
                     'Is_Active__c',
@@ -7480,7 +7480,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'API_Name__c',
                     'Signer_Verification__c',
                     'Prefill_Signer_Email__c',
-                    'Show_Signer_Decline__c',
+                    'Hide_Signer_Decline__c',
                     'Default_Email_Message__c',
                     'Form_Fields_Config__c'
                 }
@@ -7513,7 +7513,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     API_Name__c,
                     Signer_Verification__c,
                     Prefill_Signer_Email__c,
-                    Show_Signer_Decline__c,
+                    Hide_Signer_Decline__c,
                     Default_Email_Message__c,
                     Form_Fields_Config__c,
                     (
@@ -7577,7 +7577,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('API_Name__c', tmpl.API_Name__c);
             tmplData.put('Signer_Verification__c', tmpl.Signer_Verification__c);
             tmplData.put('Prefill_Signer_Email__c', tmpl.Prefill_Signer_Email__c);
-            tmplData.put('Show_Signer_Decline__c', tmpl.Show_Signer_Decline__c);
+            tmplData.put('Hide_Signer_Decline__c', tmpl.Hide_Signer_Decline__c);
             tmplData.put('Default_Email_Message__c', tmpl.Default_Email_Message__c);
             tmplData.put('Form_Fields_Config__c', tmpl.Form_Fields_Config__c);
             bundle.put('template', tmplData);
@@ -7782,7 +7782,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmpl.Custom_Margins__c = (String) tmplData.get('Custom_Margins__c');
             tmpl.Signer_Verification__c = (String) tmplData.get('Signer_Verification__c');
             tmpl.Prefill_Signer_Email__c = (String) tmplData.get('Prefill_Signer_Email__c');
-            tmpl.Show_Signer_Decline__c = tmplData.get('Show_Signer_Decline__c') == true;
+            // #367 — a bundle without the key (older export) keeps Decline shown
+            tmpl.Hide_Signer_Decline__c = tmplData.get('Hide_Signer_Decline__c') == true;
             tmpl.Default_Email_Message__c = (String) tmplData.get('Default_Email_Message__c');
             tmpl.Form_Fields_Config__c = (String) tmplData.get('Form_Fields_Config__c');
             // API_Name__c is unique — keep it (the whole point is a stable key

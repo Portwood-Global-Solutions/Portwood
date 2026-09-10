@@ -50,9 +50,10 @@ public with sharing class DocGenSetupController {
             !(s != null && s.Signature_Skip_Email_Verification__c == true)
         );
         result.put('Signature_Prefill_Signer_Email__c', s != null && s.Signature_Prefill_Signer_Email__c == true);
-        // #367 — plain pass-through: Checkbox naturally defaults false, which is
-        // exactly the intended default (Decline hidden until explicitly shown).
-        result.put('Signature_Show_Decline__c', s != null && s.Signature_Show_Decline__c == true);
+        // #367 — "Hide Decline Button" org-wide switch. Checkbox defaults false
+        // (unchecked = Decline shown), which is exactly the intended default and
+        // needs no reliance on a custom-setting defaultValue.
+        result.put('Signature_Hide_Decline__c', s != null && s.Signature_Hide_Decline__c == true);
         return result;
     }
 
@@ -466,16 +467,17 @@ public with sharing class DocGenSetupController {
     }
 
     /**
-     * #367 — org-wide master switch for the "Decline to Sign" button. Resolved live on
-     * every signing-page load (DocGenSignatureController.validateToken), not stamped
-     * at send time, so flipping this also reaches already-sent, still-pending requests.
-     * Default is off (Decline hidden). When on, each template still needs its own
-     * Show_Signer_Decline__c opt-in before Decline appears on it (AND-gate, not an
-     * override) — except source-document sends with no template, gated by this alone.
-     * @param showDecline true turns the org-wide switch on; templates still gate individually.
+     * #367 — org-wide "Hide Decline Button" master switch. Resolved live on every
+     * signing-page load (DocGenSignatureController.validateToken), not stamped at send
+     * time, so flipping this also reaches already-sent, still-pending requests.
+     * Unchecked (the default) shows Decline everywhere. Checked hides it on every
+     * signing page regardless of per-template settings; while it is unchecked, an
+     * individual template can still hide Decline for itself via Hide_Signer_Decline__c
+     * (source-document sends with no template follow this switch alone).
+     * @param hideDecline true hides the Decline button org-wide; false (the default) shows it.
      */
     @AuraEnabled
-    public static void saveDeclineSettings(Boolean showDecline) {
+    public static void saveDeclineSettings(Boolean hideDecline) {
         if (
             !FeatureManagement.checkPermission('DocGen_Admin_Access') &&
             !Schema.sObjectType.DocGen_Settings__c.isUpdateable()
@@ -483,8 +485,8 @@ public with sharing class DocGenSetupController {
             throw DocGenService.ahe('Insufficient privileges to modify Portwood settings.');
         }
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
-        settings.Signature_Show_Decline__c = (showDecline == true);
-        Set<String> declineFields = new Set<String>{ 'Signature_Show_Decline__c' };
+        settings.Signature_Hide_Decline__c = (hideDecline == true);
+        Set<String> declineFields = new Set<String>{ 'Signature_Hide_Decline__c' };
         DocGenFlsGuard.assertCreateable(settings, declineFields);
         DocGenFlsGuard.assertUpdateable(settings, declineFields);
         /* code-analyzer-suppress ApexFlsViolation */

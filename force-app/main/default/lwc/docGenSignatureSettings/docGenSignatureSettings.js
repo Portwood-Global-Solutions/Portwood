@@ -34,8 +34,8 @@ export default class DocGenSignatureSettings extends LightningElement {
     @track requireVerification = true;
     @track prefillEmail = false;
 
-    // #367 — org-wide master switch, off by default (Decline hidden until shown).
-    @track showDecline = false;
+    // #367 — org-wide "Hide Decline Button" switch, unchecked by default (Decline shown).
+    @track hideDecline = false;
 
     // Setup checks
     @track setupChecks = [];
@@ -64,7 +64,7 @@ export default class DocGenSignatureSettings extends LightningElement {
             // null → required (upgrade-safe default)
             this.requireVerification = data.Signature_Require_Email_Verification__c !== false;
             this.prefillEmail = data.Signature_Prefill_Signer_Email__c === true;
-            this.showDecline = data.Signature_Show_Decline__c === true;
+            this.hideDecline = data.Signature_Hide_Decline__c === true;
         } catch (_err) {
             // Settings not yet created — use defaults
         }
@@ -112,8 +112,8 @@ export default class DocGenSignatureSettings extends LightningElement {
     handlePrefillEmailChange(e) {
         this.prefillEmail = e.target.checked;
     }
-    handleShowDeclineChange(e) {
-        this.showDecline = e.target.checked;
+    handleHideDeclineChange(e) {
+        this.hideDecline = e.target.checked;
     }
 
     handleRefreshChecks() {
@@ -176,7 +176,7 @@ export default class DocGenSignatureSettings extends LightningElement {
                 prefillEmail: this.prefillEmail
             });
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-            await saveDeclineSettings({ showDecline: this.showDecline });
+            await saveDeclineSettings({ hideDecline: this.hideDecline });
             this.saveSuccess = true;
             this.saveMessage =
                 'Settings saved successfully.' + (this.reminderEnabled ? ' Reminders scheduled hourly.' : '');

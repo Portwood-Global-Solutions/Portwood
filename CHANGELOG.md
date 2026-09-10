@@ -54,6 +54,20 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+### Added
+
+- **A switch to hide the signer's Decline button, org-wide or per template (#367).** For
+  formal or binding documents where a self-serve refusal isn't wanted, the signer's
+  **Decline** button can now be turned off. A **Hide Decline Button** switch in the
+  Command Hub's **Signature Settings** tab hides it on every signing page; a matching
+  switch on each template (Command Hub → My Templates → edit) hides it just for that
+  template's requests. Both are off by default, so nothing changes on upgrade until an
+  admin turns one on. The gate is resolved live on every signing-page load — turning it
+  on also hides Decline for requests already sent — and enforced server-side in
+  `declineSignature`, so a hidden button can't be worked around by calling the action
+  directly. A request sent from a source document with no template follows the org-wide
+  switch alone.
+
 ### Fixed
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
