@@ -66,6 +66,19 @@ Two small fixes where the editor promised something the PDF did not deliver.
   resolve to the base-14 bold faces (verified selecting Helvetica-Bold / Times-Bold /
   Courier-Bold in a real org).
 
+- **`:convert` was silently ignored on a plain currency field (#297).** It worked on
+  aggregates and nowhere else — on a plain field the `convert` segment landed in the
+  locale slot, was parsed as a bogus locale name and dropped, so
+  `{Amount:currency:EUR:convert}` on a USD-100 record printed `€100.00`: the euro symbol
+  with the dollar figure, wrong by the exchange rate with nothing in the document to flag
+  it. It now strips `:convert` before the locale slot and converts from the record's own
+  `CurrencyIsoCode` into the tag's target, reusing `DocGenCurrency.wantsConversion` /
+  `stripConvertSegment` so the plain-field and aggregate paths can't drift on what
+  `:convert` means. It composes with locale (`:EUR:de_DE:convert`) and the `auto` forms.
+  A record with no source currency passes through unconverted rather than having a rate
+  invented for it; a missing rate raises the same actionable error the aggregate path
+  already does.
+
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
 Released 2026-08-08 · `04tVx0000010fXFIAY` · ancestor 3.54.0 · 1,957 tests, 78% coverage

@@ -1621,6 +1621,7 @@ What to know:
 - **Advanced Currency Management dated rates are not used** — conversion applies your current static rate. See issue #273.
 - **Single-currency orgs are entirely unaffected.** None of this engages.
 - **Without `:convert`, nothing converts.** `{SUM:Lines.Amount:currency:EUR}` over EUR-only rows formats them as euros; it does not translate other currencies into euros.
+- **Beyond aggregates: `:convert` works on a plain currency field too (v3.57+).** `{Amount:currency:EUR:convert}` converts the record's own amount from its `CurrencyIsoCode` into the target ISO before formatting, and composes with locale (`:EUR:de_DE:convert`) and `auto`. A record with no source currency passes through unconverted; a missing rate raises the same "add it under Manage Currencies" error as above.
 
 #### Number formatting
 
