@@ -704,10 +704,21 @@ public with sharing class DocGenBulkController {
                 Long perDocBytes = null;
                 if (String.isNotBlank(temp.Test_Record_Id__c)) {
                     try {
-                        Blob part = (Blob) DocGenService.generatePdfBlob(templateId, temp.Test_Record_Id__c)
-                            .get('blob');
-                        perDocBytes = (part == null) ? null : (Long) part.size();
-                        part = null;
+                        // Estimate the per-document size from ONE HTML render — never a
+                        // real Blob.toPdf here. analyzeJob is @AuraEnabled and runs
+                        // synchronously in the panel request; Blob.toPdf is the heaviest,
+                        // most OOM-prone step and its LimitException can be uncatchable,
+                        // which would take the whole pre-flight panel down. The HTML
+                        // output length is a safe over-estimate of the PDF byte size
+                        // (base64 fonts/images inflate the HTML more than the PDF), and
+                        // over-estimating only tightens the ceiling (#382).
+                        String oneDocHtml = DocGenService.generateHtmlForRecord(
+                            templateId,
+                            temp.Test_Record_Id__c,
+                            null
+                        );
+                        perDocBytes = (oneDocHtml == null) ? null : (Long) oneDocHtml.length();
+                        oneDocHtml = null;
                         maxDocs = duplexPacketMaxDocs(perDocBytes);
                     } catch (Exception e) {
                         // A heap failure rendering ONE record is itself a signal the
@@ -880,14 +891,18 @@ public with sharing class DocGenBulkController {
 
     /**
      * The largest duplex packet this template can assemble in one Queueable,
-     * from the byte size of one rendered PDF (#382). The merge job holds the
-     * whole packet as a hex string inside the 12 MB async heap; ~11 MB is the
-     * safe budget after GC variance. The merged output is smaller than the sum
-     * of the parts (font deduplication, structural overlap), so the peak works
-     * out near ~1.2x a part per document — calibrated against measured runs:
-     * a ~70 KB/doc statement clears 150, a ~180 KB/doc branded template fails
-     * near 65. Never returns above 400 (the count-based cap that's actually
-     * been load-tested) or below 1.
+     * from the size of one document (#382). The merge job holds the whole packet
+     * as a hex string inside the 12 MB async heap; ~11 MB is the safe budget
+     * after GC variance. The merged output is smaller than the sum of the parts
+     * (font deduplication, structural overlap), so the peak works out near ~1.2x
+     * a part per document.
+     *
+     * `perDocBytes` is the HTML-render length, not a real PDF size — analyzeJob
+     * must not run Blob.toPdf synchronously (see caller). The HTML length is a
+     * conservative over-estimate of the PDF (base64 fonts/images weigh more in
+     * the HTML), so the ceiling errs toward blocking a borderline packet rather
+     * than letting the batch OOM. Never returns above 400 (the count-based cap
+     * that's been load-tested) or below 1.
      */
     @TestVisible
     private static Integer duplexPacketMaxDocs(Long perDocBytes) {
