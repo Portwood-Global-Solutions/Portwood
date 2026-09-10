@@ -398,7 +398,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         'PEN' => 'S/',
         'ARS' => 'ARS$',
         'EGP' => 'E\u00A3',
-        'GHS' => 'GH\u20B5'
+        'GHS' => 'GH\u20B5',
+        // #395 - zero-decimal currencies whose symbol was missing here. Without an
+        // entry, {...:currency:auto} treated them as unknown and fell back to $ + 2dp,
+        // never reaching the zero-decimal handling below.
+        'ISK' => 'kr ',
+        'VND' => '\u20AB'
     };
 
     // Currencies that use 0 decimal places
@@ -3065,6 +3070,21 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
+     * Renders a PDF blob (no save) from pre-cached record data, keeping the real
+     * recordId so chart context and image tags resolve as they do for a live
+     * record. Used by DocGenBatch's duplex-padding path (#382).
+     * @return Map with keys: blob (PDF Blob), title (String)
+     */
+    global static Map<String, Object> generatePdfBlobFromData(
+        Id templateId,
+        Id recordId,
+        Map<String, Object> preloadedRecordData
+    ) {
+        preloadedRecordDataOverride = preloadedRecordData;
+        return generatePdfBlob(templateId, recordId);
+    }
+
+    /**
      * Renders a PDF directly from a caller-supplied data map — no SOQL, no recordId required.
      * Lets Flows/Apex assemble custom data wrappers (external API responses, computed totals,
      * cross-object aggregations) and render them straight into a template without persisting
@@ -3187,7 +3207,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
     private static String combineXmlWithHeadersFooters(MergeResult mr) {
         if (mr.processedXmlEntries == null) {
-            return mr.documentXml;
+            return DocGenHtmlRenderer.resolveHyperlinkRelIds(mr.documentXml, mr.relsXml);
         }
 
         // Map each header/footer file → its sectPr type (default/first/even).
@@ -3211,7 +3231,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 continue;
             }
             String partPrefix = key.substringAfterLast('/').substringBefore('.xml');
-            String partXml = namespaceImageRelIds(mr.processedXmlEntries.get(key), partPrefix);
+            // #363 — resolve Word-authored hyperlinks against THIS part's own rels
+            // (r:id values are per-part, so the document rels must not be used here).
+            // Only the full-ZIP path carries header/footer rels; the pre-decomposed
+            // PDF path stores document.xml.rels alone, so a header link there stays
+            // styled-but-dead until those parts are decomposed too.
+            String partXml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                mr.processedXmlEntries.get(key),
+                relsXmlForPart(mr, key)
+            );
+            partXml = namespaceImageRelIds(partXml, partPrefix);
             // Default to "default" when unmapped (older templates without sectPr refs).
             String partType = partTypeByFile.containsKey(partPrefix) ? partTypeByFile.get(partPrefix) : 'default';
             Boolean isHeader = key.startsWith('word/header');
@@ -3255,7 +3284,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isNotBlank(headersEven)) {
             combinedXml += '<!-- DOCGEN_HEADER_EVEN_START -->' + headersEven + '<!-- DOCGEN_HEADER_EVEN_END -->';
         }
-        combinedXml += mr.documentXml;
+        combinedXml += DocGenHtmlRenderer.resolveHyperlinkRelIds(mr.documentXml, mr.relsXml);
         if (String.isNotBlank(footersDefault)) {
             combinedXml += '<!-- DOCGEN_FOOTER_START -->' + footersDefault + '<!-- DOCGEN_FOOTER_END -->';
         }
@@ -3266,6 +3295,25 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             combinedXml += '<!-- DOCGEN_FOOTER_EVEN_START -->' + footersEven + '<!-- DOCGEN_FOOTER_EVEN_END -->';
         }
         return combinedXml;
+    }
+
+    /**
+     * Returns the rels part belonging to a processed XML entry, so hyperlink r:id
+     * values resolve against their own part rather than the document's (#363).
+     * "word/header2.xml" → the passthrough "word/_rels/header2.xml.rels".
+     * Returns null when that part wasn't carried through, which leaves those
+     * hyperlinks unresolved rather than resolving them to the wrong target.
+     */
+    private static String relsXmlForPart(MergeResult mr, String partPath) {
+        if (partPath == 'word/document.xml') {
+            return mr.relsXml;
+        }
+        if (mr.passthroughEntries == null) {
+            return null;
+        }
+        String relsPath = 'word/_rels/' + partPath.substringAfterLast('/') + '.rels';
+        Blob relsBlob = mr.passthroughEntries.get(relsPath);
+        return relsBlob == null ? null : relsBlob.toString();
     }
 
     /**

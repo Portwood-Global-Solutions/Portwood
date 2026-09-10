@@ -299,6 +299,50 @@ try {
     fail++;
     System.debug('MERGE-RUN SCAN LINEAR PAST 500K: FAIL — ' + e.getMessage());
 }
+// #395 — {…:currency:auto} for a zero-decimal currency whose symbol lives in
+// CURRENCY_SYMBOLS. ISK/VND were missing from that map, so the :auto guard
+// rejected them and fell back to '$' + 2 decimals, never reaching the
+// zero-decimal handling. Symbol table and formatter are shared across every
+// resolution path (inline, aggregate, giant-query parent), so one map entry
+// fixes all of them — the aggregate assertion below is the giant-query guard.
+// ============================================================
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'Amount' => 1545000.5, 'CurrencyIsoCode' => 'ISK' };
+    r = DocGenService.processXmlForTest('{Amount:currency:auto}', data);
+    if (r.contains('kr') && !r.contains('$') && !r.contains('.') && r.contains('1,545,001')) {
+        pass++;
+        System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: FAIL — expected "kr 1,545,001", got: ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY AUTO ISK ZERO-DECIMAL: FAIL — ' + e.getMessage());
+}
+
+try {
+    Map<String, Object> data = new Map<String, Object>{
+        'CurrencyIsoCode' => 'ISK',
+        'Items' => new Map<String, Object>{
+            'records' => new List<Object>{
+                new Map<String, Object>{ 'Amount' => 1000000 },
+                new Map<String, Object>{ 'Amount' => 545000.5 }
+            }
+        }
+    };
+    r = DocGenService.processXmlForTest('<w:t>{SUM:Items.Amount:currency:auto}</w:t>', data);
+    if (r.contains('kr') && !r.contains('$') && !r.contains('.') && r.contains('1,545,001')) {
+        pass++;
+        System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: FAIL — expected "kr 1,545,001", got: ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: FAIL — ' + e.getMessage());
+}
 
 System.debug('========================================');
 System.debug(
