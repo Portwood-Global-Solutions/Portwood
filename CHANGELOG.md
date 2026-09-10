@@ -60,8 +60,10 @@ Two small fixes where the editor promised something the PDF did not deliver.
   reusable sender identity — a **Send emails from** address (Org-Wide Email Address),
   logo, color, company name, and footer — created on the new **Brands** tab in the
   Command Hub. Point a Portwood Template at one with its **Sending Brand** field, and
-  every email in that template's signature workflow (request, reminder, verification
-  PIN, signer-completed, all-signed, declined, completion) uses that brand's identity.
+  every email a signature request triggers directly — request, verification PIN,
+  signer-completed, all-signed, declined, completion — uses that brand's identity. (The
+  scheduled reminder email still sends from the org-wide identity; making it brand-aware
+  is a fast-follow — it batches signers across many requests into one send.)
   Unset, everything falls back to the org-wide Signature Settings exactly as before, so
   a single-brand org sees no change. A customer running two entities from one org — the
   case this was built for — assigns a different brand per template and the two never

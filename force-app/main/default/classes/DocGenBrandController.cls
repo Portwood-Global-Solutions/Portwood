@@ -102,12 +102,17 @@ public with sharing class DocGenBrandController {
         b.Brand_Color__c = (String) dto.get('brandColor');
         // Long field wins — Logo_Url__c is a platform Url field capped at 255
         // chars; Logo_Url_Extended__c carries Files delivery URLs and other
-        // long links (same split as DocGen_Email_Template__c).
+        // long links (same split as DocGen_Email_Template__c). Always write
+        // BOTH slots so switching a brand from a long URL to a short one (or
+        // clearing the logo) doesn't leave a stale value in the other slot —
+        // the reader prefers Logo_Url_Extended__c whenever it's non-blank.
         String logoUrl = (String) dto.get('logoUrl');
         if (String.isNotBlank(logoUrl) && logoUrl.length() > 255) {
             b.Logo_Url_Extended__c = logoUrl;
+            b.Logo_Url__c = null;
         } else {
-            b.Logo_Url__c = logoUrl;
+            b.Logo_Url__c = String.isBlank(logoUrl) ? null : logoUrl;
+            b.Logo_Url_Extended__c = null;
         }
         b.Logo_Asset_Key__c = (String) dto.get('logoAssetKey');
         b.Company_Name__c = (String) dto.get('companyName');

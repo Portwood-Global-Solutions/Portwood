@@ -202,6 +202,49 @@ private class DocGenBrandControllerTest {
         System.assertEquals(null, saved.Logo_Url_Extended__c);
     }
 
+    // ---- saveBrand: switching a long URL to a short one clears the extended slot ----
+    // The reader prefers Logo_Url_Extended__c whenever it is non-blank, so a stale
+    // value there would keep serving the old logo after the admin shortened it.
+    @IsTest
+    static void saveBrand_longThenShortLogoUrl_clearsExtendedField() {
+        String longUrl = 'https://files.example.com/' + '0'.repeat(240) + '/logo.png';
+        Map<String, Object> createDto = newDto();
+        createDto.put('logoUrl', longUrl);
+        Id brandId = DocGenBrandController.saveBrand(createDto);
+
+        Map<String, Object> updateDto = newDto();
+        updateDto.put('id', brandId);
+        updateDto.put('logoUrl', 'https://example.com/new-short-logo.png');
+
+        Test.startTest();
+        DocGenBrandController.saveBrand(updateDto);
+        Test.stopTest();
+
+        DocGen_Brand__c saved = [SELECT Logo_Url__c, Logo_Url_Extended__c FROM DocGen_Brand__c WHERE Id = :brandId];
+        System.assertEquals('https://example.com/new-short-logo.png', saved.Logo_Url__c);
+        System.assertEquals(null, saved.Logo_Url_Extended__c, 'the stale long URL must be cleared');
+    }
+
+    // ---- saveBrand: clearing the logo empties both slots ----
+    @IsTest
+    static void saveBrand_blankLogoUrl_clearsBothSlots() {
+        Map<String, Object> createDto = newDto();
+        createDto.put('logoUrl', 'https://example.com/logo.png');
+        Id brandId = DocGenBrandController.saveBrand(createDto);
+
+        Map<String, Object> updateDto = newDto();
+        updateDto.put('id', brandId);
+        updateDto.put('logoUrl', '');
+
+        Test.startTest();
+        DocGenBrandController.saveBrand(updateDto);
+        Test.stopTest();
+
+        DocGen_Brand__c saved = [SELECT Logo_Url__c, Logo_Url_Extended__c FROM DocGen_Brand__c WHERE Id = :brandId];
+        System.assertEquals(null, saved.Logo_Url__c);
+        System.assertEquals(null, saved.Logo_Url_Extended__c);
+    }
+
     // ---- saveBrand: Is_Active__c defaulting ----
     @IsTest
     static void saveBrand_isActiveNull_defaultsTrue() {
