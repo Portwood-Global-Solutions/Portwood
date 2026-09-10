@@ -536,7 +536,7 @@ HTML templates let you author in any tool that produces HTML — Google Docs is 
 - **Apple Pages** — File → Export To → HTML
 - **Hand-written HTML** — any text editor
 
-For single-file uploads (`.html` / `.htm`), Portwood scans for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render.
+Portwood scans the template body (and the Header / Footer HTML) for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render. It runs on save whichever way the body arrives — a `.html` / `.htm` upload, a cross-org template-bundle import, or Generate-with-AI — and self-heals on render for a body that somehow reached storage without it (v3.57+).
 
 #### 5.7.3 CSS rules — what works, what doesn't, and an LLM prompt
 
@@ -1032,7 +1032,7 @@ Example footer HTML:
 Three ways to get images into an HTML template:
 
 1. **Google Docs zip** — images inserted in the Google Doc are bundled into the `.zip` and extracted automatically on upload.
-2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on upload; each is saved as its own ContentVersion and the `src` is rewritten.
+2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on save — upload, template-bundle import, or Generate-with-AI alike — and each is saved as its own ContentVersion with the `src` rewritten (v3.57+ extends this beyond the upload path).
 3. **`{%Image:N}` / `{%FieldName}` merge tags** — same syntax as Word templates. Renders the Nth record-attached image, or a ContentVersion ID stored in a field. Emits `<img src="/sfc/...">` at merge time.
 
 #### 5.7.7 Loops in tables
