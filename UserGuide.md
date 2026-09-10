@@ -536,7 +536,7 @@ HTML templates let you author in any tool that produces HTML — Google Docs is 
 - **Apple Pages** — File → Export To → HTML
 - **Hand-written HTML** — any text editor
 
-For single-file uploads (`.html` / `.htm`), Portwood scans for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render.
+Portwood scans the template body (and the Header / Footer HTML) for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render. It runs on save whichever way the body arrives — a `.html` / `.htm` upload, a cross-org template-bundle import, or Generate-with-AI — and self-heals on render for a body that somehow reached storage without it (v3.57+).
 
 #### 5.7.3 CSS rules — what works, what doesn't, and an LLM prompt
 
@@ -1032,7 +1032,7 @@ Example footer HTML:
 Three ways to get images into an HTML template:
 
 1. **Google Docs zip** — images inserted in the Google Doc are bundled into the `.zip` and extracted automatically on upload.
-2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on upload; each is saved as its own ContentVersion and the `src` is rewritten.
+2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on save — upload, template-bundle import, or Generate-with-AI alike — and each is saved as its own ContentVersion with the `src` rewritten (v3.57+ extends this beyond the upload path).
 3. **`{%Image:N}` / `{%FieldName}` merge tags** — same syntax as Word templates. Renders the Nth record-attached image, or a ContentVersion ID stored in a field. Emits `<img src="/sfc/...">` at merge time.
 
 #### 5.7.7 Loops in tables
@@ -1579,7 +1579,7 @@ Locale defaults: `en_US` → `MM/dd/yyyy`; `en_GB/AU/NZ/IE/IN` → `dd/MM/yyyy`;
 {Amount:currency:GBP}           £500,000.00
 ```
 
-Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS.
+Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS, ISK, VND.
 
 Zero-decimal currencies (JPY, KRW, CLP, VND, HUF, ISK, TWD) format without decimals automatically.
 
@@ -1621,6 +1621,7 @@ What to know:
 - **Advanced Currency Management dated rates are not used** — conversion applies your current static rate. See issue #273.
 - **Single-currency orgs are entirely unaffected.** None of this engages.
 - **Without `:convert`, nothing converts.** `{SUM:Lines.Amount:currency:EUR}` over EUR-only rows formats them as euros; it does not translate other currencies into euros.
+- **Beyond aggregates: `:convert` works on a plain currency field too (v3.57+).** `{Amount:currency:EUR:convert}` converts the record's own amount from its `CurrencyIsoCode` into the target ISO before formatting, and composes with locale (`:EUR:de_DE:convert`) and `auto`. A record with no source currency passes through unconverted; a missing rate raises the same "add it under Manage Currencies" error as above.
 
 #### Number formatting
 
@@ -2436,7 +2437,7 @@ Plain multiline (long text, textarea) fields work too — newlines in the field 
 
 Two ways to add a full-page watermark or background image to your PDF output:
 
-**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output.
+**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output. A **Watermark strength** control (Light 15% / Medium 30% / Strong 50% / Original) fades the image — the opacity is baked into the stored PNG because Flying Saucer has no CSS opacity, and Portwood keeps the unfaded original so changing the strength after upload re-fades from it rather than compounding. The new setting applies immediately and survives a page reload (v3.57+).
 
 **Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
 
@@ -2754,6 +2755,23 @@ Sorting applies to Individual Files too — it decides the order records are pro
 **In Flows**, the `Portwood: Generate Bulk Documents` action takes the same thing as a **Sort Order** text input, written as a SOQL `ORDER BY` clause without the keywords: `Account.Name ASC`, `CloseDate DESC`, or up to three comma-separated fields (`Account.Name ASC, Amount DESC`). Field API names only; `ASC`/`DESC` and `NULLS FIRST`/`NULLS LAST` are supported. An unknown or unsortable field fails the action with a message on **Error Message** rather than faulting the interview.
 
 > **If your Flow passes a Record IDs collection:** SOQL does not preserve the order of that collection, so sorting the collection in the Flow has no effect on the document. Use **Sort Order**.
+
+### 9.1.2 Duplex Padding — every document starts on a fresh sheet
+
+When a **Combined PDF** is printed double-sided, a document with an **odd** page count leaves its last sheet half-used, and the next document starts on the back of it. **Duplex Padding** fixes that: before the merge, Portwood checks each document's page count and appends **one blank page** to any document that has an odd number of pages, so every document begins on the front of a sheet.
+
+- The toggle appears under the output mode once you pick **Combined PDF** or **Both** (it does nothing for Individual Files, so it is hidden there and forced off).
+- In **Both** mode only the combined bundle is padded — the individual per-record files come out standalone and unpadded (each one already starts on its own sheet).
+- The filler page is **completely blank** — no header, no footer, no watermark, no page number.
+- **Page numbers count real pages only.** Because each record is rendered as its own document and then stitched, `{PageNumber}` / `{TotalPages}` in the Header/Footer HTML fields ([§5.7.5](#575-page-numbers)) count per-document — a 3-page statement numbers `1 of 3, 2 of 3, 3 of 3`, and the blank filler after it carries no number. A plain Combined PDF, by contrast, numbers continuously across the whole bundle.
+- Documents with an **even** page count are never touched.
+- **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
+
+**Scale.** A duplex packet is assembled entirely in memory in one background job, so the ceiling depends on how large each rendered document is — not just the record count. A plain text document (a few KB per page) can reach the low hundreds; a branded template with a logo and/or non-Latin text — which embeds a font, often 60+ KB per record — can top out below 100, sometimes near 50. The pre-run analysis panel measures your template's Test Record, shows a **Duplex Packet** row with the specific limit it estimates, and disables the Run button above it. If a job does exceed the limit at run time, it ends as **Failed** with an error-log message telling you to run **Individual Files** — where each document already starts on its own sheet — or split the filter with a tighter query.
+
+> Set a **Test Record** on the template ([§5.3](#53-test-record)) so the analysis can size the limit to it. Without one it falls back to a flat ~400, which is optimistic for a branded template.
+
+**In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
 
 ### 9.2 Saved queries
 
@@ -3077,6 +3095,56 @@ For each template you can edit the **subject** and **body**, preview it live wit
 
 > **Out of the box:** a default record for each template is created on install, so emails work immediately with zero setup. Delete a record to fall back to the built-in default.
 
+#### Changing a widget's wording or styling
+
+Each widget renders a fixed block of English text with **inline styles** — `{ActionButton}` always reads "Review & Sign Document," `{SecurityNote}` always says "This link is unique to you and will expire in _N_ hours." You cannot edit the text inside a widget, and because the widget's own inline styles win over any wrapper rule in most email clients, wrapping it in CSS won't recolor the button or relabel it either.
+
+**To change wording, stop using the widget and build the block yourself.** Every widget is assembled from ordinary merge tokens that you can place directly — so authoring your own gives you full control of both the words and the styling:
+
+| Instead of this widget | Use these tokens                      |
+| ---------------------- | ------------------------------------- |
+| `{ActionButton}`       | `{SignatureUrl}`                      |
+| `{DocumentInfo}`       | `{DocumentTitle}`, `{RoleName}`       |
+| `{SecurityNote}`       | `{SignatureUrl}`, `{ExpirationHours}` |
+| `{VerificationCode}`   | `{Pin}`, `{ExpirationMinutes}`        |
+
+A replacement for `{ActionButton}` with your own label and brand color — this is a plain `<a>`, so restyle it however you like:
+
+```html
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px auto">
+    <tr>
+        <td align="center" style="border-radius: 6px; background-color: #0b3d2e">
+            <a
+                href="{SignatureUrl}"
+                target="_blank"
+                style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;border-radius:6px;"
+                >Approve your agreement</a
+            >
+        </td>
+    </tr>
+</table>
+```
+
+And a replacement for `{SecurityNote}` in your own words:
+
+```html
+<p style="font-size: 13px; color: #706e6b; line-height: 1.5">
+    This link belongs to you alone and stops working after {ExpirationHours} hours. Trouble with the button? Paste this
+    into your browser:<br />
+    <a href="{SignatureUrl}" style="color: #0b3d2e">{SignatureUrl}</a>
+</p>
+```
+
+**To keep the widget but control what's around it,** wrap it — spacing, alignment and background of the surrounding container are yours, since those are properties of your element, not the widget's:
+
+```html
+<div style="background: #f7f9fa; padding: 20px; text-align: center; border-radius: 8px">{ActionButton}</div>
+```
+
+Use **Full custom HTML** layout mode (above) when you're replacing widgets wholesale, so Portwood adds no header/footer of its own around your markup.
+
+> **Which tokens are available depends on the email.** A token that isn't supplied for that email type renders as empty text and is then stripped. `{Pin}` / `{ExpirationMinutes}` exist only on the **Verification PIN** email; `{SignatureUrl}` / `{ExpirationHours}` / `{RoleName}` only on the emails that carry a signing link (Signature Request, Reminder). `{CompanyName}`, `{DocumentTitle}` and `{BrandColor}` are available everywhere. Use the live preview and **Send Test** on the Email Templates tab to confirm before saving.
+
 **Send-time customization.** When sending a single-template request (from the Signature Sender or the `Portwood: Create Signature Request` Flow action), you can type a **Custom Email Subject** and/or **Custom Email Message** that override the saved template for that one send. The subject supports merge tokens; the branded layout and signing button are always kept. Bulk/packet sends always use the saved templates.
 
 **Per-template default message (v3.28+).** Each Portwood Template has a **Default Email Message** field (Command Hub → template editor). When set, it becomes the `{Message}` text for signature requests sent from that template — pre-filled in the sender so you see exactly what will go out, and used automatically by Flow sends that leave the message blank. Resolution order: send-time custom message → template default → the email template's generic text. A quote template can say "Please see the attached proposal…" while an NDA template carries different copy, with no per-send typing.
@@ -3150,7 +3218,7 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 
 ### 11.5 Recipe — Generate when dataset size is unpredictable
 
-**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+. You can't know at design time which path is right.
+**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+ — or a normal count with very large line-item descriptions. You can't know at design time which path is right.
 
 **Step:** **Portwood — Generate Document (Auto Giant Query)**.
 
@@ -3167,6 +3235,8 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 - `isGiantQuery` — boolean so your Flow can branch
 
 **Pattern:** add a Decision element after the action. If `isGiantQuery = true`, send the user to a "your invoice is being prepared" screen with a polling component that watches the job. If `false`, present the file immediately.
+
+**How it routes (v3.57+).** The action estimates peak memory rather than counting rows alone — and when a dataset is borderline it measures one real child row, so a record with only a few hundred line items still routes async when each row carries a large rich-text description. Auto-routing to the background needs a **V3 query config**: a V1 or V2 query config that's over budget returns an error asking you to re-save it as V3 or use the Runner, and a non-Word template is pointed to the Runner (the background path is Word-only). The Runner's own on-screen size warning is based on row count and is advisory — it doesn't block generation.
 
 ### 11.6 Recipe — Send a contract for signature on Opportunity approval
 

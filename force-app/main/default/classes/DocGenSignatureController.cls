@@ -1705,6 +1705,11 @@ public without sharing class DocGenSignatureController {
             }
         }
 
+        // #363 — a Word-authored hyperlink only holds an r:id; resolve it off the rels
+        // we already read here so the signed PDF keeps the clickable link the source
+        // template had. Every caller of this method feeds documentXml to convertToHtml.
+        documentXml = DocGenHtmlRenderer.resolveHyperlinkRelIds(documentXml, relsXml);
+
         return new Map<String, Object>{ 'documentXml' => documentXml, 'imagesByRelId' => imagesByRelId };
     }
 
