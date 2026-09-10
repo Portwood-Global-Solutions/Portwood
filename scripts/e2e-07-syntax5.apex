@@ -260,6 +260,47 @@ try {
     System.debug('CURRENCY AGG :convert WITH LOCALE: FAIL — ' + e.getMessage());
 }
 
+// #297 — :convert on a PLAIN field. The segment must be stripped before the
+// locale slot is read (else `convert` parses as a locale name and the number
+// formats with default separators under a changed currency symbol — silent
+// corruption). A record with no source currency passes through unconverted but
+// must still format as the target currency, not fall back to plain separators.
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{Amount:currency:EUR:convert}</w:t>',
+        new Map<String, Object>{ 'Amount' => 1234.5 }
+    );
+    if (r.contains('€') && r.contains('1,234.50') && !r.containsIgnoreCase('convert')) {
+        pass++;
+        System.debug('CURRENCY PLAIN :convert NO SOURCE PASSES THROUGH: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY PLAIN :convert NO SOURCE PASSES THROUGH: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY PLAIN :convert NO SOURCE PASSES THROUGH: FAIL — ' + e.getMessage());
+}
+
+// #297 — :convert composes with an explicit locale on a plain field: the
+// segment is consumed and de_DE separators still apply.
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{Amount:currency:EUR:de_DE:convert}</w:t>',
+        new Map<String, Object>{ 'Amount' => 1234.5 }
+    );
+    if (r.contains('1.234,50') && !r.containsIgnoreCase('convert')) {
+        pass++;
+        System.debug('CURRENCY PLAIN :convert WITH LOCALE: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('CURRENCY PLAIN :convert WITH LOCALE: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY PLAIN :convert WITH LOCALE: FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')

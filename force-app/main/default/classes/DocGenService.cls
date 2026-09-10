@@ -6330,7 +6330,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         } else if (fn == 'COUNT') {
             String countResult = String.valueOf(values.size());
             if (numberFormat != null && isNumericFormat(numberFormat)) {
-                return formatNumber(Decimal.valueOf(countResult), numberFormat, data);
+                // Strip `:convert` here too — the SUM/AVG/MIN/MAX path below does,
+                // and without it `{COUNT:Rel.Field:currency:EUR:convert}` leaks
+                // `convert` into the formatter's locale slot (#297).
+                return formatNumber(
+                    Decimal.valueOf(countResult),
+                    DocGenCurrency.stripConvertSegment(numberFormat),
+                    data
+                );
             }
             return countResult;
         } else {

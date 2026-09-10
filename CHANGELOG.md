@@ -77,7 +77,9 @@ Two small fixes where the editor promised something the PDF did not deliver.
   `:convert` means. It composes with locale (`:EUR:de_DE:convert`) and the `auto` forms.
   A record with no source currency passes through unconverted rather than having a rate
   invented for it; a missing rate raises the same actionable error the aggregate path
-  already does.
+  already does. Applies on the giant-query parent path (>2000 child rows) as well as the
+  normal path, and a stray `:convert` no longer leaks into a `{COUNT:…:currency:…}` tag's
+  formatting.
 
 ## v3.55.0 — Element linking, named blocks, client-side charts
 
