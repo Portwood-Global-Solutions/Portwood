@@ -770,26 +770,41 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param base64Data  Base64-encoded image bytes
      * @return The created ContentVersion ID
      */
-    @AuraEnabled
+    /**
+     * Apex-side convenience with no retained source. NOT @AuraEnabled — Apex
+     * forbids overloading an @AuraEnabled method, so the LWC entry point is the
+     * four-argument form below and passes null when there is no source (#313).
+     */
     public static Id saveWatermarkImage(Id versionId, String fileName, String base64Data) {
-        if (versionId == null) {
-            throw new DocGenException('Version ID is required.');
-        }
-        if (String.isBlank(base64Data)) {
-            throw new DocGenException('Image data is required.');
-        }
-        // SECURITY (v1.75): verify the caller actually has access to this template
-        // version. Without this, any authenticated user could attach a watermark
-        // (and a ContentVersion) to any other admin's template version by Id.
-        // USER_MODE on a custom object the caller can't see throws QueryException —
-        // catch and convert to AuraHandledException so the LWC error handler reports
-        // a clean denial.
+        return saveWatermarkImage(versionId, fileName, base64Data, null);
+    }
+
+    /** Title prefix for the baked (washed) watermark image. */
+    private static final String WATERMARK_PREFIX = 'docgen_watermark_';
+    /** Title prefix for the retained, unbaked watermark source (#313). */
+    private static final String WATERMARK_SOURCE_PREFIX = 'docgen_watermark_src_';
+    /**
+     * Pulls the baked opacity out of a watermark file name — "watermark-p50.png"
+     * yields 50. The designer encodes the wash it applied into PathOnClient so it
+     * can seed the strength control on reload rather than snapping to the default
+     * over an image that is actually at some other value (#313).
+     */
+    private static final Pattern WATERMARK_PCT_PATTERN = Pattern.compile('-p(\\d{1,3})(?:\\.|$)');
+
+    /**
+     * Confirms the caller can see this template version before any watermark
+     * read or write touches it. Without this the watermark endpoints would let
+     * any authenticated user reach another admin's template version by Id — the
+     * IDOR class the v1.75 sweep closed on saveWatermarkImage, which the #313
+     * read endpoints have to honour too.
+     */
+    private static void assertWatermarkVersionAccess(Id versionId) {
         List<DocGen_Template_Version__c> ownerCheck;
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template_Version__c.sObjectType, new Set<String>{ 'Template__c' });
             /* code-analyzer-suppress ApexFlsViolation */
             ownerCheck = [
-                SELECT Id, Template__c
+                SELECT Id
                 FROM DocGen_Template_Version__c
                 WHERE Id = :versionId
                 WITH SYSTEM_MODE
@@ -803,14 +818,253 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (ownerCheck.isEmpty()) {
             throw DocGenService.ahe('Template version not found or access denied.');
         }
+    }
+
+    /**
+     * Returns the retained unbaked watermark source for a version, or null when
+     * there is none — a watermark uploaded before #313, or one saved without a
+     * source. The caller re-bakes from this rather than from the stored image,
+     * which is already washed (#313).
+     */
+    @AuraEnabled
+    public static String getWatermarkSource(Id versionId) {
+        if (versionId == null) {
+            return null;
+        }
+        assertWatermarkVersionAccess(versionId);
+        DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title', 'VersionData' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<ContentVersion> cvs = [
+            SELECT VersionData
+            FROM ContentVersion
+            WHERE Title = :(WATERMARK_SOURCE_PREFIX + versionId)
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        return cvs.isEmpty() || cvs[0].VersionData == null ? null : EncodingUtil.base64Encode(cvs[0].VersionData);
+    }
+
+    /**
+     * The baked opacity of the version's current watermark (15 / 30 / 50 / 100),
+     * or null when it can't be determined — a watermark with no percent in its
+     * file name, or none at all. Read from the ContentVersion the version
+     * actually references, so it still resolves after a Save-as-New-Version
+     * carries the id forward under the previous version's title (#313).
+     */
+    @AuraEnabled
+    public static Integer getWatermarkOpacity(Id versionId) {
+        if (versionId == null) {
+            return null;
+        }
+        assertWatermarkVersionAccess(versionId);
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> vers = [
+            SELECT Watermark_Image_CV_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Id = :versionId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (vers.isEmpty() || String.isBlank(vers[0].Watermark_Image_CV_Id__c)) {
+            return null;
+        }
+        Id wmCvId;
+        try {
+            wmCvId = Id.valueOf(vers[0].Watermark_Image_CV_Id__c);
+        } catch (Exception badId) {
+            return null;
+        }
+        DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Id', 'PathOnClient' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<ContentVersion> cvs = [
+            SELECT PathOnClient
+            FROM ContentVersion
+            WHERE Id = :wmCvId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (cvs.isEmpty() || String.isBlank(cvs[0].PathOnClient)) {
+            return null;
+        }
+        Matcher pctMatch = WATERMARK_PCT_PATTERN.matcher(cvs[0].PathOnClient);
+        return pctMatch.find() ? Integer.valueOf(pctMatch.group(1)) : null;
+    }
+
+    /**
+     * Deletes the baked image and retained source left by a prior watermark save
+     * for this version. Each opacity change re-uploads, so without this the pair
+     * accumulates one set per change and nothing reclaims it. The titles are
+     * version-keyed, so this only touches this version's own files — but a
+     * different version can still point at the same baked CV id (Save-as-New-
+     * Version shares it forward), so a CV another version references is left
+     * alone. Best-effort — a failed sweep must never fail the save (#313).
+     */
+    private static void purgePriorWatermarkFiles(Id versionId) {
+        try {
+            Set<String> staleTitles = new Set<String>{
+                WATERMARK_PREFIX + versionId,
+                WATERMARK_SOURCE_PREFIX + versionId
+            };
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<ContentVersion> prior = [
+                SELECT Id, ContentDocumentId
+                FROM ContentVersion
+                WHERE Title IN :staleTitles
+                WITH SYSTEM_MODE
+            ];
+            if (prior.isEmpty()) {
+                return;
+            }
+            // Apex forbids an inner and outer SELECT on the same object, so the
+            // template is looked up first, then its other versions.
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Template_Version__c> self = [
+                SELECT Template__c
+                FROM DocGen_Template_Version__c
+                WHERE Id = :versionId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            Set<String> referencedByOtherVersions = new Set<String>();
+            if (!self.isEmpty() && self[0].Template__c != null) {
+                /* code-analyzer-suppress ApexFlsViolation */
+                for (DocGen_Template_Version__c other : [
+                    SELECT Watermark_Image_CV_Id__c
+                    FROM DocGen_Template_Version__c
+                    WHERE Template__c = :self[0].Template__c AND Id != :versionId AND Watermark_Image_CV_Id__c != NULL
+                    WITH SYSTEM_MODE
+                ]) {
+                    referencedByOtherVersions.add(other.Watermark_Image_CV_Id__c);
+                }
+            }
+            List<ContentDocument> docs = new List<ContentDocument>();
+            for (ContentVersion cv : prior) {
+                if (cv.ContentDocumentId == null) {
+                    continue;
+                }
+                String cvId18 = String.valueOf(cv.Id);
+                if (
+                    referencedByOtherVersions.contains(cvId18) ||
+                    referencedByOtherVersions.contains(cvId18.substring(0, 15))
+                ) {
+                    continue;
+                }
+                docs.add(new ContentDocument(Id = cv.ContentDocumentId));
+            }
+            if (!docs.isEmpty()) {
+                /* code-analyzer-suppress ApexFlsViolation */
+                Database.delete(docs, AccessLevel.SYSTEM_MODE);
+            }
+        } catch (Exception cleanupFailed) {
+            // Orphaned watermark files are harmless; the save must still land.
+        }
+    }
+
+    /**
+     * Copies the retained watermark source from one version to another under the
+     * new version's title. Save-as-New-Version carries the baked image's CV id
+     * forward but the source is title-keyed to a version, so without this copy
+     * the opacity control on the new version reports "re-upload to change" even
+     * though the original is sitting in the org (#313). Best-effort.
+     */
+    private static void copyWatermarkSourceForward(Id fromVersionId, Id toVersionId) {
+        if (fromVersionId == null || toVersionId == null) {
+            return;
+        }
+        try {
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<ContentVersion> src = [
+                SELECT VersionData
+                FROM ContentVersion
+                WHERE Title = :(WATERMARK_SOURCE_PREFIX + fromVersionId)
+                WITH SYSTEM_MODE
+                ORDER BY CreatedDate DESC
+                LIMIT 1
+            ];
+            if (src.isEmpty() || src[0].VersionData == null) {
+                return;
+            }
+            ContentVersion copy = new ContentVersion(
+                Title = WATERMARK_SOURCE_PREFIX + toVersionId,
+                PathOnClient = 'watermark-source.png',
+                VersionData = src[0].VersionData,
+                FirstPublishLocationId = toVersionId
+            );
+            /* code-analyzer-suppress ApexFlsViolation */
+            Database.insert(copy, AccessLevel.SYSTEM_MODE);
+        } catch (Exception copyFailed) {
+            // A missing source only costs one re-upload; never fail the save.
+        }
+    }
+
+    /**
+     * Ceiling on each base64 watermark payload (#313). saveWatermarkImage runs in
+     * the synchronous 6 MB heap and now carries TWO images (baked + unbaked
+     * source); a base64 string is ~2.6x the image and Apex holds it as UTF-16, so
+     * even one large payload can blow the governor. ~4 MB of base64 ≈ a ~3 MB
+     * image — far more than any real watermark logo/stamp.
+     */
+    private static final Integer WATERMARK_BASE64_MAX = 4 * 1024 * 1024;
+
+    @AuraEnabled
+    public static Id saveWatermarkImage(Id versionId, String fileName, String base64Data, String sourceBase64) {
+        if (versionId == null) {
+            throw new DocGenException('Version ID is required.');
+        }
+        if (String.isBlank(base64Data)) {
+            throw new DocGenException('Image data is required.');
+        }
+        if (
+            base64Data.length() > WATERMARK_BASE64_MAX ||
+            (String.isNotBlank(sourceBase64) && sourceBase64.length() > WATERMARK_BASE64_MAX)
+        ) {
+            throw new DocGenException(
+                'Watermark image is too large. Use an image under ~3 MB — a logo or stamp at screen resolution is plenty.'
+            );
+        }
+        // SECURITY (v1.75): verify the caller actually has access to this template
+        // version before attaching anything to it. Extracted to a shared helper so
+        // the #313 read endpoints enforce the same gate.
+        assertWatermarkVersionAccess(versionId);
+
+        // This save supersedes any prior watermark for the version — sweep the
+        // old baked image + retained source so opacity changes don't pile up
+        // ContentVersions (#313).
+        purgePriorWatermarkFiles(versionId);
+
+        // Decode + insert one image at a time, releasing each base64 string and
+        // blob before touching the next — never hold both in the 6 MB sync heap.
         Blob imgBlob = EncodingUtil.base64Decode(base64Data);
+        base64Data = null;
         ContentVersion cv = new ContentVersion(
-            Title = 'docgen_watermark_' + versionId,
+            Title = WATERMARK_PREFIX + versionId,
             PathOnClient = String.isNotBlank(fileName) ? fileName : 'watermark.png',
             VersionData = imgBlob,
             FirstPublishLocationId = versionId
         );
         Database.insert(cv, AccessLevel.USER_MODE);
+        imgBlob = null;
+
+        // Keep the UNBAKED original alongside the washed image (#313).
+        //
+        // Opacity is baked into the stored PNG's pixels — Flying Saucer has no CSS
+        // opacity, so pre-multiplied alpha is the only thing that renders. That
+        // means the stored image cannot be re-washed: 30% of an already-30% image
+        // is 9%, and every change would compound. Persisting the source is what
+        // lets the opacity control keep working after the page is reloaded, or in
+        // a later session, instead of asking the author to upload the file again.
+        if (String.isNotBlank(sourceBase64)) {
+            Blob srcBlob = EncodingUtil.base64Decode(sourceBase64);
+            sourceBase64 = null;
+            ContentVersion src = new ContentVersion(
+                Title = WATERMARK_SOURCE_PREFIX + versionId,
+                PathOnClient = 'watermark-source.png',
+                VersionData = srcBlob,
+                FirstPublishLocationId = versionId
+            );
+            Database.insert(src, AccessLevel.USER_MODE);
+        }
         // Persist the CV ID on the template version so the renderer knows about it.
         // SYSTEM_MODE on the namespaced custom-field update — Schema check above
         // gates access; USER_MODE strict-FLS strips Watermark_Image_CV_Id__c when
@@ -867,6 +1121,31 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         DocGenFlsGuard.assertUpdateable(v, new Set<String>{ 'Watermark_Image_CV_Id__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         Database.update(v, AccessLevel.SYSTEM_MODE);
+
+        // Drop the retained unbaked source too — otherwise a later opacity change
+        // could re-bake it onto a template whose watermark was removed (#313).
+        // The baked image is deliberately kept (see method doc).
+        try {
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<ContentVersion> srcCvs = [
+                SELECT ContentDocumentId
+                FROM ContentVersion
+                WHERE Title = :(WATERMARK_SOURCE_PREFIX + versionId)
+                WITH SYSTEM_MODE
+            ];
+            List<ContentDocument> srcDocs = new List<ContentDocument>();
+            for (ContentVersion cv : srcCvs) {
+                if (cv.ContentDocumentId != null) {
+                    srcDocs.add(new ContentDocument(Id = cv.ContentDocumentId));
+                }
+            }
+            if (!srcDocs.isEmpty()) {
+                /* code-analyzer-suppress ApexFlsViolation */
+                Database.delete(srcDocs, AccessLevel.SYSTEM_MODE);
+            }
+        } catch (Exception cleanupFailed) {
+            // Best-effort — a lingering source file is harmless on its own.
+        }
     }
 
     @AuraEnabled
@@ -1491,20 +1770,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param templateId The DocGen_Template__c record ID
      * @return Map of relationship name to child record count
      */
-    // Heap-pressure router constants — tuned from real-world breakage.
-    // Output format matters enormously: PDF rendering via Blob.toPdf() parses the
-    // entire HTML into an in-memory DOM, so peak heap is ~5-10× the raw expanded
-    // XML size. DOCX/Excel paths just write XML and ship base64 to the client.
-    private static final Integer SYNC_HEAP_LIMIT = 6000000; // Apex sync heap governor (6MB)
-    private static final Decimal SAFE_HEAP_RATIO = 0.6; // leave 40% headroom
-
-    // PDF: Blob.toPdf() holds full DOM + parse tree in heap
-    private static final Integer PDF_BASE_BYTES = 1000000; // template HTML + styles + parent data
-    private static final Integer PDF_BYTES_PER_ROW = 10000; // ~10KB per row after DOM/CSS parsing
-
-    // DOCX/Excel/PowerPoint: server merges XML, returns base64 to client
-    private static final Integer DOCX_BASE_BYTES = 200000;
-    private static final Integer DOCX_BYTES_PER_ROW = 2000;
+    // Heap-pressure routing is owned by DocGenGiantQueryRouter so this pre-flight
+    // and the "Auto Giant Query" Flow action share one estimator (#374).
 
     @AuraEnabled
     public static Map<String, Object> scoutChildCounts(Id recordId, Id templateId) {
@@ -1513,7 +1780,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         result.put('childNodes', new Map<String, Map<String, Object>>());
         result.put('heapEstimates', new Map<String, Integer>());
         result.put('useGiantPath', new Map<String, Boolean>());
-        result.put('heapLimitBytes', SYNC_HEAP_LIMIT);
+        result.put('heapLimitBytes', DocGenGiantQueryRouter.SYNC_HEAP_LIMIT);
 
         if (recordId == null || templateId == null) {
             return result;
@@ -1640,20 +1907,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         result.put('childNodes', childNodes);
 
-        // Heap-pressure pre-flight: for each relationship with a known count, estimate
-        // peak sync-path heap. Constants differ by output format because PDF's
-        // Blob.toPdf() holds the whole HTML DOM in heap while rendering.
+        // Heap-pressure pre-flight: for each relationship with a known count,
+        // estimate peak sync-path heap via the shared router (#374). Row-count
+        // only here (no per-row sampling) — the client just needs the flag.
         String outputFormat = templates[0].Output_Format__c;
-        Boolean isPdf = 'PDF'.equalsIgnoreCase(outputFormat);
-        Integer baseBytes = isPdf ? PDF_BASE_BYTES : DOCX_BASE_BYTES;
-        Integer bytesPerRow = isPdf ? PDF_BYTES_PER_ROW : DOCX_BYTES_PER_ROW;
-        Integer safeHeapBytes = (Integer) (SYNC_HEAP_LIMIT * SAFE_HEAP_RATIO);
+        Integer safeHeapBytes = DocGenGiantQueryRouter.safeHeapBytes();
 
         Map<String, Integer> heapEstimates = new Map<String, Integer>();
         Map<String, Boolean> useGiantPath = new Map<String, Boolean>();
         for (String relName : counts.keySet()) {
-            Integer rowCount = counts.get(relName);
-            Integer estimatedPeak = baseBytes + (rowCount * bytesPerRow);
+            Integer estimatedPeak = DocGenGiantQueryRouter.estimatePeakHeapBytes(counts.get(relName), 0, outputFormat);
             heapEstimates.put(relName, estimatedPeak);
             useGiantPath.put(relName, estimatedPeak > safeHeapBytes);
         }
@@ -2701,10 +2964,23 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Record_Filter__c')) {
                 template.Record_Filter__c = (String) fields.get('Record_Filter__c');
             }
+            // #377 — a data: URI pasted into the header/footer band renders blank
+            // in Blob.toPdf; pull it into a CV at save time. Written back into the
+            // fields map so the version snapshot below (which reads from `fields`,
+            // not from `template`) also stores the materialised markup. templateId
+            // is null on first create — the render-path fallback covers that.
             if (fields.containsKey('Header_Html__c')) {
+                fields.put(
+                    'Header_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Header_Html__c'))
+                );
                 template.Header_Html__c = (String) fields.get('Header_Html__c');
             }
             if (fields.containsKey('Footer_Html__c')) {
+                fields.put(
+                    'Footer_Html__c',
+                    DocGenService.materialiseInlineHtmlImages(templateId, (String) fields.get('Footer_Html__c'))
+                );
                 template.Footer_Html__c = (String) fields.get('Footer_Html__c');
             }
             // 1.68 — page orientation, size, margins
@@ -2974,6 +3250,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 /* code-analyzer-suppress ApexFlsViolation */
                 Database.insert(version, AccessLevel.SYSTEM_MODE);
                 createdVersionId = version.Id;
+
+                // Bring the retained watermark source across too, so opacity stays
+                // adjustable on the new version and not just the image (#313).
+                if (String.isNotBlank(priorWatermarkCvId)) {
+                    copyWatermarkSourceForward(priorVersionId, version.Id);
+                }
 
                 if (
                     String.isBlank(contentVersionId) &&
@@ -3452,6 +3734,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (!DocGenService.isHtmlBacked(tpls[0].Type__c)) {
             throw new DocGenException('saveHtmlTemplateBody is for HTML-backed templates only.');
         }
+
+        // #377 — pull any `data:` URI images out into ContentVersions and rewrite
+        // <img src> to relative /sfc/ URLs BEFORE the body is stored (and before
+        // any whole-body regex below, which a large inline base64 blob would trip).
+        // Blob.toPdf can't render inline base64, and it can't fetch a CV created in
+        // the same transaction as the render — so this has to happen here, at save
+        // time. The Designer's upload path already does this client-side; this
+        // covers every other caller (AI generation, a direct API save). No-op when
+        // the body has no inline images.
+        htmlContent = DocGenService.materialiseInlineHtmlImages(templateId, htmlContent);
 
         // Refuse to overwrite a real body with an empty one.
         //
@@ -5176,8 +5468,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * Builds a Giant Query child node config from a V1 flat query string.
      * Parses the subquery for the given relationship name and resolves
      * the child object + lookup field from the parent record's schema.
+     *
+     * Public so DocGenGiantQueryRouter can reuse it — the router is the single
+     * sync-vs-giant decision point shared with DocGenGiantQueryFlowAction (#374).
      */
-    private static Map<String, Object> buildNodeConfigFromFlat(
+    public static Map<String, Object> buildNodeConfigFromFlat(
         Id recordId,
         String queryConfig,
         String relationshipName
@@ -7661,6 +7956,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     // Malformed CV ID — skip, don't fail the whole export.
                 }
             }
+            // The retained watermark source (#313) — carried so opacity stays
+            // adjustable on the imported/cloned copy, not just the baked image.
+            Id watermarkSourceCvId = null;
+            if (ver != null) {
+                DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Id', 'Title' });
+                /* code-analyzer-suppress ApexFlsViolation */
+                List<ContentVersion> srcCvs = [
+                    SELECT Id
+                    FROM ContentVersion
+                    WHERE Title = :(WATERMARK_SOURCE_PREFIX + ver.Id) AND IsLatest = TRUE
+                    WITH SYSTEM_MODE
+                    LIMIT 1
+                ];
+                if (!srcCvs.isEmpty()) {
+                    watermarkSourceCvId = srcCvs[0].Id;
+                    assetCvIds.add(watermarkSourceCvId);
+                }
+            }
             if (!assetCvIds.isEmpty()) {
                 // SYSTEM_MODE for the same #114 reason as the template-file read above —
                 // these CVs are linked to the template with Visibility=InternalUsers.
@@ -7688,6 +8001,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             }
             if (watermarkCvId != null) {
                 bundle.put('watermarkOriginalCvId', String.valueOf(watermarkCvId));
+            }
+            if (watermarkSourceCvId != null) {
+                bundle.put('watermarkSourceOriginalCvId', String.valueOf(watermarkSourceCvId));
             }
 
             // Saved queries
@@ -7846,14 +8162,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            // 1.6. If any asset URLs were referenced in Header_Html__c or
-            // Footer_Html__c, rewrite them to point at the newly-inserted CVs.
-            if (!cvIdMap.isEmpty()) {
-                String rewrittenHeader = rewriteShepherdCvIds(tmpl.Header_Html__c, cvIdMap);
-                String rewrittenFooter = rewriteShepherdCvIds(tmpl.Footer_Html__c, cvIdMap);
-                if (rewrittenHeader != tmpl.Header_Html__c || rewrittenFooter != tmpl.Footer_Html__c) {
-                    tmpl.Header_Html__c = rewrittenHeader;
-                    tmpl.Footer_Html__c = rewrittenFooter;
+            {
+                // 1.6. Rewrite the Header_Html__c / Footer_Html__c fields on the new
+                // template. Word templates carry HTML header/footer bands too, so this
+                // is NOT gated on isHtmlBacked:
+                //   1. re-key any exported shepherd asset URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a self-contained export
+                //      carries them in the bands too, not just the body) out into
+                //      ContentVersions so Blob.toPdf can render them. No-op on a band
+                //      with no inline image.
+                String h0 = tmpl.Header_Html__c;
+                String f0 = tmpl.Footer_Html__c;
+                String h1 = cvIdMap.isEmpty() ? h0 : rewriteShepherdCvIds(h0, cvIdMap);
+                String f1 = cvIdMap.isEmpty() ? f0 : rewriteShepherdCvIds(f0, cvIdMap);
+                h1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, h1);
+                f1 = DocGenService.materialiseInlineHtmlImages(tmpl.Id, f1);
+                if (h1 != h0 || f1 != f0) {
+                    tmpl.Header_Html__c = h1;
+                    tmpl.Footer_Html__c = f1;
                     /* code-analyzer-suppress ApexFlsViolation */
                     Database.update(tmpl, AccessLevel.USER_MODE);
                 }
@@ -7874,14 +8200,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     : tmpl.Name;
                 cv.PathOnClient = tmpl.Name + '.' + (String) fileData.get('fileExtension');
                 Blob bodyBytes = EncodingUtil.base64Decode((String) fileData.get('base64'));
-                // For HTML templates, rewrite embedded shepherd URLs in the body
-                // bytes BEFORE upload (ContentVersion.VersionData is immutable
-                // post-insert). Word/Excel/PowerPoint templates carry their
-                // image references inside docx-internal relationships, not
-                // shepherd URLs, so they pass through untouched.
-                if (DocGenService.isHtmlBacked(tmpl.Type__c) && !cvIdMap.isEmpty()) {
+                // For HTML templates, rewrite the body bytes BEFORE upload
+                // (ContentVersion.VersionData is immutable post-insert):
+                //   1. re-key exported shepherd image URLs to the newly-inserted CVs
+                //   2. #377 — pull any `data:` URI images (a "self-contained" export)
+                //      out into ContentVersions and rewrite <img src> to /sfc/ URLs,
+                //      so Blob.toPdf can actually render them. Must happen here at
+                //      import time — a CV created during a render is invisible to
+                //      Blob.toPdf's fetch in that same transaction.
+                // Word/Excel/PowerPoint templates carry image references inside
+                // docx-internal relationships, not shepherd URLs, so they pass
+                // through untouched.
+                if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
                     String htmlBody = bodyBytes.toString();
-                    String rewrittenBody = rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    String rewrittenBody = cvIdMap.isEmpty() ? htmlBody : rewriteShepherdCvIds(htmlBody, cvIdMap);
+                    rewrittenBody = DocGenService.materialiseInlineHtmlImages(tmpl.Id, rewrittenBody);
                     if (rewrittenBody != htmlBody) {
                         bodyBytes = Blob.valueOf(rewrittenBody);
                     }
@@ -7957,6 +8290,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(ver, AccessLevel.SYSTEM_MODE);
+
+            // The watermark source (#313) was re-uploaded as an asset above, but
+            // under the SOURCE version's title. Re-title it to this version so
+            // getWatermarkSource / getWatermarkOpacity resolve it.
+            String watermarkSourceOriginalCvId = (String) bundle.get('watermarkSourceOriginalCvId');
+            if (String.isNotBlank(watermarkSourceOriginalCvId) && cvIdMap.containsKey(watermarkSourceOriginalCvId)) {
+                try {
+                    ContentVersion retitled = new ContentVersion(
+                        Id = (Id) cvIdMap.get(watermarkSourceOriginalCvId),
+                        Title = WATERMARK_SOURCE_PREFIX + ver.Id
+                    );
+                    /* code-analyzer-suppress ApexFlsViolation */
+                    Database.update(retitled, AccessLevel.SYSTEM_MODE);
+                } catch (Exception retitleFailed) {
+                    // Non-fatal — the baked watermark still imported; only the
+                    // adjustable-opacity affordance is lost.
+                }
+            }
 
             // 4. Extract images and pre-decompose — async (12 MB heap).
             DocGenService.enqueueTemplateImageExtraction(tmpl.Id, ver.Id);

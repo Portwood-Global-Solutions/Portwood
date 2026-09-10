@@ -83,6 +83,8 @@ import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions
 import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import saveWatermarkImage from '@salesforce/apex/DocGenController.saveWatermarkImage';
+import getWatermarkSource from '@salesforce/apex/DocGenController.getWatermarkSource';
+import getWatermarkOpacity from '@salesforce/apex/DocGenController.getWatermarkOpacity';
 import clearWatermarkImage from '@salesforce/apex/DocGenController.clearWatermarkImage';
 import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
@@ -5410,6 +5412,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
+                this._watermarkSourceFile = null;
+                // Seed the strength control from what's actually stored, so it
+                // doesn't report the default over an image at another value (#313).
+                if (this.editTemplateWatermarkCvId && active) {
+                    getWatermarkOpacity({ versionId: active.Id })
+                        .then((pct) => {
+                            if (pct) {
+                                this.watermarkOpacityPct = String(pct);
+                            }
+                        })
+                        .catch(() => {
+                            // Non-fatal — leave the control at its default.
+                        });
+                }
 
                 // Enrich with the body ContentVersion's number + filename so the table
                 // shows which underlying file each version points at (diagnostic).
@@ -5727,6 +5743,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false, contentVersionId: null });
             this.showToast('Success', 'Template Details saved.', 'success');
+            // The modal stays open after a details save; re-baseline the
+            // unsaved-changes snapshot so a following Close doesn't warn about
+            // edits that are now persisted on the record (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
@@ -5883,6 +5903,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.loadVersions(this.editTemplateId);
             }
             this.activeEditTab = this.editTemplateType === 'PDF' ? 'pdfFields' : 'document';
+            // "Save as New Version" deliberately leaves the modal open (authors
+            // want to preview/test the new version straight away). Re-baseline the
+            // unsaved-changes snapshot against the just-saved values so clicking
+            // Close afterwards doesn't falsely prompt to discard changes (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
@@ -15282,8 +15307,98 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         ].map((o) => ({ ...o, selected: o.value === this.watermarkOpacityPct }));
     }
 
-    handleWatermarkOpacityChange(event) {
+    /**
+     * The file the author picked, kept UNBAKED for the session (#313).
+     *
+     * Opacity is baked into the PNG's pixels at upload time, so once an image is
+     * stored the control had nothing left to act on — changing it did nothing,
+     * silently:
+     *
+     *   "When I try to update the Watermark percentage after I uploaded the
+     *    image it doesn't update this value. It works when I change it before I
+     *    upload the file."
+     *
+     * Keeping the original means a later change can re-bake from it. Re-baking
+     * the STORED image would compound the wash — 30% of an already-30% image is
+     * 9% — so the original is the only correct source.
+     */
+    _watermarkSourceFile = null;
+
+    async handleWatermarkOpacityChange(event) {
         this.watermarkOpacityPct = event.currentTarget.value;
+        // Nothing uploaded yet: the value is picked up when they do upload.
+        if (!this.editTemplateWatermarkCvId) {
+            return;
+        }
+        // Already re-baking a previous change — let it finish; the select is
+        // disabled in the template while isUploadingWatermark is true.
+        if (this.isUploadingWatermark) {
+            return;
+        }
+        await this._reuploadWatermarkAtCurrentOpacity();
+    }
+
+    /** The saved file name encodes the wash so the control can seed from it on
+     *  reload — "watermark-p50.png" (#313). */
+    _watermarkFileName(pct) {
+        return 'watermark-p' + (parseInt(pct, 10) || 100) + '.png';
+    }
+
+    /** base64 PNG -> Blob, without fetch() on a data: URI (awkward under the
+     *  managed-package security sandbox). _bakeWatermarkOpacity tolerates a
+     *  nameless Blob; the upload name is passed explicitly. Mirrors
+     *  docGenButton.base64ToBlob. */
+    _base64ToBlob(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: 'image/png' });
+    }
+
+    /** Re-bakes the retained original at the current setting and replaces the stored image. */
+    async _reuploadWatermarkAtCurrentOpacity() {
+        const active = (this.versions || []).find((v) => v[F.VerIsActive]);
+        if (!active) {
+            return;
+        }
+        this.isUploadingWatermark = true;
+        try {
+            const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
+            // In-session file first; otherwise the original persisted at upload
+            // time, which is what makes this work after a reload (#313).
+            let source = this._watermarkSourceFile;
+            if (!source) {
+                const stored = await getWatermarkSource({ versionId: active.Id });
+                if (!stored) {
+                    this.showToast(
+                        'Re-upload to change the wash',
+                        'This watermark was uploaded before Portwood started keeping the original, so the opacity is baked in. Upload the image again to apply ' +
+                            pct +
+                            '%.',
+                        'warning'
+                    );
+                    return;
+                }
+                source = this._base64ToBlob(stored);
+            }
+            const baked = await this._bakeWatermarkOpacity(source, pct);
+            const original = await this._bakeWatermarkOpacity(source, 100);
+            this.editTemplateWatermarkCvId = await saveWatermarkImage({
+                versionId: active.Id,
+                fileName: this._watermarkFileName(pct),
+                base64Data: baked.base64,
+                sourceBase64: original.base64
+            });
+            this.showToast('Watermark updated', 'Re-applied at ' + pct + '%.', 'success');
+        } catch (err) {
+            const msg =
+                err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Update failed';
+            this.showToast('Could not update the watermark', msg, 'error');
+        } finally {
+            this.isUploadingWatermark = false;
+        }
     }
 
     /** Redraws the image at the chosen opacity on a canvas → PNG base64.
@@ -15300,8 +15415,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 reader.onerror = () => reject(new Error('FileReader failed'));
                 reader.readAsDataURL(blobOrFile);
             });
+        const baseName = (file.name || 'watermark').replace(/\.[^.]+$/, '');
         if (pct >= 100) {
-            return { base64: await readAsBase64(file), fileName: file.name };
+            return { base64: await readAsBase64(file), fileName: baseName + '.png' };
         }
         const url = URL.createObjectURL(file);
         try {
@@ -15321,7 +15437,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const commaIdx = dataUrl.indexOf(',');
             return {
                 base64: dataUrl.substring(commaIdx + 1),
-                fileName: file.name.replace(/\.[^.]+$/, '') + '.png'
+                fileName: baseName + '.png'
             };
         } finally {
             URL.revokeObjectURL(url);
@@ -15335,6 +15451,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         if (!file.type || !file.type.startsWith('image/')) {
             this.showToast('Unsupported file', 'Please choose an image file (PNG, JPEG, GIF).', 'error');
+            event.target.value = '';
+            return;
+        }
+        // The save carries the baked image AND the unbaked source; both are
+        // base64 in the synchronous Apex heap. Keep watermarks small (#313).
+        if (file.size > 3 * 1024 * 1024) {
+            this.showToast(
+                'Image too large',
+                'Use a watermark image under 3 MB — a logo or stamp at screen resolution is plenty.',
+                'error'
+            );
             event.target.value = '';
             return;
         }
@@ -15352,12 +15479,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
             const baked = await this._bakeWatermarkOpacity(file, pct);
+            // Persist the UNBAKED original too, so the opacity stays adjustable in
+            // any later session — not just this one (#313).
+            const source = await this._bakeWatermarkOpacity(file, 100);
             const newCvId = await saveWatermarkImage({
                 versionId: active.Id,
-                fileName: baked.fileName,
-                base64Data: baked.base64
+                // Encode the wash into the name so the control seeds from it on
+                // reload rather than snapping to the default (#313).
+                fileName: this._watermarkFileName(pct),
+                base64Data: baked.base64,
+                sourceBase64: source.base64
             });
             this.editTemplateWatermarkCvId = newCvId;
+            // Retain the UNBAKED original so a later opacity change can re-bake
+            // from it rather than washing an already-washed image (#313).
+            this._watermarkSourceFile = file;
             this.showToast('Success', 'Watermark uploaded.', 'success');
         } catch (err) {
             const msg =
@@ -15378,6 +15514,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             await clearWatermarkImage({ versionId: active.Id });
             this.editTemplateWatermarkCvId = null;
+            this._watermarkSourceFile = null;
             this.showToast('Removed', 'Watermark cleared.', 'success');
         } catch (err) {
             const msg = err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Clear failed';

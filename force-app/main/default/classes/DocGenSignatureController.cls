@@ -1731,6 +1731,11 @@ public without sharing class DocGenSignatureController {
             }
         }
 
+        // #363 — a Word-authored hyperlink only holds an r:id; resolve it off the rels
+        // we already read here so the signed PDF keeps the clickable link the source
+        // template had. Every caller of this method feeds documentXml to convertToHtml.
+        documentXml = DocGenHtmlRenderer.resolveHyperlinkRelIds(documentXml, relsXml);
+
         return new Map<String, Object>{ 'documentXml' => documentXml, 'imagesByRelId' => imagesByRelId };
     }
 
@@ -2628,9 +2633,12 @@ public without sharing class DocGenSignatureController {
 
         // M2: publish the platform event so DocGenSignaturePdfTrigger enqueues the
         // finalizer (it gates on remaining==0 and Template__c) to produce the signed
-        // document + certificate PDF on the related record. The M1 flat-PDF path has no
-        // template to re-render, so it records audit + status only and never publishes.
-        if (snapshotBacked) {
+        // document + certificate PDF on the related record.
+        // Also publish for a NON-final signer on any path (#379): the trigger sends the
+        // "signer completed" notice and, on a Sequential request, the next signer's
+        // email. The M1 flat-PDF completion path still records audit + status only and
+        // never publishes — there is nothing to re-render.
+        if (snapshotBacked || !result.isComplete) {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
             EventBus.publish(pdfEvent);
@@ -2999,6 +3007,25 @@ public without sharing class DocGenSignatureController {
                 System.debug(
                     LoggingLevel.WARN,
                     'Portwood: composited signer completion email failed: ' + signerNotifEx.getMessage()
+                );
+            }
+        } else {
+            // Not the last signer. This client-composited path stores the PDF directly
+            // and otherwise never publishes DocGen_Signature_PDF__e, so
+            // DocGenSignaturePdfTrigger never runs for it: on a Sequential request the
+            // next signer is never emailed and the envelope stalls at "In Progress"
+            // (#379), and the sender never gets the "signer completed" notice. Hand off
+            // to the trigger exactly as saveSignature does — it gates PDF generation on
+            // remaining == 0, so an intermediate signer only triggers notifications.
+            try {
+                DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
+                pdfEvent.Request_Id__c = signer.Signature_Request__c;
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                EventBus.publish(pdfEvent);
+            } catch (Exception seqEx) {
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: composited sequential hand-off publish failed: ' + seqEx.getMessage()
                 );
             }
         }

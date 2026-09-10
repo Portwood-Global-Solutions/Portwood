@@ -3477,8 +3477,9 @@
                                                 >
                                                 <select
                                                     class="dg-page-select"
-                                                    title="Opacity is baked into the image on upload so the PDF matches exactly"
+                                                    title="Applied to the image and re-applied when you change it — the PDF matches exactly"
                                                     onchange={handleWatermarkOpacityChange}
+                                                    disabled={isUploadingWatermark}
                                                 >
                                                     <template for:each={watermarkOpacityOptions} for:item="opt">
                                                         <option
@@ -4007,8 +4008,9 @@
                                             <label class="slds-form-element__label">Watermark strength</label>
                                             <select
                                                 class="dg-page-select"
-                                                title="Opacity is baked into the image on upload so the PDF matches exactly"
+                                                title="Applied to the image and re-applied when you change it — the PDF matches exactly"
                                                 onchange={handleWatermarkOpacityChange}
+                                                disabled={isUploadingWatermark}
                                             >
                                                 <template for:each={watermarkOpacityOptions} for:item="opt">
                                                     <option key={opt.value} value={opt.value} selected={opt.selected}>
