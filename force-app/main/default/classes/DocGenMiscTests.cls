@@ -6366,7 +6366,11 @@ private class DocGenMiscTests {
                 '<notarealtag>hello</notarealtag>',
                 '<script>alert(1)</script>',
                 '<style>body{color:red}</style>',
-                '<iframe src="x"></iframe>'
+                '<iframe src="x"></iframe>',
+                'set the <threshold> below the <transform> value',
+                'the <link> between the two <list> entries',
+                'wrap it in <brackets> not <parens>',
+                'a <point> in the <plane>'
             }
         ) {
             System.assert(!DocGenService.looksLikeRichTextHtml(plain), 'should stay plain text: ' + plain);

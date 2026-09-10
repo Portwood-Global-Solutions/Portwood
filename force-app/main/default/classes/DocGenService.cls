@@ -6616,11 +6616,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * (passed through to the renderer for HTML templates, converted to runs for
      * DOCX) rather than plain text (XML-escaped so it prints literally).
      *
-     * The test is "does it contain a recognised HTML element" — a known tag name
-     * that opens (`<td>`, `<td ...>`), closes (`</td>`) or self-closes (`<br/>`).
-     * It is anchored to tag names, and to the `<b>` / `<b ` forms for the
-     * ambiguous single letters, so prose such as `price < cost` or
-     * `a < b and c > d` is NOT mistaken for markup and stays escaped.
+     * The test is "does it contain a recognised HTML element". Distinctive
+     * multi-character tag names (`<table`, `<div`, `<blockquote`, …) are matched
+     * as a plain substring. Short or ambiguous names (`<p`, `<b`, `<li`, `<tr`,
+     * `<th`, `<pre`, `<hr`, `<h1`-`<h6`, …) are matched only when a tag boundary
+     * (`>`, `/`, or whitespace) follows the name immediately — so prose such as
+     * `the <link> between`, `pressure < 5`, `a < b and c > d`, or an
+     * angle-bracketed word like `<threshold>` is NOT mistaken for markup and
+     * stays escaped. Without that boundary check `<li` matches `<link>`, `<tr`
+     * matches `<transform>`, `<th` matches `<threshold>` and the bracketed word
+     * silently vanishes from the rendered document.
      *
      * Presentational tags only. `<script>`, `<style>`, `<iframe>`, `<object>`,
      * `<form>`, `<input>`, `<link>`, `<meta>` are deliberately absent — a value
@@ -6633,47 +6638,81 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * `<table>` / `<h1>`-only values used to miss the old hand-list and render as
      * raw markup even though the renderer handles them.
      */
+    private static final Set<String> RICH_TEXT_BOUNDARY_TAGS = new Set<String>{
+        'p',
+        'br',
+        'b',
+        'i',
+        'u',
+        'a',
+        'em',
+        'ul',
+        'ol',
+        'li',
+        'dl',
+        'pre',
+        'hr',
+        'tr',
+        'td',
+        'th',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6'
+    };
+
     @TestVisible
     private static Boolean looksLikeRichTextHtml(String s) {
         if (String.isBlank(s) || !s.contains('<') || !s.contains('>')) {
             return false;
         }
         String l = s.toLowerCase();
-        return l.contains('<p') ||
+        if (
             l.contains('<div') ||
             l.contains('<span') ||
-            l.contains('<br') ||
             l.contains('<img') ||
-            l.contains('<b>') ||
-            l.contains('<b ') ||
-            l.contains('<i>') ||
-            l.contains('<i ') ||
-            l.contains('<u>') ||
             l.contains('<strong') ||
-            l.contains('<em') ||
-            l.contains('<ul') ||
-            l.contains('<ol') ||
-            l.contains('<li') ||
-            l.contains('<dl') ||
             l.contains('<table') ||
             l.contains('<thead') ||
             l.contains('<tbody') ||
             l.contains('<tfoot') ||
-            l.contains('<tr') ||
-            l.contains('<td') ||
-            l.contains('<th') ||
             l.contains('<caption') ||
-            l.contains('<h1') ||
-            l.contains('<h2') ||
-            l.contains('<h3') ||
-            l.contains('<h4') ||
-            l.contains('<h5') ||
-            l.contains('<h6') ||
-            l.contains('<a>') ||
-            l.contains('<a ') ||
-            l.contains('<blockquote') ||
-            l.contains('<pre') ||
-            l.contains('<hr');
+            l.contains('<blockquote')
+        ) {
+            return true;
+        }
+        for (String name : RICH_TEXT_BOUNDARY_TAGS) {
+            if (htmlTagOpens(l, name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when `lower` (already lower-cased) contains an opening or self-closing
+     * tag for `name`: the substring `<name` followed immediately by a tag
+     * boundary — `>`, `/`, or whitespace. Anchored so an angle-bracketed word in
+     * prose (`<link>`, `<transform>`, `<threshold>`) whose prefix happens to
+     * collide with a short tag name is not treated as that tag.
+     */
+    private static Boolean htmlTagOpens(String lower, String name) {
+        String needle = '<' + name;
+        Integer i = lower.indexOf(needle);
+        while (i != -1) {
+            Integer after = i + needle.length();
+            if (after >= lower.length()) {
+                return false;
+            }
+            String c = lower.substring(after, after + 1);
+            if (c == '>' || c == '/' || c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+                return true;
+            }
+            i = lower.indexOf(needle, i + 1);
+        }
+        return false;
     }
 
     /**

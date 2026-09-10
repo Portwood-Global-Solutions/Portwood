@@ -297,6 +297,26 @@ try {
     System.debug('RICHTEXT PROSE ANGLE BRACKETS ESCAPED: FAIL — ' + e.getMessage());
 }
 
+// An angle-bracketed word whose prefix collides with a short tag name
+// (<li> vs <link>, <tr> vs <transform>, <th> vs <threshold>) must NOT be
+// treated as HTML — the tag-name match is boundary-anchored.
+try {
+    r = DocGenService.processXmlForTest(
+        '<w:t>{F}</w:t>',
+        new Map<String, Object>{ 'F' => 'set the <threshold> and <transform> in the <link> block' }
+    );
+    if (r.contains('&lt;threshold&gt;') && r.contains('&lt;transform&gt;') && r.contains('&lt;link&gt;')) {
+        pass++;
+        System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: PASS — ' + r);
+    } else {
+        fail++;
+        System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: FAIL — ' + r);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('RICHTEXT TAG-PREFIX PROSE ESCAPED: FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')
