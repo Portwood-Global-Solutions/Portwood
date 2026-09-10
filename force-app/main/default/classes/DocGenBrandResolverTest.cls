@@ -53,9 +53,9 @@ private class DocGenBrandResolverTest {
     static void resolveBrandForRequest_templateWithBrand_returnsBrandId() {
         Account acc = new Account(Name = 'Brand Resolver Test Acct');
         insert acc;
-        DocGen_Brand__c brand = new DocGen_Brand__c(Name = 'Temple View Capital', Is_Active__c = true);
+        DocGen_Brand__c brand = new DocGen_Brand__c(Name = 'Acme Advisors', Is_Active__c = true);
         insert brand;
-        DocGen_Template__c tmpl = newTemplate('TVC Template', brand.Id);
+        DocGen_Template__c tmpl = newTemplate('Acme Template', brand.Id);
         DocGen_Signature_Request__c req = newRequest(tmpl.Id, acc.Id);
 
         DocGenBrandResolver.clearCache();

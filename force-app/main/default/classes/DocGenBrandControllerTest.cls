@@ -34,13 +34,13 @@ private class DocGenBrandControllerTest {
 
     private static Map<String, Object> newDto() {
         return new Map<String, Object>{
-            'name' => 'Temple View Capital',
+            'name' => 'Acme Advisors',
             'owaId' => '0D2000000000001AAA',
             'brandColor' => '#1E3A5F',
-            'logoUrl' => 'https://example.com/tvc-logo.png',
-            'logoAssetKey' => 'tvc-logo',
-            'companyName' => 'Temple View Capital',
-            'footerText' => 'TVC Footer',
+            'logoUrl' => 'https://example.com/acme-logo.png',
+            'logoAssetKey' => 'acme-logo',
+            'companyName' => 'Acme Advisors',
+            'footerText' => 'Acme Footer',
             'isActive' => true
         };
     }
@@ -49,10 +49,10 @@ private class DocGenBrandControllerTest {
     @IsTest
     static void getBrands_returnsActiveAndInactiveWithFields() {
         insert new DocGen_Brand__c(
-            Name = 'Temple View Capital',
+            Name = 'Acme Advisors',
             OWA_Id__c = '0D2000000000001AAA',
             Brand_Color__c = '#1E3A5F',
-            Company_Name__c = 'Temple View Capital',
+            Company_Name__c = 'Acme Advisors',
             Is_Active__c = true
         );
         insert new DocGen_Brand__c(Name = 'Retired Brand', Is_Active__c = false);
@@ -66,8 +66,8 @@ private class DocGenBrandControllerTest {
         for (DocGenBrandController.BrandDto d : results) {
             byName.put(d.name, d);
         }
-        System.assert(byName.get('Temple View Capital').isActive, 'TVC should be active');
-        System.assertEquals('#1E3A5F', byName.get('Temple View Capital').brandColor);
+        System.assert(byName.get('Acme Advisors').isActive, 'the active brand should be active');
+        System.assertEquals('#1E3A5F', byName.get('Acme Advisors').brandColor);
         System.assertEquals(false, byName.get('Retired Brand').isActive, 'retired brand should be inactive');
     }
 
@@ -104,13 +104,13 @@ private class DocGenBrandControllerTest {
             FROM DocGen_Brand__c
             WHERE Id = :newId
         ];
-        System.assertEquals('Temple View Capital', saved.Name);
+        System.assertEquals('Acme Advisors', saved.Name);
         System.assertEquals('0D2000000000001AAA', saved.OWA_Id__c);
         System.assertEquals('#1E3A5F', saved.Brand_Color__c);
-        System.assertEquals('https://example.com/tvc-logo.png', saved.Logo_Url__c);
-        System.assertEquals('tvc-logo', saved.Logo_Asset_Key__c);
-        System.assertEquals('Temple View Capital', saved.Company_Name__c);
-        System.assertEquals('TVC Footer', saved.Footer_Text__c);
+        System.assertEquals('https://example.com/acme-logo.png', saved.Logo_Url__c);
+        System.assertEquals('acme-logo', saved.Logo_Asset_Key__c);
+        System.assertEquals('Acme Advisors', saved.Company_Name__c);
+        System.assertEquals('Acme Footer', saved.Footer_Text__c);
         System.assertEquals(true, saved.Is_Active__c);
     }
 
