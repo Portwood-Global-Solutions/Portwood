@@ -4761,23 +4761,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         }
                         // Rich text HTML — convert to DOCX XML preserving formatting, images, and paragraphs
                         // PowerPoint: strip HTML tags and output plain text (Word XML corrupts PPTX)
-                        if (
-                            strVal.contains('<') &&
-                            strVal.contains('>') &&
-                            (strVal.containsIgnoreCase('<p') ||
-                            strVal.containsIgnoreCase('<div') ||
-                            strVal.containsIgnoreCase('<span') ||
-                            strVal.containsIgnoreCase('<br') ||
-                            strVal.containsIgnoreCase('<img') ||
-                            strVal.containsIgnoreCase('<b>') ||
-                            strVal.containsIgnoreCase('<i>') ||
-                            strVal.containsIgnoreCase('<u>') ||
-                            strVal.containsIgnoreCase('<strong') ||
-                            strVal.containsIgnoreCase('<em') ||
-                            strVal.containsIgnoreCase('<ul') ||
-                            strVal.containsIgnoreCase('<ol') ||
-                            strVal.containsIgnoreCase('<li'))
-                        ) {
+                        // #399: table/heading-only values are rich text too — the gate lives in
+                        // looksLikeRichTextHtml so every caller agrees on what counts as markup.
+                        if (looksLikeRichTextHtml(strVal)) {
                             if (currentTemplateType == 'PowerPoint' || currentTemplateType == 'Excel') {
                                 // Strip HTML tags for plain text in PPTX/XLSX — DrawingML/
                                 // WordprocessingML rich-text runs don't exist in these parts
@@ -6799,6 +6785,110 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         String stripped = s.replaceAll('(?i)<[^>]+>', '').replace('&nbsp;', '').replace('&#160;', '').trim();
         return String.isBlank(stripped);
+    }
+
+    /**
+     * Returns true when a merge-field value should be treated as rich-text HTML
+     * (passed through to the renderer for HTML templates, converted to runs for
+     * DOCX) rather than plain text (XML-escaped so it prints literally).
+     *
+     * The test is "does it contain a recognised HTML element". Distinctive
+     * multi-character tag names (`<table`, `<div`, `<blockquote`, …) are matched
+     * as a plain substring. Short or ambiguous names (`<p`, `<b`, `<li`, `<tr`,
+     * `<th`, `<pre`, `<hr`, `<h1`-`<h6`, …) are matched only when a tag boundary
+     * (`>`, `/`, or whitespace) follows the name immediately — so prose such as
+     * `the <link> between`, `pressure < 5`, `a < b and c > d`, or an
+     * angle-bracketed word like `<threshold>` is NOT mistaken for markup and
+     * stays escaped. Without that boundary check `<li` matches `<link>`, `<tr`
+     * matches `<transform>`, `<th` matches `<threshold>` and the bracketed word
+     * silently vanishes from the rendered document.
+     *
+     * Presentational tags only. `<script>`, `<style>`, `<iframe>`, `<object>`,
+     * `<form>`, `<input>`, `<link>`, `<meta>` are deliberately absent — a value
+     * containing one keeps getting escaped (defence in depth for the HTML/PDF
+     * sink). Do not add them.
+     *
+     * A plain substring scan, not a regex: this runs once per merge tag — inside
+     * a `{#Loop}` body that is once per child row — and a backtracking pattern on
+     * a 32 KB long-text value would be a CPU-limit risk on that path. Issue #399:
+     * `<table>` / `<h1>`-only values used to miss the old hand-list and render as
+     * raw markup even though the renderer handles them.
+     */
+    private static final Set<String> RICH_TEXT_BOUNDARY_TAGS = new Set<String>{
+        'p',
+        'br',
+        'b',
+        'i',
+        'u',
+        'a',
+        'em',
+        'ul',
+        'ol',
+        'li',
+        'dl',
+        'pre',
+        'hr',
+        'tr',
+        'td',
+        'th',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6'
+    };
+
+    @TestVisible
+    private static Boolean looksLikeRichTextHtml(String s) {
+        if (String.isBlank(s) || !s.contains('<') || !s.contains('>')) {
+            return false;
+        }
+        String l = s.toLowerCase();
+        if (
+            l.contains('<div') ||
+            l.contains('<span') ||
+            l.contains('<img') ||
+            l.contains('<strong') ||
+            l.contains('<table') ||
+            l.contains('<thead') ||
+            l.contains('<tbody') ||
+            l.contains('<tfoot') ||
+            l.contains('<caption') ||
+            l.contains('<blockquote')
+        ) {
+            return true;
+        }
+        for (String name : RICH_TEXT_BOUNDARY_TAGS) {
+            if (htmlTagOpens(l, name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when `lower` (already lower-cased) contains an opening or self-closing
+     * tag for `name`: the substring `<name` followed immediately by a tag
+     * boundary — `>`, `/`, or whitespace. Anchored so an angle-bracketed word in
+     * prose (`<link>`, `<transform>`, `<threshold>`) whose prefix happens to
+     * collide with a short tag name is not treated as that tag.
+     */
+    private static Boolean htmlTagOpens(String lower, String name) {
+        String needle = '<' + name;
+        Integer i = lower.indexOf(needle);
+        while (i != -1) {
+            Integer after = i + needle.length();
+            if (after >= lower.length()) {
+                return false;
+            }
+            String c = lower.substring(after, after + 1);
+            if (c == '>' || c == '/' || c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+                return true;
+            }
+            i = lower.indexOf(needle, i + 1);
+        }
+        return false;
     }
 
     /**

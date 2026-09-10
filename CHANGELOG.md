@@ -96,6 +96,20 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Rich-text field values that are a bare `<table>` or `<h1>` now render instead of
+  printing as raw markup (#399).** `processXml`'s "is this HTML or plain text?" gate
+  checked a hand-maintained list of tag substrings (`<p`, `<div`, `<br`, …) that never
+  included the table or heading tags. A rich-text / long-text field whose value had no
+  `<p>`/`<div>` wrapper — common when the value comes from an integration rather than the
+  Salesforce Rich Text editor — was classified as plain text and XML-escaped, so the PDF
+  showed `<table>...</table>` literally. The gate moved into `looksLikeRichTextHtml`,
+  which recognises the table family, `<h1>`–`<h6>`, `<a>`, `<blockquote>`, `<pre>` and
+  `<hr>` as well. `<script>`/`<style>`/`<iframe>` and friends are deliberately still
+  escaped. HTML templates now render the table (the renderer always supported it — the
+  value just never reached it as HTML); `<br>` was already handled and is unchanged. In
+  Word, PowerPoint and Excel output these values now come through as flattened text
+  rather than raw tags; an HTML table is not reconstructed as a native table in those
+  formats.
 - **Word-authored hyperlinks are clickable in the PDF again (#363).** A link inserted in
   Word (**Insert → Link**) came out blue and underlined and did nothing — the styling
   survived the DOCX→HTML conversion and the URL did not. Word keeps the target in
