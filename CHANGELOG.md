@@ -2,8 +2,8 @@
 
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
-Released 2026-09-11 · `04t… — assigned at release` · ancestor 3.56.0 · ~2,111 tests, 79%
-coverage
+Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
+79% coverage
 
 One org can now run two entities without their signature emails crossing; Combined-PDF
 bulk output can be padded for double-sided printing; and a batch of uncatchable
