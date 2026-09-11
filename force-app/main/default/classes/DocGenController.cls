@@ -8126,8 +8126,46 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     tmpl.API_Name__c = importedApiName;
                 }
             }
+            // Guard + SYSTEM_MODE, not raw USER_MODE: the package-build @TestSetup
+            // context doesn't propagate permset-granted FLS for a newly-added field
+            // within the same transaction, so USER_MODE strips it and the insert
+            // throws "fields being inaccessible" with no Test.isRunningTest() escape
+            // hatch (see DocGenFlsGuard's class doc for the same failure class).
+            DocGenFlsGuard.assertCreateable(
+                tmpl,
+                new Set<String>{
+                    'Name',
+                    'Base_Object_API__c',
+                    'Type__c',
+                    'Output_Format__c',
+                    'Category__c',
+                    'Description__c',
+                    'Query_Config__c',
+                    'Document_Title_Format__c',
+                    'Is_Default__c',
+                    'Is_Active__c',
+                    'Header_Html__c',
+                    'Footer_Html__c',
+                    'Test_Record_Id__c',
+                    'Sort_Order__c',
+                    'Lock_Output_Format__c',
+                    'Specific_Record_Ids__c',
+                    'Required_Permission_Sets__c',
+                    'Record_Filter__c',
+                    'Page_Orientation__c',
+                    'Page_Size__c',
+                    'Page_Margins__c',
+                    'Custom_Margins__c',
+                    'Signer_Verification__c',
+                    'Prefill_Signer_Email__c',
+                    'Hide_Signer_Decline__c',
+                    'Default_Email_Message__c',
+                    'Form_Fields_Config__c',
+                    'API_Name__c'
+                }
+            );
             /* code-analyzer-suppress ApexFlsViolation */
-            Database.insert(tmpl, AccessLevel.USER_MODE);
+            Database.insert(tmpl, AccessLevel.SYSTEM_MODE);
 
             // 1.5. Re-upload inline-image / watermark assets and build the
             // source-org → target-org CV ID map. Done BEFORE the template body
@@ -8189,8 +8227,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 if (h1 != h0 || f1 != f0) {
                     tmpl.Header_Html__c = h1;
                     tmpl.Footer_Html__c = f1;
+                    // Same USER_MODE-in-package-build issue as the insert above.
+                    DocGenFlsGuard.assertUpdateable(tmpl, new Set<String>{ 'Header_Html__c', 'Footer_Html__c' });
                     /* code-analyzer-suppress ApexFlsViolation */
-                    Database.update(tmpl, AccessLevel.USER_MODE);
+                    Database.update(tmpl, AccessLevel.SYSTEM_MODE);
                 }
             }
 
