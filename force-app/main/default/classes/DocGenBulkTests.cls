@@ -787,6 +787,14 @@ private class DocGenBulkTests {
         return TestDataFactory.buildSimpleDocXml();
     }
 
+    private static Integer countJobLinksForTitle(Id jobId, String title) {
+        return [
+            SELECT COUNT()
+            FROM ContentDocumentLink
+            WHERE LinkedEntityId = :jobId AND ContentDocument.Title = :title
+        ];
+    }
+
     private static DocGen_Template__c prepareAcroFormBulkTemplate() {
         DocGen_Template__c t = TestDataFactory.getTestTemplate();
         t.Type__c = 'PDF';
@@ -928,6 +936,79 @@ private class DocGenBulkTests {
         }
     }
 
+    @IsTest
+    static void batchCombinesJobConditionWithTemplateRecordFilter() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c t = new DocGen_Template__c(
+                Name = 'Filter Combine Template',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name',
+                Type__c = 'Word',
+                Output_Format__c = 'Native',
+                Record_Filter__c = 'Industry = \'Technology\''
+            );
+            Database.insert(t, AccessLevel.SYSTEM_MODE);
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = t.Id,
+                Query_Condition__c = 'Name != null',
+                Status__c = 'Queued'
+            );
+            Database.insert(job, AccessLevel.SYSTEM_MODE);
+
+            DocGenBatch batch = new DocGenBatch(job.Id);
+
+            System.assertEquals(
+                '(Name != null) AND (Industry = \'Technology\')',
+                batch.andTemplateFilter('Name != null'),
+                'Bulk jobs must preserve both the user filter and template audience filter.'
+            );
+            System.assertEquals(
+                '(Industry = \'Technology\')',
+                batch.andTemplateFilter(null),
+                'Template audience filter should still apply when the job filter is blank.'
+            );
+        }
+    }
+
+    @IsTest
+    static void individualBulkLinksGeneratedFilesToJob() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c t = new DocGen_Template__c(
+                Name = 'Individual Job Link Template',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name',
+                Type__c = 'Word',
+                Output_Format__c = 'Native'
+            );
+            insert t;
+
+            createValidDocxForTemplate(t.Id, buildSimpleDocXml());
+
+            Account a = new Account(Name = 'Job Link Individual Account');
+            insert a;
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = t.Id,
+                Query_Condition__c = 'Name = \'Job Link Individual Account\'',
+                Status__c = 'Queued'
+            );
+            Database.insert(job, AccessLevel.SYSTEM_MODE);
+
+            Test.startTest();
+            Database.executeBatch(new DocGenBatch(job.Id), 1);
+            Test.stopTest();
+
+            System.assertEquals(
+                1,
+                countJobLinksForTitle(job.Id, 'Job Link Individual Account'),
+                'Individual Files bulk output must also be attached to the parent job.'
+            );
+        }
+    }
+
     // =========================================================================
     // DocGenBatch — merge mode (mergePdf=true)
     // =========================================================================
@@ -973,6 +1054,43 @@ private class DocGenBulkTests {
             // If records generated successfully, status will be 'Merging' (chained DocGenMergeJob)
             // If they failed, status will be 'Failed' or 'Completed with Errors'
             System.assertNotEquals('Queued', updated.Status__c, 'Status should have progressed');
+        }
+    }
+
+    @IsTest
+    static void combinedPlusIndividualLinksIndividualFilesToJob() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c t = new DocGen_Template__c(
+                Name = 'Both Mode Job Link Template',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name',
+                Type__c = 'Word',
+                Output_Format__c = 'PDF'
+            );
+            insert t;
+
+            createValidDocxForTemplate(t.Id, buildSimpleDocXml());
+
+            Account a = new Account(Name = 'Job Link Both Account');
+            insert a;
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = t.Id,
+                Query_Condition__c = 'Name = \'Job Link Both Account\'',
+                Status__c = 'Queued'
+            );
+            Database.insert(job, AccessLevel.SYSTEM_MODE);
+
+            Test.startTest();
+            Database.executeBatch(new DocGenBatch(job.Id, true, false), 1);
+            Test.stopTest();
+
+            System.assertEquals(
+                1,
+                countJobLinksForTitle(job.Id, 'Job Link Both Account'),
+                'Combined + Individual must attach the per-record file to the parent job as well as the merged packet.'
+            );
         }
     }
 
