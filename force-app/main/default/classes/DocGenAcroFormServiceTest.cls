@@ -27,6 +27,37 @@ private class DocGenAcroFormServiceTest {
     }
 
     @IsTest
+    static void fillsAccentedTextFieldsWithPdfDocEncoding() {
+        Blob pdf = Blob.valueOf(simpleAcroFormPdf());
+        String arvore = 'Poda de ' + String.fromCharArray(new List<Integer>{ 193 }) + 'rvore';
+        String solicitacao = 'Solicita' +
+            String.fromCharArray(new List<Integer>{ 231 }) +
+            String.fromCharArray(new List<Integer>{ 227 }) +
+            'o';
+        Map<String, Object> data = new Map<String, Object>{
+            'Name' => arvore,
+            'Owner' => new Map<String, Object>{ 'Email' => solicitacao }
+        };
+
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(pdf, data);
+        String filledHex = EncodingUtil.convertToHex(filled).toLowerCase();
+
+        System.assert(filled.size() > pdf.size(), 'Accented values should still append an incremental update');
+        System.assert(
+            filledHex.contains(
+                EncodingUtil.convertToHex(Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>'))
+                    .toLowerCase()
+            ),
+            'Accented field value should be written as UTF-16BE PDF text, not UTF-8 text'
+        );
+        System.assert(
+            filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('00E7')).toLowerCase()) &&
+                filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('00E3')).toLowerCase()),
+            'Portuguese cedilla/tilde characters should be preserved in the PDF field value'
+        );
+    }
+
+    @IsTest
     static void returnsOriginalWhenNoMappedFieldsResolve() {
         Blob pdf = Blob.valueOf(simpleAcroFormPdf());
 
@@ -64,6 +95,17 @@ private class DocGenAcroFormServiceTest {
     }
 
     @IsTest
+    static void appendsXrefStreamWhenSourceUsesXrefStream() {
+        Blob pdf = Blob.valueOf(xrefStreamMarkedAcroFormPdf());
+
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(pdf, new Map<String, Object>{ 'Name' => 'Stream Ada' });
+
+        System.assert(filled.size() > pdf.size(), 'XRef-stream PDFs should still receive an incremental update');
+        System.assert(blobContains(filled, '/Type /XRef'), 'Incremental update should use an xref stream');
+        System.assert(blobContains(filled, '/V (Stream Ada)'), 'Field should be filled before xref-stream append');
+    }
+
+    @IsTest
     static void updatesXfaDatasetNodes() {
         String selfClosing = '<xfa:datasets><f1_01\n/><f1_02/></xfa:datasets>';
         String updatedSelfClosing = DocGenAcroFormService.withXfaFieldValue(selfClosing, 'f1_01', 'Ada & Co <Pilot>');
@@ -77,6 +119,14 @@ private class DocGenAcroFormServiceTest {
         String updatedPaired = DocGenAcroFormService.withXfaFieldValue(paired, 'f1_01', 'New');
 
         System.assert(updatedPaired.contains('<f1_01>New</f1_01>'), 'Existing XFA data node value should be replaced');
+
+        String accented = 'Poda de ' + String.fromCharArray(new List<Integer>{ 193 }) + 'rvore';
+        String updatedAccented = DocGenAcroFormService.withXfaFieldValue(paired, 'f1_01', accented);
+
+        System.assert(
+            updatedAccented.contains('<f1_01>Poda de &#193;rvore</f1_01>'),
+            'XFA XML should use numeric character references for accented values'
+        );
     }
 
     @IsTest
@@ -106,18 +156,75 @@ private class DocGenAcroFormServiceTest {
         );
 
         Blob pdf = Blob.valueOf(snapshotBackedXfaPdf());
+        String arvore = 'Poda de ' + String.fromCharArray(new List<Integer>{ 193 }) + 'rvore';
         Blob filled = DocGenAcroFormService.fillPdfTemplate(
             pdf,
-            new Map<String, Object>{ 'Name' => 'Ada Snapshot' },
+            new Map<String, Object>{ 'Name' => arvore },
+            template.Id
+        );
+        String filledHex = EncodingUtil.convertToHex(filled).toLowerCase();
+
+        System.assert(filled.size() > pdf.size(), 'Saved snapshot should drive an incremental PDF update');
+        System.assert(
+            filledHex.contains(
+                EncodingUtil.convertToHex(Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>'))
+                    .toLowerCase()
+            ),
+            'Snapshot-mapped field value should be stored as UTF-16BE PDF text'
+        );
+        System.assert(
+            filledHex.contains(
+                EncodingUtil.convertToHex(Blob.valueOf(' Td <506F646120646520C172766F7265> Tj ')).toLowerCase()
+            ),
+            'Visible appearance text should use single-byte PDF font bytes for Latin accents'
+        );
+        System.assert(
+            filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('<f1_01>')).toLowerCase()),
+            'XFA datasets packet should be updated alongside AcroForm value'
+        );
+        System.assert(
+            filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('Poda de &#193;rvore')).toLowerCase()),
+            'XFA datasets packet should avoid raw UTF-8 accented bytes'
+        );
+    }
+
+    @IsTest
+    static void fillsSnapshotWithSeparateWidgetsAndButtonAppearances() {
+        DocGen_Template__c template = new DocGen_Template__c(
+            Name = 'PDF Widget Snapshot Render Test',
+            Type__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name,Approved__c'
+        );
+        insert template;
+
+        DocGen_Template_Version__c version = new DocGen_Template_Version__c(
+            Template__c = template.Id,
+            Type__c = 'PDF',
+            Output_Format__c = 'PDF',
+            Is_Active__c = true
+        );
+        insert version;
+
+        insert new ContentVersion(
+            Title = 'docgen_tmpl_pdf_' + String.valueOf(version.Id) + '_acroform',
+            PathOnClient = 'snapshot.json',
+            VersionData = Blob.valueOf(widgetSnapshotJson()),
+            IsMajorVersion = true
+        );
+
+        Blob pdf = Blob.valueOf(widgetSnapshotPdf());
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(
+            pdf,
+            new Map<String, Object>{ 'Name' => 'Widget Ada', 'Approved__c' => true },
             template.Id
         );
 
-        System.assert(filled.size() > pdf.size(), 'Saved snapshot should drive an incremental PDF update');
-        System.assert(blobContains(filled, '/V (Ada Snapshot)'), 'Snapshot-mapped field should receive a value');
-        System.assert(
-            blobContains(filled, '<f1_01>Ada Snapshot</f1_01>'),
-            'XFA datasets packet should be updated alongside AcroForm value'
-        );
+        System.assert(filled.size() > pdf.size(), 'Widget snapshot should append an incremental update');
+        System.assert(blobContains(filled, '/V (Widget Ada)'), 'Parent text field should receive the value');
+        System.assert(blobContains(filled, '/AS /Yes'), 'Button widget should use the checked appearance state');
+        System.assert(blobContains(filled, '/AP <</N <<'), 'Widgets should receive generated normal appearances');
     }
 
     @IsTest
@@ -198,6 +305,19 @@ private class DocGenAcroFormServiceTest {
             '0000000184 00000 n \n' +
             '0000000281 00000 n \n' +
             '0000000357 00000 n \n' +
+            'trailer\n<< /Size 7 /Root 1 0 R >>\n' +
+            'startxref\n0\n' +
+            '%%EOF\n';
+    }
+
+    private static String xrefStreamMarkedAcroFormPdf() {
+        return '%PDF-1.5\n' +
+            '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +
+            '2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n' +
+            '3 0 obj\n<< /Fields [5 0 R] >>\nendobj\n' +
+            '4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [5 0 R] >>\nendobj\n' +
+            '5 0 obj\n<< /FT /Tx /T (Name) /Subtype /Widget /Rect [10 10 200 30] >>\nendobj\n' +
+            '6 0 obj\n<< /Type /XRef /Length 0 >>\nstream\n\nendstream\nendobj\n' +
             'trailer\n<< /Size 7 /Root 1 0 R >>\n' +
             'startxref\n0\n' +
             '%%EOF\n';
@@ -296,6 +416,64 @@ private class DocGenAcroFormServiceTest {
                         'name' => 'datasets',
                         'objectNumber' => 7,
                         'decodedStream' => '<xfa:datasets><f1_01/></xfa:datasets>'
+                    }
+                }
+            }
+        );
+    }
+
+    private static String widgetSnapshotPdf() {
+        return '%PDF-1.7\n' +
+            '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +
+            '2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n' +
+            '3 0 obj\n<< /Fields [5 0 R 8 0 R] /DA (/Helv 10 Tf 0 g) >>\nendobj\n' +
+            '4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [6 0 R 8 0 R] >>\nendobj\n' +
+            '5 0 obj\n<< /FT /Tx /T (Name) /Kids [6 0 R] >>\nendobj\n' +
+            '6 0 obj\n<< /Subtype /Widget /Parent 5 0 R /Rect [10 10 210 35] >>\nendobj\n' +
+            '8 0 obj\n<< /FT /Btn /T (Approved__c) /Subtype /Widget /Rect [10 45 30 65] /AP << /N << /Off 9 0 R /Yes 10 0 R >> >> /V /Off /AS /Off >>\nendobj\n' +
+            '9 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n' +
+            '10 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n' +
+            'trailer\n<< /Size 11 /Root 1 0 R >>\n' +
+            'startxref\n0\n' +
+            '%%EOF\n';
+    }
+
+    private static String widgetSnapshotJson() {
+        return JSON.serialize(
+            new Map<String, Object>{
+                'version' => 1,
+                'rootObjectNumber' => 1,
+                'rootBody' => '<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>',
+                'acroFormObjectNumber' => 3,
+                'acroFormBody' => '<< /Fields [5 0 R 8 0 R] /DA (/Helv 10 Tf 0 g) >>',
+                'size' => 11,
+                'fields' => new List<Object>{
+                    new Map<String, Object>{
+                        'objectNumber' => 5,
+                        'valueObjectNumber' => 5,
+                        'widgetObjectNumber' => 6,
+                        'body' => '<< /FT /Tx /T (Name) /Kids [6 0 R] >>',
+                        'widgetBody' => '<< /Subtype /Widget /Parent 5 0 R /Rect [10 10 210 35] >>',
+                        'name' => 'Name',
+                        'partialName' => 'Name',
+                        'fieldType' => 'Tx',
+                        'mappedPath' => 'Name'
+                    },
+                    new Map<String, Object>{
+                        'objectNumber' => 8,
+                        'body' => '<< /FT /Btn /T (Approved__c) /Subtype /Widget /Rect [10 45 30 65] /AP << /N << /Off 9 0 R /Yes 10 0 R >> >> /V /Off /AS /Off >>',
+                        'name' => 'Approved__c',
+                        'partialName' => 'Approved__c',
+                        'fieldType' => 'Btn',
+                        'mappedPath' => 'Approved__c',
+                        'buttonOnValue' => 'Yes',
+                        'widgets' => new List<Object>{
+                            new Map<String, Object>{
+                                'objectNumber' => 8,
+                                'body' => '<< /FT /Btn /T (Approved__c) /Subtype /Widget /Rect [10 45 30 65] /AP << /N << /Off 9 0 R /Yes 10 0 R >> >> /V /Off /AS /Off >>',
+                                'exportValue' => 'Yes'
+                            }
+                        }
                     }
                 }
             }
