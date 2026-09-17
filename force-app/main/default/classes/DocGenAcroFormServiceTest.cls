@@ -30,7 +30,8 @@ private class DocGenAcroFormServiceTest {
     static void fillsAccentedTextFieldsWithPdfDocEncoding() {
         Blob pdf = Blob.valueOf(simpleAcroFormPdf());
         String arvore = 'Poda de ' + String.fromCharArray(new List<Integer>{ 193 }) + 'rvore';
-        String solicitacao = 'Solicita' +
+        String solicitacao =
+            'Solicita' +
             String.fromCharArray(new List<Integer>{ 231 }) +
             String.fromCharArray(new List<Integer>{ 227 }) +
             'o';
@@ -45,14 +46,16 @@ private class DocGenAcroFormServiceTest {
         System.assert(filled.size() > pdf.size(), 'Accented values should still append an incremental update');
         System.assert(
             filledHex.contains(
-                EncodingUtil.convertToHex(Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>'))
+                EncodingUtil.convertToHex(
+                        Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>')
+                    )
                     .toLowerCase()
             ),
             'Accented field value should be written as UTF-16BE PDF text, not UTF-8 text'
         );
         System.assert(
             filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('00E7')).toLowerCase()) &&
-                filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('00E3')).toLowerCase()),
+            filledHex.contains(EncodingUtil.convertToHex(Blob.valueOf('00E3')).toLowerCase()),
             'Portuguese cedilla/tilde characters should be preserved in the PDF field value'
         );
     }
@@ -167,7 +170,9 @@ private class DocGenAcroFormServiceTest {
         System.assert(filled.size() > pdf.size(), 'Saved snapshot should drive an incremental PDF update');
         System.assert(
             filledHex.contains(
-                EncodingUtil.convertToHex(Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>'))
+                EncodingUtil.convertToHex(
+                        Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>')
+                    )
                     .toLowerCase()
             ),
             'Snapshot-mapped field value should be stored as UTF-16BE PDF text'
