@@ -12,6 +12,11 @@
  * LWS-safe MIME type: PDF, images, text) or as a file-servlet download URL (everything
  * else, including Office formats that Lightning Web Security blocks for Blob URLs).
  *
+ * Delivery_Mode__c controls what the LWC does with the file: DOWNLOAD (default,
+ * blank, or unrecognized), PREVIEW (open the native file preview, no download), or
+ * PREVIEW_AND_DOWNLOAD. Preview uses the ContentDocumentId, so a preview-only
+ * button skips reading VersionData into heap.
+ *
  * The generation call is isolated behind the Generator seam so the full controller
  * flow can be unit-tested without invoking real document rendering.
  */
@@ -21,6 +26,11 @@ public with sharing class DocGenButtonController {
      *  stay within Apex heap. Not final so tests can exercise both branches. */
     @TestVisible
     private static Integer inlineDownloadMaxBytes = 3500000; // ~3.5 MB
+
+    /** Normalized Delivery_Mode__c values returned to the LWC. */
+    public static final String DELIVERY_DOWNLOAD = 'DOWNLOAD';
+    public static final String DELIVERY_PREVIEW = 'PREVIEW';
+    public static final String DELIVERY_PREVIEW_AND_DOWNLOAD = 'PREVIEW_AND_DOWNLOAD';
 
     public class DocGenButtonException extends Exception {
     }
@@ -111,6 +121,8 @@ public with sharing class DocGenButtonController {
         public Id contentDocumentId;
         @AuraEnabled
         public Id contentVersionId;
+        @AuraEnabled
+        public String deliveryMode; // DOWNLOAD | PREVIEW | PREVIEW_AND_DOWNLOAD
     }
 
     // ---------------------------------------------------------------------
@@ -250,6 +262,7 @@ public with sharing class DocGenButtonController {
             ContentVersion cv = cvs[0];
 
             dto.success = true;
+            dto.deliveryMode = normalizeDeliveryMode(cfg.Delivery_Mode__c);
             dto.contentVersionId = cv.Id;
             dto.contentDocumentId = cv.ContentDocumentId;
             dto.fileName = buildFileName(cv);
@@ -262,7 +275,9 @@ public with sharing class DocGenButtonController {
 
             // Also return base64 for small files. The LWC uses the Blob path only for
             // LWS-safe MIME types (PDF, images, text) and otherwise uses downloadUrl.
-            if (cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
+            // A preview-only button never downloads, so skip loading VersionData.
+            Boolean needsDownload = dto.deliveryMode != DELIVERY_PREVIEW;
+            if (needsDownload && cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
                 List<ContentVersion> withData = [
                     SELECT VersionData
                     FROM ContentVersion
@@ -359,6 +374,7 @@ public with sharing class DocGenButtonController {
                 Save_To_Record__c,
                 Output_Format_Override__c,
                 Document_Title__c,
+                Delivery_Mode__c,
                 Active__c,
                 Sort_Order__c,
                 Record_Type_Developer_Names__c
@@ -389,6 +405,7 @@ public with sharing class DocGenButtonController {
                 Save_To_Record__c,
                 Output_Format_Override__c,
                 Document_Title__c,
+                Delivery_Mode__c,
                 Active__c,
                 Record_Type_Developer_Names__c
             FROM DocGen_Button__mdt
@@ -397,6 +414,24 @@ public with sharing class DocGenButtonController {
             LIMIT 1
         ]; // NOPMD ApexCRUDViolation — CMDT is admin-authored config; internal config reads use SYSTEM_MODE
         return rows.isEmpty() ? null : rows[0];
+    }
+
+    /** Maps the admin-entered Delivery_Mode__c to a canonical value. Blank or
+     *  unrecognized values return DOWNLOAD so existing buttons are unchanged.
+     *  Accepts spaces, hyphens, "+", and "&" as separators (e.g. "Preview + Download"). */
+    @TestVisible
+    private static String normalizeDeliveryMode(String raw) {
+        if (String.isBlank(raw)) {
+            return DELIVERY_DOWNLOAD;
+        }
+        String k = raw.trim().toUpperCase().replaceAll('[\\s+&-]+', '_').replaceAll('_+', '_');
+        if (k == DELIVERY_PREVIEW || k == DELIVERY_PREVIEW_AND_DOWNLOAD) {
+            return k;
+        }
+        if (k == 'DOWNLOAD_AND_PREVIEW' || k == 'BOTH') {
+            return DELIVERY_PREVIEW_AND_DOWNLOAD;
+        }
+        return DELIVERY_DOWNLOAD;
     }
 
     private static String buildFileName(ContentVersion cv) {

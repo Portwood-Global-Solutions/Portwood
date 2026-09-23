@@ -1,6 +1,7 @@
 import { LightningElement, api } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { CloseActionScreenEvent } from 'lightning/actions';
+import { NavigationMixin } from 'lightning/navigation';
 import { isBlobSafeMime as isBlobSafeMimeUtil } from 'c/docGenUtils';
 import getButtons from '@salesforce/apex/DocGenButtonController.getButtons';
 import generate from '@salesforce/apex/DocGenButtonController.generate';
@@ -9,11 +10,16 @@ import generate from '@salesforce/apex/DocGenButtonController.generate';
  * docGenButton
  * ------------
  * Screen quick action that generates a Portwood document from a pre-configured
- * template (DocGen_Button__mdt) and downloads it. When exactly one configuration
- * exists for the object it runs immediately; when several exist it shows a small
- * picker. No Portwood Runner, no field choices.
+ * template (DocGen_Button__mdt) and delivers it per the config's Delivery Mode:
+ * download (default), open in the native Salesforce file preview, or both. When
+ * exactly one configuration exists for the object it runs immediately; when several
+ * exist it shows a small picker. No Portwood Runner, no field choices.
  */
-export default class DocGenButton extends LightningElement {
+const DELIVERY_DOWNLOAD = 'DOWNLOAD';
+const DELIVERY_PREVIEW = 'PREVIEW';
+const DELIVERY_PREVIEW_AND_DOWNLOAD = 'PREVIEW_AND_DOWNLOAD';
+
+export default class DocGenButton extends NavigationMixin(LightningElement) {
     _recordId;
     _started = false;
     _waitTimer;
@@ -102,8 +108,24 @@ export default class DocGenButton extends LightningElement {
                 this.fail((res && res.errorMessage) || 'Document generation failed.');
                 return;
             }
-            this.deliver(res);
-            this.showToast('Document generated', `${res.fileName} is downloading.`, 'success');
+            const mode = res.deliveryMode || DELIVERY_DOWNLOAD;
+            const wantsDownload = mode !== DELIVERY_PREVIEW;
+            // Preview needs a ContentDocumentId; without one, fall back to download
+            // so the user still gets the file.
+            const wantsPreview =
+                (mode === DELIVERY_PREVIEW || mode === DELIVERY_PREVIEW_AND_DOWNLOAD) && !!res.contentDocumentId;
+
+            if (wantsDownload || !wantsPreview) {
+                this.deliver(res);
+            }
+            if (wantsPreview) {
+                this.preview(res.contentDocumentId);
+            }
+            this.showToast(
+                'Document generated',
+                this.successMessage(res.fileName, wantsDownload || !wantsPreview, wantsPreview),
+                'success'
+            );
             this.close();
         } catch (e) {
             this.fail(this.toMessage(e));
@@ -141,6 +163,30 @@ export default class DocGenButton extends LightningElement {
             // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => URL.revokeObjectURL(href), 4000);
         }
+    }
+
+    /**
+     * Opens the native Salesforce file preview (same pattern docGenAdmin uses for
+     * large PDF previews). This is a navigation event, not window.open, so it is not
+     * subject to popup blocking after the async Apex round trip.
+     */
+    preview(contentDocumentId) {
+        this[NavigationMixin.Navigate]({
+            type: 'standard__namedPage',
+            attributes: { pageName: 'filePreview' },
+            state: { selectedRecordId: contentDocumentId }
+        });
+    }
+
+    successMessage(fileName, downloaded, previewed) {
+        const name = fileName || 'Your document';
+        if (downloaded && previewed) {
+            return `${name} is downloading and opening in preview.`;
+        }
+        if (previewed) {
+            return `${name} is opening in preview.`;
+        }
+        return `${name} is downloading.`;
     }
 
     // Delegates to c/docGenUtils so this component and downloadBase64 cannot

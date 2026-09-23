@@ -32,6 +32,12 @@ export default class DocGenButtonBuilder extends LightningElement {
         { label: 'PowerPoint (PPTX)', value: 'PPTX' }
     ];
 
+    deliveryModeOptions = [
+        { label: 'Download (default)', value: '' },
+        { label: 'Open in preview', value: 'PREVIEW' },
+        { label: 'Preview and download', value: 'PREVIEW_AND_DOWNLOAD' }
+    ];
+
     connectedCallback() {
         this.init();
     }
@@ -96,6 +102,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             documentTitle: b.documentTitle || '',
             outputFormatOverride: b.outputFormatOverride || '',
             saveToRecord: !!b.saveToRecord,
+            deliveryMode: b.deliveryMode || '',
             sortOrder: b.sortOrder,
             active: b.active !== false
         };
@@ -162,6 +169,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             documentTitle: this.form.documentTitle || null,
             outputFormatOverride: this.form.outputFormatOverride || null,
             saveToRecord: !!this.form.saveToRecord,
+            deliveryMode: this.form.deliveryMode || null,
             sortOrder: this.form.sortOrder === '' || this.form.sortOrder == null ? null : this.form.sortOrder,
             active: this.form.active !== false,
             recordTypeDeveloperNames: this.selectedRecordTypes.length ? this.selectedRecordTypes.join(',') : null
@@ -201,6 +209,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             documentTitle: b.documentTitle || '',
             outputFormatOverride: b.outputFormatOverride || '',
             saveToRecord: !!b.saveToRecord,
+            deliveryMode: b.deliveryMode || '',
             sortOrder: b.sortOrder,
             active: false
         };
@@ -228,6 +237,7 @@ function blank() {
         documentTitle: '',
         outputFormatOverride: '',
         saveToRecord: false,
+        deliveryMode: '',
         sortOrder: null,
         active: true
     };

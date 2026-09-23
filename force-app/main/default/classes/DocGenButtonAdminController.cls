@@ -32,6 +32,8 @@ public with sharing class DocGenButtonAdminController {
         @AuraEnabled
         public Boolean saveToRecord;
         @AuraEnabled
+        public String deliveryMode;
+        @AuraEnabled
         public Decimal sortOrder;
         @AuraEnabled
         public Boolean active;
@@ -67,6 +69,7 @@ public with sharing class DocGenButtonAdminController {
                 Document_Title__c,
                 Output_Format_Override__c,
                 Save_To_Record__c,
+                Delivery_Mode__c,
                 Sort_Order__c,
                 Active__c,
                 Record_Type_Developer_Names__c
@@ -83,6 +86,7 @@ public with sharing class DocGenButtonAdminController {
             d.documentTitle = c.Document_Title__c;
             d.outputFormatOverride = c.Output_Format_Override__c;
             d.saveToRecord = c.Save_To_Record__c;
+            d.deliveryMode = c.Delivery_Mode__c;
             d.sortOrder = c.Sort_Order__c;
             d.active = c.Active__c;
             d.recordTypeDeveloperNames = c.Record_Type_Developer_Names__c;
@@ -165,6 +169,12 @@ public with sharing class DocGenButtonAdminController {
         if (String.isBlank(templateApiName) && String.isBlank(templateId)) {
             throw new AuraHandledException('Choose a template.');
         }
+        String deliveryMode = str(cfg, 'deliveryMode');
+        if (deliveryMode != null && !VALID_DELIVERY_MODES.contains(deliveryMode.toUpperCase())) {
+            throw new AuraHandledException(
+                'Delivery Mode must be Download, Preview, or Preview_And_Download (or blank for Download).'
+            );
+        }
         String devName = String.isNotBlank(str(cfg, 'developerName'))
             ? str(cfg, 'developerName')
             : sanitizeDevName(label);
@@ -184,6 +194,7 @@ public with sharing class DocGenButtonAdminController {
         addValue(cmd, DocGen_Button__mdt.Document_Title__c, str(cfg, 'documentTitle'));
         addValue(cmd, DocGen_Button__mdt.Output_Format_Override__c, str(cfg, 'outputFormatOverride'));
         addValue(cmd, DocGen_Button__mdt.Save_To_Record__c, cfg.get('saveToRecord') == true);
+        addValue(cmd, DocGen_Button__mdt.Delivery_Mode__c, deliveryMode == null ? null : deliveryMode.toUpperCase());
         addValue(cmd, DocGen_Button__mdt.Sort_Order__c, dec(cfg, 'sortOrder'));
         addValue(cmd, DocGen_Button__mdt.Active__c, cfg.get('active') != false); // default active
         addValue(cmd, DocGen_Button__mdt.Record_Type_Developer_Names__c, str(cfg, 'recordTypeDeveloperNames'));
@@ -195,6 +206,14 @@ public with sharing class DocGenButtonAdminController {
         }
         return Metadata.Operations.enqueueDeployment(container, new DeployCallback());
     }
+
+    /** Canonical Delivery_Mode__c values the builder may write (blank = DOWNLOAD). */
+    @TestVisible
+    private static final Set<String> VALID_DELIVERY_MODES = new Set<String>{
+        DocGenButtonController.DELIVERY_DOWNLOAD,
+        DocGenButtonController.DELIVERY_PREVIEW,
+        DocGenButtonController.DELIVERY_PREVIEW_AND_DOWNLOAD
+    };
 
     /** Map value as a trimmed String (null when absent/blank). */
     private static String str(Map<String, Object> m, String key) {

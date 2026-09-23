@@ -153,6 +153,82 @@ private class DocGenButtonControllerTest {
         );
     }
 
+    // ---------------------------------------------------------------------
+    // Delivery mode
+    // ---------------------------------------------------------------------
+
+    @IsTest
+    static void normalizeDeliveryMode_variants() {
+        System.assertEquals('DOWNLOAD', DocGenButtonController.normalizeDeliveryMode(null), 'blank = download');
+        System.assertEquals('DOWNLOAD', DocGenButtonController.normalizeDeliveryMode('  '), 'whitespace = download');
+        System.assertEquals('DOWNLOAD', DocGenButtonController.normalizeDeliveryMode('Download'));
+        System.assertEquals('PREVIEW', DocGenButtonController.normalizeDeliveryMode('preview'), 'case-insensitive');
+        System.assertEquals(
+            'PREVIEW_AND_DOWNLOAD',
+            DocGenButtonController.normalizeDeliveryMode('Preview_And_Download')
+        );
+        System.assertEquals(
+            'PREVIEW_AND_DOWNLOAD',
+            DocGenButtonController.normalizeDeliveryMode('Preview + Download'),
+            'separator tolerant'
+        );
+        System.assertEquals('PREVIEW_AND_DOWNLOAD', DocGenButtonController.normalizeDeliveryMode('Both'));
+        System.assertEquals(
+            'DOWNLOAD',
+            DocGenButtonController.normalizeDeliveryMode('Popup'),
+            'unrecognized falls back to download'
+        );
+    }
+
+    @IsTest
+    static void generate_noDeliveryMode_defaultsToDownload() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{
+            cfg('WO_PDF', OBJ, UserInfo.getUserId(), true)
+        };
+
+        Test.startTest();
+        DocGenButtonController.GenerateResultDTO dto = DocGenButtonController.generate(UserInfo.getUserId(), 'WO_PDF');
+        Test.stopTest();
+
+        System.assertEquals('DOWNLOAD', dto.deliveryMode, 'Existing configs keep downloading');
+        System.assertNotEquals(null, dto.base64Data, 'Download mode still returns base64 for small files');
+    }
+
+    @IsTest
+    static void generate_previewMode_skipsBase64AndReturnsDocumentId() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt c = cfg('WO_PDF', OBJ, UserInfo.getUserId(), true);
+        c.Delivery_Mode__c = 'Preview';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ c };
+
+        Test.startTest();
+        DocGenButtonController.GenerateResultDTO dto = DocGenButtonController.generate(UserInfo.getUserId(), 'WO_PDF');
+        Test.stopTest();
+
+        System.assertEquals(true, dto.success, 'Expected success: ' + dto.errorMessage);
+        System.assertEquals('PREVIEW', dto.deliveryMode, 'Preview mode is passed to the LWC');
+        System.assertNotEquals(null, dto.contentDocumentId, 'Preview needs the ContentDocumentId');
+        System.assertEquals(null, dto.base64Data, 'Preview-only must not load VersionData into heap');
+        System.assertNotEquals(null, dto.downloadUrl, 'Servlet URL is still provided as a fallback');
+    }
+
+    @IsTest
+    static void generate_previewAndDownloadMode_returnsBoth() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt c = cfg('WO_PDF', OBJ, UserInfo.getUserId(), true);
+        c.Delivery_Mode__c = 'PREVIEW_AND_DOWNLOAD';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ c };
+
+        Test.startTest();
+        DocGenButtonController.GenerateResultDTO dto = DocGenButtonController.generate(UserInfo.getUserId(), 'WO_PDF');
+        Test.stopTest();
+
+        System.assertEquals('PREVIEW_AND_DOWNLOAD', dto.deliveryMode);
+        System.assertNotEquals(null, dto.contentDocumentId, 'Preview needs the ContentDocumentId');
+        System.assertNotEquals(null, dto.base64Data, 'Download half still gets base64 for small files');
+    }
+
     @IsTest
     static void generate_unknownConfig_returnsError() {
         DocGenButtonController.generator = new MockGenerator();
