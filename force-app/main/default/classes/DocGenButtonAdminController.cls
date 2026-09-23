@@ -30,6 +30,8 @@ public with sharing class DocGenButtonAdminController {
         @AuraEnabled
         public String outputFormatOverride;
         @AuraEnabled
+        public String actionType;
+        @AuraEnabled
         public Boolean saveToRecord;
         @AuraEnabled
         public Decimal sortOrder;
@@ -52,8 +54,9 @@ public with sharing class DocGenButtonAdminController {
 
     /** All button configs (active + inactive) for the management list. */
     @AuraEnabled(cacheable=false)
-    public static List<ButtonConfigDTO> getButtonConfigs() {
+    public static List<ButtonConfigDTO> getButtonConfigs(String actionType) {
         List<ButtonConfigDTO> out = new List<ButtonConfigDTO>();
+        String wantedActionType = normalizeActionType(actionType);
         // Custom metadata is admin-authored config (no row-level FLS/CRUD); this
         // class is reachable only via the DocGen_Button_Manager permission set.
         /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
@@ -64,6 +67,7 @@ public with sharing class DocGenButtonAdminController {
                 Object_API_Name__c,
                 Template_API_Name__c,
                 Template_Id__c,
+                Action_Type__c,
                 Document_Title__c,
                 Output_Format_Override__c,
                 Save_To_Record__c,
@@ -74,12 +78,17 @@ public with sharing class DocGenButtonAdminController {
             ORDER BY Object_API_Name__c, Sort_Order__c NULLS LAST, MasterLabel
         ]; // NOPMD ApexCRUDViolation - button-manager-gated CMDT config read
         for (DocGen_Button__mdt c : rows) {
+            String rowActionType = normalizeActionType(c.Action_Type__c);
+            if (rowActionType != wantedActionType) {
+                continue;
+            }
             ButtonConfigDTO d = new ButtonConfigDTO();
             d.developerName = c.DeveloperName;
             d.label = c.MasterLabel;
             d.objectApiName = c.Object_API_Name__c;
             d.templateApiName = c.Template_API_Name__c;
             d.templateId = c.Template_Id__c;
+            d.actionType = rowActionType;
             d.documentTitle = c.Document_Title__c;
             d.outputFormatOverride = c.Output_Format_Override__c;
             d.saveToRecord = c.Save_To_Record__c;
@@ -158,11 +167,12 @@ public with sharing class DocGenButtonAdminController {
         String templateApiName = str(cfg, 'templateApiName');
         String templateId = str(cfg, 'templateId');
         String label = str(cfg, 'label');
+        String actionType = normalizeActionType(str(cfg, 'actionType'));
 
         if (String.isBlank(objectApiName)) {
             throw new AuraHandledException('An object is required.');
         }
-        if (String.isBlank(templateApiName) && String.isBlank(templateId)) {
+        if (actionType != 'Email' && String.isBlank(templateApiName) && String.isBlank(templateId)) {
             throw new AuraHandledException('Choose a template.');
         }
         String devName = String.isNotBlank(str(cfg, 'developerName'))
@@ -181,6 +191,7 @@ public with sharing class DocGenButtonAdminController {
         addValue(cmd, DocGen_Button__mdt.Object_API_Name__c, objectApiName);
         addValue(cmd, DocGen_Button__mdt.Template_API_Name__c, templateApiName);
         addValue(cmd, DocGen_Button__mdt.Template_Id__c, templateId);
+        addValue(cmd, DocGen_Button__mdt.Action_Type__c, actionType);
         addValue(cmd, DocGen_Button__mdt.Document_Title__c, str(cfg, 'documentTitle'));
         addValue(cmd, DocGen_Button__mdt.Output_Format_Override__c, str(cfg, 'outputFormatOverride'));
         addValue(cmd, DocGen_Button__mdt.Save_To_Record__c, cfg.get('saveToRecord') == true);
@@ -234,6 +245,11 @@ public with sharing class DocGenButtonAdminController {
         v.field = field.getDescribe().getName(); // namespaced field API name
         v.value = val;
         cmd.values.add(v);
+    }
+
+    @TestVisible
+    private static String normalizeActionType(String actionType) {
+        return String.isNotBlank(actionType) && actionType.equalsIgnoreCase('Email') ? 'Email' : 'Document';
     }
 
     /** Label -> a valid, unique-ish CMDT DeveloperName (letters/digits/underscores). */

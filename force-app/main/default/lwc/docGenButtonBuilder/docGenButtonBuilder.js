@@ -1,4 +1,4 @@
-import { LightningElement, track } from 'lwc';
+import { api, LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getButtonConfigs from '@salesforce/apex/DocGenButtonAdminController.getButtonConfigs';
 import getTemplateOptions from '@salesforce/apex/DocGenButtonAdminController.getTemplateOptions';
@@ -14,6 +14,7 @@ import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions
  * Saves are async (Metadata API), so after a save we re-query on a short delay.
  */
 export default class DocGenButtonBuilder extends LightningElement {
+    @api actionType = 'Document';
     @track buttons = [];
     @track objectOptions = [];
     @track templateOptions = [];
@@ -50,7 +51,7 @@ export default class DocGenButtonBuilder extends LightningElement {
     }
 
     async refreshButtons() {
-        const rows = await getButtonConfigs();
+        const rows = await getButtonConfigs({ actionType: this.normalizedActionType });
         this.buttons = (rows || []).map((b) => ({
             ...b,
             recordTypesLabel: b.recordTypeDeveloperNames || 'All record types',
@@ -63,16 +64,41 @@ export default class DocGenButtonBuilder extends LightningElement {
         return this.buttons.length > 0;
     }
     get newLabel() {
-        return this.showForm ? 'Close' : 'New Button';
+        return this.showForm ? 'Close' : this.isEmailMode ? 'New Send Email Button' : 'New Button';
     }
     get saveLabel() {
-        return this.saving ? 'Saving…' : 'Save Button';
+        return this.saving ? 'Saving...' : this.isEmailMode ? 'Save Send Email Button' : 'Save Button';
     }
     get formTitle() {
+        if (this.isEmailMode) {
+            return this.form.developerName ? 'Edit send email button' : 'New send email button';
+        }
         return this.form.developerName ? 'Edit button' : 'New button';
     }
     get hasRecordTypes() {
         return this.recordTypeOptions.length > 0;
+    }
+    get normalizedActionType() {
+        return this.actionType === 'Email' ? 'Email' : 'Document';
+    }
+    get isEmailMode() {
+        return this.normalizedActionType === 'Email';
+    }
+    get heading() {
+        return this.isEmailMode ? 'Record-Page Send Email Buttons' : 'Record-Page Document Buttons';
+    }
+    get helpText() {
+        return this.isEmailMode
+            ? 'Create Send Email actions for a record page. Users choose the email button, preview the generated document, enter recipients, and send it as an attachment.'
+            : 'Create one-click "generate document" buttons for a record page - no Setup required. Choose the object, template, and (optionally) which record types the button appears for.';
+    }
+    get setupComponentName() {
+        return this.isEmailMode ? 'c:docGenSendEmailButton' : 'c:docGenButton';
+    }
+    get noRowsMessage() {
+        return this.isEmailMode
+            ? 'No send email buttons yet. Click New Send Email Button to create your first one.'
+            : 'No document buttons yet. Click New Button to create your first one.';
     }
 
     handleToggleForm() {
@@ -145,7 +171,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             this.toast('Object required', 'Pick the object whose record page hosts the button.', 'warning');
             return;
         }
-        if (!this.form.template) {
+        if (!this.isEmailMode && !this.form.template) {
             this.toast('Template required', 'Pick the template this button generates.', 'warning');
             return;
         }
@@ -157,8 +183,11 @@ export default class DocGenButtonBuilder extends LightningElement {
             developerName: this.form.developerName || null,
             label: this.form.label.trim(),
             objectApiName: this.form.objectApiName,
-            templateApiName: this.form.template.startsWith('key:') ? this.form.template.substring(4) : null,
-            templateId: this.form.template.startsWith('id:') ? this.form.template.substring(3) : null,
+            templateApiName:
+                this.form.template && this.form.template.startsWith('key:') ? this.form.template.substring(4) : null,
+            templateId:
+                this.form.template && this.form.template.startsWith('id:') ? this.form.template.substring(3) : null,
+            actionType: this.normalizedActionType,
             documentTitle: this.form.documentTitle || null,
             outputFormatOverride: this.form.outputFormatOverride || null,
             saveToRecord: !!this.form.saveToRecord,
@@ -170,8 +199,8 @@ export default class DocGenButtonBuilder extends LightningElement {
         try {
             await saveButtonConfig({ cfg: dto });
             this.toast(
-                'Saving button',
-                'Your button is deploying (custom metadata) — it appears here in a few seconds and on matching record pages after the deploy finishes.',
+                this.isEmailMode ? 'Saving send email button' : 'Saving button',
+                'Your button is deploying (custom metadata) - it appears here in a few seconds and on matching record pages after the deploy finishes.',
                 'success'
             );
             this.showForm = false;

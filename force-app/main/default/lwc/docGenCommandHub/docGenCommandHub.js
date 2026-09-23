@@ -80,8 +80,14 @@ export default class DocGenCommandHub extends LightningElement {
     get isButtons() {
         return this.activeSection === 'buttons';
     }
+    get isSendEmail() {
+        return this.activeSection === 'sendEmail';
+    }
     get showButtonsSection() {
         return this.activeSection === 'buttons' && this.showButtonsTab;
+    }
+    get showSendEmailSection() {
+        return this.activeSection === 'sendEmail' && this.showButtonsTab;
     }
     get isEmail() {
         return this.activeSection === 'email';
@@ -107,6 +113,9 @@ export default class DocGenCommandHub extends LightningElement {
     get buttonsTabClass() {
         return this.activeSection === 'buttons' ? 'tab-active' : '';
     }
+    get sendEmailTabClass() {
+        return this.activeSection === 'sendEmail' ? 'tab-active' : '';
+    }
     get emailTabClass() {
         return this.activeSection === 'email' ? 'tab-active' : '';
     }
@@ -131,6 +140,9 @@ export default class DocGenCommandHub extends LightningElement {
     }
     handleShowButtons() {
         this.activeSection = 'buttons';
+    }
+    handleShowSendEmail() {
+        this.activeSection = 'sendEmail';
     }
     handleShowEmail() {
         this.activeSection = 'email';
