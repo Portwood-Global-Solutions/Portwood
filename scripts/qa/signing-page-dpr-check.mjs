@@ -7,9 +7,10 @@
  * HiDPI screen (every phone) the PDF was drawn at a fraction of the screen's
  * resolution and upscaled — soft text, and pinch-zoom only magnified the blur. Pages
  * are now backed at devicePixelRatio, bounded by per-canvas and whole-document pixel
- * caps so a long document can't exhaust a phone's canvas memory.
+ * caps so a long document can't exhaust a phone's canvas memory, and pinch/browser zoom
+ * re-renders the pages in view at the zoomed resolution.
  *
- * Unlike a mirrored copy, this lifts backingRatio() and its constants straight out
+ * Unlike a mirrored copy, this lifts backingRatio(), zoomedRatio() and their constants out
  * of DocGenSignaturePdf.page, so the check can't drift from the shipped code. It also
  * asserts the invariant that keeps sign-spots in place: anchor lookup and
  * hitToPdfRect read the CSS-pixel viewport stored per page, never the canvas size.
@@ -103,6 +104,55 @@ ok(!/canvas\.(width|height)/.test(extractFunction('itemDeviceBox') || ''), 'anch
 ok(
     /hitToPdfRect: function[\s\S]*?var vp = pages\[i\]\.viewport;/.test(src),
     'hitToPdfRect maps stamps through the stored CSS-pixel viewport'
+);
+
+// ── zoom: re-render the pages in view at the zoomed resolution ────────────────
+const zoomSrc = extractFunction('zoomedRatio');
+ok(!!zoomSrc, 'zoomedRatio() found in DocGenSignaturePdf.page');
+if (zoomSrc) {
+    const zoomedRatio = new Function(`var MAX_DEVICE_RATIO = ${MAX_RATIO};\n${zoomSrc}\nreturn zoomedRatio;`)();
+    const A3 = { width: 320, height: 226 }; // an A3 landscape sheet fitted to a phone
+    const base = 2.625; // Pixel 10 devicePixelRatio
+    ok(zoomedRatio(A3, base, 2.625, 1, MAX_PX) === base, 'no pinch-zoom → stays at the base render (no churn)');
+    ok(
+        Math.abs(zoomedRatio(A3, base, 2.625, 5, MAX_PX) - 13.125) < 1e-9,
+        'Pixel 10 pinched to 5× → 13.1 px per CSS px (sharp)'
+    );
+    const capped = zoomedRatio(A3, base, 3, 20, MAX_PX);
+    ok(
+        A3.width * A3.height * capped * capped <= MAX_PX + 1,
+        `extreme zoom is held to MAX_CANVAS_PIXELS (ratio ${capped.toFixed(1)})`
+    );
+    ok(zoomedRatio(A3, 3, 3, 0.5, MAX_PX) === 3, 'zoom below 1 never renders below the base');
+    ok(
+        zoomedRatio({ width: 5000, height: 5000 }, 1, 3, 5, MAX_PX) === 1,
+        'a page already over the cap stays at its base'
+    );
+    ok(zoomedRatio(A3, base, 2.625, 5, MAX_PX / 4) < 13.125, 'several pages in view share the zoom budget');
+}
+ok(
+    /window\.visualViewport\.addEventListener\('resize', scheduleRefresh\)/.test(src),
+    'listens for pinch-zoom (visualViewport resize)'
+);
+ok(
+    /window\.visualViewport\.addEventListener\('scroll', scheduleRefresh\)/.test(src),
+    'listens for panning while zoomed'
+);
+ok(
+    /window\.addEventListener\('resize', scheduleRefresh\)/.test(src),
+    'listens for browser zoom (devicePixelRatio change)'
+);
+ok(
+    /window\.addEventListener\('scroll', scheduleRefresh/.test(src) &&
+        /containerEl\.addEventListener\('scroll', scheduleRefresh/.test(src),
+    'listens for document scroll (phones) and viewer scroll (desktop)'
+);
+const rerender = extractFunction('rerenderPage') || '';
+ok(/next\.style\.width = entry\.viewport\.width/.test(rerender), 'zoom re-render keeps the CSS-pixel display size');
+ok(/replaceChild\(next, entry\.canvas\)/.test(rerender), 'zoom re-render swaps the canvas in place (chips stay put)');
+ok(
+    /visible\.indexOf\(entry\) >= 0/.test(extractFunction('refreshResolution') || ''),
+    'only pages in view are sharpened; the rest keep or drop back to base'
 );
 
 console.log(fail ? `\n${fail} FAILED` : '\ndevice-resolution rendering OK');
