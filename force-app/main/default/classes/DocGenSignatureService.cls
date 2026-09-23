@@ -1443,11 +1443,7 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    List<Database.SaveResult> auditResults = Database.update(
-                        audits,
-                        false,
-                        AccessLevel.SYSTEM_MODE
-                    );
+                    List<Database.SaveResult> auditResults = Database.update(audits, false, AccessLevel.SYSTEM_MODE);
                     for (Integer i = 0; i < auditResults.size(); i++) {
                         requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
                     }
@@ -1752,11 +1748,7 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    List<Database.SaveResult> auditResults = Database.update(
-                        audits,
-                        false,
-                        AccessLevel.SYSTEM_MODE
-                    );
+                    List<Database.SaveResult> auditResults = Database.update(audits, false, AccessLevel.SYSTEM_MODE);
                     for (Integer i = 0; i < auditResults.size(); i++) {
                         requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
                     }

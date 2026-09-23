@@ -95,10 +95,7 @@ private class DocGenSignatureTests {
         return tmpl.Id;
     }
 
-    private static DocGen_Signature_Placement__c createPendingPlacement(
-        DocGen_Signer__c signer,
-        Integer sequence
-    ) {
+    private static DocGen_Signature_Placement__c createPendingPlacement(DocGen_Signer__c signer, Integer sequence) {
         DocGen_Signature_Placement__c placement = new DocGen_Signature_Placement__c(
             Signer__c = signer.Id,
             Signature_Request__c = signer.Signature_Request__c,
@@ -112,10 +109,7 @@ private class DocGenSignatureTests {
         return placement;
     }
 
-    private static DocGen_Signature_Placement__c createSignedPlacement(
-        DocGen_Signer__c signer,
-        Integer sequence
-    ) {
+    private static DocGen_Signature_Placement__c createSignedPlacement(DocGen_Signer__c signer, Integer sequence) {
         DocGen_Signature_Placement__c placement = new DocGen_Signature_Placement__c(
             Signer__c = signer.Id,
             Signature_Request__c = signer.Signature_Request__c,
@@ -6273,7 +6267,7 @@ private class DocGenSignatureTests {
         System.assertEquals(false, result.success, 'saveSignature must reject a pending placement');
         System.assertEquals(
             'Signing cannot be completed because one or more required signature fields are incomplete. ' +
-                'Please complete all required fields and try again.',
+            'Please complete all required fields and try again.',
             result.message
         );
         System.assertNotEquals(
@@ -6307,7 +6301,7 @@ private class DocGenSignatureTests {
         System.assertEquals(false, result.success, 'savePdfSignature must reject a pending placement');
         System.assertEquals(
             'Signing cannot be completed because one or more required signature fields are incomplete. ' +
-                'Please complete all required fields and try again.',
+            'Please complete all required fields and try again.',
             result.message
         );
         System.assertNotEquals(
@@ -6341,7 +6335,7 @@ private class DocGenSignatureTests {
         System.assertEquals(false, result.success, 'saveCompositedSignedPdf must reject a pending placement');
         System.assertEquals(
             'Signing cannot be completed because one or more required signature fields are incomplete. ' +
-                'Please complete all required fields and try again.',
+            'Please complete all required fields and try again.',
             result.message
         );
         System.assertNotEquals(

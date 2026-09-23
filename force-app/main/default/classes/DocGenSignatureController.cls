@@ -1326,11 +1326,7 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        requireDmlSuccess(
-            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
-            'Finalize signer',
-            signer.Id
-        );
+        requireDmlSuccess(Database.update(signer, false, AccessLevel.SYSTEM_MODE), 'Finalize signer', signer.Id);
 
         // Create audit trail immediately with all available data
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -2278,11 +2274,7 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(plc, new Set<String>{ 'Signed_Value__c', 'Status__c', 'Signed_At__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        requireDmlSuccess(
-            Database.update(plc, false, AccessLevel.SYSTEM_MODE),
-            'Save signature placement',
-            plc.Id
-        );
+        requireDmlSuccess(Database.update(plc, false, AccessLevel.SYSTEM_MODE), 'Save signature placement', plc.Id);
 
         return getSignerPlacements(token);
     }
@@ -2668,11 +2660,7 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        requireDmlSuccess(
-            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
-            'Finalize PDF signer',
-            signer.Id
-        );
+        requireDmlSuccess(Database.update(signer, false, AccessLevel.SYSTEM_MODE), 'Finalize PDF signer', signer.Id);
 
         // Create audit trail immediately with all available data (mirrors saveSignature)
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
