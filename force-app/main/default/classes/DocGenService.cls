@@ -881,6 +881,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
 
+        // Release the read-side copies now that every entry has been extracted into mr —
+        // base64File/templateBlob/reader are not referenced again below, and holding them
+        // alongside mr.passthroughEntries through the rest of this method (and later through
+        // assembleZip's re-zip) needlessly doubles peak heap on a large template (#403).
+        // Mirrors the discipline already used in mergeTemplateForGiantQueryPdf.
+        base64File = null;
+        templateBlob = null;
+        reader = null;
+
         // Excel second pass: inline shared strings into worksheets, then merge tags
         if (templateType == 'Excel' && !pendingExcelSheets.isEmpty()) {
             currentTemplateType = 'Excel';
@@ -1179,7 +1188,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Add passthrough entries in deterministic path order, skipping entries
-        // already written explicitly above.
+        // already written explicitly above. Remove each Blob from mr.passthroughEntries
+        // as soon as the writer has it — for a large template (many/large embedded media
+        // parts) this is the difference between holding the whole set twice (once in the
+        // map, once in the writer's own buffer) versus once (#403).
         List<String> passthroughNames = new List<String>(mr.passthroughEntries.keySet());
         passthroughNames.sort();
         for (String name : passthroughNames) {
@@ -1187,6 +1199,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 continue;
             }
             writer.addEntry(name, mr.passthroughEntries.get(name));
+            mr.passthroughEntries.remove(name);
         }
 
         // Add image blobs (skip URL-only images which are for PDF rendering only)
@@ -1209,6 +1222,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Blob entry = mr.passthroughEntries.get(name);
         if (entry != null) {
             writer.addEntry(name, entry);
+            mr.passthroughEntries.remove(name);
         }
     }
 

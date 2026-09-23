@@ -62,6 +62,18 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
 
         @InvocableVariable(label='Success')
         global Boolean success;
+
+        @InvocableVariable(
+            label='Job ID'
+            description='The Portwood Job record ID (background generation only — poll Status__c via Get Records; the finished file links to this Job record, and to the source record too if Save to Record was true). Null for a synchronous result.'
+        )
+        global Id jobId;
+
+        @InvocableVariable(
+            label='Is Async'
+            description='True if this request was routed to background generation because the resulting Word document would be too large to build synchronously (#403). Poll Job ID for completion instead of expecting Content Document ID immediately.'
+        )
+        global Boolean isAsync;
     }
 
     @InvocableMethod(
@@ -103,6 +115,65 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
                     Map<String, Object> dataMap = (Map<String, Object>) parsed;
 
                     if (req.recordId != null) {
+                        // #403 — DOCX output's ZIP reassembly (assembleZip) can exceed the 6MB
+                        // synchronous heap governor for a large enough template; that
+                        // System.LimitException is uncatchable, so the decision must be made
+                        // BEFORE generation starts, not recovered from after. PDF output is
+                        // exempt (never reaches assembleZip for a Word->PDF render) and
+                        // DocGenFlowHeapRouter.decide short-circuits it to SYNC.
+                        String effectiveFormat = req.outputFormatOverride;
+                        if (String.isBlank(effectiveFormat)) {
+                            effectiveFormat = resolveTemplateOutputFormat(req.templateId);
+                        }
+                        Integer templateSizeBytes = DocGenTemplateManager.getTemplateFileSize(req.templateId);
+                        DocGenFlowHeapRouter.Decision route = DocGenFlowHeapRouter.decide(
+                            templateSizeBytes,
+                            effectiveFormat
+                        );
+
+                        if (route.route == DocGenFlowHeapRouter.ROUTE_REJECT) {
+                            throw new DocGenException(
+                                'This document is too large to generate from custom JSON data. ' + route.reason
+                            );
+                        }
+
+                        if (route.route == DocGenFlowHeapRouter.ROUTE_ASYNC) {
+                            // Can't launch a new async job from inside one already running —
+                            // mirrors DocGenGiantQueryFlowAction's identical guard.
+                            if (System.isBatch() || System.isFuture() || System.isQueueable() || System.isScheduled()) {
+                                throw new DocGenException(
+                                    'This document needs background generation (' +
+                                        route.reason +
+                                        ') but the Flow is already running asynchronously, which cannot start a ' +
+                                        'new background job. Run this Generate Document step from a screen or ' +
+                                        'record-triggered (synchronous) Flow.'
+                                );
+                            }
+                            DocGen_Job__c job = new DocGen_Job__c(
+                                Status__c = 'Draft',
+                                Template__c = req.templateId,
+                                Label__c = 'Custom JSON Flow Document (background, #403)',
+                                Parent_Record_Id__c = String.valueOf(req.recordId)
+                            );
+                            insert job; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                            System.enqueueJob(
+                                new DocGenJsonMergeQueueable(
+                                    req.templateId,
+                                    req.recordId,
+                                    req.jsonData,
+                                    req.outputFormatOverride,
+                                    req.documentTitle,
+                                    req.saveToRecord,
+                                    job.Id
+                                )
+                            );
+                            res.isAsync = true;
+                            res.jobId = job.Id;
+                            res.success = true;
+                            responses.add(res);
+                            continue;
+                        }
+
                         // recordId is the title/context anchor. The actual attachment target is null
                         // when saveToRecord != true — produces a standalone ContentVersion the Flow
                         // can hand off via the returned ContentDocumentId (issue #90).
@@ -242,5 +313,28 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
         }
 
         return responses;
+    }
+
+    /**
+     * Cheap Output_Format__c lookup for the #403 sync/async routing decision —
+     * only reached when the caller didn't already supply outputFormatOverride.
+     * Returns null (treated as non-PDF / DOCX-shaped by DocGenFlowHeapRouter)
+     * if the template can't be resolved; the actual generation call below will
+     * surface a proper error for that case either way.
+     */
+    private static String resolveTemplateOutputFormat(Id templateId) {
+        if (templateId == null || !Schema.sObjectType.DocGen_Template__c.isAccessible()) {
+            return null;
+        }
+        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Output_Format__c' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template__c> templates = [
+            SELECT Output_Format__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        return templates.isEmpty() ? null : templates[0].Output_Format__c;
     }
 }
