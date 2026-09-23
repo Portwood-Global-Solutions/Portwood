@@ -86,6 +86,60 @@ public without sharing class DocGenSignatureService {
     }
 
     /**
+     * Issue #407 output-integrity guard. The server-rendered PDF source must not
+     * reach Blob.toPdf while it still contains an unresolved placement sentinel.
+     */
+    @TestVisible
+    private static void assertNoUnresolvedSignatureSentinels(String outputHtml) {
+        if (String.isNotBlank(outputHtml) && Pattern.compile('@@SIG-\\d+@@').matcher(outputHtml).find()) {
+            throw new SignatureException('Signed document still contains an unresolved signature field.');
+        }
+    }
+
+    /**
+     * Defense in depth for asynchronous finalization. Controller endpoints
+     * validate the completing signer, but the queueable must also reject a
+     * request whose persisted placement state is inconsistent.
+     */
+    @TestVisible
+    private static void assertRequestPlacementsComplete(Id requestId) {
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Signature_Placement__c.sObjectType,
+            new Set<String>{ 'Signature_Request__c', 'Status__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        Integer unsignedCount = [
+            SELECT COUNT()
+            FROM DocGen_Signature_Placement__c
+            WHERE Signature_Request__c = :requestId AND Status__c != 'Signed'
+            WITH SYSTEM_MODE
+        ];
+        if (unsignedCount > 0) {
+            throw new SignatureException('Signature request contains unsigned required placements.');
+        }
+    }
+
+    private static void requireDmlSuccess(Database.SaveResult saveResult, String operation, Id recordId) {
+        if (saveResult != null && saveResult.isSuccess()) {
+            return;
+        }
+        List<String> details = new List<String>();
+        if (saveResult != null) {
+            for (Database.Error err : saveResult.getErrors()) {
+                details.add(String.valueOf(err.getStatusCode()) + ': ' + err.getMessage());
+            }
+        }
+        String detail = details.isEmpty() ? 'No database error detail was returned.' : String.join(details, '; ');
+        DocGenErrorLogger.Entry entry = new DocGenErrorLogger.Entry();
+        entry.context = 'Signature Finalize';
+        entry.operation = operation;
+        entry.recordId = recordId == null ? null : String.valueOf(recordId);
+        entry.message = detail;
+        DocGenErrorLogger.log(entry);
+        throw new SignatureException(operation + ' failed: ' + detail);
+    }
+
+    /**
      * Builds the HTML verification block appended to the end of the signed PDF.
      * Includes signer details, timestamps, and a verification URL. Back-compat
      * 2-arg signature — delegates to the form-field-aware overload with no fields.
@@ -1242,9 +1296,11 @@ public without sharing class DocGenSignatureService {
                 return;
 
             DocGen_Signature_Request__c req = requests[0];
+
             DocGenService.applyWatermarkOverride(req.Template__c);
 
             try {
+                assertRequestPlacementsComplete(requestId);
                 // Get signature data from signers
                 DocGenFlsGuard.assertAccessible(
                     DocGen_Signer__c.sObjectType,
@@ -1314,6 +1370,7 @@ public without sharing class DocGenSignatureService {
                     }
 
                     String html = DocGenHtmlRenderer.convertToHtml(documentXml, imageUrlMap);
+                    assertNoUnresolvedSignatureSentinels(html);
                     pdfBlob = Blob.toPdf(html);
                 }
 
@@ -1386,7 +1443,14 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    Database.update(audits, false, AccessLevel.SYSTEM_MODE);
+                    List<Database.SaveResult> auditResults = Database.update(
+                        audits,
+                        false,
+                        AccessLevel.SYSTEM_MODE
+                    );
+                    for (Integer i = 0; i < auditResults.size(); i++) {
+                        requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
+                    }
                 }
 
                 // Mark request as signed
@@ -1395,7 +1459,11 @@ public without sharing class DocGenSignatureService {
                 // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                 DocGenFlsGuard.assertUpdateable(req, new Set<String>{ 'Status__c' });
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                Database.update(req, false, AccessLevel.SYSTEM_MODE);
+                requireDmlSuccess(
+                    Database.update(req, false, AccessLevel.SYSTEM_MODE),
+                    'Complete signature request',
+                    req.Id
+                );
 
                 // Completion emails (moved here from DocGenSignaturePdfTrigger so the
                 // finalized PDF can be attached — it doesn't exist yet in the trigger).
@@ -1530,6 +1598,7 @@ public without sharing class DocGenSignatureService {
             Map<String, Object> formValues = DocGenFieldWritebackService.collectValues(requestId);
 
             try {
+                assertRequestPlacementsComplete(requestId);
                 DocGenService.resolveFormFields = true;
                 formFieldsResolvedHere = true;
                 Blob pdfBlob;
@@ -1683,7 +1752,14 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    Database.update(audits, false, AccessLevel.SYSTEM_MODE);
+                    List<Database.SaveResult> auditResults = Database.update(
+                        audits,
+                        false,
+                        AccessLevel.SYSTEM_MODE
+                    );
+                    for (Integer i = 0; i < auditResults.size(); i++) {
+                        requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
+                    }
                 }
 
                 // Mark signed. #156: reclaim the frozen-snapshot CV (signed PDF produced);
@@ -1700,7 +1776,11 @@ public without sharing class DocGenSignatureService {
                     new Set<String>{ 'Status__c', 'Signature_Data__c', 'Frozen_Document_CV_Id__c' }
                 );
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                Database.update(req, false, AccessLevel.SYSTEM_MODE);
+                requireDmlSuccess(
+                    Database.update(req, false, AccessLevel.SYSTEM_MODE),
+                    'Complete signature request',
+                    req.Id
+                );
                 purgeFrozenSnapshotCv(frozenCvToPurge);
 
                 // Completion emails (moved here from DocGenSignaturePdfTrigger so the
@@ -2012,6 +2092,8 @@ public without sharing class DocGenSignatureService {
             );
             html = injectVerifyBlockBeforeLastBody(html, verifyBlock);
 
+            assertNoUnresolvedSignatureSentinels(html);
+
             return Blob.toPdf(html);
         }
 
@@ -2237,6 +2319,8 @@ public without sharing class DocGenSignatureService {
             // packet HTML has one </body> per template, so String.replace would
             // drop the verification block after every template (the v1.77 bug).
             fullHtml = injectVerifyBlockBeforeLastBody(fullHtml, verifyBlock);
+
+            assertNoUnresolvedSignatureSentinels(fullHtml);
 
             return Blob.toPdf(fullHtml);
         }

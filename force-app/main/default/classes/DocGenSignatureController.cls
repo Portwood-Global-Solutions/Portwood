@@ -1,4 +1,8 @@
 public without sharing class DocGenSignatureController {
+    private static final String INCOMPLETE_SIGNATURE_FIELDS_MESSAGE =
+        'Signing cannot be completed because one or more required signature fields are incomplete. ' +
+        'Please complete all required fields and try again.';
+
     // Legacy signing-window: requests created before Expires_At__c existed live this
     // long from creation. New requests stamp Expires_At__c (DocGenSignatureExpiry).
     private static final Integer TOKEN_EXPIRATION_HOURS = 48;
@@ -43,6 +47,61 @@ public without sharing class DocGenSignatureController {
         }
         verificationRequiredCache.put(requestId, required);
         return required;
+    }
+
+    /**
+     * Issue #407: a signer with placement records must complete every one before
+     * any finalization endpoint can mark the signer Signed. A signer with no
+     * placements is a legitimate legacy request and remains supported. The
+     * query is deliberately scoped to the current signer so future signers in a
+     * multi-signer request may still have pending placements.
+     */
+    private static String validateSignerPlacementsComplete(Id signerId) {
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signature_Placement__c.sObjectType,
+            new Set<String>{ 'Signer__c', 'Status__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signature_Placement__c> placements = [
+            SELECT Id, Status__c
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c = :signerId
+            WITH SYSTEM_MODE
+            FOR UPDATE
+        ];
+        Integer unsignedCount = 0;
+        for (DocGen_Signature_Placement__c placement : placements) {
+            if (placement.Status__c != 'Signed') {
+                unsignedCount++;
+            }
+        }
+        return unsignedCount > 0 ? INCOMPLETE_SIGNATURE_FIELDS_MESSAGE : null;
+    }
+
+    /**
+     * Partial-success DML does not throw. Convert a failed SaveResult into a
+     * visible signing error and record the diagnostic instead of continuing with
+     * inconsistent signer/request/placement state.
+     */
+    private static void requireDmlSuccess(Database.SaveResult saveResult, String operation, Id recordId) {
+        if (saveResult != null && saveResult.isSuccess()) {
+            return;
+        }
+        List<String> details = new List<String>();
+        if (saveResult != null) {
+            for (Database.Error err : saveResult.getErrors()) {
+                details.add(String.valueOf(err.getStatusCode()) + ': ' + err.getMessage());
+            }
+        }
+        String detail = details.isEmpty() ? 'No database error detail was returned.' : String.join(details, '; ');
+        System.debug(LoggingLevel.ERROR, 'Portwood: ' + operation + ' failed for ' + recordId + ': ' + detail);
+        DocGenErrorLogger.Entry entry = new DocGenErrorLogger.Entry();
+        entry.context = 'Signature Finalize';
+        entry.operation = operation;
+        entry.recordId = recordId == null ? null : String.valueOf(recordId);
+        entry.message = detail;
+        DocGenErrorLogger.log(entry);
+        throw new AuraHandledException('Your signature could not be saved. Please try again or contact the sender.');
     }
 
     public class SignatureInitResponse {
@@ -92,6 +151,10 @@ public without sharing class DocGenSignatureController {
 
     public class SaveSignatureResult {
         @AuraEnabled
+        public Boolean success;
+        @AuraEnabled
+        public String message;
+        @AuraEnabled
         public Boolean isComplete;
         @AuraEnabled
         public Integer remaining;
@@ -107,6 +170,8 @@ public without sharing class DocGenSignatureController {
     public class SavePdfSignatureResult {
         @AuraEnabled
         public Boolean success;
+        @AuraEnabled
+        public String message;
         @AuraEnabled
         public Boolean isComplete;
         @AuraEnabled
@@ -202,7 +267,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(signerUpd, new Set<String>{ 'Field_Data_Json__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signerUpd, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signerUpd, false, AccessLevel.SYSTEM_MODE),
+            'Save signer form fields',
+            signerId
+        );
     }
 
     /**
@@ -1163,6 +1232,7 @@ public without sharing class DocGenSignatureController {
         String formFieldJson
     ) {
         SaveSignatureResult result = new SaveSignatureResult();
+        result.success = false;
 
         // Validate token format
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
@@ -1234,6 +1304,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist the collected values BEFORE the
         // signer is finalized, so a required-field failure aborts the whole save
         // (no status change, nothing persisted) and the guest sees a clean error.
@@ -1250,7 +1326,11 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
+            'Finalize signer',
+            signer.Id
+        );
 
         // Create audit trail immediately with all available data
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -1285,7 +1365,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create signature audit',
+            signer.Signature_Request__c
+        );
 
         // Check if all signers are now complete
         DocGenFlsGuard.guestAssertAccessible(
@@ -1316,7 +1400,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(parentReq, new Set<String>{ 'Status__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update signature request status',
+            parentReq.Id
+        );
 
         // All post-signature actions (PDF generation, notifications, sequential signing)
         // are deferred to system context via platform event.
@@ -1331,6 +1419,7 @@ public without sharing class DocGenSignatureController {
             System.debug(LoggingLevel.WARN, 'Portwood: Post-signature event publish failed: ' + e.getMessage());
         }
 
+        result.success = true;
         return result;
     }
 
@@ -2189,7 +2278,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(plc, new Set<String>{ 'Signed_Value__c', 'Status__c', 'Signed_At__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(plc, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(plc, false, AccessLevel.SYSTEM_MODE),
+            'Save signature placement',
+            plc.Id
+        );
 
         return getSignerPlacements(token);
     }
@@ -2553,6 +2646,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist the collected values BEFORE the
         // signer is finalized, so a required-field failure aborts the whole save
         // (no status change, nothing persisted) and the guest sees a clean error.
@@ -2569,7 +2668,11 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
+            'Finalize PDF signer',
+            signer.Id
+        );
 
         // Create audit trail immediately with all available data (mirrors saveSignature)
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -2604,7 +2707,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create PDF signature audit',
+            signer.Signature_Request__c
+        );
 
         // Check if all signers are now complete
         DocGenFlsGuard.guestAssertAccessible(
@@ -2655,7 +2762,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(parentReq, new Set<String>{ 'Status__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update PDF signature request status',
+            parentReq.Id
+        );
 
         // M2: publish the platform event so DocGenSignaturePdfTrigger enqueues the
         // finalizer (it gates on remaining==0 and Template__c) to produce the signed
@@ -2765,6 +2876,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist before finalizing the signer (a
         // required-field failure aborts the save before any status/CV write).
         captureFormFieldData(signer.Id, signer.Signature_Request__c, token, formFieldJson);
@@ -2777,7 +2894,11 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
+            'Finalize composited PDF signer',
+            signer.Id
+        );
 
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
         audit.Signature_Request__c = signer.Signature_Request__c;
@@ -2818,7 +2939,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create composited signature audit',
+            signer.Signature_Request__c
+        );
 
         // Remaining signers?
         DocGenFlsGuard.guestAssertAccessible(
@@ -2873,7 +2998,10 @@ public without sharing class DocGenSignatureController {
             if (!hashFixes.isEmpty()) {
                 DocGenFlsGuard.guestAssertUpdateable(hashFixes, new Set<String>{ 'Document_Hash_SHA256__c' });
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                Database.update(hashFixes, false, AccessLevel.SYSTEM_MODE);
+                List<Database.SaveResult> hashResults = Database.update(hashFixes, false, AccessLevel.SYSTEM_MODE);
+                for (Integer i = 0; i < hashResults.size(); i++) {
+                    requireDmlSuccess(hashResults[i], 'Update final signature audit hash', hashFixes[i].Id);
+                }
             }
         }
 
@@ -2982,7 +3110,11 @@ public without sharing class DocGenSignatureController {
         }
         DocGenFlsGuard.guestAssertUpdateable(parentReq, reqUpd);
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update composited signature request status',
+            parentReq.Id
+        );
 
         // Signer form-field writeback: this guided drawn-signature path stores the
         // client-composited PDF directly and never enqueues TemplateSignaturePdfQueueable
