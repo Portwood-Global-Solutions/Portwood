@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — Custom-JSON Flow generation no longer crashes on large Word templates
+
+- **The Generate Document Flow action no longer crashes generating a Word/PowerPoint/
+  Excel document from custom JSON data on a large enough template (#403).** A Flow
+  supplying pre-built JSON via the `JSON Data` input (bypassing Portwood's own SOQL
+  retrieval — see §11.8) could hit an **uncatchable** `System.LimitException: Apex heap
+size too large` reassembling the output file, once the template's own size pushed
+  peak heap past the 6 MB synchronous ceiling. A customer report first attributed this
+  to a mismatch between JSON keys and template merge fields; live reproduction proved
+  that theory wrong — a matched, correct payload failed identically to a mismatched one
+  at the same template size. The real driver is `assembleZip`'s ZIP reassembly step,
+  which now releases each template part as soon as the output file has it instead of
+  holding both simultaneously (a modest, real reduction on its own), and — the actual
+  fix — the action now estimates peak heap from the template's size before generating.
+  A request that would exceed the safe synchronous budget routes to background
+  generation instead of crashing; one that would exceed even that budget is refused with
+  a clear, actionable error instead of an opaque platform crash.
+
+    **Existing Flows:** unaffected unless you're using **JSON Data**. A large enough
+    Word/PowerPoint/Excel template on that path now returns `Is Async = true` and a
+    **Job ID** with no **Content Document ID** yet, instead of the finished file
+    immediately — branch on `Is Async` and poll the job, the same way the Auto Giant
+    Query action's `Is Giant Query` flag already works.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
