@@ -1152,6 +1152,13 @@
                     var MODULE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
                     var WORKER_SRC = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
                     var MAX_SCALE = 1.8;
+                    // #413 — page canvases are backed at device resolution, bounded so a phone
+                    // doesn't run out of canvas memory: at most 3x, at most MAX_CANVAS_PIXELS
+                    // per page (iOS Safari refuses a larger canvas outright), and at most
+                    // DOC_PIXEL_BUDGET across the document (every page canvas stays live).
+                    var MAX_DEVICE_RATIO = 3;
+                    var MAX_CANVAS_PIXELS = 16777216; // 4096 x 4096
+                    var DOC_PIXEL_BUDGET = 48000000; // ~192 MB of RGBA
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
                     var pages = []; // { pageNum, viewport, textContent, wrapEl }
@@ -1207,21 +1214,34 @@
                         return Math.min(MAX_SCALE, avail / base.width);
                     }
 
+                    // Backing-store pixels per CSS pixel for one page canvas (#413). Never
+                    // below 1, so a page that hits a cap is no worse than before.
+                    function backingRatio(viewport, numPages) {
+                        var ratio = Math.min(MAX_DEVICE_RATIO, window.devicePixelRatio || 1);
+                        var cssPixels = viewport.width * viewport.height;
+                        var perPage = Math.min(MAX_CANVAS_PIXELS, DOC_PIXEL_BUDGET / Math.max(1, numPages));
+                        if (cssPixels * ratio * ratio > perPage) {
+                            ratio = Math.sqrt(perPage / cssPixels);
+                        }
+                        return Math.max(1, ratio);
+                    }
+
                     function renderOnePage(pdf, pageNum, containerEl) {
                         return pdf.getPage(pageNum).then(function (page) {
                             var viewport = page.getViewport({ scale: fitScale(page, containerEl) });
-                            // Render at device-pixel density so text and fine signature fields
-                            // stay sharp on Retina/HiDPI displays while preserving the same
-                            // CSS dimensions for overlays and scrolling.
-                            var pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
-                            var renderViewport = page.getViewport({ scale: viewport.scale * pixelRatio });
+                            // #413 — draw at device resolution, display at CSS size. `viewport`
+                            // stays in CSS pixels: the wrap, anchor lookup and hitToPdfRect all
+                            // use it, so sign-spot placement and stamping are unchanged.
+                            var renderViewport = page.getViewport({
+                                scale: viewport.scale * backingRatio(viewport, pdf.numPages)
+                            });
                             var wrap = document.createElement('div');
                             wrap.className = 'dg-page-wrap';
                             wrap.style.width = viewport.width + 'px';
                             wrap.style.height = viewport.height + 'px';
                             var canvas = document.createElement('canvas');
-                            canvas.width = Math.ceil(renderViewport.width);
-                            canvas.height = Math.ceil(renderViewport.height);
+                            canvas.width = Math.floor(renderViewport.width);
+                            canvas.height = Math.floor(renderViewport.height);
                             canvas.style.width = viewport.width + 'px';
                             canvas.style.height = viewport.height + 'px';
                             wrap.appendChild(canvas);
