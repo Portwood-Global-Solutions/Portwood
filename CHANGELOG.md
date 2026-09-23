@@ -5,9 +5,10 @@
 - **The Generate Document Flow action no longer crashes generating a Word/PowerPoint/
   Excel document from custom JSON data on a large enough template (#403).** A Flow
   supplying pre-built JSON via the `JSON Data` input (bypassing Portwood's own SOQL
-  retrieval — see §11.8) could hit an **uncatchable** `System.LimitException: Apex heap
-size too large` reassembling the output file, once the template's own size pushed
-  peak heap past the 6 MB synchronous ceiling. A customer report first attributed this
+  retrieval — see §11.8) could hit an **uncatchable**
+  `System.LimitException: Apex heap size too large` reassembling the output file, once
+  the template's own size pushed peak heap past the 6 MB synchronous ceiling. A customer
+  report first attributed this
   to a mismatch between JSON keys and template merge fields; live reproduction proved
   that theory wrong — a matched, correct payload failed identically to a mismatched one
   at the same template size. The real driver is `assembleZip`'s ZIP reassembly step,
