@@ -123,6 +123,12 @@ public with sharing class DocGenButtonController {
         public Id contentVersionId;
         @AuraEnabled
         public String deliveryMode; // DOWNLOAD | PREVIEW | PREVIEW_AND_DOWNLOAD
+        @AuraEnabled
+        public String previewHtml;
+        @AuraEnabled
+        public String templatePreviewUrl;
+        @AuraEnabled
+        public String templatePreviewMimeType;
     }
 
     // ---------------------------------------------------------------------
@@ -267,6 +273,39 @@ public with sharing class DocGenButtonController {
             dto.contentDocumentId = cv.ContentDocumentId;
             dto.fileName = buildFileName(cv);
             dto.mimeType = mimeFor(cv.FileExtension);
+            if (dto.deliveryMode == DELIVERY_PREVIEW || dto.deliveryMode == DELIVERY_PREVIEW_AND_DOWNLOAD) {
+                List<DocGen_Template_Version__c> templateVersions = [
+                    SELECT Content_Version_Id__c
+                    FROM DocGen_Template_Version__c
+                    WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                    WITH USER_MODE
+                    ORDER BY CreatedDate DESC
+                    LIMIT 1
+                ];
+                if (!templateVersions.isEmpty() && templateVersions[0].Content_Version_Id__c != null) {
+                    Id sourceVersionId = (Id) templateVersions[0].Content_Version_Id__c;
+                    List<ContentVersion> sourceVersions = [
+                        SELECT Id, FileExtension
+                        FROM ContentVersion
+                        WHERE Id = :sourceVersionId
+                        WITH USER_MODE
+                        LIMIT 1
+                    ];
+                    if (!sourceVersions.isEmpty()) {
+                        dto.templatePreviewUrl = '/sfc/servlet.shepherd/version/download/' + sourceVersions[0].Id;
+                        dto.templatePreviewMimeType = mimeFor(sourceVersions[0].FileExtension);
+                    }
+                }
+                try {
+                    dto.previewHtml = DocGenService.renderPreviewHtml(templateId, recordId);
+                } catch (Exception previewEx) {
+                    // The generated file is still valid and downloadable. Some
+                    // source formats (for example PowerPoint) do not have an
+                    // HTML preview path, so leave previewHtml blank and let the
+                    // LWC show a clear fallback in the preview screen.
+                    String noop = previewEx.getMessage(); // NOPMD UnusedLocalVariable
+                }
+            }
 
             // Always provide a file-servlet download URL. It works for every MIME type
             // and any size, and sidesteps Lightning Web Security's Blob/createObjectURL
@@ -275,9 +314,10 @@ public with sharing class DocGenButtonController {
 
             // Also return base64 for small files. The LWC uses the Blob path only for
             // LWS-safe MIME types (PDF, images, text) and otherwise uses downloadUrl.
-            // A preview-only button never downloads, so skip loading VersionData.
-            Boolean needsDownload = dto.deliveryMode != DELIVERY_PREVIEW;
-            if (needsDownload && cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
+            // Preview-only buttons need inline bytes for PDFs too; Salesforce native
+            // file preview can lag or report "No preview available" for fresh files.
+            Boolean needsInlineBytes = dto.deliveryMode != DELIVERY_PREVIEW || isDirectPreviewMime(dto.mimeType);
+            if (needsInlineBytes && cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
                 List<ContentVersion> withData = [
                     SELECT VersionData
                     FROM ContentVersion
@@ -424,11 +464,16 @@ public with sharing class DocGenButtonController {
         if (String.isBlank(raw)) {
             return DELIVERY_DOWNLOAD;
         }
-        String k = raw.trim().toUpperCase().replaceAll('[\\s+&-]+', '_').replaceAll('_+', '_');
+        String k = raw.trim().toUpperCase();
+        k = k.replaceAll('\\s+', '_');
+        k = k.replaceAll('\\+', '_');
+        k = k.replaceAll('&', '_');
+        k = k.replaceAll('-', '_');
+        k = k.replaceAll('_+', '_');
         if (k == DELIVERY_PREVIEW || k == DELIVERY_PREVIEW_AND_DOWNLOAD) {
             return k;
         }
-        if (k == 'DOWNLOAD_AND_PREVIEW' || k == 'BOTH') {
+        if (k == 'DOWNLOAD_AND_PREVIEW' || k == 'DOWNLOAD_PREVIEW' || k == 'PREVIEW_DOWNLOAD' || k == 'BOTH') {
             return DELIVERY_PREVIEW_AND_DOWNLOAD;
         }
         return DELIVERY_DOWNLOAD;
@@ -451,5 +496,10 @@ public with sharing class DocGenButtonController {
             'xlsm' => 'application/vnd.ms-excel.sheet.macroEnabled.12'
         };
         return m.containsKey(e) ? m.get(e) : 'application/octet-stream';
+    }
+
+    private static Boolean isDirectPreviewMime(String mimeType) {
+        return mimeType == 'application/pdf' ||
+            (mimeType != null && (mimeType.startsWith('image/') || mimeType.startsWith('text/')));
     }
 }

@@ -209,7 +209,7 @@ private class DocGenButtonControllerTest {
         System.assertEquals(true, dto.success, 'Expected success: ' + dto.errorMessage);
         System.assertEquals('PREVIEW', dto.deliveryMode, 'Preview mode is passed to the LWC');
         System.assertNotEquals(null, dto.contentDocumentId, 'Preview needs the ContentDocumentId');
-        System.assertEquals(null, dto.base64Data, 'Preview-only must not load VersionData into heap');
+        System.assertNotEquals(null, dto.base64Data, 'Small PDFs should return bytes for direct browser preview');
         System.assertNotEquals(null, dto.downloadUrl, 'Servlet URL is still provided as a fallback');
     }
 

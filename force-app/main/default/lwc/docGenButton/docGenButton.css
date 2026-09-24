@@ -2,3 +2,82 @@
     min-height: 8rem;
     width: 100%;
 }
+
+.docgen-centered {
+    min-height: 8rem;
+}
+
+.docgen-preview {
+    width: 100%;
+}
+
+.docgen-preview-header {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.docgen-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.docgen-preview-footer {
+    display: flex;
+    justify-content: center;
+}
+
+.docgen-preview-frame {
+    align-items: center;
+    background: #eef0f3;
+    border: 1px solid #d8dde6;
+    border-radius: 0.25rem;
+    display: block;
+    height: calc(100vh - 11rem);
+    min-height: 36rem;
+    overflow: auto;
+    overflow-x: hidden;
+    padding: 1rem;
+    width: 100%;
+}
+
+object.docgen-preview-frame {
+    background: #eef0f3;
+}
+
+/* Keep HTML previews on an A4 sheet with visible breathing room from the frame. */
+div.docgen-preview-frame {
+    box-sizing: border-box;
+}
+
+div.docgen-preview-frame .dg-pv {
+    box-sizing: border-box;
+    margin: 0 auto 1rem;
+    max-width: 100%;
+    min-height: 297mm;
+    width: min(210mm, 100%);
+}
+
+.docgen-preview-page {
+    background: #fff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.docgen-preview-unavailable {
+    align-items: center;
+    border: 1px solid #d8dde6;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    justify-content: center;
+    min-height: 16rem;
+    padding: 2rem;
+    text-align: center;
+}

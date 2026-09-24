@@ -1,14 +1,45 @@
 <template>
-    <div class="slds-p-around_medium slds-align_absolute-center docgen-button-shell">
+    <div class="slds-p-around_medium docgen-button-shell">
+        <template lwc:if={showPreview}>
+            <div class="docgen-preview">
+                <div class="docgen-preview-header slds-m-bottom_small">
+                    <div>
+                        <p class="slds-text-title_caps">Preview</p>
+                        <p class="slds-text-heading_small">{previewFileName}</p>
+                    </div>
+                </div>
+                <template lwc:if={previewUnavailable}>
+                    <div class="docgen-preview-unavailable">
+                        <lightning-icon icon-name="utility:preview" size="small"></lightning-icon>
+                        <p>The selected template could not be rendered in this preview.</p>
+                    </div>
+                </template>
+                <template lwc:elseif={previewPdf}>
+                    <object
+                        data={previewUrl}
+                        type="application/pdf"
+                        class="docgen-preview-frame"
+                        aria-label={previewFileName}
+                    ></object>
+                </template>
+                <template lwc:else>
+                    <div class="docgen-preview-frame" lwc:dom="manual"></div>
+                </template>
+                <div class="docgen-preview-footer slds-m-top_medium">
+                    <lightning-button label="Close" variant="brand" onclick={handleClose}></lightning-button>
+                </div>
+            </div>
+        </template>
+
         <template lwc:if={loading}>
-            <div class="slds-text-align_center">
+            <div class="slds-text-align_center slds-align_absolute-center docgen-centered">
                 <lightning-spinner alternative-text="Generating document" size="medium"></lightning-spinner>
                 <p class="slds-m-top_large slds-text-body_regular">{statusMessage}</p>
             </div>
         </template>
 
         <template lwc:if={showPicker}>
-            <div class="slds-text-align_center">
+            <div class="slds-text-align_center slds-align_absolute-center docgen-centered">
                 <p class="slds-text-heading_small slds-m-bottom_medium">Choose a document to generate</p>
                 <template for:each={options} for:item="opt">
                     <lightning-button
@@ -24,7 +55,7 @@
         </template>
 
         <template lwc:if={errorMessage}>
-            <div class="slds-text-align_center">
+            <div class="slds-text-align_center slds-align_absolute-center docgen-centered">
                 <lightning-icon
                     icon-name="utility:error"
                     variant="error"

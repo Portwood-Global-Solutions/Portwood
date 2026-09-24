@@ -1,8 +1,8 @@
 import { LightningElement, api } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { CloseActionScreenEvent } from 'lightning/actions';
-import { NavigationMixin } from 'lightning/navigation';
 import { isBlobSafeMime as isBlobSafeMimeUtil } from 'c/docGenUtils';
+import { scopeHtmlForInlinePreview } from 'c/docGenAuthoringKit';
 import getButtons from '@salesforce/apex/DocGenButtonController.getButtons';
 import generate from '@salesforce/apex/DocGenButtonController.generate';
 
@@ -19,10 +19,12 @@ const DELIVERY_DOWNLOAD = 'DOWNLOAD';
 const DELIVERY_PREVIEW = 'PREVIEW';
 const DELIVERY_PREVIEW_AND_DOWNLOAD = 'PREVIEW_AND_DOWNLOAD';
 
-export default class DocGenButton extends NavigationMixin(LightningElement) {
+export default class DocGenButton extends LightningElement {
     _recordId;
     _started = false;
     _waitTimer;
+    _previewObjectUrl;
+    _previewHtml;
 
     @api
     get recordId() {
@@ -40,6 +42,11 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     errorMessage;
     options = [];
     showPicker = false;
+    showPreview = false;
+    previewUrl;
+    previewFileName;
+    previewUnavailable = false;
+    previewPdf = false;
 
     connectedCallback() {
         this.maybeStart();
@@ -56,6 +63,22 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
         if (this._waitTimer) {
             clearTimeout(this._waitTimer);
         }
+        this.releasePreviewUrl();
+    }
+
+    renderedCallback() {
+        if (!this.showPreview || (!this._previewHtml && !this.previewPdf)) {
+            return;
+        }
+        if (this.previewPdf) {
+            return;
+        }
+        const host = this.template.querySelector('.docgen-preview-frame');
+        if (!host || host.dataset.rendered === 'true') {
+            return;
+        }
+        host.innerHTML = scopeHtmlForInlinePreview(this._previewHtml);
+        host.dataset.rendered = 'true';
     }
 
     /** Runs the flow exactly once, and only after recordId has been injected. */
@@ -119,14 +142,16 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
                 this.deliver(res);
             }
             if (wantsPreview) {
-                this.preview(res.contentDocumentId);
+                await this.preview(res);
             }
             this.showToast(
                 'Document generated',
                 this.successMessage(res.fileName, wantsDownload || !wantsPreview, wantsPreview),
                 'success'
             );
-            this.close();
+            if (!wantsPreview) {
+                this.close();
+            }
         } catch (e) {
             this.fail(this.toMessage(e));
         }
@@ -166,16 +191,54 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     }
 
     /**
-     * Opens the native Salesforce file preview (same pattern docGenAdmin uses for
-     * large PDF previews). This is a navigation event, not window.open, so it is not
-     * subject to popup blocking after the async Apex round trip.
+     * Shows the generated file inside the quick action. This gives Preview and
+     * Preview + Download an actual preview screen instead of relying on async
+     * tab/navigation behavior that can be blocked or swallowed by the modal close.
      */
-    preview(contentDocumentId) {
-        this[NavigationMixin.Navigate]({
-            type: 'standard__namedPage',
-            attributes: { pageName: 'filePreview' },
-            state: { selectedRecordId: contentDocumentId }
-        });
+    async preview(res) {
+        this.releasePreviewUrl();
+        this.previewFileName = res.fileName || 'Selected template';
+        this._previewHtml = res.previewHtml || null;
+        // Use the generated selected template even when Apex omits inline bytes
+        // because the file is larger than the download threshold.
+        const previewMimeType = res.templatePreviewMimeType || res.mimeType;
+        this.previewPdf = this.isPdf(previewMimeType) && !!(res.templatePreviewUrl || res.downloadUrl);
+        this.previewUnavailable = !this._previewHtml && !this.previewPdf;
+
+        if (res.templatePreviewUrl) {
+            this.previewUrl = res.templatePreviewUrl;
+        } else if (res.base64Data && this.isBlobSafeMime(res.mimeType)) {
+            const blob = this.base64ToBlob(res.base64Data, res.mimeType);
+            this._previewObjectUrl = URL.createObjectURL(blob);
+            this.previewUrl = this._previewObjectUrl;
+        } else {
+            this.previewUrl = res.templatePreviewUrl || res.downloadUrl;
+        }
+
+        if (!this._previewHtml && !this.previewUrl) {
+            this.fail('Preview could not be opened because the generated file URL was not returned.');
+            return;
+        }
+
+        this.loading = false;
+        this.showPicker = false;
+        this.errorMessage = null;
+        this.showPreview = true;
+
+        if (this.previewPdf) {
+            await Promise.resolve();
+        }
+    }
+
+    isPdf(mimeType) {
+        return (mimeType || '').toLowerCase() === 'application/pdf';
+    }
+
+    releasePreviewUrl() {
+        if (this._previewObjectUrl) {
+            URL.revokeObjectURL(this._previewObjectUrl);
+            this._previewObjectUrl = null;
+        }
     }
 
     successMessage(fileName, downloaded, previewed) {
@@ -213,6 +276,7 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     }
 
     close() {
+        this.releasePreviewUrl();
         this.dispatchEvent(new CloseActionScreenEvent());
     }
 
