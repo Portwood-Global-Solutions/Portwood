@@ -48,7 +48,9 @@ if (acct != null && tmpl != null) {
 
         if (contentVersionId != null && contentDocumentId != null) {
             pass++;
-            System.debug('PREVIEW IDS RETURNED: PASS - version=' + contentVersionId + ', document=' + contentDocumentId);
+            System.debug(
+                'PREVIEW IDS RETURNED: PASS - version=' + contentVersionId + ', document=' + contentDocumentId
+            );
         } else {
             fail++;
             System.debug('PREVIEW IDS RETURNED: FAIL - ' + result);
