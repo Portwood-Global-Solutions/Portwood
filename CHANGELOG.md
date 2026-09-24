@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Signed PDFs can retain an unresolved signature placeholder when a required
+  placement is still pending (#407).** Signer finalization now checks every required
+  placement belonging to the current signer before changing that signer to **Signed**
+  in the typed-signature, flat-PDF, and browser-composited PDF paths. A pending
+  placement blocks completion, leaves the signer and request unfinished, and returns
+  an actionable message asking the signer to complete all required fields; pending
+  placements belonging to future signers do not block the current signer. The signing
+  page also fails closed when placement anchors cannot be loaded or located, and the
+  PDF renderer rejects any output that still contains an unresolved `@@SIG-n@@`
+  sentinel. Failed placement/finalization DML is now surfaced and logged instead of
+  allowing inconsistent status, while legacy requests with no placement records remain
+  supported.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
