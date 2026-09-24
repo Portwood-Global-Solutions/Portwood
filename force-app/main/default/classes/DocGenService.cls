@@ -3059,15 +3059,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Native DOCX/PPTX path
+        Boolean isMacroEnabled = isMacroEnabledWorkbook(mr);
         Blob resultBlob = assembleZip(mr);
-        return saveFile(
-            resultBlob,
-            mr.docTitle,
-            attachmentRecordId,
-            mr.outputFormat,
-            mr.templateType,
-            isMacroEnabledWorkbook(mr)
-        );
+        return saveFile(resultBlob, mr.docTitle, attachmentRecordId, mr.outputFormat, mr.templateType, isMacroEnabled);
     }
 
     /**
@@ -10098,8 +10092,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return savePdfFile(pdfBlob, mr.docTitle, recordId);
         }
 
+        Boolean isMacroEnabled = isMacroEnabledWorkbook(mr);
         Blob resultBlob = assembleZip(mr);
-        return saveFile(resultBlob, mr.docTitle, recordId, outputFormat, templateType, isMacroEnabledWorkbook(mr));
+        return saveFile(resultBlob, mr.docTitle, recordId, outputFormat, templateType, isMacroEnabled);
     }
 
     /**
