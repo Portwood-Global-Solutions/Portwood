@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Document button output-format overrides now match the selected template.** The
+  Buttons builder filters override choices by template type, respects locked output
+  formats, and normalizes legacy values such as `DOCX`, `XLSX`, and `PPTX`. Runtime
+  generation now accepts Excel overrides and rejects unsupported cross-format Office
+  conversions consistently across buttons, Flow, and Apex.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,

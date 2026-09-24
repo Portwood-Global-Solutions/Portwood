@@ -2674,7 +2674,21 @@ For **Word, Excel and PowerPoint**, the file is assembled in your browser, so bo
 
 ### 8.3 Output format override
 
-If the template isn't locked (`Lock_Output_Format__c = false`), users see a toggle to switch between native and PDF. Flow actions also support the override via `outputFormatOverride` parameter.
+An output format override is available only when the template's **Lock Output Format** field is off (`Lock_Output_Format__c = false`). The available choices depend on the template type:
+
+| Template type | Allowed override formats |
+| --- | --- |
+| Word | **PDF** or **Word** |
+| Excel | **Excel** |
+| PowerPoint | **PowerPoint** |
+| HTML or Canvas | **PDF** |
+| PDF | **PDF** |
+
+The builder updates the choices when the template changes and clears an incompatible value before saving. Leave the field blank to use the template's default output format. A locked template has no override choice, and runtime requests that try to override it are rejected.
+
+Portwood does not convert between native Office formats: an Excel template cannot output Word or PowerPoint, and a PowerPoint template cannot output PDF. Word templates can be rendered as PDF because the PDF renderer supports Word input. Flow actions and the Apex API apply the same validation rules through the `outputFormatOverride` parameter.
+
+For buttons, use the canonical values `PDF`, `Word`, `Excel`, `PowerPoint`, or `HTML`. Existing configurations using common legacy aliases such as `DOCX`, `XLSX`, or `PPTX` are normalized automatically when the button runs.
 
 ### 8.4 PDF merge (combine with existing PDFs)
 
@@ -3544,7 +3558,7 @@ Primary entry point from Apex. Use from triggers, scheduled Apex, or other servi
 | Method                                                                                                                   | Returns                                | Purpose                                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generateDocument(Id templateId, Id recordId)`                                                                           | `Id` (ContentDocumentId)               | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format.                                                                                                 |
-| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                                        |
+| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'Excel'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                             |
 | `generatePdfBlob(Id templateId, Id recordId)`                                                                            | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system.                                                                                                       |
 | `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)`                           | `Id`                                   | Same as `generateDocument` but skips the per-record data query and uses the supplied map instead. For custom bulk loops or callers that already have the data in hand.                                                |
 | `generatePdfBlobFromData(Id templateId, Map<String,Object> dataMap)`                                                     | `Map<String,Object>` (`blob`, `title`) | Renders a PDF straight from a caller-built data map — no SOQL, no recordId required. Lets you assemble external API responses, computed totals, or cross-object aggregations and merge them directly into a template. |
