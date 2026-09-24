@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Designer PDF Preview can fail to open under Lightning Web Security (#411).**
+  The Designer previously opened a generated `blob:` URL with `window.open`,
+  which could produce a `SecureWindow.open` error or leave a blank tab in some
+  orgs. PDF Preview now renders the current unsaved draft against the selected
+  sample record and opens the result in Salesforce's native file viewer for
+  every PDF size. The template is not saved; Salesforce creates a preview file
+  for the viewer. This change applies to the Designer toolbar's PDF Preview
+  action. Verification in an org that previously showed the error is pending.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
