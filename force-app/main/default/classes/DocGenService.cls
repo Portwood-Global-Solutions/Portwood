@@ -1333,8 +1333,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Validates that a runtime output-format override is allowed for a given template.
      * Rules:
      *   - If template has Lock_Output_Format__c = true, no override is permitted (must be null).
-     *   - PowerPoint templates cannot render to PDF (Blob.toPdf only handles Word source).
-     *   - Override values must be one of: 'PDF', 'Word', 'PowerPoint'.
+     *   - PowerPoint / Excel templates cannot render to PDF (Blob.toPdf only handles Word / HTML source).
+     *   - Native Office overrides must match the template type; this engine does
+     *     not convert XLSX <-> DOCX <-> PPTX.
+     *   - Override values must be one of: 'PDF', 'Word', 'Excel', 'PowerPoint', 'HTML'.
      * Throws DocGenException on violation.
      */
     @TestVisible
@@ -1344,11 +1346,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (
             outputFormatOverride != 'PDF' &&
             outputFormatOverride != 'Word' &&
+            outputFormatOverride != 'Excel' &&
             outputFormatOverride != 'PowerPoint' &&
             outputFormatOverride != 'HTML'
         ) {
             throw new DocGenException(
-                'Invalid output format override: ' + outputFormatOverride + '. Expected PDF, Word, PowerPoint, or HTML.'
+                'Invalid output format override: ' +
+                    outputFormatOverride +
+                    '. Expected PDF, Word, Excel, PowerPoint, or HTML.'
             );
         }
         DocGenFlsGuard.assertAccessible(
@@ -1369,11 +1374,23 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (t.Lock_Output_Format__c == true) {
             throw new DocGenException('This template locks its output format. Override not permitted.');
         }
-        if (t.Type__c == 'PowerPoint' && outputFormatOverride == 'PDF') {
-            throw new DocGenException('PowerPoint templates cannot render to PDF.');
+        if ((t.Type__c == 'PowerPoint' || t.Type__c == 'Excel') && outputFormatOverride == 'PDF') {
+            throw new DocGenException(t.Type__c + ' templates cannot render to PDF.');
         }
         if (t.Type__c == 'PDF' && outputFormatOverride != 'PDF') {
             throw new DocGenException('PDF AcroForm templates can only output PDF.');
+        }
+        if (
+            (outputFormatOverride == 'Word' ||
+            outputFormatOverride == 'Excel' ||
+            outputFormatOverride == 'PowerPoint') && outputFormatOverride != t.Type__c
+        ) {
+            throw new DocGenException(
+                t.Type__c +
+                    ' templates can only output their native ' +
+                    t.Type__c +
+                    ' format. Cross-format Office conversion is not supported.'
+            );
         }
     }
 

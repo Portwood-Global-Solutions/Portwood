@@ -44,9 +44,18 @@ public with sharing class DocGenButtonAdminController {
         public String label;
         @AuraEnabled
         public String value;
+        @AuraEnabled
+        public String templateType;
+        @AuraEnabled
+        public Boolean lockOutputFormat;
         public Option(String l, String v) {
             this.label = l;
             this.value = v;
+        }
+        public Option(String l, String v, String templateType, Boolean lockOutputFormat) {
+            this(l, v);
+            this.templateType = templateType;
+            this.lockOutputFormat = lockOutputFormat;
         }
     }
 
@@ -99,10 +108,13 @@ public with sharing class DocGenButtonAdminController {
         // Button-manager-gated read of the template list for a picker; Name /
         // API_Name are label fields. SYSTEM_MODE avoids the managed-package USER_MODE
         // namespace pitfall (see DocGenController); class access is the gate.
-        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Name', 'API_Name__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Name', 'API_Name__c', 'Type__c', 'Lock_Output_Format__c' }
+        );
         /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
         List<DocGen_Template__c> tpls = [
-            SELECT Id, Name, API_Name__c
+            SELECT Id, Name, API_Name__c, Type__c, Lock_Output_Format__c
             FROM DocGen_Template__c
             WHERE Is_Active__c = TRUE
             WITH SYSTEM_MODE
@@ -113,7 +125,9 @@ public with sharing class DocGenButtonAdminController {
             out.add(
                 new Option(
                     hasKey ? t.Name + ' (' + t.API_Name__c + ')' : t.Name,
-                    hasKey ? 'key:' + t.API_Name__c : 'id:' + t.Id
+                    hasKey ? 'key:' + t.API_Name__c : 'id:' + t.Id,
+                    t.Type__c,
+                    t.Lock_Output_Format__c
                 )
             );
         }

@@ -3,7 +3,7 @@
     <fullName>Output_Format_Override__c</fullName>
     <label>Output Format Override</label>
     <description
-    >Optional. Override the template's output format at runtime: PDF, Word, PowerPoint, or HTML (Excel is not supported as an override). Leave blank to use the template default. Errors if the template has Lock Output Format enabled.</description>
+    >Optional. Override the template's output format at runtime. Word templates can output PDF or Word; Excel and PowerPoint templates can output their native Office format. Leave blank to use the template default. Errors if the template has Lock Output Format enabled.</description>
     <type>Text</type>
     <length>40</length>
     <required>false</required>

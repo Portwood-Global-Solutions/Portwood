@@ -206,7 +206,7 @@ public with sharing class DocGenButtonController {
             gReq.recordId = recordId;
             gReq.saveToRecord = cfg.Save_To_Record__c == true;
             gReq.documentTitle = cfg.Document_Title__c;
-            gReq.outputFormatOverride = cfg.Output_Format_Override__c;
+            gReq.outputFormatOverride = normalizeOutputFormatOverride(cfg.Output_Format_Override__c);
 
             GenResult res = generator.generate(gReq);
             if (res == null || res.success != true) {
@@ -397,6 +397,29 @@ public with sharing class DocGenButtonController {
             LIMIT 1
         ]; // NOPMD ApexCRUDViolation — CMDT is admin-authored config; internal config reads use SYSTEM_MODE
         return rows.isEmpty() ? null : rows[0];
+    }
+
+    @TestVisible
+    private static String normalizeOutputFormatOverride(String rawOverride) {
+        if (String.isBlank(rawOverride)) {
+            return null;
+        }
+        String value = rawOverride.trim();
+        String key = value.toUpperCase();
+        Map<String, String> aliases = new Map<String, String>{
+            'PDF' => 'PDF',
+            'DOCX' => 'Word',
+            'WORD' => 'Word',
+            'XLSX' => 'Excel',
+            'XLSM' => 'Excel',
+            'EXCEL' => 'Excel',
+            'PPTX' => 'PowerPoint',
+            'PPT' => 'PowerPoint',
+            'POWERPOINT' => 'PowerPoint',
+            'POWER POINT' => 'PowerPoint',
+            'HTML' => 'HTML'
+        };
+        return aliases.containsKey(key) ? aliases.get(key) : value;
     }
 
     private static String buildFileName(ContentVersion cv) {
