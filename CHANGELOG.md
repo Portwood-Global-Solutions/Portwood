@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased - PDF AcroForm accent encoding
+
+### Fixed
+
+- **Accented characters in fillable PDF output.** PDF-to-PDF templates now preserve
+  mapped values containing accented Latin characters, including `Poda de Árvore` and
+  `Solicitação`. PDF field values use UTF-16BE encoding, visible appearances use
+  PDF-compatible character bytes, and XFA datasets use XML character references.
+- **AcroForm regression coverage.** Added Apex tests for accented text, XFA fields,
+  widgets, buttons, xref streams, and saved PDF snapshots. Added an output-format E2E
+  assertion for accented AcroForm values.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
