@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Portwood Button delivery-mode preview.** `Preview` now keeps the quick action open
+  and displays the active template selected by the button configuration inside the
+  screen. `Preview and Download` displays that same template while downloading the
+  generated document. The preview uses an A4 layout, fills the available width without
+  horizontal scrolling, supports vertical review of multi-page templates, and places
+  **Close** below the preview. The implementation uses the active template version and
+  file servlet URL so it remains portable across orgs instead of depending on an
+  org-specific file-preview navigation state.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
