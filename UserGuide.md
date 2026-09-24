@@ -2785,7 +2785,7 @@ Command Hub → **Job History** tab. Every bulk job shows:
 
 - Status (Draft, Harvesting, Running, Completed, Completed with Errors, Recovering, Failed)
 - Record count + success/failure counts
-- Generated PDFs (clickable links)
+- Generated files (clickable links). Individual Files are linked to the bulk job as well as to their source records, so they can be retrieved from Job History.
 - Start + end time
 - Error messages (for failed jobs)
 

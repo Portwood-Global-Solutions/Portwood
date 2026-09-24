@@ -83,6 +83,29 @@ try {
     System.debug('SUBMIT JOB: FAIL — ' + e.getMessage());
 }
 
+// ===== Individual output is linked to the parent bulk job =====
+// Invoke the batch lifecycle directly so this E2E assertion can inspect the
+// generated ContentDocumentLink in the same transaction.
+try {
+    DocGenBatch linkBatch = new DocGenBatch(jobId);
+    linkBatch.start(null);
+    Account linkAccount = [SELECT Id FROM Account WHERE Id = :acctId LIMIT 1];
+    linkBatch.execute(null, new List<SObject>{ linkAccount });
+    linkBatch.finish(null);
+
+    List<Map<String, String>> jobFiles = DocGenBulkController.getJobGeneratedPdfs(jobId);
+    if (jobFiles != null && !jobFiles.isEmpty()) {
+        pass++;
+        System.debug('INDIVIDUAL FILE LINKED TO JOB: PASS — files: ' + jobFiles.size());
+    } else {
+        fail++;
+        System.debug('INDIVIDUAL FILE LINKED TO JOB: FAIL — no generated files on Job History');
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('INDIVIDUAL FILE LINKED TO JOB: FAIL — ' + e.getMessage());
+}
+
 // ===== Sort Order — parent-level ORDER BY on the bulk query =====
 // The bulk query had no ORDER BY, so a merged PDF came out in record-creation
 // order with no way to change it. Merge order follows query order, so these
