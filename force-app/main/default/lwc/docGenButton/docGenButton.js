@@ -38,6 +38,7 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     loading = true;
     statusMessage = 'Preparing…';
     errorMessage;
+    doneMessage;
     options = [];
     showPicker = false;
 
@@ -126,7 +127,16 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
                 this.successMessage(res.fileName, wantsDownload || !wantsPreview, wantsPreview),
                 'success'
             );
-            this.close();
+            if (wantsPreview) {
+                // Closing the action screen, now or after a delay, returns to the record page and
+                // cancels the file-preview navigation started above (the preview is layered on top of
+                // the action's own page). So leave the action open, but stop the spinner: once the
+                // preview is closed the user sees a finished state with a Close button, not "Generating".
+                this.loading = false;
+                this.doneMessage = 'Your document opened in the file preview. You can close this window.';
+            } else {
+                this.close();
+            }
         } catch (e) {
             this.fail(this.toMessage(e));
         }

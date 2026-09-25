@@ -23,6 +23,19 @@
             </div>
         </template>
 
+        <template lwc:if={doneMessage}>
+            <div class="slds-text-align_center">
+                <lightning-icon
+                    icon-name="utility:success"
+                    variant="success"
+                    size="small"
+                    class="slds-m-bottom_x-small"
+                ></lightning-icon>
+                <p>{doneMessage}</p>
+                <lightning-button label="Close" class="slds-m-top_medium" onclick={handleClose}></lightning-button>
+            </div>
+        </template>
+
         <template lwc:if={errorMessage}>
             <div class="slds-text-align_center">
                 <lightning-icon
