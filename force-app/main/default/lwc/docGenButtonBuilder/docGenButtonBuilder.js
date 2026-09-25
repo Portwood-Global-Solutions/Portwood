@@ -218,7 +218,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             documentTitle: this.form.documentTitle || null,
             outputFormatOverride: outputFormatOverride || null,
             saveToRecord: !!this.form.saveToRecord,
-            deliveryMode: this.form.deliveryMode || null,
+            deliveryMode: this.isEmailMode ? null : this.form.deliveryMode || null,
             sortOrder: this.form.sortOrder === '' || this.form.sortOrder == null ? null : this.form.sortOrder,
             active: this.form.active !== false,
             recordTypeDeveloperNames: this.selectedRecordTypes.length ? this.selectedRecordTypes.join(',') : null

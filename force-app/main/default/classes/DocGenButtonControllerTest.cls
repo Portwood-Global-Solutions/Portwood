@@ -587,4 +587,153 @@ private class DocGenButtonControllerTest {
             'Expected an object-mismatch error naming the configured object: ' + dto.errorMessage
         );
     }
+
+    // ---------------------------------------------------------------------
+    // Send Email: template scoping, recipient cap, sender
+    // ---------------------------------------------------------------------
+
+    private static DocGen_Template__c makeEmailTemplate(String name, String apiName, String baseObject) {
+        DocGen_Template__c t = new DocGen_Template__c(
+            Name = name,
+            API_Name__c = apiName,
+            Base_Object_API__c = baseObject,
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF'
+        );
+        Database.insert(t, AccessLevel.SYSTEM_MODE);
+        return t;
+    }
+
+    private static DocGen_Button__mdt unpinnedEmailCfg() {
+        DocGen_Button__mdt c = cfg('Email_Button', OBJ, null, true);
+        c.Action_Type__c = 'Email';
+        return c;
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_unpinnedButton_rejectsTemplateBuiltForAnotherObject() {
+        DocGenButtonController.generator = new MockGenerator();
+        makeEmailTemplate('Account Only Template', 'Account_Only_Tpl', 'Account');
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ unpinnedEmailCfg() };
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            'key:Account_Only_Tpl',
+            new List<String>{ 'one@example.com' },
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(false, dto.success, 'A template built for another object must be refused');
+        System.assert(dto.errorMessage.contains('not available for this record'), 'Got: ' + dto.errorMessage);
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_unpinnedButton_acceptsTemplateForTheRecordObject() {
+        DocGenButtonController.generator = new MockGenerator();
+        makeEmailTemplate('User Template', 'User_Tpl', OBJ);
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ unpinnedEmailCfg() };
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            'key:User_Tpl',
+            new List<String>{ 'one@example.com' },
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(true, dto.success, 'Expected success: ' + dto.errorMessage);
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_unpinnedButton_requiresATemplate() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ unpinnedEmailCfg() };
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            null,
+            new List<String>{ 'one@example.com' },
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(false, dto.success, 'No template chosen and none pinned must fail');
+        System.assert(dto.errorMessage.contains('Choose a template'), 'Got: ' + dto.errorMessage);
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_pinnedButton_ignoresTheClientsTemplateChoice() {
+        DocGenButtonController.generator = new MockGenerator();
+        makeEmailTemplate('Account Only Template', 'Account_Only_Tpl', 'Account');
+        DocGen_Button__mdt pinned = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        pinned.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ pinned };
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            'key:Account_Only_Tpl',
+            new List<String>{ 'one@example.com' },
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(true, dto.success, 'The pinned template wins; the client value is ignored');
+    }
+
+    @IsTest
+    static void getEmailTemplateOptions_offersOnlyTemplatesForTheRecordObject() {
+        makeEmailTemplate('User Template', 'User_Tpl', OBJ);
+        makeEmailTemplate('Account Only Template', 'Account_Only_Tpl', 'Account');
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ unpinnedEmailCfg() };
+
+        List<DocGenButtonController.EmailTemplateOption> opts = DocGenButtonController.getEmailTemplateOptions(
+            UserInfo.getUserId(),
+            'Email_Button'
+        );
+
+        Set<String> values = new Set<String>();
+        for (DocGenButtonController.EmailTemplateOption o : opts) {
+            values.add(o.value);
+        }
+        System.assert(values.contains('key:User_Tpl'), 'Template for the record object is offered');
+        System.assert(!values.contains('key:Account_Only_Tpl'), 'Template for another object is not offered');
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_rejectsMoreThanTheRecipientCap() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        emailCfg.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ emailCfg };
+        List<String> many = new List<String>();
+        for (Integer i = 0; i <= DocGenButtonController.MAX_EMAIL_RECIPIENTS; i++) {
+            many.add('person' + i + '@example.com');
+        }
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            null,
+            many,
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(false, dto.success, 'More than the cap must be refused');
+        System.assert(dto.errorMessage.contains('at most'), 'Got: ' + dto.errorMessage);
+    }
+
+    @IsTest
+    static void configuredSender_isNullUnlessAnAdminConfiguredOne() {
+        System.assertEquals(
+            null,
+            DocGenButtonController.configuredOrgWideEmailAddressId(),
+            'With no configured sender the email goes out as the running user, never a guessed org-wide address'
+        );
+    }
 }

@@ -2743,6 +2743,8 @@ The Send Email flow has three steps:
 
 Sending generates the document, links the generated file to the source record's Files, and sends the email to every selected/manual recipient with the generated document attached. If Salesforce blocks delivery, for example because org deliverability is restricted or the email service returns an error, the user sees the send error in the modal.
 
+**Who the email goes from, and what it can send.** The email is sent from the sender an admin configured for Portwood (Portwood → Signatures settings) when one is set and verified; otherwise it is sent as the user who clicked the button. Portwood never picks an org-wide address on its own. A Send Email button can address at most 10 recipients. If the button pins a template, that template is always used; otherwise the user can choose only among active templates built for the record's own object. The preview is a sanitized content check, not a pixel-perfect render; the final document is generated when you send.
+
 ### 8.7 Document naming — Document Title Format tokens
 
 The template's **Document Title Format** field (Settings tab → Document Title editor) names every generated file — runner, bulk, Flow, quick action, and signed PDFs alike. Blank = the template name. Supported tokens, resolved against the source record:

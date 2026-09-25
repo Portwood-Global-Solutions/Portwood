@@ -91,7 +91,13 @@
                         <p>Review the generated document before composing the email.</p>
                     </div>
                 </div>
-                <div class="preview-frame"><div class="preview-html" lwc:dom="manual"></div></div>
+                <!-- The platform sanitizes this (scripts, event handlers and unsafe URLs are stripped), so
+                     merged record data can never inject markup into the page. It is a content check, not a
+                     pixel-perfect render: the final document is generated when you send. -->
+                <div class="preview-frame">
+                    <lightning-formatted-rich-text class="preview-html" value={previewHtml}>
+                    </lightning-formatted-rich-text>
+                </div>
             </section>
             <div class="slds-m-top_medium slds-text-align_right">
                 <lightning-button label="Back" onclick={handleBackToSelect}></lightning-button>

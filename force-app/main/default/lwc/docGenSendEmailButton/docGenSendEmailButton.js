@@ -44,7 +44,6 @@ export default class DocGenSendEmailButton extends LightningElement {
     selectedButton;
     selectedTemplate;
     previewHtml;
-    previewRendered = false;
     existingEmailOptions = [];
     selectedExistingEmails = [];
     manualEmails = '';
@@ -64,17 +63,6 @@ export default class DocGenSendEmailButton extends LightningElement {
     disconnectedCallback() {
         if (this._waitTimer) {
             clearTimeout(this._waitTimer);
-        }
-    }
-
-    renderedCallback() {
-        if (this.screen !== 'preview' || this.previewRendered || !this.previewHtml) {
-            return;
-        }
-        const preview = this.template.querySelector('.preview-html');
-        if (preview) {
-            preview.innerHTML = this.previewHtml;
-            this.previewRendered = true;
         }
     }
 
@@ -138,14 +126,17 @@ export default class DocGenSendEmailButton extends LightningElement {
 
     async init() {
         try {
-            const [opts, templates] = await Promise.all([
-                getEmailButtons({ recordId: this.effectiveRecordId }),
-                getEmailTemplateOptions()
-            ]);
+            const opts = await getEmailButtons({ recordId: this.effectiveRecordId });
             if (!opts || opts.length === 0) {
                 this.fail('No Portwood Send Email button is configured for this record type.');
                 return;
             }
+            // The template list depends on the record and the button (a button can pin one
+            // template; otherwise only templates built for this record's object are offered).
+            const templates = await getEmailTemplateOptions({
+                recordId: this.effectiveRecordId,
+                configDeveloperName: opts[0].developerName
+            });
             this.options = opts.map((opt) => ({
                 ...opt,
                 value: opt.developerName,
@@ -282,7 +273,6 @@ export default class DocGenSendEmailButton extends LightningElement {
                 configDeveloperName: this.selectedButton,
                 templateReference: this.selectedTemplate
             });
-            this.previewRendered = false;
             this.screen = 'preview';
             return true;
         } catch (e) {
@@ -322,14 +312,6 @@ export default class DocGenSendEmailButton extends LightningElement {
         if (targetIndex < currentIndex) {
             this.screen = target;
             this.errorMessage = null;
-
-            if (target === 'preview') {
-                this.previewRendered = false;
-            }
-
-            if (target === 'select') {
-                this.previewRendered = false;
-            }
             return;
         }
 
@@ -356,7 +338,6 @@ export default class DocGenSendEmailButton extends LightningElement {
 
     handleBackToPreview() {
         this.screen = 'preview';
-        this.previewRendered = false;
         this.errorMessage = null;
     }
 

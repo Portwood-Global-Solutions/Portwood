@@ -32,6 +32,10 @@ public with sharing class DocGenButtonController {
     public static final String DELIVERY_PREVIEW = 'PREVIEW';
     public static final String DELIVERY_PREVIEW_AND_DOWNLOAD = 'PREVIEW_AND_DOWNLOAD';
 
+    /** Cap on recipients per Send Email action (manual entry included). */
+    @TestVisible
+    private static final Integer MAX_EMAIL_RECIPIENTS = 10;
+
     public class DocGenButtonException extends Exception {
     }
 
@@ -360,7 +364,7 @@ public with sharing class DocGenButtonController {
     public static String getEmailPreviewHtml(Id recordId, String configDeveloperName, String templateReference) {
         try {
             DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
-            Id templateId = resolveTemplateId(cfg, configDeveloperName, templateReference);
+            Id templateId = resolveEmailTemplateId(cfg, configDeveloperName, templateReference, recordId);
             String html = DocGenSignatureSenderController.getDocumentPreviewHtml(templateId, String.valueOf(recordId));
             return String.isBlank(html) ? previewFallback('Preview is unavailable for this template.') : html;
         } catch (Exception e) {
@@ -368,18 +372,32 @@ public with sharing class DocGenButtonController {
         }
     }
 
-    @AuraEnabled(cacheable=true)
-    public static List<EmailTemplateOption> getEmailTemplateOptions() {
+    /**
+     * Templates the user may pick for this Email button on this record. A button that pins a
+     * template offers only that one; otherwise only active templates built for the record's own
+     * object are offered. Not cacheable: the answer depends on the record and the button.
+     */
+    @AuraEnabled
+    public static List<EmailTemplateOption> getEmailTemplateOptions(Id recordId, String configDeveloperName) {
         List<EmailTemplateOption> out = new List<EmailTemplateOption>();
-        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Name', 'API_Name__c' });
+        DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
+        String recObject = recordId.getSObjectType().getDescribe().getName();
+        Id pinnedId = hasConfiguredTemplate(cfg) ? resolveTemplateId(cfg, configDeveloperName, null) : null;
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Name', 'API_Name__c', 'Base_Object_API__c', 'Is_Active__c' }
+        );
         /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
         for (DocGen_Template__c t : [
             SELECT Id, Name, API_Name__c
             FROM DocGen_Template__c
-            WHERE Is_Active__c = TRUE
+            WHERE Is_Active__c = TRUE AND Base_Object_API__c = :recObject
             WITH SYSTEM_MODE
             ORDER BY Name
         ]) {
+            if (pinnedId != null && t.Id != pinnedId) {
+                continue;
+            }
             EmailTemplateOption option = new EmailTemplateOption();
             option.label = t.Name;
             option.value = String.isNotBlank(t.API_Name__c) ? 'key:' + t.API_Name__c : 'id:' + t.Id;
@@ -467,7 +485,7 @@ public with sharing class DocGenButtonController {
             }
 
             DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
-            Id templateId = resolveTemplateId(cfg, configDeveloperName, templateReference);
+            Id templateId = resolveEmailTemplateId(cfg, configDeveloperName, templateReference, recordId);
 
             GenRequest gReq = new GenRequest();
             gReq.templateId = templateId;
@@ -503,9 +521,11 @@ public with sharing class DocGenButtonController {
             msg.setSubject(stripHtml(subject));
             msg.setHtmlBody(body);
             msg.setFileAttachments(new List<Messaging.EmailFileAttachment>{ attachment });
-            Id verifiedSenderId = verifiedOrgWideEmailAddressId();
-            if (verifiedSenderId != null) {
-                msg.setOrgWideEmailAddressId(verifiedSenderId);
+            // Send from the sender the admin configured for Portwood when there is one; otherwise
+            // as the running user. Never guess an org-wide address the admin did not choose.
+            Id configuredSenderId = configuredOrgWideEmailAddressId();
+            if (configuredSenderId != null) {
+                msg.setOrgWideEmailAddressId(configuredSenderId);
             }
             if (!Test.isRunningTest()) {
                 Messaging.SendEmailResult[] sendResults = Messaging.sendEmail(new List<Messaging.Email>{ msg }, false);
@@ -677,11 +697,15 @@ public with sharing class DocGenButtonController {
         if (String.isBlank(raw)) {
             return DELIVERY_DOWNLOAD;
         }
-        String k = raw.trim().toUpperCase().replaceAll('[\\s+&-]+', '_').replaceAll('_+', '_');
-        if (k == DELIVERY_PREVIEW || k == DELIVERY_PREVIEW_AND_DOWNLOAD) {
-            return k;
+        // Separators ("+", "&", "-", spaces) collapse to "_", and a spelled-out "AND" is dropped,
+        // so "Preview + Download", "Preview & Download" and "Preview_And_Download" all become
+        // PREVIEW_DOWNLOAD. (The "+" and "&" forms have no "AND" to match on, which is why the
+        // canonical-string compare alone left them falling back to DOWNLOAD.)
+        String k = raw.trim().toUpperCase().replaceAll('[\\s+&-]+', '_').replaceAll('_+', '_').replace('_AND_', '_');
+        if (k == DELIVERY_PREVIEW) {
+            return DELIVERY_PREVIEW;
         }
-        if (k == 'DOWNLOAD_AND_PREVIEW' || k == 'BOTH') {
+        if (k == 'PREVIEW_DOWNLOAD' || k == 'DOWNLOAD_PREVIEW' || k == 'BOTH') {
             return DELIVERY_PREVIEW_AND_DOWNLOAD;
         }
         return DELIVERY_DOWNLOAD;
@@ -817,6 +841,11 @@ public with sharing class DocGenButtonController {
                 }
             }
         }
+        if (unique.size() > MAX_EMAIL_RECIPIENTS) {
+            throw new DocGenButtonException(
+                'A Send Email action can address at most ' + MAX_EMAIL_RECIPIENTS + ' recipients.'
+            );
+        }
         return new List<String>(unique);
     }
 
@@ -909,20 +938,72 @@ public with sharing class DocGenButtonController {
             : 'Salesforce did not accept the email for delivery: ' + String.join(messages, '; ');
     }
 
-    private static Id verifiedOrgWideEmailAddressId() {
+    /**
+     * The org-wide sender an admin explicitly chose for Portwood emails
+     * (DocGen_Settings__c.Signature_OWA_Id__c, the same setting the signature and email-template
+     * senders use), and only if it is still verified. Null means "send as the running user".
+     */
+    @TestVisible
+    private static Id configuredOrgWideEmailAddressId() {
         try {
+            DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+            if (settings == null || String.isBlank(settings.Signature_OWA_Id__c)) {
+                return null;
+            }
+            String configured = settings.Signature_OWA_Id__c;
             List<OrgWideEmailAddress> senders = [
                 SELECT Id
                 FROM OrgWideEmailAddress
-                WHERE IsVerified = TRUE
+                WHERE Id = :configured AND IsVerified = TRUE
                 WITH USER_MODE
-                ORDER BY CreatedDate
                 LIMIT 1
             ];
             return senders.isEmpty() ? null : senders[0].Id;
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static Boolean hasConfiguredTemplate(DocGen_Button__mdt cfg) {
+        return String.isNotBlank(cfg.Template_Id__c) || String.isNotBlank(cfg.Template_API_Name__c);
+    }
+
+    /**
+     * Template an Email button may generate. A button that pins a template always uses it (the
+     * client cannot swap it). Otherwise the client's choice must be an active template built for
+     * the record's own object, so the picker is not the only thing standing between a user and
+     * every template in the org.
+     */
+    private static Id resolveEmailTemplateId(
+        DocGen_Button__mdt cfg,
+        String configDeveloperName,
+        String templateReference,
+        Id recordId
+    ) {
+        if (hasConfiguredTemplate(cfg)) {
+            return resolveTemplateId(cfg, configDeveloperName, null);
+        }
+        if (String.isBlank(templateReference)) {
+            throw new DocGenButtonException('Choose a template.');
+        }
+        Id templateId = resolveTemplateId(cfg, configDeveloperName, templateReference);
+        String recObject = recordId.getSObjectType().getDescribe().getName();
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Base_Object_API__c', 'Is_Active__c' }
+        );
+        /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
+        List<DocGen_Template__c> allowed = [
+            SELECT Id
+            FROM DocGen_Template__c
+            WHERE Id = :templateId AND Is_Active__c = TRUE AND Base_Object_API__c = :recObject
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (allowed.isEmpty()) {
+            throw new DocGenButtonException('That template is not available for this record.');
+        }
+        return templateId;
     }
 
     private static String stripHtml(String value) {

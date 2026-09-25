@@ -85,16 +85,20 @@
                             onchange={handleComboChange}
                         ></lightning-combobox>
                     </div>
-                    <div class="slds-col slds-size_1-of-2 slds-var-p-bottom_x-small">
-                        <lightning-combobox
-                            label="Delivery mode"
-                            data-field="deliveryMode"
-                            value={form.deliveryMode}
-                            options={deliveryModeOptions}
-                            onchange={handleComboChange}
-                            field-level-help="Preview opens the file in the Salesforce file viewer right after generation."
-                        ></lightning-combobox>
-                    </div>
+                    <!-- Delivery mode only applies to Document buttons (open/download the file). A Send Email
+                         button attaches the file to an email, so the setting would do nothing there. -->
+                    <template if:false={isEmailMode}>
+                        <div class="slds-col slds-size_1-of-2 slds-var-p-bottom_x-small">
+                            <lightning-combobox
+                                label="Delivery mode"
+                                data-field="deliveryMode"
+                                value={form.deliveryMode}
+                                options={deliveryModeOptions}
+                                onchange={handleComboChange}
+                                field-level-help="Preview opens the file in the Salesforce file viewer right after generation."
+                            ></lightning-combobox>
+                        </div>
+                    </template>
                     <div class="slds-col slds-size_1-of-1 slds-var-p-bottom_x-small">
                         <template if:true={hasRecordTypes}>
                             <lightning-dual-listbox

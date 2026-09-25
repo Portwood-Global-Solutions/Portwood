@@ -14,6 +14,19 @@
 
 ## Unreleased
 
+- **Delivery Mode on the Portwood Button (`Delivery_Mode__c`).** A button can now open the
+  generated file in the native Salesforce file preview, download it, or both. Blank means
+  Download, so existing buttons are unchanged. "Preview + Download", "Preview & Download" and
+  "Preview_And_Download" are all accepted.
+- **Send Email buttons: template, sender and recipient limits.** A button that pins a template
+  always uses it, otherwise only active templates built for the record's object are offered
+  (enforced on the server, not just in the picker). Email is sent from the sender an admin
+  configured for Portwood when one is set, otherwise as the clicking user. At most 10 recipients.
+  The document preview is rendered through the platform's sanitizing rich-text component.
+- **Signing pages report a refused signature.** `DocGenSignature.page` now shows the server's
+  message when signing is refused because a required placement is still pending, instead of
+  saying the signature was recorded.
+
 ### Fixed
 
 - **Designer PDF Preview can fail to open under Lightning Web Security (#411).**
