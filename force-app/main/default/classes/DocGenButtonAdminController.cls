@@ -30,7 +30,11 @@ public with sharing class DocGenButtonAdminController {
         @AuraEnabled
         public String outputFormatOverride;
         @AuraEnabled
+        public String actionType;
+        @AuraEnabled
         public Boolean saveToRecord;
+        @AuraEnabled
+        public String deliveryMode;
         @AuraEnabled
         public Decimal sortOrder;
         @AuraEnabled
@@ -44,16 +48,26 @@ public with sharing class DocGenButtonAdminController {
         public String label;
         @AuraEnabled
         public String value;
+        @AuraEnabled
+        public String templateType;
+        @AuraEnabled
+        public Boolean lockOutputFormat;
         public Option(String l, String v) {
             this.label = l;
             this.value = v;
+        }
+        public Option(String l, String v, String templateType, Boolean lockOutputFormat) {
+            this(l, v);
+            this.templateType = templateType;
+            this.lockOutputFormat = lockOutputFormat;
         }
     }
 
     /** All button configs (active + inactive) for the management list. */
     @AuraEnabled(cacheable=false)
-    public static List<ButtonConfigDTO> getButtonConfigs() {
+    public static List<ButtonConfigDTO> getButtonConfigs(String actionType) {
         List<ButtonConfigDTO> out = new List<ButtonConfigDTO>();
+        String wantedActionType = normalizeActionType(actionType);
         // Custom metadata is admin-authored config (no row-level FLS/CRUD); this
         // class is reachable only via the DocGen_Button_Manager permission set.
         /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
@@ -64,9 +78,11 @@ public with sharing class DocGenButtonAdminController {
                 Object_API_Name__c,
                 Template_API_Name__c,
                 Template_Id__c,
+                Action_Type__c,
                 Document_Title__c,
                 Output_Format_Override__c,
                 Save_To_Record__c,
+                Delivery_Mode__c,
                 Sort_Order__c,
                 Active__c,
                 Record_Type_Developer_Names__c
@@ -74,15 +90,21 @@ public with sharing class DocGenButtonAdminController {
             ORDER BY Object_API_Name__c, Sort_Order__c NULLS LAST, MasterLabel
         ]; // NOPMD ApexCRUDViolation - button-manager-gated CMDT config read
         for (DocGen_Button__mdt c : rows) {
+            String rowActionType = normalizeActionType(c.Action_Type__c);
+            if (rowActionType != wantedActionType) {
+                continue;
+            }
             ButtonConfigDTO d = new ButtonConfigDTO();
             d.developerName = c.DeveloperName;
             d.label = c.MasterLabel;
             d.objectApiName = c.Object_API_Name__c;
             d.templateApiName = c.Template_API_Name__c;
             d.templateId = c.Template_Id__c;
+            d.actionType = rowActionType;
             d.documentTitle = c.Document_Title__c;
             d.outputFormatOverride = c.Output_Format_Override__c;
             d.saveToRecord = c.Save_To_Record__c;
+            d.deliveryMode = c.Delivery_Mode__c;
             d.sortOrder = c.Sort_Order__c;
             d.active = c.Active__c;
             d.recordTypeDeveloperNames = c.Record_Type_Developer_Names__c;
@@ -99,10 +121,13 @@ public with sharing class DocGenButtonAdminController {
         // Button-manager-gated read of the template list for a picker; Name /
         // API_Name are label fields. SYSTEM_MODE avoids the managed-package USER_MODE
         // namespace pitfall (see DocGenController); class access is the gate.
-        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Name', 'API_Name__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Name', 'API_Name__c', 'Type__c', 'Lock_Output_Format__c' }
+        );
         /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
         List<DocGen_Template__c> tpls = [
-            SELECT Id, Name, API_Name__c
+            SELECT Id, Name, API_Name__c, Type__c, Lock_Output_Format__c
             FROM DocGen_Template__c
             WHERE Is_Active__c = TRUE
             WITH SYSTEM_MODE
@@ -113,7 +138,9 @@ public with sharing class DocGenButtonAdminController {
             out.add(
                 new Option(
                     hasKey ? t.Name + ' (' + t.API_Name__c + ')' : t.Name,
-                    hasKey ? 'key:' + t.API_Name__c : 'id:' + t.Id
+                    hasKey ? 'key:' + t.API_Name__c : 'id:' + t.Id,
+                    t.Type__c,
+                    t.Lock_Output_Format__c
                 )
             );
         }
@@ -158,12 +185,19 @@ public with sharing class DocGenButtonAdminController {
         String templateApiName = str(cfg, 'templateApiName');
         String templateId = str(cfg, 'templateId');
         String label = str(cfg, 'label');
+        String actionType = normalizeActionType(str(cfg, 'actionType'));
 
         if (String.isBlank(objectApiName)) {
             throw new AuraHandledException('An object is required.');
         }
-        if (String.isBlank(templateApiName) && String.isBlank(templateId)) {
+        if (actionType != 'Email' && String.isBlank(templateApiName) && String.isBlank(templateId)) {
             throw new AuraHandledException('Choose a template.');
+        }
+        String deliveryMode = str(cfg, 'deliveryMode');
+        if (deliveryMode != null && !VALID_DELIVERY_MODES.contains(deliveryMode.toUpperCase())) {
+            throw new AuraHandledException(
+                'Delivery Mode must be Download, Preview, or Preview_And_Download (or blank for Download).'
+            );
         }
         String devName = String.isNotBlank(str(cfg, 'developerName'))
             ? str(cfg, 'developerName')
@@ -181,9 +215,11 @@ public with sharing class DocGenButtonAdminController {
         addValue(cmd, DocGen_Button__mdt.Object_API_Name__c, objectApiName);
         addValue(cmd, DocGen_Button__mdt.Template_API_Name__c, templateApiName);
         addValue(cmd, DocGen_Button__mdt.Template_Id__c, templateId);
+        addValue(cmd, DocGen_Button__mdt.Action_Type__c, actionType);
         addValue(cmd, DocGen_Button__mdt.Document_Title__c, str(cfg, 'documentTitle'));
         addValue(cmd, DocGen_Button__mdt.Output_Format_Override__c, str(cfg, 'outputFormatOverride'));
         addValue(cmd, DocGen_Button__mdt.Save_To_Record__c, cfg.get('saveToRecord') == true);
+        addValue(cmd, DocGen_Button__mdt.Delivery_Mode__c, deliveryMode == null ? null : deliveryMode.toUpperCase());
         addValue(cmd, DocGen_Button__mdt.Sort_Order__c, dec(cfg, 'sortOrder'));
         addValue(cmd, DocGen_Button__mdt.Active__c, cfg.get('active') != false); // default active
         addValue(cmd, DocGen_Button__mdt.Record_Type_Developer_Names__c, str(cfg, 'recordTypeDeveloperNames'));
@@ -195,6 +231,14 @@ public with sharing class DocGenButtonAdminController {
         }
         return Metadata.Operations.enqueueDeployment(container, new DeployCallback());
     }
+
+    /** Canonical Delivery_Mode__c values the builder may write (blank = DOWNLOAD). */
+    @TestVisible
+    private static final Set<String> VALID_DELIVERY_MODES = new Set<String>{
+        DocGenButtonController.DELIVERY_DOWNLOAD,
+        DocGenButtonController.DELIVERY_PREVIEW,
+        DocGenButtonController.DELIVERY_PREVIEW_AND_DOWNLOAD
+    };
 
     /** Map value as a trimmed String (null when absent/blank). */
     private static String str(Map<String, Object> m, String key) {
@@ -234,6 +278,11 @@ public with sharing class DocGenButtonAdminController {
         v.field = field.getDescribe().getName(); // namespaced field API name
         v.value = val;
         cmd.values.add(v);
+    }
+
+    @TestVisible
+    private static String normalizeActionType(String actionType) {
+        return String.isNotBlank(actionType) && actionType.equalsIgnoreCase('Email') ? 'Email' : 'Document';
     }
 
     /** Label -> a valid, unique-ish CMDT DeveloperName (letters/digits/underscores). */

@@ -259,6 +259,14 @@ try {
 final String FORGED_IP = '203.0.113.7';
 String signedB64 = EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 e2e-06c signed bytes ' + System.now().getTime()));
 String expectedHash = EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', EncodingUtil.base64Decode(signedB64)));
+// #407: sign each placement first, as the guided UI does.
+for (DocGen_Signature_Placement__c p : [
+    SELECT Id
+    FROM DocGen_Signature_Placement__c
+    WHERE Signature_Request__c = :reqId
+]) {
+    DocGenSignatureController.signPlacement(signerToken, p.Id, 'E2E Signer');
+}
 try {
     DocGenSignatureController.SavePdfSignatureResult r = DocGenSignatureController.saveCompositedSignedPdf(
         signerToken,

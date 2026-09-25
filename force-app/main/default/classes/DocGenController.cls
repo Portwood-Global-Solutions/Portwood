@@ -4932,11 +4932,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     }
 
     /**
-     * Draft PDF preview as base64 — no ContentVersion persisted. The LWC opens
-     * a new tab on a blob: URL (top-level navigation, which LWS allows; only
-     * blob: IFRAMES are blocked). PDFs too large for the Aura payload ceiling
-     * signal tooLarge and the caller falls back to previewDraftPdf's
-     * ContentVersion + native file-preview path.
+     * Draft PDF as base64 without persisting a ContentVersion. Retained for
+     * callers that need the bytes; the Designer uses previewDraftPdf and the
+     * native file viewer so it does not depend on blob: tab navigation.
+     * PDFs above the Aura payload ceiling signal tooLarge.
      */
     @AuraEnabled
     public static Map<String, Object> previewDraftPdfData(
@@ -4980,9 +4979,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * Designer live PDF preview: renders the caller's DRAFT HTML (unsaved
      * editor contents) through the full merge + Blob.toPdf pipeline against a
      * real record, without touching the template's saved versions. Persists a
-     * ContentVersion for Salesforce's native file-preview overlay — the
-     * fallback when previewDraftPdfData can't be used (popup blocked, PDF too
-     * large for the Aura payload).
+     * ContentVersion for Salesforce's native file-preview overlay.
      */
     @AuraEnabled
     public static Map<String, Object> previewDraftPdf(

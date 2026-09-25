@@ -1537,8 +1537,9 @@
 
                     // ===== GUIDED SIGN-SPOT OVERLAY =====
                     // Maps this signer's placements to located positions in the PDF and
-                    // walks them field-to-field. Degrades to the single-modal flow if the
-                    // signer has no placements or none can be located in the document.
+                    // walks them field-to-field. Only a request with zero placement records
+                    // may use the legacy single-modal flow. If placements exist, every anchor
+                    // must be located or signing fails closed (issue #407).
                     function labelForType(type) {
                         if (type === 'Initials') return 'INITIAL HERE';
                         if (type === 'Date' || type === 'DatePick') return 'DATE';
@@ -1550,8 +1551,16 @@
                             '{!$RemoteAction.DocGenSignatureController.getSignerPlacements}',
                             token,
                             function (placements, event) {
-                                if (!event.status || !placements || !placements.length) {
-                                    return; // no placements — keep the single-modal flow
+                                if (!event.status || !placements) {
+                                    showError(
+                                        'The required signature fields could not be loaded. ' +
+                                            'Please refresh the page or contact the sender.'
+                                    );
+                                    return;
+                                }
+                                if (!placements.length) {
+                                    console.info('Portwood signing path: legacy; placements=0; located=0');
+                                    return; // legitimate placement-less request
                                 }
                                 buildGuidedSpots(placements);
                             },
@@ -1573,7 +1582,13 @@
                             }
                             byNeedle[p.tagText].push(p);
                         }
-                        if (!needles.length) return;
+                        if (!needles.length) {
+                            showError(
+                                'This document has required signature fields that cannot be located. ' +
+                                    'Please contact the sender.'
+                            );
+                            return;
+                        }
 
                         var hits = DocGenPdfViewer.locateAnchors(needles);
                         // Bucket hits by needle in document order (locateAnchors already
@@ -1591,7 +1606,7 @@
                             var hitList = hitsByNeedle[needle] || [];
                             for (var j = 0; j < plcs.length; j++) {
                                 var hit = hitList[j];
-                                if (!hit) continue; // unlocated placement — skip (no chip)
+                                if (!hit) continue;
                                 var plc = plcs[j];
                                 var isSigned = plc.status === 'Signed';
                                 var chip = DocGenPdfViewer.addChip(hit, labelForType(plc.type), null);
@@ -1610,7 +1625,19 @@
                                 });
                             }
                         }
-                        if (!spots.length) return;
+                        console.info(
+                            'Portwood signing path: guided; placements=' +
+                                placements.length +
+                                '; located=' +
+                                spots.length
+                        );
+                        if (spots.length !== placements.length || hits.length !== placements.length) {
+                            showError(
+                                'This document has required signature fields that cannot be located. ' +
+                                    'Please contact the sender.'
+                            );
+                            return;
+                        }
 
                         // Order the walk by sequence (then document position is implicit).
                         spots.sort(function (a, b) {
@@ -3032,8 +3059,7 @@
                                 btn.textContent = 'Sign';
                                 if (!event.status || !result || result.success === false) {
                                     showModalMsg(
-                                        'Save failed: ' +
-                                            ((result && result.message) || event.message || 'Unknown error'),
+                                        (result && result.message) || event.message || 'Unable to complete signing.',
                                         'error'
                                     );
                                     return;
@@ -3194,7 +3220,7 @@
                                     btn.disabled = false;
                                     btn.textContent = 'Sign';
                                     showModalMsg(
-                                        'Submit failed: ' + (err && err.message ? err.message : 'Unknown error'),
+                                        err && err.message ? err.message : 'Unable to complete signing.',
                                         'error'
                                     );
                                 });
@@ -3214,8 +3240,7 @@
                                 btn.textContent = 'Sign';
                                 if (!event.status || !result || result.success === false) {
                                     showModalMsg(
-                                        'Submit failed: ' +
-                                            ((result && result.message) || event.message || 'Unknown error'),
+                                        (result && result.message) || event.message || 'Unable to complete signing.',
                                         'error'
                                     );
                                     return;

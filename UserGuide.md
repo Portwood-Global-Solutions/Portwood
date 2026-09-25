@@ -2674,7 +2674,21 @@ For **Word, Excel and PowerPoint**, the file is assembled in your browser, so bo
 
 ### 8.3 Output format override
 
-If the template isn't locked (`Lock_Output_Format__c = false`), users see a toggle to switch between native and PDF. Flow actions also support the override via `outputFormatOverride` parameter.
+An output format override is available only when the template's **Lock Output Format** field is off (`Lock_Output_Format__c = false`). The available choices depend on the template type:
+
+| Template type  | Allowed override formats |
+| -------------- | ------------------------ |
+| Word           | **PDF** or **Word**      |
+| Excel          | **Excel**                |
+| PowerPoint     | **PowerPoint**           |
+| HTML or Canvas | **PDF**                  |
+| PDF            | **PDF**                  |
+
+The builder updates the choices when the template changes and clears an incompatible value before saving. Leave the field blank to use the template's default output format. A locked template has no override choice, and runtime requests that try to override it are rejected.
+
+Portwood does not convert between native Office formats: an Excel template cannot output Word or PowerPoint, and a PowerPoint template cannot output PDF. Word templates can be rendered as PDF because the PDF renderer supports Word input. Flow actions and the Apex API apply the same validation rules through the `outputFormatOverride` parameter.
+
+For buttons, use the canonical values `PDF`, `Word`, `Excel`, `PowerPoint`, or `HTML`. Existing configurations using common legacy aliases such as `DOCX`, `XLSX`, or `PPTX` are normalized automatically when the button runs.
 
 ### 8.4 PDF merge (combine with existing PDFs)
 
@@ -2705,7 +2719,35 @@ For the "this object always generates this one template" case, add the **Portwoo
 
 When an object has one active configuration (matching the record's type) the click generates immediately; with several, a small picker appears. **Save To Record** additionally attaches the file to the record's Files.
 
+**Open the document instead of (or as well as) downloading it.** The **Delivery Mode** field (Command Hub builder: _Delivery mode_) controls what happens after generation:
+
+| Delivery Mode          | Result                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| blank or `Download`    | The file downloads (the original behavior — existing buttons are unchanged).                                       |
+| `Preview`              | The file opens in the standard Salesforce file preview. Nothing downloads; the viewer has its own download button. |
+| `Preview_And_Download` | The file opens in the preview first; when you close it, the dialog offers a **Download** button.                   |
+
+Values are case-insensitive; anything unrecognized falls back to `Download`. Preview works whether or not **Save To Record** is checked (an unattached file is owned by the user who generated it). PDFs preview immediately; Word/PowerPoint/Excel previews depend on Salesforce generating a file rendition, which can take a moment on first open.
+
+**Preview with nothing left behind.** The regular Portwood Button action (`c:docGenButton`) always opens a small dialog, and closing that dialog cancels the preview it opened, so in Preview mode a finished dialog stays behind the file viewer. For a preview with no dialog at all, add the **Portwood Preview Button** (`c:docGenPreviewButton`) as the record action instead. It is a headless action: one click generates the document and opens the file preview. It uses the record's first active button whose Delivery Mode is **Preview** (and tells the user if there is none). Each preview still creates a file, saved to the record when **Save To Record** is on.
+
 > **Limitation:** this is a synchronous path — templates over the giant-query threshold (~2,000 child rows) will show an error instead of downloading. Use the Runner or a Flow with the Bulk/Giant actions for those.
+
+**Send Email buttons.** The Command Hub also has a **Send Email** button builder for record-page actions that generate a document, save it to the source record, and email it as an attachment. Open **Portwood app -> Command Hub -> Send Email**, click **New Send Email Button**, then choose the object, optional default template, record types, label, sort order, and active flag.
+
+Place the Send Email action the same way as the document button, but choose the Lightning Web Component `docGenSendEmailButton`. When the user launches it from a record, Portwood uses that clicked record automatically.
+
+The Send Email flow has three steps:
+
+1. **Template** - select the document template to generate. Template options show the friendly template name.
+2. **Preview** - review the generated document preview before sending.
+3. **Recipients & message** - choose an email address from the record when available, or type one or more manual email addresses. Add the subject and body, then send.
+
+Sending generates the document, links the generated file to the source record's Files, and sends the email to every selected/manual recipient with the generated document attached. If Salesforce blocks delivery, for example because org deliverability is restricted or the email service returns an error, the user sees the send error in the modal.
+
+**Who the email goes from, and what it can send.** The email is sent from the sender an admin configured for Portwood (Portwood → Signatures settings) when one is set and verified; otherwise it is sent as the user who clicked the button. Portwood never picks an org-wide address on its own. A Send Email button can address at most 10 recipients. If the button pins a template, that template is always used; otherwise the user can choose only among active templates built for the record's own object. The preview shows the merged document with its own layout and styling, with scripts, forms, frames and unsafe links removed and its CSS kept inside the preview; the final document is generated when you send.
+
+**Set a verified sender, or the email may never arrive.** If no verified org-wide address is configured, Salesforce sends as the clicking user, and when that user's email domain is not verified in your org it substitutes its own address. Salesforce still accepts the send and Portwood reports success, but the recipient's mail provider can silently drop it. Add an org-wide address on a domain you control (Setup → Organization-Wide Addresses), click the verification link Salesforce emails to it, then select it in Portwood → Signatures settings. Your domain should also authorise Salesforce to send for it (SPF and DKIM). Do not use a free-mail address such as `gmail.com` as the sender: in our testing, mail sent as a `@gmail.com` address through Salesforce was accepted but never delivered, while mail from a verified address on a company domain arrived. If Salesforce refuses the send outright, for example "your email address domain isn't verified", the dialog shows that message.
 
 ### 8.7 Document naming — Document Title Format tokens
 
@@ -2785,7 +2827,7 @@ Command Hub → **Job History** tab. Every bulk job shows:
 
 - Status (Draft, Harvesting, Running, Completed, Completed with Errors, Recovering, Failed)
 - Record count + success/failure counts
-- Generated PDFs (clickable links)
+- Generated files (clickable links). Individual Files are linked to the bulk job as well as to their source records, so they can be retrieved from Job History.
 - Start + end time
 - Error messages (for failed jobs)
 
@@ -3544,7 +3586,7 @@ Primary entry point from Apex. Use from triggers, scheduled Apex, or other servi
 | Method                                                                                                                   | Returns                                | Purpose                                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generateDocument(Id templateId, Id recordId)`                                                                           | `Id` (ContentDocumentId)               | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format.                                                                                                 |
-| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                                        |
+| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'Excel'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                            |
 | `generatePdfBlob(Id templateId, Id recordId)`                                                                            | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system.                                                                                                       |
 | `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)`                           | `Id`                                   | Same as `generateDocument` but skips the per-record data query and uses the supplied map instead. For custom bulk loops or callers that already have the data in hand.                                                |
 | `generatePdfBlobFromData(Id templateId, Map<String,Object> dataMap)`                                                     | `Map<String,Object>` (`blob`, `title`) | Renders a PDF straight from a caller-built data map — no SOQL, no recordId required. Lets you assemble external API responses, computed totals, or cross-object aggregations and merge them directly into a template. |

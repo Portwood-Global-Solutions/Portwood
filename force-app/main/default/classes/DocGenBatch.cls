@@ -355,11 +355,13 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
      * Also captures HTML snippet for merge mode.
      */
     private void generateIndividualDocument(Id recordId, Map<String, Object> recordData) {
+        Id contentDocumentId;
         if (recordData != null) {
-            DocGenService.generateDocumentFromData(templateId, recordId, recordData);
+            contentDocumentId = DocGenService.generateDocumentFromData(templateId, recordId, recordData);
         } else {
-            DocGenService.generateDocument(templateId, recordId);
+            contentDocumentId = DocGenService.generateDocument(templateId, recordId);
         }
+        linkGeneratedDocumentToJob(recordId, contentDocumentId);
 
         // Merge mode (not merge-only): also capture HTML snippet for merged PDF.
         // Skipped under duplex padding — that path merges from per-record PDF
@@ -369,6 +371,29 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             saveHtmlSnippet(DocGenService.lastRenderedHtml);
             DocGenService.lastRenderedHtml = null;
         }
+    }
+
+    /**
+     * Individual bulk generation saves each document to its source record. The
+     * job record is the operator's collection point, so add a second file link
+     * there as well. Combined-PDF artifacts already use FirstPublishLocationId =
+     * jobId; this closes the gap for Individual Files and Combined + Individual.
+     */
+    private void linkGeneratedDocumentToJob(Id recordId, Id contentDocumentId) {
+        if (jobId == null || contentDocumentId == null || recordId == jobId) {
+            return;
+        }
+        ContentDocumentLink cdl = new ContentDocumentLink(
+            ContentDocumentId = contentDocumentId,
+            LinkedEntityId = jobId,
+            ShareType = 'V',
+            Visibility = 'AllUsers'
+        );
+        SObjectAccessDecision cdlDec = Security.stripInaccessible(
+            AccessType.CREATABLE,
+            new List<ContentDocumentLink>{ cdl }
+        );
+        insert cdlDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
     }
 
     /**

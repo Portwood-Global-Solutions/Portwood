@@ -15,7 +15,9 @@ private class DocGenButtonAdminControllerTest {
     @IsTest
     static void getters_returnDataWithoutError() {
         Test.startTest();
-        List<DocGenButtonAdminController.ButtonConfigDTO> cfgs = DocGenButtonAdminController.getButtonConfigs();
+        List<DocGenButtonAdminController.ButtonConfigDTO> cfgs = DocGenButtonAdminController.getButtonConfigs(
+            'Document'
+        );
         List<DocGenButtonAdminController.Option> tpls = DocGenButtonAdminController.getTemplateOptions();
         List<DocGenButtonAdminController.Option> rts = DocGenButtonAdminController.getObjectRecordTypes('Account');
         List<DocGenButtonAdminController.Option> none = DocGenButtonAdminController.getObjectRecordTypes(null);
@@ -92,6 +94,34 @@ private class DocGenButtonAdminControllerTest {
     @IsTest
     static void saveButtonConfig_missingLabel_throws() {
         assertThrows(new Map<String, Object>{ 'objectApiName' => 'Account', 'templateApiName' => 'K' }, 'label');
+    }
+
+    @IsTest
+    static void saveButtonConfig_validDeliveryMode_accepted() {
+        DocGenButtonAdminController.testMetadataOverride = true;
+        Map<String, Object> cfg = new Map<String, Object>{
+            'label' => 'Preview Button',
+            'objectApiName' => 'Account',
+            'templateApiName' => 'K',
+            'deliveryMode' => 'preview_and_download' // lower-case: normalized on save
+        };
+        Test.startTest();
+        Id jobId = DocGenButtonAdminController.saveButtonConfig(cfg);
+        Test.stopTest();
+        System.assertEquals(null, jobId, 'Valid delivery mode passes validation (deploy skipped in tests)');
+    }
+
+    @IsTest
+    static void saveButtonConfig_invalidDeliveryMode_throws() {
+        assertThrows(
+            new Map<String, Object>{
+                'label' => 'X',
+                'objectApiName' => 'Account',
+                'templateApiName' => 'K',
+                'deliveryMode' => 'POPUP'
+            },
+            'a valid delivery mode'
+        );
     }
 
     @IsTest

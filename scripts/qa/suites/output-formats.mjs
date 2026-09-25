@@ -876,6 +876,10 @@ String pdf = '%PDF-1.4\\n' +
     'trailer\\n<< /Size 6 /Root 1 0 R >>\\nstartxref\\n0\\n%%EOF\\n';
 Blob src = Blob.valueOf(pdf);
 System.debug('A_SRC_SIZE=' + src.size());
+String accented = 'Poda de ' + String.fromCharArray(new List<Integer>{ 193 }) + 'rvore';
+String expectedAccent = EncodingUtil.convertToHex(
+    Blob.valueOf('/V <FEFF0050006F00640061002000640065002000C100720076006F00720065>')
+).toUpperCase();
 
 DocGen_Template__c at = new DocGen_Template__c(
     Name = PFX + ' ACROFORM', Base_Object_API__c = 'Account', Type__c = 'PDF',
@@ -896,6 +900,12 @@ try {
         // is readable as literal bytes in the tail of the file.
         System.debug('A_MERGED=' + bytesContain(abl, PFX + ' Corp'));
         System.debug('A_GROWN=' + (abl.size() > src.size()));
+        Blob accentedBlob = DocGenAcroFormService.fillPdfTemplate(
+            src,
+            new Map<String, Object>{ 'Name' => accented }
+        );
+        String accentedHex = EncodingUtil.convertToHex(accentedBlob).toUpperCase();
+        System.debug('A_ACCENT=' + accentedHex.contains(expectedAccent));
     } else {
         System.debug('A_SIZE=0');
     }
@@ -936,6 +946,14 @@ System.debug('PHASE_DONE=P5');
                     yes(p5.map.A_GROWN),
                     `template ${p5.map.A_SRC_SIZE} bytes → output ${p5.map.A_SIZE} bytes; equal size means no field was filled`,
                     MA
+                )
+            );
+            checks.push(
+                check(
+                    'PDF AcroForm: accented value is preserved',
+                    yes(p5.map.A_ACCENT),
+                    `expected UTF-16BE encoding for "Poda de Árvore"; A_ACCENT=${p5.map.A_ACCENT}`,
+                    B
                 )
             );
         }

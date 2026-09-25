@@ -1,0 +1,180 @@
+<template>
+    <div class="send-email-shell slds-p-around_medium">
+        <template lwc:if={loading}>
+            <div class="loading-overlay" role="status" aria-live="polite">
+                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                <p class="loading-message">{statusMessage}</p>
+            </div>
+        </template>
+
+        <template lwc:if={errorMessage}>
+            <div class="slds-notify slds-notify_alert slds-alert_error slds-m-bottom_medium" role="alert">
+                <span>{errorMessage}</span>
+            </div>
+        </template>
+
+        <template lwc:if={hasOptions}>
+            <div class="flow-intro">
+                <div class="flow-eyebrow">PORTWOOD EMAIL DELIVERY</div>
+                <div class="flow-stepper" aria-label="Email sending steps">
+                    <button
+                        type="button"
+                        class={selectStepClass}
+                        data-step="select"
+                        onclick={handleStepClick}
+                        aria-label="Go to template step"
+                    >
+                        <span>1</span><strong>Template</strong>
+                    </button>
+                    <div class={selectLineClass}></div>
+                    <button
+                        type="button"
+                        class={previewStepClass}
+                        data-step="preview"
+                        onclick={handleStepClick}
+                        aria-label="Go to preview step"
+                    >
+                        <span>2</span><strong>Preview</strong>
+                    </button>
+                    <div class={previewLineClass}></div>
+                    <button
+                        type="button"
+                        class={composeStepClass}
+                        data-step="compose"
+                        onclick={handleStepClick}
+                        aria-label="Go to recipients and message step"
+                    >
+                        <span>3</span><strong>Recipients &amp; message</strong>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={isSelectScreen}>
+            <template lwc:if={hasOptions}>
+                <section class="flow-card">
+                    <div class="section-heading">
+                        <span class="section-icon">01</span>
+                        <div>
+                            <h2>Select Template</h2>
+                            <p>Choose the document to generate for this record.</p>
+                        </div>
+                    </div>
+                    <lightning-combobox
+                        label="Template"
+                        value={selectedTemplate}
+                        options={templateOptions}
+                        onchange={handleTemplateChoice}
+                        placeholder="Select a template"
+                        required
+                    ></lightning-combobox>
+                </section>
+                <div class="slds-m-top_medium slds-text-align_right">
+                    <lightning-button label="Cancel" onclick={handleClose}></lightning-button>
+                    <lightning-button
+                        class="slds-m-left_x-small"
+                        variant="brand"
+                        label="Next"
+                        onclick={handleNextToPreview}
+                        disabled={disableNext}
+                    ></lightning-button>
+                </div>
+            </template>
+        </template>
+
+        <template lwc:if={isPreviewScreen}>
+            <section class="flow-card preview-card">
+                <div class="section-heading">
+                    <span class="section-icon">02</span>
+                    <div>
+                        <h2>Preview</h2>
+                        <p>Review the generated document before composing the email.</p>
+                    </div>
+                </div>
+                <!-- Rendered in renderedCallback: the merged HTML is hardened (sanitizePreviewHtml) and its CSS
+                     scoped (scopeHtmlForInlinePreview) before it is written here. It is a preview, not the final
+                     document, which is generated when you send. -->
+                <div class="preview-frame"><div class="preview-html" lwc:dom="manual"></div></div>
+            </section>
+            <div class="slds-m-top_medium slds-text-align_right">
+                <lightning-button label="Back" onclick={handleBackToSelect}></lightning-button>
+                <lightning-button
+                    class="slds-m-left_x-small"
+                    variant="brand"
+                    label="Next"
+                    onclick={handleNextToCompose}
+                    disabled={disablePreviewNext}
+                ></lightning-button>
+            </div>
+        </template>
+
+        <template lwc:if={isComposeScreen}>
+            <section class="flow-card compose-card">
+                <div class="section-heading">
+                    <span class="section-icon">03</span>
+                    <div>
+                        <h2>Email Details</h2>
+                        <p>Choose recipients and write the message that will accompany the attachment.</p>
+                    </div>
+                </div>
+                <h3 class="subsection-heading">Select Email from Record</h3>
+                <template lwc:if={hasExistingEmailOptions}>
+                    <lightning-combobox
+                        label="Email from record"
+                        options={existingEmailOptions}
+                        value={selectedExistingEmail}
+                        onchange={handleExistingChange}
+                        placeholder="Select an email from the record"
+                    ></lightning-combobox>
+                </template>
+                <template lwc:if={hasNoExistingEmailOptions}>
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        No populated email fields were found on this record.
+                    </p>
+                </template>
+                <div class="manual-recipient-block">
+                    <lightning-textarea
+                        class="slds-m-top_small"
+                        label="Manual email addresses"
+                        data-field="manualEmails"
+                        value={manualEmails}
+                        placeholder="name@example.com, other@example.com"
+                        onchange={handleField}
+                    ></lightning-textarea>
+                </div>
+                <h3 class="slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
+                    <abbr class="slds-required" title="required">*</abbr> Email Subject
+                </h3>
+                <lightning-input-rich-text
+                    class="slds-m-top_small"
+                    label="Subject"
+                    data-field="subject"
+                    value={subject}
+                    onchange={handleField}
+                    required
+                ></lightning-input-rich-text>
+                <h3 class="slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
+                    <abbr class="slds-required" title="required">*</abbr> Email Body
+                </h3>
+                <lightning-input-rich-text
+                    class="slds-m-top_small"
+                    label="Body content"
+                    data-field="body"
+                    value={body}
+                    onchange={handleField}
+                    required
+                ></lightning-input-rich-text>
+            </section>
+            <div class="slds-m-top_medium slds-text-align_right">
+                <lightning-button label="Back" onclick={handleBackToPreview}></lightning-button>
+                <lightning-button
+                    class="slds-m-left_x-small"
+                    variant="brand"
+                    label="Send Email"
+                    onclick={handleSend}
+                    disabled={disableSend}
+                ></lightning-button>
+            </div>
+        </template>
+    </div>
+</template>

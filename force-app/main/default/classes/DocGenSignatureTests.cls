@@ -95,6 +95,48 @@ private class DocGenSignatureTests {
         return tmpl.Id;
     }
 
+    private static DocGen_Signature_Placement__c createPendingPlacement(DocGen_Signer__c signer, Integer sequence) {
+        DocGen_Signature_Placement__c placement = new DocGen_Signature_Placement__c(
+            Signer__c = signer.Id,
+            Signature_Request__c = signer.Signature_Request__c,
+            Document_Index__c = 0,
+            Sequence_Order__c = sequence,
+            Placement_Type__c = 'Full',
+            Status__c = 'Pending',
+            Tag_Text__c = '@@SIG-' + (sequence - 1) + '@@'
+        );
+        insert placement;
+        return placement;
+    }
+
+    private static DocGen_Signature_Placement__c createSignedPlacement(DocGen_Signer__c signer, Integer sequence) {
+        DocGen_Signature_Placement__c placement = new DocGen_Signature_Placement__c(
+            Signer__c = signer.Id,
+            Signature_Request__c = signer.Signature_Request__c,
+            Document_Index__c = 0,
+            Sequence_Order__c = sequence,
+            Placement_Type__c = 'Full',
+            Status__c = 'Signed',
+            Signed_Value__c = 'Previously completed',
+            Signed_At__c = System.now(),
+            Tag_Text__c = '@@SIG-' + (sequence - 1) + '@@'
+        );
+        insert placement;
+        return placement;
+    }
+
+    private static void assertMixedPlacementStatePreserved(Id signerId) {
+        List<DocGen_Signature_Placement__c> placements = [
+            SELECT Status__c
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c = :signerId
+            ORDER BY Sequence_Order__c
+        ];
+        System.assertEquals(2, placements.size(), 'The exact mixed-placement fixture must remain present');
+        System.assertEquals('Signed', placements[0].Status__c, 'The already-completed placement stays Signed');
+        System.assertEquals('Pending', placements[1].Status__c, 'The incomplete placement stays Pending');
+    }
+
     // =========================================================================
     // Token Validation
     // =========================================================================
@@ -6201,6 +6243,202 @@ private class DocGenSignatureTests {
     // =========================================================================
     // Signer Form Fields — capture round-trip + decoupled writeback
     // =========================================================================
+
+    @IsTest
+    static void saveSignature_pendingPlacementDoesNotFinalizeSigner() {
+        DocGen_Signer__c signer = getTestSigner();
+        signer.PIN_Verified_At__c = System.now();
+        update signer;
+        createSignedPlacement(signer, 1);
+        createPendingPlacement(signer, 2);
+
+        DocGenSignatureController.SaveSignatureResult result;
+        Test.startTest();
+        result = DocGenSignatureController.saveSignature(
+            signer.Secure_Token__c,
+            'Pending Placement Signer',
+            true,
+            '1.2.3.4',
+            'UA',
+            '{}'
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.success, 'saveSignature must reject a pending placement');
+        System.assertEquals(
+            'Signing cannot be completed because one or more required signature fields are incomplete. ' +
+            'Please complete all required fields and try again.',
+            result.message
+        );
+        System.assertNotEquals(
+            'Signed',
+            [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Status__c,
+            'The signer must not be finalized'
+        );
+        assertMixedPlacementStatePreserved(signer.Id);
+    }
+
+    @IsTest
+    static void savePdfSignature_pendingPlacementDoesNotFinalizeSigner() {
+        DocGen_Signer__c signer = getTestSigner();
+        signer.PIN_Verified_At__c = System.now();
+        update signer;
+        createSignedPlacement(signer, 1);
+        createPendingPlacement(signer, 2);
+
+        DocGenSignatureController.SavePdfSignatureResult result;
+        Test.startTest();
+        result = DocGenSignatureController.savePdfSignature(
+            signer.Secure_Token__c,
+            'Pending PDF Signer',
+            true,
+            '1.2.3.4',
+            'UA',
+            '{}'
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.success, 'savePdfSignature must reject a pending placement');
+        System.assertEquals(
+            'Signing cannot be completed because one or more required signature fields are incomplete. ' +
+            'Please complete all required fields and try again.',
+            result.message
+        );
+        System.assertNotEquals(
+            'Signed',
+            [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Status__c,
+            'The PDF signer must not be finalized'
+        );
+        assertMixedPlacementStatePreserved(signer.Id);
+    }
+
+    @IsTest
+    static void saveCompositedSignedPdf_pendingPlacementDoesNotFinalizeSigner() {
+        DocGen_Signer__c signer = getTestSigner();
+        signer.PIN_Verified_At__c = System.now();
+        update signer;
+        createSignedPlacement(signer, 1);
+        createPendingPlacement(signer, 2);
+
+        DocGenSignatureController.SavePdfSignatureResult result;
+        Test.startTest();
+        result = DocGenSignatureController.saveCompositedSignedPdf(
+            signer.Secure_Token__c,
+            EncodingUtil.base64Encode(Blob.valueOf('test pdf')),
+            true,
+            '1.2.3.4',
+            'UA',
+            '{}'
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.success, 'saveCompositedSignedPdf must reject a pending placement');
+        System.assertEquals(
+            'Signing cannot be completed because one or more required signature fields are incomplete. ' +
+            'Please complete all required fields and try again.',
+            result.message
+        );
+        System.assertNotEquals(
+            'Signed',
+            [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Status__c,
+            'The composited-PDF signer must not be finalized'
+        );
+        assertMixedPlacementStatePreserved(signer.Id);
+    }
+
+    @IsTest
+    static void saveSignature_ignoresFutureSignerPendingPlacements() {
+        DocGen_Signature_Request__c request = getTestRequest();
+        DocGen_Signer__c currentSigner = getTestSigner();
+        currentSigner.PIN_Verified_At__c = System.now();
+        update currentSigner;
+        createSignedPlacement(currentSigner, 1);
+        createSignedPlacement(currentSigner, 2);
+
+        DocGen_Signer__c futureSigner = new DocGen_Signer__c(
+            Signature_Request__c = request.Id,
+            Signer_Name__c = 'Future Signer',
+            Signer_Email__c = 'future@example.com',
+            Role_Name__c = 'Seller',
+            Secure_Token__c = EncodingUtil.convertToHex(Crypto.generateAesKey(256)),
+            Status__c = 'Pending',
+            Sort_Order__c = 2
+        );
+        insert futureSigner;
+        createPendingPlacement(futureSigner, 1);
+
+        Test.startTest();
+        DocGenSignatureController.SaveSignatureResult result = DocGenSignatureController.saveSignature(
+            currentSigner.Secure_Token__c,
+            'Current Signer',
+            true,
+            '1.2.3.4',
+            'UA',
+            '{}'
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, result.success);
+        System.assertEquals(false, result.isComplete, 'The future signer still remains');
+        System.assertEquals(1, result.remaining);
+        System.assertEquals(
+            'Signed',
+            [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :currentSigner.Id].Status__c,
+            'Only the current signer is finalized'
+        );
+        System.assertEquals(
+            'Pending',
+            [SELECT Status__c FROM DocGen_Signature_Placement__c WHERE Signer__c = :futureSigner.Id LIMIT 1].Status__c
+        );
+    }
+
+    @IsTest
+    static void unresolvedSignatureSentinel_isRejectedBeforePdfRender() {
+        DocGenSignatureService.assertNoUnresolvedSignatureSentinels(
+            '<html><body>Electronically signed by Jane</body></html>'
+        );
+
+        Boolean threw = false;
+        try {
+            DocGenSignatureService.assertNoUnresolvedSignatureSentinels(
+                '<html><body>Signature: @@SIG-0@@</body></html>'
+            );
+        } catch (Exception e) {
+            threw = true;
+        }
+        System.assert(threw, 'Unresolved signature sentinels must block PDF rendering');
+    }
+
+    @IsTest
+    static void signerDmlFailure_isVisibleAndLogged() {
+        DocGen_Signer__c signer = getTestSigner();
+        signer.PIN_Verified_At__c = System.now();
+        update signer;
+
+        Boolean threw = false;
+        Test.startTest();
+        try {
+            DocGenSignatureController.saveSignature(
+                signer.Secure_Token__c,
+                ''.leftPad(256, 'X'),
+                true,
+                '1.2.3.4',
+                'UA',
+                '{}'
+            );
+        } catch (Exception e) {
+            threw = true;
+        }
+        Test.stopTest();
+
+        System.assert(threw, 'A failed signer update must produce a visible error');
+        System.assertNotEquals('Signed', [SELECT Status__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Status__c);
+        System.assertEquals(
+            1,
+            [SELECT COUNT() FROM DocGen_Error_Log__c WHERE Operation__c = 'Finalize signer'],
+            'The failed DML result must be recorded for administrators'
+        );
+    }
 
     private static final String FF_TOKEN = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
 

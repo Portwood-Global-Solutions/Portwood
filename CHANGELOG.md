@@ -1,5 +1,65 @@
 # Changelog
 
+## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
+
+Not yet released. Seven community and team contributions, verified together on a fresh scratch org.
+
+### Added
+
+- **Delivery Mode on the Portwood Button (`Delivery_Mode__c`).** A button can now open the
+  generated file in the native Salesforce file preview, download it, or open the preview and
+  then offer a Download button. Blank means Download, so existing buttons are unchanged.
+  "Preview + Download", "Preview & Download" and "Preview_And_Download" are all accepted. In
+  preview modes the action dialog stays open behind the viewer (closing it would cancel the
+  preview) and shows a finished state with a Close button, plus a Download button for
+  "Preview and Download" (no automatic download). See UserGuide §8.6.
+- **Portwood Preview Button (`c:docGenPreviewButton`).** A headless record action that
+  generates the document and opens the file preview with no dialog at all, using the record's
+  first active button whose Delivery Mode is Preview. Each preview still creates a file, saved
+  to the record when Save To Record is on.
+- **Send Email by Portwood buttons.** A Command Hub **Send Email** builder for record-page
+  email actions: pick a template, preview the document, choose an email from the record or enter
+  recipients, and send the generated file as an attachment, linked to the source record's Files.
+  A button that pins a template always uses it; otherwise only active templates built for the
+  record's object are offered (enforced on the server). Mail is sent from the sender an admin
+  configured for Portwood (Portwood → Signatures settings) when it is set and verified,
+  otherwise as the clicking user, and a message can address at most 10 recipients. The preview
+  keeps the document's own layout but removes scripts, event handlers, frames, forms and unsafe
+  links from the merged HTML and confines its CSS to the preview, because the merge does not
+  HTML-escape record values. See UserGuide §8.6.
+
+### Fixed
+
+- **Accented characters in fillable PDF output (#394).** PDF-to-PDF templates now preserve
+  mapped values containing accented Latin characters, including `Poda de Árvore` and
+  `Solicitação`: field values use UTF-16BE, visible appearances use PDF-compatible bytes, and XFA
+  datasets use XML character references. Known limit: characters outside Latin-1 (for example
+  `ł`, `€` or curly quotes) are still replaced with `?`.
+- **Designer PDF Preview can fail to open under Lightning Web Security (#411).** The Designer
+  used to open a generated `blob:` URL with `window.open`, which could produce a
+  `SecureWindow.open` error or a blank tab in some orgs. PDF Preview now renders the current
+  unsaved draft against the selected sample record and opens the result in Salesforce's native
+  file viewer for every PDF size. The template is not saved; Salesforce creates a preview file
+  for the viewer. Verification in an org that previously showed the error is pending.
+- **Document button output-format overrides now match the selected template (#408).** The
+  Buttons builder filters override choices by template type, respects locked output formats, and
+  normalizes legacy values such as `DOCX`, `XLSX` and `PPTX`. Runtime generation accepts Excel
+  overrides and rejects unsupported cross-format Office conversions consistently across
+  buttons, Flow and Apex.
+- **Signed PDFs can retain an unresolved signature placeholder when a required placement is
+  still pending (#407).** Signer finalization now checks every required placement belonging to
+  the current signer before marking that signer **Signed**, in the typed-signature, flat-PDF and
+  browser-composited PDF paths. A pending placement blocks completion and returns an actionable
+  message; pending placements of future signers do not block the current signer. The signing
+  pages fail closed when placement anchors cannot be loaded or located, and both signing pages
+  now show the server's refusal instead of reporting the signature as recorded. The PDF renderer
+  rejects output that still contains an unresolved `@@SIG-n@@` sentinel, and failed
+  placement/finalization DML is surfaced and logged. Requests with no placement records are
+  unchanged.
+- **Bulk Individual Files are now linked to the job (#406).** Each generated file is still saved
+  on its source record and is also linked to the parent bulk job, so operators can retrieve
+  individual output directly from the job. Combined PDF output is unchanged.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,

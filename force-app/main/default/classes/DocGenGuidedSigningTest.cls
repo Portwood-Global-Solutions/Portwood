@@ -233,6 +233,7 @@ private class DocGenGuidedSigningTest {
         ];
         signer.PIN_Verified_At__c = System.now();
         update signer;
+        signAllPlacements(new Set<Id>{ signer.Id });
         String token = signer.Secure_Token__c;
 
         Test.startTest();
@@ -310,6 +311,7 @@ private class DocGenGuidedSigningTest {
         ];
         signer.PIN_Verified_At__c = System.now();
         update signer;
+        signAllPlacements(new Set<Id>{ signer.Id });
 
         Test.startTest();
         DocGenSignatureController.SavePdfSignatureResult r = DocGenSignatureController.saveCompositedSignedPdf(
@@ -352,6 +354,7 @@ private class DocGenGuidedSigningTest {
         ];
         signer.PIN_Verified_At__c = System.now();
         update signer;
+        signAllPlacements(new Set<Id>{ signer.Id });
 
         String b64 = EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 composited audit-hash test bytes'));
         String expectedHash = EncodingUtil.convertToHex(
@@ -406,6 +409,7 @@ private class DocGenGuidedSigningTest {
             s.PIN_Verified_At__c = System.now();
         }
         update signers;
+        signAllPlacements(new Map<Id, DocGen_Signer__c>(signers).keySet());
         Id requestId = signers[0].Signature_Request__c;
 
         // Distinct bytes per signing step so the intermediate and final hashes differ.
@@ -670,6 +674,7 @@ private class DocGenGuidedSigningTest {
             s.PIN_Verified_At__c = System.now();
         }
         update signers;
+        signAllPlacements(new Map<Id, DocGen_Signer__c>(signers).keySet());
         Id reqId = signers[0].Signature_Request__c;
         Id nextSignerId = signers[1].Id;
         String nextEmail = signers[1].Signer_Email__c;
@@ -741,5 +746,24 @@ private class DocGenGuidedSigningTest {
         // Null-safe / idempotent: purging null or an already-gone CV does not throw.
         DocGenSignatureService.purgeFrozenSnapshotCv(null);
         DocGenSignatureService.purgeFrozenSnapshotCv(cvId);
+    }
+
+    /**
+     * #407: the server refuses to finalize a signer whose placements are still Pending, so a test
+     * that drives a composited save must first do what the guided signing UI does, which is to
+     * sign every placement (signPlacement) before the final save.
+     */
+    private static void signAllPlacements(Set<Id> signerIds) {
+        List<DocGen_Signature_Placement__c> plcs = [
+            SELECT Id
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c IN :signerIds
+        ];
+        for (DocGen_Signature_Placement__c p : plcs) {
+            p.Status__c = 'Signed';
+            p.Signed_Value__c = 'Test Signer';
+            p.Signed_At__c = System.now();
+        }
+        update plcs;
     }
 }
