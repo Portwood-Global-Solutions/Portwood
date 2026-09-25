@@ -11310,6 +11310,72 @@ private class DocGenMiscTests {
         );
     }
 
+    // isMacroEnabledWorkbook has a BACKUP signal for workbooks whose content type is a
+    // plain .xlsx workbook: an xl/vbaProject.bin part still in mr.passthroughEntries.
+    // assembleZip releases each passthrough entry as it writes it (#403), so the flag
+    // must be read BEFORE assembly. The test above never reaches this path (its content
+    // type is already macro-enabled), so without this one the ordering regresses silently
+    // to a macro workbook saved as .xlsx, which Excel refuses to load VBA from.
+    @IsTest
+    static void testFlowAction_vbaProjectPartAloneSavesAsXlsm() {
+        Account acc = TestDataFactory.getTestAccount();
+        DocGen_Template__c tpl = new DocGen_Template__c(
+            Name = 'Xlsm Backup Signal Template',
+            Base_Object_API__c = 'FlowJsonData',
+            Type__c = 'Excel',
+            Output_Format__c = 'Native',
+            Query_Config__c = '{"v":4,"source":"flowJsonData"}'
+        );
+        Database.insert(tpl, AccessLevel.SYSTEM_MODE);
+
+        // macroEnabled=false keeps the plain workbook content type; the VBA project
+        // rides in as an extra .bin part, so only the passthrough-entries check can fire.
+        Blob vbaBytes = EncodingUtil.base64Decode('AAECgP8AVkJB');
+        ContentVersion cv = new ContentVersion(
+            Title = 'Xlsm Backup Signal Template',
+            PathOnClient = 'book.xlsx',
+            VersionData = buildTestWorkbook(false, null, 'xl/vbaProject.bin', vbaBytes),
+            FirstPublishLocationId = tpl.Id
+        );
+        Database.insert(cv, AccessLevel.SYSTEM_MODE);
+        Id cvId = [SELECT Id FROM ContentVersion WHERE Id = :cv.Id LIMIT 1].Id;
+
+        DocGen_Template_Version__c ver = new DocGen_Template_Version__c(
+            Template__c = tpl.Id,
+            Is_Active__c = true,
+            Type__c = 'Excel',
+            Base_Object_API__c = 'FlowJsonData',
+            Query_Config__c = '{"v":4,"source":"flowJsonData"}',
+            Content_Version_Id__c = cvId
+        );
+        Database.insert(ver, AccessLevel.SYSTEM_MODE);
+
+        DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+        req.templateId = tpl.Id;
+        req.recordId = acc.Id;
+        req.saveToRecord = true;
+        req.jsonData = '{"Name":"Acme"}';
+
+        Test.startTest();
+        List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+            new List<DocGenFlowAction.Request>{ req }
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, responses[0].success, 'Xlsm render should succeed: ' + responses[0].errorMessage);
+        ContentVersion saved = [
+            SELECT PathOnClient
+            FROM ContentVersion
+            WHERE Id = :responses[0].contentVersionId
+            LIMIT 1
+        ];
+        System.assert(
+            saved.PathOnClient.endsWith('.xlsm'),
+            'A workbook shipping xl/vbaProject.bin must save as .xlsm even with a plain content type, got: ' +
+            saved.PathOnClient
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Issue #325 — Word generation above ~450K of document.xml.
     //
