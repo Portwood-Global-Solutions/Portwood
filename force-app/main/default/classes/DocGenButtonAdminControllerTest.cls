@@ -95,6 +95,34 @@ private class DocGenButtonAdminControllerTest {
     }
 
     @IsTest
+    static void saveButtonConfig_validDeliveryMode_accepted() {
+        DocGenButtonAdminController.testMetadataOverride = true;
+        Map<String, Object> cfg = new Map<String, Object>{
+            'label' => 'Preview Button',
+            'objectApiName' => 'Account',
+            'templateApiName' => 'K',
+            'deliveryMode' => 'preview_and_download' // lower-case: normalized on save
+        };
+        Test.startTest();
+        Id jobId = DocGenButtonAdminController.saveButtonConfig(cfg);
+        Test.stopTest();
+        System.assertEquals(null, jobId, 'Valid delivery mode passes validation (deploy skipped in tests)');
+    }
+
+    @IsTest
+    static void saveButtonConfig_invalidDeliveryMode_throws() {
+        assertThrows(
+            new Map<String, Object>{
+                'label' => 'X',
+                'objectApiName' => 'Account',
+                'templateApiName' => 'K',
+                'deliveryMode' => 'POPUP'
+            },
+            'a valid delivery mode'
+        );
+    }
+
+    @IsTest
     static void sanitizeDevName_variants() {
         System.assertEquals('My_Button', DocGenButtonAdminController.sanitizeDevName('My Button'));
         System.assertEquals('B_123abc', DocGenButtonAdminController.sanitizeDevName('123abc'));

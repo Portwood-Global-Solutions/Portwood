@@ -2719,6 +2719,16 @@ For the "this object always generates this one template" case, add the **Portwoo
 
 When an object has one active configuration (matching the record's type) the click generates immediately; with several, a small picker appears. **Save To Record** additionally attaches the file to the record's Files.
 
+**Open the document instead of (or as well as) downloading it.** The **Delivery Mode** field (Command Hub builder: _Delivery mode_) controls what happens after generation:
+
+| Delivery Mode          | Result                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| blank or `Download`    | The file downloads (the original behavior — existing buttons are unchanged).                                       |
+| `Preview`              | The file opens in the standard Salesforce file preview. Nothing downloads; the viewer has its own download button. |
+| `Preview_And_Download` | The file downloads **and** opens in the preview.                                                                   |
+
+Values are case-insensitive; anything unrecognized falls back to `Download`. Preview works whether or not **Save To Record** is checked (an unattached file is owned by the user who generated it). PDFs preview immediately; Word/PowerPoint/Excel previews depend on Salesforce generating a file rendition, which can take a moment on first open.
+
 > **Limitation:** this is a synchronous path — templates over the giant-query threshold (~2,000 child rows) will show an error instead of downloading. Use the Runner or a Flow with the Bulk/Giant actions for those.
 
 ### 8.7 Document naming — Document Title Format tokens
