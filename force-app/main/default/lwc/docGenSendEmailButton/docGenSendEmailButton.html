@@ -95,8 +95,11 @@
                      merged record data can never inject markup into the page. It is a content check, not a
                      pixel-perfect render: the final document is generated when you send. -->
                 <div class="preview-frame">
-                    <lightning-formatted-rich-text class="preview-html" value={previewHtml}>
-                    </lightning-formatted-rich-text>
+                    <!-- The block wrapper carries the paper styling. lightning-formatted-rich-text is an
+                         inline element, so padding/background on it itself paint only around line fragments. -->
+                    <div class="preview-html">
+                        <lightning-formatted-rich-text value={previewHtml}></lightning-formatted-rich-text>
+                    </div>
                 </div>
             </section>
             <div class="slds-m-top_medium slds-text-align_right">
