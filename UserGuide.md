@@ -2725,7 +2725,7 @@ When an object has one active configuration (matching the record's type) the cli
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | blank or `Download`    | The file downloads (the original behavior — existing buttons are unchanged).                                       |
 | `Preview`              | The file opens in the standard Salesforce file preview. Nothing downloads; the viewer has its own download button. |
-| `Preview_And_Download` | The file downloads **and** opens in the preview.                                                                   |
+| `Preview_And_Download` | The file opens in the preview first; when you close it, the dialog offers a **Download** button.                   |
 
 Values are case-insensitive; anything unrecognized falls back to `Download`. Preview works whether or not **Save To Record** is checked (an unattached file is owned by the user who generated it). PDFs preview immediately; Word/PowerPoint/Excel previews depend on Salesforce generating a file rendition, which can take a moment on first open.
 

@@ -39,6 +39,8 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     statusMessage = 'Preparing…';
     errorMessage;
     doneMessage;
+    showDownload = false;
+    _result;
     options = [];
     showPicker = false;
 
@@ -110,30 +112,35 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
                 return;
             }
             const mode = res.deliveryMode || DELIVERY_DOWNLOAD;
-            const wantsDownload = mode !== DELIVERY_PREVIEW;
             // Preview needs a ContentDocumentId; without one, fall back to download
             // so the user still gets the file.
-            const wantsPreview =
-                (mode === DELIVERY_PREVIEW || mode === DELIVERY_PREVIEW_AND_DOWNLOAD) && !!res.contentDocumentId;
+            const canPreview = !!res.contentDocumentId;
+            const previewOnly = mode === DELIVERY_PREVIEW && canPreview;
+            const previewThenDownload = mode === DELIVERY_PREVIEW_AND_DOWNLOAD && canPreview;
+            const downloadNow = !previewOnly && !previewThenDownload;
 
-            if (wantsDownload || !wantsPreview) {
+            if (downloadNow) {
                 this.deliver(res);
-            }
-            if (wantsPreview) {
-                this.preview(res.contentDocumentId);
             }
             this.showToast(
                 'Document generated',
-                this.successMessage(res.fileName, wantsDownload || !wantsPreview, wantsPreview),
+                this.successMessage(res.fileName, downloadNow, !downloadNow),
                 'success'
             );
-            if (wantsPreview) {
-                // Closing the action screen, now or after a delay, returns to the record page and
-                // cancels the file-preview navigation started above (the preview is layered on top of
-                // the action's own page). So leave the action open, but stop the spinner: once the
-                // preview is closed the user sees a finished state with a Close button, not "Generating".
+
+            if (previewOnly || previewThenDownload) {
+                // The preview is layered on top of the action's own page, so closing the action, before
+                // or after opening the preview, either cancels it or leaves no preview at all (the
+                // component is gone by the time a delayed navigation fires). The dialog therefore stays
+                // behind the preview and, once the preview is closed, shows a finished state: a Close
+                // button, plus a Download button for "preview and download".
+                this.preview(res.contentDocumentId);
+                this._result = res;
                 this.loading = false;
-                this.doneMessage = 'Your document opened in the file preview. You can close this window.';
+                this.showDownload = previewThenDownload;
+                this.doneMessage = previewThenDownload
+                    ? 'Your document opened in the file preview. Download a copy below.'
+                    : 'Your document opened in the file preview. You can close this window.';
             } else {
                 this.close();
             }
@@ -186,6 +193,12 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
             attributes: { pageName: 'filePreview' },
             state: { selectedRecordId: contentDocumentId }
         });
+    }
+
+    handleDownload() {
+        if (this._result) {
+            this.deliver(this._result);
+        }
     }
 
     successMessage(fileName, downloaded, previewed) {

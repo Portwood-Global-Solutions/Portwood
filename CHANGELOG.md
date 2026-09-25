@@ -18,7 +18,8 @@
   generated file in the native Salesforce file preview, download it, or both. Blank means
   Download, so existing buttons are unchanged. "Preview + Download", "Preview & Download" and
   "Preview_And_Download" are all accepted. In preview modes the action dialog stays open (closing it
-  would cancel the preview) and shows a finished state with a Close button.
+  would cancel the preview) and shows a finished state with a Close button. "Preview and Download"
+  opens the preview first and then offers a Download button in that dialog (no automatic download).
 - **Send Email buttons: template, sender and recipient limits.** A button that pins a template
   always uses it, otherwise only active templates built for the record's object are offered
   (enforced on the server, not just in the picker). Email is sent from the sender an admin

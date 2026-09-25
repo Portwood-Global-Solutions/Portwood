@@ -32,7 +32,17 @@
                     class="slds-m-bottom_x-small"
                 ></lightning-icon>
                 <p>{doneMessage}</p>
-                <lightning-button label="Close" class="slds-m-top_medium" onclick={handleClose}></lightning-button>
+                <div class="slds-m-top_medium">
+                    <template lwc:if={showDownload}>
+                        <lightning-button
+                            label="Download"
+                            variant="brand"
+                            class="slds-m-right_x-small"
+                            onclick={handleDownload}
+                        ></lightning-button>
+                    </template>
+                    <lightning-button label="Close" onclick={handleClose}></lightning-button>
+                </div>
             </div>
         </template>
 
