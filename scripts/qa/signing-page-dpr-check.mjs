@@ -155,5 +155,24 @@ ok(
     'only pages in view are sharpened; the rest keep or drop back to base'
 );
 
+// ── zoomed scroll: don't depend on the browser delivering scroll events ───────
+// On a Pixel, pinch-zoom then scrolling to the next page left it soft until a
+// re-zoom — the events alone don't cover a zoomed pan/fling. A watcher polls the
+// view while zoomed and refreshes once it has settled.
+const watch = extractFunction('watchWhileZoomed') || '';
+ok(!!watch, 'watchWhileZoomed() found in DocGenSignaturePdf.page');
+ok(/pinchZoom\(\) <= 1/.test(watch) && /setInterval\(/.test(watch), 'watcher only runs while pinch-zoomed');
+ok(/clearInterval\(zoomWatch\)/.test(watch), 'watcher stops when the signer zooms back out');
+ok(
+    /key !== lastViewKey/.test(watch) && /Date\.now\(\) - lastMovedAt >= ZOOM_SETTLE_MS/.test(watch),
+    'watcher refreshes only once the view has stopped moving'
+);
+ok(/key !== refreshedViewKey/.test(watch), 'watcher refreshes once per settled view, not every tick');
+ok(/watchWhileZoomed\(\)/.test(extractFunction('scheduleRefresh') || ''), 'any zoom/scroll event arms the watcher');
+ok(
+    /scrollY/.test(extractFunction('viewKey') || '') && /offsetTop/.test(extractFunction('viewKey') || ''),
+    'view position covers document scroll and the pinch viewport'
+);
+
 console.log(fail ? `\n${fail} FAILED` : '\ndevice-resolution rendering OK');
 process.exit(fail ? 1 : 0);

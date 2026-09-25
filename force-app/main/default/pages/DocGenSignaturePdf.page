@@ -1165,6 +1165,10 @@
                     var ZOOM_PIXEL_BUDGET = 2 * MAX_CANVAS_PIXELS;
                     var ZOOM_SETTLE_MS = 250; // re-render once the gesture or scroll settles
                     var ZOOM_MIN_CHANGE = 0.15; // skip re-renders that change resolution < 15%
+                    // While zoomed, also watch the view position directly: a zoomed pan or fling
+                    // on a phone doesn't reliably deliver the events above, and without this a
+                    // page scrolled into view stayed soft until the signer re-zoomed.
+                    var ZOOM_WATCH_MS = 400;
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
                     // { pageNum, viewport, textContent, wrapEl, pdfPage, canvas, ratio, task, pendingRatio }
@@ -1173,6 +1177,11 @@
                     var docPageCount = 1;
                     var zoomTimer = null;
                     var zoomListening = false;
+                    var zoomWatch = null; // interval id while pinch-zoomed
+                    var viewerEl = null;
+                    var lastViewKey = '';
+                    var lastMovedAt = 0;
+                    var refreshedViewKey = ''; // view the last refresh evaluated
 
                     function ensurePdfjs(containerEl) {
                         if (pdfjsLib) {
@@ -1310,6 +1319,7 @@
                         if (!ready || !pages.length) {
                             return;
                         }
+                        refreshedViewKey = viewKey();
                         var zoom = pinchZoom();
                         var dpr = window.devicePixelRatio || 1;
                         var visible = pages.filter(inView);
@@ -1340,9 +1350,55 @@
                             clearTimeout(zoomTimer);
                         }
                         zoomTimer = setTimeout(refreshResolution, ZOOM_SETTLE_MS);
+                        watchWhileZoomed();
+                    }
+
+                    // Where the signer is looking: scroll positions plus the pinch viewport.
+                    function viewKey() {
+                        var vv = window.visualViewport;
+                        return [
+                            window.scrollX,
+                            window.scrollY,
+                            viewerEl ? viewerEl.scrollTop : 0,
+                            vv ? vv.offsetLeft : 0,
+                            vv ? vv.offsetTop : 0,
+                            pinchZoom()
+                        ].join(',');
+                    }
+
+                    // While pinch-zoomed, poll the view: once it has stopped moving for
+                    // ZOOM_SETTLE_MS, refresh (a no-op when nothing needs re-rendering). This
+                    // converges whichever events the browser did or didn't send for a zoomed
+                    // pan, fling or scroll. Stops when the signer zooms back out.
+                    function watchWhileZoomed() {
+                        if (zoomWatch || pinchZoom() <= 1) {
+                            return;
+                        }
+                        lastViewKey = viewKey();
+                        lastMovedAt = Date.now();
+                        zoomWatch = setInterval(function () {
+                            if (pinchZoom() <= 1) {
+                                clearInterval(zoomWatch);
+                                zoomWatch = null;
+                                scheduleRefresh(); // hand zoomed pages back to base
+                                return;
+                            }
+                            var key = viewKey();
+                            if (key !== lastViewKey) {
+                                lastViewKey = key;
+                                lastMovedAt = Date.now();
+                            } else if (
+                                !zoomTimer &&
+                                key !== refreshedViewKey &&
+                                Date.now() - lastMovedAt >= ZOOM_SETTLE_MS
+                            ) {
+                                refreshResolution();
+                            }
+                        }, ZOOM_WATCH_MS);
                     }
 
                     function listenForZoom(containerEl) {
+                        viewerEl = containerEl;
                         if (zoomListening) {
                             return;
                         }
