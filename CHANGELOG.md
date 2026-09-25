@@ -2,7 +2,8 @@
 
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
-Not yet released. Seven community and team contributions, verified together on a fresh scratch org.
+Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
+80% coverage
 
 ### Added
 
