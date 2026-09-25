@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **The signing page is sharp on phones and HiDPI screens, and stays sharp when you
+  zoom (#413).** The guided signing viewer drew each PDF page onto a canvas sized in CSS
+  pixels and ignored `devicePixelRatio`, so on any high-density screen — every modern
+  phone, most laptops — the document was rasterised at a half to a third of the screen's
+  resolution and upscaled: soft text, and pinch-zoom only magnified the blur. Two
+  changes:
+    - **Device resolution.** Page canvases are backed at the device's pixel ratio (up to
+      3×) while displaying at the same size, bounded by a per-canvas cap (iOS Safari
+      refuses a canvas over 16.7 MP) and a whole-document pixel budget so a long document
+      can't exhaust a phone's canvas memory. A page that hits a cap renders no worse than
+      before.
+    - **Zoom re-renders.** Once a pinch-zoom (or a desktop browser-zoom change) settles,
+      the pages in view are re-rendered at the zoomed resolution — the current render
+      stays on screen until the sharp one is ready — within a shared zoom pixel budget.
+      Pages that scroll out of view drop back to their base render, so memory stays
+      bounded; a quick pinch in and out re-renders nothing. While zoomed, the viewer also
+      watches the view position directly, so scrolling or flinging to another page
+      sharpens it once the view settles — a zoomed pan on a phone doesn't reliably fire
+      scroll events, and without this the next page stayed soft until the signer
+      re-zoomed. On an A3 drawing pinched to 5× on a phone that is ~5× the detail it had
+      before.
+
+    Sign-spot placement and the composited stamps are unchanged — anchors and stamping read
+    the CSS-pixel viewport, never the canvas — verified by signing the same template before
+    the change, after it, and after a zoom cycle: every placement operator in the signed PDF
+    was identical. Covered by `scripts/qa/signing-page-dpr-check.mjs`, which lifts the
+    sizing and zoom logic straight out of the page.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
