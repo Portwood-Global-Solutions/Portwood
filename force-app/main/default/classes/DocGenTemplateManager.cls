@@ -112,4 +112,70 @@ public with sharing class DocGenTemplateManager {
 
         return EncodingUtil.base64Encode(cvs[0].VersionData);
     }
+
+    /**
+     * Cheap size-only lookup for the template's active (or latest attached) file —
+     * same ContentVersion resolution as getTemplateFileContent, but queries
+     * ContentSize instead of VersionData so callers can estimate before deciding
+     * whether to load the full blob at all. Used by DocGenFlowHeapRouter (#403) to
+     * decide sync vs async for DOCX output without paying for the read it might not need.
+     * Returns 0 if no template file can be resolved (caller should treat as "unknown/small").
+     */
+    public static Integer getTemplateFileSize(Id templateId) {
+        if (templateId == null) {
+            return 0;
+        }
+        if (!Schema.sObjectType.DocGen_Template_Version__c.isAccessible()) {
+            return 0;
+        }
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template_Version__c.sObjectType,
+            new Set<String>{ 'Content_Version_Id__c', 'Template__c', 'Is_Active__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> activeVersions = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+
+        Id targetCvId = (!activeVersions.isEmpty()) ? activeVersions[0].Content_Version_Id__c : null;
+
+        if (targetCvId == null) {
+            List<ContentDocumentLink> links = [
+                SELECT ContentDocumentId
+                FROM ContentDocumentLink
+                WHERE LinkedEntityId = :templateId
+                WITH USER_MODE
+                ORDER BY ContentDocument.CreatedDate DESC
+                LIMIT 1
+            ];
+            if (!links.isEmpty()) {
+                List<ContentVersion> cvs = [
+                    SELECT Id
+                    FROM ContentVersion
+                    WHERE ContentDocumentId = :links[0].ContentDocumentId AND IsLatest = TRUE
+                    WITH USER_MODE
+                    LIMIT 1
+                ];
+                if (!cvs.isEmpty()) {
+                    targetCvId = cvs[0].Id;
+                }
+            }
+        }
+
+        if (targetCvId == null || !Schema.sObjectType.ContentVersion.isAccessible()) {
+            return 0;
+        }
+        List<ContentVersion> sized = [
+            SELECT ContentSize
+            FROM ContentVersion
+            WHERE Id = :targetCvId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        return sized.isEmpty() ? 0 : (Integer) sized[0].ContentSize;
+    }
 }

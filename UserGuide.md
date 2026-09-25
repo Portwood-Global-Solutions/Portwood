@@ -3441,6 +3441,8 @@ The **Generate Document** action accepts an optional **JSON Data** input. When p
 
 Wire this to a Flow Text Variable populated upstream — typically by an Apex action that calls an external API and returns a JSON string. The merge tags in your template (`{Name}`, `{Amount:currency}`, `{#Items}…{/Items}`) resolve against the JSON instead of a Salesforce record.
 
+**Large templates route to the background automatically (v3.58+).** When you're using JSON Data and the template is large enough that building the Word, PowerPoint, or Excel file could hit Salesforce's memory limit, this action generates it in the background instead of failing — you'll get `Is Async = true` and a **Job ID** instead of an immediate `Content Document ID`. Poll it the same way as any other async job ([§11.10](#1110-polling-an-async-job-from-a-screen-flow)). Most templates are well under the limit and still generate immediately. PDF output isn't affected, since it doesn't hit this limit the same way.
+
 ### 11.9 Recipe — Custom signing UI (advanced, legacy requests only)
 
 > **Corrected 2026-07-30 (guide revision, no package change).** Earlier revisions of this section did not state which kind of signature request these three actions work with. They work **only** against a **legacy single-signer** request — one whose signing token lives on the request record itself. They **cannot** submit a signature into a request created by **Portwood: Create Signature Request** ([§11.6](#116-recipe--send-a-contract-for-signature-on-opportunity-approval)) or **Send Existing Document for Signature** ([§11.7](#117-recipe--send-a-document-for-signature-on-the-pdf-viewer-page)) — the current v3 multi-signer path, and what almost every Flow built since v3.0 uses. If you want to capture a signature inside your own portal or screen Flow, use [§11.6.1](#1161-sign-in-session--capture-the-signature-in-your-own-portal-or-screen-flow) instead: it is the supported route, and it is the only one that produces an audit trail and a Certificate of Completion.
@@ -3486,7 +3488,7 @@ Most customers don't need this. Use the bundled signing pages ([§11.6.1](#1161-
 
 ### 11.10 Polling an async job from a screen Flow
 
-Bulk and Giant Query actions return a `jobId`. Screen Flows have **no Wait element** (Wait/Pause exists only in autolaunched/record-triggered Flows), so poll with a user-driven refresh loop:
+Bulk, Giant Query, and (for large custom-JSON templates) Generate Document all return a `jobId`. Screen Flows have **no Wait element** (Wait/Pause exists only in autolaunched/record-triggered Flows), so poll with a user-driven refresh loop:
 
 1. **Get Records** on `DocGen_Job__c` where `Id = {!jobId}`.
 2. **Decision** on `Status__c`: `Completed` → show the file; `Failed` → show the error; anything else → a **Screen** with the current status and a "Refresh" button.

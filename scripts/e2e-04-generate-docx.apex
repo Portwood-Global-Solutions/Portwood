@@ -80,6 +80,14 @@ try {
             System.debug('DOCX GEN NON-EMPTY: FAIL — empty base64');
         }
 
+        if (docTitle == 'E2E Test Corp') {
+            pass++;
+            System.debug('DOCX TITLE PRESERVED: PASS');
+        } else {
+            fail++;
+            System.debug('DOCX TITLE PRESERVED: FAIL — got: ' + docTitle);
+        }
+
         // Verify ZIP header — first bytes should be PK (0x504B)
         if (String.isNotBlank(base64Docx)) {
             Blob docxBlob = EncodingUtil.base64Decode(base64Docx);
