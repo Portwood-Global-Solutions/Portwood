@@ -182,11 +182,12 @@
     padding: 1.25rem;
 }
 
+/* The preview page (.dg-pv, added by scopeHtmlForInlinePreview) is the paper. This host only
+   contains it: the transform and paint containment make any position: fixed / absolute content
+   in the merged HTML stay inside the preview instead of covering the page behind the modal. */
 .preview-html {
-    min-height: 12rem;
-    max-width: 52rem;
-    margin: 0 auto;
-    padding: 1.5rem;
-    background: #fff;
-    box-shadow: 0 2px 12px rgba(30, 48, 75, 0.08);
+    position: relative;
+    overflow: auto;
+    transform: translateZ(0);
+    contain: content;
 }

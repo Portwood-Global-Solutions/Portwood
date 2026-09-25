@@ -22,7 +22,9 @@
   always uses it, otherwise only active templates built for the record's object are offered
   (enforced on the server, not just in the picker). Email is sent from the sender an admin
   configured for Portwood when one is set, otherwise as the clicking user. At most 10 recipients.
-  The document preview is rendered through the platform's sanitizing rich-text component.
+  The document preview keeps the document's own layout but removes scripts, event handlers,
+  frames, forms and unsafe links from the merged HTML and confines its CSS to the preview
+  (record values are not HTML-escaped by the merge, so this is required).
 - **Signing pages report a refused signature.** `DocGenSignature.page` now shows the server's
   message when signing is refused because a required placement is still pending, instead of
   saying the signature was recorded.

@@ -7,6 +7,8 @@ import getEmailTemplateOptions from '@salesforce/apex/DocGenButtonController.get
 import getEmailPreviewHtml from '@salesforce/apex/DocGenButtonController.getEmailPreviewHtml';
 import getEmailCandidates from '@salesforce/apex/DocGenButtonController.getEmailCandidates';
 import sendGeneratedEmail from '@salesforce/apex/DocGenButtonController.sendGeneratedEmail';
+import { sanitizePreviewHtml } from 'c/docGenUtils';
+import { scopeHtmlForInlinePreview } from 'c/docGenAuthoringKit';
 
 export default class DocGenSendEmailButton extends LightningElement {
     _recordId;
@@ -58,6 +60,21 @@ export default class DocGenSendEmailButton extends LightningElement {
                 this.fail('Could not determine the record. Please reopen the record and try again.');
             }
         }, 4000);
+    }
+
+    renderedCallback() {
+        if (this.screen !== 'preview' || !this.previewHtml) {
+            return;
+        }
+        const host = this.template.querySelector('.preview-html');
+        if (host && host.dataset.rendered !== String(this.previewHtml.length)) {
+            // The merged HTML contains record data that is not HTML-escaped, so it is hardened first
+            // (scripts, handlers, frames, unsafe URLs removed) and its CSS is scoped to the preview
+            // page so it cannot restyle the page behind the modal. Same pattern as the Designer preview.
+            // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM write of sanitizePreviewHtml + scopeHtmlForInlinePreview output
+            host.innerHTML = scopeHtmlForInlinePreview(sanitizePreviewHtml(this.previewHtml));
+            host.dataset.rendered = String(this.previewHtml.length);
+        }
     }
 
     disconnectedCallback() {
