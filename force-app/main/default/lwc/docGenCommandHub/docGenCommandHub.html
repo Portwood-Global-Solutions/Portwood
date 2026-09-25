@@ -36,6 +36,10 @@
                         ></lightning-icon>
                         <span>Buttons</span>
                     </button>
+                    <button class={sendEmailTabClass} onclick={handleShowSendEmail}>
+                        <lightning-icon icon-name="utility:send" size="x-small" class="nav-icon"></lightning-icon>
+                        <span>Send Email</span>
+                    </button>
                 </template>
                 <button class={emailTabClass} onclick={handleShowEmail}>
                     <lightning-icon icon-name="utility:email" size="x-small" class="nav-icon"></lightning-icon>
@@ -145,6 +149,22 @@
                         </div>
                         <div class="panel-body">
                             <c-doc-gen-button-builder></c-doc-gen-button-builder>
+                        </div>
+                    </template>
+
+                    <!-- SEND EMAIL BUTTONS -->
+                    <template if:true={showSendEmailSection}>
+                        <div class="panel-header">
+                            <div>
+                                <h2>Send Email Buttons</h2>
+                                <p>
+                                    Create record-page Send Email actions that generate a document, attach it to the
+                                    source record, and email it to selected or manually entered recipients.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <c-doc-gen-button-builder action-type="Email"></c-doc-gen-button-builder>
                         </div>
                     </template>
 

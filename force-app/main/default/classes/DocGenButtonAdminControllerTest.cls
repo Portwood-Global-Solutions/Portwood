@@ -15,7 +15,9 @@ private class DocGenButtonAdminControllerTest {
     @IsTest
     static void getters_returnDataWithoutError() {
         Test.startTest();
-        List<DocGenButtonAdminController.ButtonConfigDTO> cfgs = DocGenButtonAdminController.getButtonConfigs();
+        List<DocGenButtonAdminController.ButtonConfigDTO> cfgs = DocGenButtonAdminController.getButtonConfigs(
+            'Document'
+        );
         List<DocGenButtonAdminController.Option> tpls = DocGenButtonAdminController.getTemplateOptions();
         List<DocGenButtonAdminController.Option> rts = DocGenButtonAdminController.getObjectRecordTypes('Account');
         List<DocGenButtonAdminController.Option> none = DocGenButtonAdminController.getObjectRecordTypes(null);

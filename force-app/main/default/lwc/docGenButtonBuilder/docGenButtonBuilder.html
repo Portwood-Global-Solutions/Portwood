@@ -2,11 +2,8 @@
     <div class="slds-card slds-var-p-around_medium">
         <div class="slds-grid slds-grid_vertical-align-center slds-var-m-bottom_small">
             <div class="slds-col">
-                <h2 class="slds-text-heading_small">Record-Page Document Buttons</h2>
-                <p class="slds-text-body_small slds-text-color_weak">
-                    Create one-click "generate document" buttons for a record page — no Setup required. Choose the
-                    object, template, and (optionally) which record types the button appears for.
-                </p>
+                <h2 class="slds-text-heading_small">{heading}</h2>
+                <p class="slds-text-body_small slds-text-color_weak">{helpText}</p>
             </div>
             <div class="slds-col slds-no-flex">
                 <lightning-button
@@ -22,14 +19,17 @@
             <lightning-icon icon-name="utility:info" size="xx-small" class="slds-var-m-right_xx-small"></lightning-icon>
             <strong>Two steps to a working button:</strong>
             <ol class="slds-list_ordered slds-var-m-left_medium slds-var-m-top_xxx-small">
-                <li>Create the button below (object, template, and — optionally — record types).</li>
+                <li>
+                    Create the button below (object<template if:false={isEmailMode}>, template</template>, and —
+                    optionally — record types).
+                </li>
                 <li>
                     Add it to the record page. In <strong>Setup → Object Manager →</strong> your object
                     <strong> → Buttons, Links, and Actions → New Action</strong>: set
-                    <strong>Action Type = Lightning Web Component</strong>, choose <strong>c:docGenButton</strong>, give
-                    it a label, and Save. Then add that action to the object's
-                    <strong>Lightning record page</strong> (or the Page Layout's actions). It shows on records of the
-                    object and record types you picked here.
+                    <strong>Action Type = Lightning Web Component</strong>, choose
+                    <strong>{setupComponentName}</strong>, give it a label, and Save. Then add that action to the
+                    object's <strong>Lightning record page</strong> (or the Page Layout's actions). It shows on records
+                    of the object and record types you picked here.
                 </li>
             </ol>
         </div>
@@ -63,17 +63,19 @@
                             required
                         ></lightning-combobox>
                     </div>
-                    <div class="slds-col slds-size_1-of-2 slds-var-p-bottom_x-small">
-                        <lightning-combobox
-                            label="Template"
-                            data-field="template"
-                            value={form.template}
-                            options={templateOptions}
-                            onchange={handleComboChange}
-                            placeholder="Pick a template"
-                            required
-                        ></lightning-combobox>
-                    </div>
+                    <template if:false={isEmailMode}>
+                        <div class="slds-col slds-size_1-of-2 slds-var-p-bottom_x-small">
+                            <lightning-combobox
+                                label="Template"
+                                data-field="template"
+                                value={form.template}
+                                options={templateOptions}
+                                onchange={handleComboChange}
+                                placeholder="Pick a template"
+                                required
+                            ></lightning-combobox>
+                        </div>
+                    </template>
                     <div class="slds-col slds-size_1-of-2 slds-var-p-bottom_x-small">
                         <lightning-combobox
                             label="Output format override"
@@ -173,7 +175,9 @@
                         <th scope="col"><div class="slds-truncate">Object</div></th>
                         <th scope="col"><div class="slds-truncate">Sort</div></th>
                         <th scope="col"><div class="slds-truncate">Record types</div></th>
-                        <th scope="col"><div class="slds-truncate">Template</div></th>
+                        <template if:false={isEmailMode}>
+                            <th scope="col"><div class="slds-truncate">Template</div></th>
+                        </template>
                         <th scope="col"><div class="slds-truncate">Status</div></th>
                         <th scope="col"><div class="slds-truncate">Actions</div></th>
                     </tr>
@@ -185,11 +189,13 @@
                             <td><div class="slds-truncate" title={b.objectApiName}>{b.objectApiName}</div></td>
                             <td><div class="slds-truncate">{b.sortOrder}</div></td>
                             <td><div class="slds-truncate" title={b.recordTypesLabel}>{b.recordTypesLabel}</div></td>
-                            <td>
-                                <div class="slds-truncate" title={b.templateApiName}>
-                                    {b.templateApiName}{b.templateId}
-                                </div>
-                            </td>
+                            <template if:false={isEmailMode}>
+                                <td>
+                                    <div class="slds-truncate" title={b.templateApiName}>
+                                        {b.templateApiName}{b.templateId}
+                                    </div>
+                                </td>
+                            </template>
                             <td>
                                 <span class={b.statusBadgeClass}>{b.statusLabel}</span>
                             </td>
@@ -219,9 +225,7 @@
         </template>
         <template if:false={hasButtons}>
             <template if:false={loading}>
-                <p class="slds-text-body_regular slds-text-color_weak slds-var-p-vertical_small">
-                    No document buttons yet. Click <strong>New Button</strong> to create your first one.
-                </p>
+                <p class="slds-text-body_regular slds-text-color_weak slds-var-p-vertical_small">{noRowsMessage}</p>
             </template>
         </template>
     </div>

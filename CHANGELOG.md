@@ -51,6 +51,12 @@
   can retrieve individual output directly from Command Hub -> Job History. Combined
   PDF output is unchanged.
 
+## Unreleased
+
+### Added
+
+- **Send Email by Portwood buttons.** Added a Command Hub **Send Email** builder for record-page email actions. Admins can create object/template-specific Send Email buttons, restrict them by record type, and place the `docGenSendEmailButton` Lightning Web Component on record pages. Users can pick the matching email action, choose a template, preview the generated document, select an email from the record or enter manual recipients, add subject/body text, and send the generated document as an attachment. The generated file is linked back to the source record's Files, and send errors are surfaced in the modal.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,

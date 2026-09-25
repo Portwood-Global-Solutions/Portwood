@@ -2731,6 +2731,18 @@ Values are case-insensitive; anything unrecognized falls back to `Download`. Pre
 
 > **Limitation:** this is a synchronous path — templates over the giant-query threshold (~2,000 child rows) will show an error instead of downloading. Use the Runner or a Flow with the Bulk/Giant actions for those.
 
+**Send Email buttons.** The Command Hub also has a **Send Email** button builder for record-page actions that generate a document, save it to the source record, and email it as an attachment. Open **Portwood app -> Command Hub -> Send Email**, click **New Send Email Button**, then choose the object, optional default template, record types, label, sort order, and active flag.
+
+Place the Send Email action the same way as the document button, but choose the Lightning Web Component `docGenSendEmailButton`. When the user launches it from a record, Portwood uses that clicked record automatically.
+
+The Send Email flow has three steps:
+
+1. **Template** - select the document template to generate. Template options show the friendly template name.
+2. **Preview** - review the generated document preview before sending.
+3. **Recipients & message** - choose an email address from the record when available, or type one or more manual email addresses. Add the subject and body, then send.
+
+Sending generates the document, links the generated file to the source record's Files, and sends the email to every selected/manual recipient with the generated document attached. If Salesforce blocks delivery, for example because org deliverability is restricted or the email service returns an error, the user sees the send error in the modal.
+
 ### 8.7 Document naming — Document Title Format tokens
 
 The template's **Document Title Format** field (Settings tab → Document Title editor) names every generated file — runner, bulk, Flow, quick action, and signed PDFs alike. Blank = the template name. Supported tokens, resolved against the source record:

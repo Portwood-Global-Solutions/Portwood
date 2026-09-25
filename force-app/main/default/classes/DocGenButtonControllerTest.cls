@@ -90,6 +90,48 @@ private class DocGenButtonControllerTest {
     }
 
     @IsTest
+    static void getEmailButtons_returnsOnlyEmailConfigs() {
+        DocGen_Button__mdt docCfg = cfg('Doc_Button', OBJ, UserInfo.getUserId(), true);
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        emailCfg.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ docCfg, emailCfg };
+
+        Test.startTest();
+        List<DocGenButtonController.ButtonOption> docOpts = DocGenButtonController.getButtons(UserInfo.getUserId());
+        List<DocGenButtonController.ButtonOption> emailOpts = DocGenButtonController.getEmailButtons(
+            UserInfo.getUserId()
+        );
+        Test.stopTest();
+
+        System.assertEquals(1, docOpts.size(), 'Document picker should hide email buttons');
+        System.assertEquals('Doc_Button', docOpts[0].developerName);
+        System.assertEquals(1, emailOpts.size(), 'Email picker should show only email buttons');
+        System.assertEquals('Email_Button', emailOpts[0].developerName);
+    }
+
+    @IsTest
+    static void getEmailButtons_usesTemplateNameWhenReadable() {
+        DocGen_Template__c tpl = new DocGen_Template__c(
+            Name = 'Readable Template Name',
+            Base_Object_API__c = 'User',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            API_Name__c = 'Readable_Template_Key'
+        );
+        Database.insert(tpl, AccessLevel.SYSTEM_MODE);
+
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, null, true);
+        emailCfg.Action_Type__c = 'Email';
+        emailCfg.Template_API_Name__c = 'Readable_Template_Key';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ emailCfg };
+
+        List<DocGenButtonController.ButtonOption> opts = DocGenButtonController.getEmailButtons(UserInfo.getUserId());
+
+        System.assertEquals(1, opts.size(), 'Expected one email option');
+        System.assertEquals('Readable Template Name', opts[0].templateName, 'Picker should show template Name');
+    }
+
+    @IsTest
     static void getButtons_nullRecordId_returnsEmpty() {
         Test.startTest();
         List<DocGenButtonController.ButtonOption> opts = DocGenButtonController.getButtons((Id) null);
@@ -145,6 +187,79 @@ private class DocGenButtonControllerTest {
         System.assertEquals('PowerPoint', DocGenButtonController.normalizeOutputFormatOverride('PPTX'));
         System.assertEquals('PDF', DocGenButtonController.normalizeOutputFormatOverride('PDF'));
         System.assertEquals(null, DocGenButtonController.normalizeOutputFormatOverride(' '));
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_generatesAttachmentAndSends() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        emailCfg.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ emailCfg };
+
+        Test.startTest();
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            new List<String>{ 'one@example.com', 'two@example.com' },
+            'Subject',
+            'Body'
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, dto.success, 'Email path should succeed: ' + dto.errorMessage);
+        System.assertNotEquals(null, dto.contentVersionId, 'Generated file version should be returned');
+        System.assert(dto.fileName.endsWithIgnoreCase('.pdf'), 'Attachment should keep generated filename');
+    }
+
+    @IsTest
+    static void sendGeneratedEmail_rejectsInvalidManualEmail() {
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        emailCfg.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ emailCfg };
+
+        DocGenButtonController.SendEmailResultDTO dto = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            new List<String>{ 'not-an-email' },
+            'Subject',
+            'Body'
+        );
+
+        System.assertEquals(false, dto.success, 'Invalid recipient should fail');
+        System.assert(dto.errorMessage.contains('Invalid email address'), 'Expected validation message');
+    }
+
+    @IsTest
+    static void emailHelpers_coverPreviewCandidatesAndValidation() {
+        DocGen_Button__mdt emailCfg = cfg('Email_Button', OBJ, UserInfo.getUserId(), true);
+        emailCfg.Action_Type__c = 'Email';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ emailCfg };
+
+        Test.startTest();
+        String preview = DocGenButtonController.getEmailPreviewHtml(UserInfo.getUserId(), 'Email_Button');
+        List<DocGenButtonController.EmailCandidate> candidates = DocGenButtonController.getEmailCandidates(
+            UserInfo.getUserId()
+        );
+        Test.stopTest();
+
+        System.assert(String.isNotBlank(preview), 'Preview fallback should still return displayable HTML');
+        System.assertNotEquals(null, candidates, 'Email candidate lookup should return a list');
+
+        DocGenButtonController.SendEmailResultDTO noSubject = DocGenButtonController.sendGeneratedEmail(
+            UserInfo.getUserId(),
+            'Email_Button',
+            new List<String>{ 'one@example.com' },
+            null,
+            'Body'
+        );
+        System.assertEquals(false, noSubject.success, 'Missing subject should fail');
+
+        DocGenButtonController.GenerateResultDTO wrongAction = DocGenButtonController.generate(
+            UserInfo.getUserId(),
+            'Email_Button'
+        );
+        System.assertEquals(false, wrongAction.success, 'Document generation endpoint should reject email buttons');
     }
 
     @IsTest
