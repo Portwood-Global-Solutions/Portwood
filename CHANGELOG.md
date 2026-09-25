@@ -42,6 +42,15 @@
   allowing inconsistent status, while legacy requests with no placement records remain
   supported.
 
+## Unreleased - Bulk individual file links
+
+### Fixed
+
+- **Bulk Individual Files are now linked to the job.** Each generated file is still
+  saved on its source record and is also linked to the parent bulk job, so operators
+  can retrieve individual output directly from Command Hub -> Job History. Combined
+  PDF output is unchanged.
+
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 
 Released 2026-09-11 · `04tVx0000015OKTIA2` (build 3.57.0-2) · ancestor 3.56.0 · ~2,111 tests,
