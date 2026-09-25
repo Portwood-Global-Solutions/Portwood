@@ -2729,6 +2729,8 @@ When an object has one active configuration (matching the record's type) the cli
 
 Values are case-insensitive; anything unrecognized falls back to `Download`. Preview works whether or not **Save To Record** is checked (an unattached file is owned by the user who generated it). PDFs preview immediately; Word/PowerPoint/Excel previews depend on Salesforce generating a file rendition, which can take a moment on first open.
 
+**Preview with nothing left behind.** The regular Portwood Button action (`c:docGenButton`) always opens a small dialog, and closing that dialog cancels the preview it opened, so in Preview mode a finished dialog stays behind the file viewer. For a preview with no dialog at all, add the **Portwood Preview Button** (`c:docGenPreviewButton`) as the record action instead. It is a headless action: one click generates the document and opens the file preview. It uses the record's first active button whose Delivery Mode is **Preview** (and tells the user if there is none). Each preview still creates a file, saved to the record when **Save To Record** is on.
+
 > **Limitation:** this is a synchronous path — templates over the giant-query threshold (~2,000 child rows) will show an error instead of downloading. Use the Runner or a Flow with the Bulk/Giant actions for those.
 
 **Send Email buttons.** The Command Hub also has a **Send Email** button builder for record-page actions that generate a document, save it to the source record, and email it as an attachment. Open **Portwood app -> Command Hub -> Send Email**, click **New Send Email Button**, then choose the object, optional default template, record types, label, sort order, and active flag.

@@ -736,4 +736,23 @@ private class DocGenButtonControllerTest {
             'With no configured sender the email goes out as the running user, never a guessed org-wide address'
         );
     }
+
+    @IsTest
+    static void getButtons_reportsEachButtonsDeliveryMode() {
+        DocGen_Button__mdt previewCfg = cfg('WO_Preview', OBJ, UserInfo.getUserId(), true);
+        previewCfg.Delivery_Mode__c = 'Preview';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{
+            previewCfg,
+            cfg('WO_Default', OBJ, UserInfo.getUserId(), true)
+        };
+
+        List<DocGenButtonController.ButtonOption> opts = DocGenButtonController.getButtons(UserInfo.getUserId());
+
+        Map<String, String> modes = new Map<String, String>();
+        for (DocGenButtonController.ButtonOption o : opts) {
+            modes.put(o.developerName, o.deliveryMode);
+        }
+        System.assertEquals('PREVIEW', modes.get('WO_Preview'), 'The headless preview action picks buttons by this');
+        System.assertEquals('DOWNLOAD', modes.get('WO_Default'), 'A blank Delivery Mode reports as DOWNLOAD');
+    }
 }

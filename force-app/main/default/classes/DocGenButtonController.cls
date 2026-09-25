@@ -108,6 +108,8 @@ public with sharing class DocGenButtonController {
         public String label;
         @AuraEnabled
         public String templateName;
+        @AuraEnabled
+        public String deliveryMode; // DOWNLOAD | PREVIEW | PREVIEW_AND_DOWNLOAD
     }
 
     public class GenerateResultDTO {
@@ -204,6 +206,7 @@ public with sharing class DocGenButtonController {
             opt.templateName = templateNames.containsKey(cfg.DeveloperName)
                 ? templateNames.get(cfg.DeveloperName)
                 : templateLabel(cfg);
+            opt.deliveryMode = normalizeDeliveryMode(cfg.Delivery_Mode__c);
             options.add(opt);
         }
         return options;
