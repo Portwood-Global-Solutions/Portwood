@@ -24,6 +24,11 @@
   every PDF size. The template is not saved; Salesforce creates a preview file
   for the viewer. This change applies to the Designer toolbar's PDF Preview
   action. Verification in an org that previously showed the error is pending.
+- **Document button output-format overrides now match the selected template.** The
+  Buttons builder filters override choices by template type, respects locked output
+  formats, and normalizes legacy values such as `DOCX`, `XLSX`, and `PPTX`. Runtime
+  generation now accepts Excel overrides and rejects unsupported cross-format Office
+  conversions consistently across buttons, Flow, and Apex.
 
 ## v3.57.0 — Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes
 

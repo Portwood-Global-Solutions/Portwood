@@ -10,10 +10,12 @@
 @IsTest
 private class DocGenButtonControllerTest {
     private static final String OBJ = 'User';
+    private static DocGenButtonController.GenRequest lastRequest;
 
     /** Mock that creates a real ContentVersion and returns its ids. */
     private class MockGenerator implements DocGenButtonController.Generator {
         public DocGenButtonController.GenResult generate(DocGenButtonController.GenRequest req) {
+            lastRequest = req;
             ContentVersion cv = new ContentVersion(
                 Title = String.isNotBlank(req.documentTitle) ? req.documentTitle : 'Mock Document',
                 PathOnClient = 'Mock Document.pdf',
@@ -97,6 +99,7 @@ private class DocGenButtonControllerTest {
 
     @IsTest
     static void generate_smallFile_returnsBase64() {
+        lastRequest = null;
         DocGenButtonController.generator = new MockGenerator();
         DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{
             cfg('WO_PDF', OBJ, UserInfo.getUserId(), true)
@@ -111,6 +114,37 @@ private class DocGenButtonControllerTest {
         System.assertNotEquals(null, dto.downloadUrl, 'A servlet download URL is always provided');
         System.assertEquals('application/pdf', dto.mimeType, 'PDF mime expected');
         System.assert(dto.fileName.endsWithIgnoreCase('.pdf'), 'Filename should carry extension');
+    }
+
+    @IsTest
+    static void generate_normalizesLegacyOutputFormatAliases() {
+        lastRequest = null;
+        DocGenButtonController.generator = new MockGenerator();
+        DocGen_Button__mdt c = cfg('WO_XLSX', OBJ, UserInfo.getUserId(), true);
+        c.Output_Format_Override__c = 'XLSX';
+        DocGenButtonController.configOverride = new List<DocGen_Button__mdt>{ c };
+
+        Test.startTest();
+        DocGenButtonController.GenerateResultDTO dto = DocGenButtonController.generate(UserInfo.getUserId(), 'WO_XLSX');
+        Test.stopTest();
+
+        System.assertEquals(true, dto.success, 'Expected success');
+        System.assertNotEquals(null, lastRequest, 'Generator should receive a request');
+        System.assertEquals(
+            'Excel',
+            lastRequest.outputFormatOverride,
+            'Legacy XLSX value should normalize for service'
+        );
+    }
+
+    @IsTest
+    static void normalizeOutputFormatOverride_acceptsAliasesAndCanonicalValues() {
+        System.assertEquals('Word', DocGenButtonController.normalizeOutputFormatOverride('DOCX'));
+        System.assertEquals('Excel', DocGenButtonController.normalizeOutputFormatOverride('xlsx'));
+        System.assertEquals('Excel', DocGenButtonController.normalizeOutputFormatOverride('Excel'));
+        System.assertEquals('PowerPoint', DocGenButtonController.normalizeOutputFormatOverride('PPTX'));
+        System.assertEquals('PDF', DocGenButtonController.normalizeOutputFormatOverride('PDF'));
+        System.assertEquals(null, DocGenButtonController.normalizeOutputFormatOverride(' '));
     }
 
     @IsTest

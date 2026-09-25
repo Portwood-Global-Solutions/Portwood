@@ -24,13 +24,13 @@ export default class DocGenButtonBuilder extends LightningElement {
     loading = true;
     saving = false;
 
-    outputFormatOptions = [
-        { label: 'Template default', value: '' },
-        { label: 'PDF', value: 'PDF' },
-        { label: 'Word (DOCX)', value: 'DOCX' },
-        { label: 'Excel (XLSX)', value: 'XLSX' },
-        { label: 'PowerPoint (PPTX)', value: 'PPTX' }
-    ];
+    outputFormatLabels = {
+        Word: 'Word (DOCX)',
+        Excel: 'Excel (XLSX)',
+        PowerPoint: 'PowerPoint (PPTX)',
+        HTML: 'HTML',
+        PDF: 'PDF'
+    };
 
     connectedCallback() {
         this.init();
@@ -40,7 +40,12 @@ export default class DocGenButtonBuilder extends LightningElement {
         try {
             const [objs, tpls] = await Promise.all([getObjectOptions(), getTemplateOptions()]);
             this.objectOptions = (objs || []).map((o) => ({ label: o.label, value: o.value }));
-            this.templateOptions = (tpls || []).map((o) => ({ label: o.label, value: o.value }));
+            this.templateOptions = (tpls || []).map((o) => ({
+                label: o.label,
+                value: o.value,
+                templateType: o.templateType,
+                lockOutputFormat: o.lockOutputFormat
+            }));
             await this.refreshButtons();
         } catch (e) {
             this.toast('Could not load', this.msg(e), 'error');
@@ -73,6 +78,12 @@ export default class DocGenButtonBuilder extends LightningElement {
     }
     get hasRecordTypes() {
         return this.recordTypeOptions.length > 0;
+    }
+    get selectedTemplate() {
+        return this.templateOptions.find((t) => t.value === this.form.template);
+    }
+    get outputFormatOptions() {
+        return this.allowedOutputFormatsForTemplate(this.selectedTemplate);
     }
 
     handleToggleForm() {
@@ -137,7 +148,12 @@ export default class DocGenButtonBuilder extends LightningElement {
     }
 
     handleComboChange(event) {
-        this.form = { ...this.form, [event.target.dataset.field]: event.detail.value };
+        const field = event.target.dataset.field;
+        const next = { ...this.form, [field]: event.detail.value };
+        if (field === 'template') {
+            next.outputFormatOverride = this.normalizeOutputFormatForTemplate(next.outputFormatOverride, next.template);
+        }
+        this.form = next;
     }
 
     async handleSave() {
@@ -153,6 +169,10 @@ export default class DocGenButtonBuilder extends LightningElement {
             this.toast('Label required', 'Give the button a label.', 'warning');
             return;
         }
+        const outputFormatOverride = this.normalizeOutputFormatForTemplate(
+            this.form.outputFormatOverride,
+            this.form.template
+        );
         const dto = {
             developerName: this.form.developerName || null,
             label: this.form.label.trim(),
@@ -160,7 +180,7 @@ export default class DocGenButtonBuilder extends LightningElement {
             templateApiName: this.form.template.startsWith('key:') ? this.form.template.substring(4) : null,
             templateId: this.form.template.startsWith('id:') ? this.form.template.substring(3) : null,
             documentTitle: this.form.documentTitle || null,
-            outputFormatOverride: this.form.outputFormatOverride || null,
+            outputFormatOverride: outputFormatOverride || null,
             saveToRecord: !!this.form.saveToRecord,
             sortOrder: this.form.sortOrder === '' || this.form.sortOrder == null ? null : this.form.sortOrder,
             active: this.form.active !== false,
@@ -216,6 +236,48 @@ export default class DocGenButtonBuilder extends LightningElement {
     }
     msg(e) {
         return (e && e.body && e.body.message) || (e && e.message) || 'Unexpected error.';
+    }
+    normalizeOutputFormatForTemplate(rawValue, templateValue) {
+        if (!rawValue) {
+            return '';
+        }
+        const aliases = {
+            DOCX: 'Word',
+            WORD: 'Word',
+            XLSX: 'Excel',
+            XLSM: 'Excel',
+            EXCEL: 'Excel',
+            PPTX: 'PowerPoint',
+            PPT: 'PowerPoint',
+            POWERPOINT: 'PowerPoint',
+            PDF: 'PDF',
+            HTML: 'HTML'
+        };
+        const value = aliases[String(rawValue).trim().toUpperCase()] || rawValue;
+        const template = this.templateOptions.find((t) => t.value === templateValue);
+        if (!template || template.lockOutputFormat) {
+            return '';
+        }
+        return this.allowedOutputFormatsForTemplate(template).some((o) => o.value === value) ? value : '';
+    }
+    allowedOutputFormatsForTemplate(template) {
+        const options = [{ label: 'Template default', value: '' }];
+        if (!template || template.lockOutputFormat) {
+            return options;
+        }
+        const type = template.templateType;
+        if (type === 'Word') {
+            options.push({ label: 'PDF', value: 'PDF' }, { label: this.outputFormatLabels.Word, value: 'Word' });
+        } else if (type === 'Excel') {
+            options.push({ label: this.outputFormatLabels.Excel, value: 'Excel' });
+        } else if (type === 'PowerPoint') {
+            options.push({ label: this.outputFormatLabels.PowerPoint, value: 'PowerPoint' });
+        } else if (type === 'HTML' || type === 'Canvas') {
+            options.push({ label: 'PDF', value: 'PDF' });
+        } else if (type === 'PDF') {
+            options.push({ label: 'PDF', value: 'PDF' });
+        }
+        return options;
     }
 }
 
