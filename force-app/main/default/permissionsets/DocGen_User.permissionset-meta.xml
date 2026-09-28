@@ -666,7 +666,7 @@
     </fieldPermissions>
     <!-- Signature Request fields (User: read most, edit status) -->
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Related_Record_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -681,12 +681,12 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Snapshot_Hash__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Snapshot_Taken_At__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -711,17 +711,17 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Source_Document_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Template__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -747,7 +747,7 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signature_Request__c.Email_Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -761,14 +761,21 @@
         <field>DocGen_Signature_Request__c.Expires_At__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Signer fields (User: read-only; PIN_Hash/PIN_Attempts/PIN_Expires_At/Secure_Token intentionally blocked) -->
+    <!-- Signer fields (User: read-only; PIN_Hash/PIN_Attempts/PIN_Expires_At/Secure_Token intentionally blocked).
+         NOT changed by this PR: Secure_Token__c on DocGen_Signer__c is also blocked here, but we found
+         it's populated on every signer record at insert time (checked records untouched since creation),
+         same as Secure_Token__c on DocGen_Signature_Request__c. If DocGen_User is meant to be able to send
+         for signature, either this field needs unblocking too, or there's a system/elevated-context path
+         that's supposed to set it instead of the calling user's own FLS - left to maintainers to confirm
+         which, given it's grouped with the PIN fields as a deliberate security boundary.
+         See github.com/Portwood-Global-Solutions/Portwood/issues/409 -->
     <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Signer__c.Consent_Captured__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Contact__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -783,7 +790,7 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Role_Name__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -794,22 +801,22 @@
     </fieldPermissions>
     <!-- DocGen_Signer__c.Signature_Request__c is a required master-detail; FLS auto-granted -->
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Signer_Email__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Signer_Name__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Sort_Order__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -1013,7 +1020,10 @@
     <objectPermissions>
         <allowCreate>true</allowCreate>
         <allowDelete>false</allowDelete>
-        <allowEdit>false</allowEdit>
+        <!-- Edit added: the send-for-signature flow does a follow-up update to the record
+             after the initial insert, which needs object-level Edit, not just Create.
+             See github.com/Portwood-Global-Solutions/Portwood/issues/409 -->
+        <allowEdit>true</allowEdit>
         <allowRead>true</allowRead>
         <modifyAllRecords>false</modifyAllRecords>
         <object>DocGen_Signature_Request__c</object>
@@ -1021,7 +1031,10 @@
         <viewAllRecords>false</viewAllRecords>
     </objectPermissions>
     <objectPermissions>
-        <allowCreate>false</allowCreate>
+        <!-- Create added: DocGenSignatureFlowAction builds DocGen_Signer__c records for each
+             signer on send, which DocGen_User could not do with Read-only access.
+             See github.com/Portwood-Global-Solutions/Portwood/issues/409 -->
+        <allowCreate>true</allowCreate>
         <allowDelete>false</allowDelete>
         <allowEdit>false</allowEdit>
         <allowRead>true</allowRead>
