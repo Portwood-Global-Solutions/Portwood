@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Canvas Import HTML flattened an exported document to one element, discarding every
+  box, condition and coordinate (#301).** The Canvas designer's **Import HTML** button
+  called `htmlToCanvas()` unconditionally — the converter meant for arbitrary foreign
+  HTML, which deliberately groups consecutive blocks into a single box. Handed a
+  document the Canvas designer itself had just exported, it folded the whole thing into
+  one box and reported "Imported 1 element(s)." **Import HTML** now tries to open the
+  file as a canvas document first (the same rule `loadBody()` already followed when
+  reopening a saved template) and only falls back to the foreign-HTML converter when the
+  file isn't canvas-shaped. Export → Import is a real round trip again; importing
+  genuinely foreign HTML is unaffected.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
