@@ -54,6 +54,29 @@ below.mode = 'flow';
 below.text = 'Below the table';
 doc.artboards[0].boxes.push(below);
 
+// Mutually exclusive conditional alternatives share one authored slot. Without the
+// variant group, the serializer advances the flow cursor through A, B and C even when
+// two of them will be removed by {#IF}, leaving the next block laid out as though all
+// three existed.
+const variantDoc = m.blankDocument();
+const variantTitle = m.newTextBox(0.5, 0.5, 4, 0.4);
+variantTitle.mode = 'flow';
+variantTitle.text = 'Account Name';
+variantDoc.artboards[0].boxes.push(variantTitle);
+for (const [i, label] of ['Customer A', 'Customer B', 'Customer C'].entries()) {
+    const alt = m.newTextBox(0.5, 1 + i * 0.5, 4, 0.4);
+    alt.mode = 'flow';
+    alt.condition = 'Type = "' + label.slice(-1) + '"';
+    alt.variantGroup = 'Customer Type';
+    alt.text = label;
+    variantDoc.artboards[0].boxes.push(alt);
+}
+const variantAfter = m.newTextBox(0.5, 2.5, 4, 0.4);
+variantAfter.mode = 'flow';
+variantAfter.text = 'Dear Customer';
+variantDoc.artboards[0].boxes.push(variantAfter);
+const variantHtml = m.serialize(variantDoc, geo);
+
 // --- fixtures for rich text, images, shapes and page setup ------------------
 const rich = m.newTextBox(0.5, 5.2, 3, 0.4);
 rich.html = '<p><b>Rich</b> text with {Owner.Name} and a &#123;braced&#125; entity</p>';
@@ -266,6 +289,22 @@ const checks = [
     // this right is what makes a growing table push what is under it down.
     ['flow boxes stack by gap, not by absolute y', !/class="dg-flow"[^>]*margin: 7.5in/.test(html)],
     ['pinned boxes are emitted before flow ones', html.indexOf('dg-pin') < html.indexOf('dg-flow')],
+    [
+        'variant alternatives share the first slot instead of their stacked y positions',
+        (
+            variantHtml.match(
+                /class="dg-flow"[^>]*data-dg-variant-group="Customer Type"[^>]*margin: 0.1in 0 0 0.5in/g
+            ) || []
+        ).length === 3
+    ],
+    [
+        'the block after a variant group follows the shared slot',
+        /class="dg-flow"[^>]*margin: 0in 0 0 0.5in[^>]*>Dear Customer/.test(variantHtml)
+    ],
+    [
+        'variant group metadata is preserved for authoring',
+        (variantHtml.match(/data-dg-variant-group="Customer Type"/g) || []).length === 3
+    ],
     // The CSS is a rendering instruction, not a record of what the author did — a flow
     // box's margin is the GAP from the previous one, not its position. Reading the
     // margin back as y collapsed flow boxes toward the top on every reload, and with
