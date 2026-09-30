@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Negative currency values in generated templates now place the minus sign before symbol-before currencies. For example, `{Amount:currency}` renders `-$50.00` instead of `$-50.00`, and `{Amount:currency:GBP}` renders `-£50.00` instead of `£-50.00`. Symbol-after locale output, such as German/French-style `-50,00 €`, is unchanged.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
