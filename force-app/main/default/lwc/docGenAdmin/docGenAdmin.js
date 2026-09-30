@@ -5743,6 +5743,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
         }
 
+        // #322 — a header/footer band only reaches editTemplateHeaderHtml/FooterHtml
+        // through the band's native 'input' listener. A chip click, a drag-drop
+        // insert or a pill retype all mutate the band DOM directly and never fire
+        // that event, so without this the field below could still be what the band
+        // held BEFORE the edit. _liveChrome() re-reads the live bands the same way
+        // Preview already does, so Save can never persist a stale chrome value.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
+            return;
+        }
+
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -5795,6 +5809,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async handleSaveAndClose() {
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
+            return;
+        }
+        // #322 — see the matching comment in handleSaveOnly: a header/footer band
+        // only reaches editTemplateHeaderHtml/FooterHtml through the band's native
+        // 'input' listener, and a chip/drag/pill-retype insert never fires it. Force
+        // a fresh read from the live bands before this handler goes anywhere near
+        // the fields below, or a tag visibly added to the header can be silently
+        // dropped by a save that looked completely successful.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
             return;
         }
         // Designer: unapplied visual/source edits fold into the staged body
@@ -6933,7 +6960,16 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
             return container.innerHTML;
         } catch (e) {
-            return html;
+            // #322 — this function is the last line of defense against editor
+            // chrome (pills, drop markers, the preview wrapper) reaching a saved
+            // template body. The guard above already established `html` still
+            // carries at least one of those markers, so silently handing it back
+            // unchanged here means a failed sanitize looks IDENTICAL to a
+            // successful one to every caller — "Editor HTML staged" fires and the
+            // dirty markup goes on to save. Fail loud instead: _processAndSaveHtmlBody
+            // already documents itself as "Throws on failure — callers own the
+            // error toast," so this matches its existing contract.
+            throw new Error('Could not clean staged HTML: ' + (e && e.message ? e.message : String(e)));
         }
     }
 
