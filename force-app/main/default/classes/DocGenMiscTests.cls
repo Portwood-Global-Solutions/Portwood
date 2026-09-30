@@ -4409,6 +4409,8 @@ private class DocGenMiscTests {
 
         System.assert(result.contains('-'), 'Negative should contain minus sign, got: ' + result);
         System.assert(result.contains('1,234.56'), 'Negative value should have commas, got: ' + result);
+        System.assert(result.contains('-$1,234.56'), 'Negative currency sign should precede $, got: ' + result);
+        System.assert(!result.contains('$-'), 'Negative currency must not render as $-, got: ' + result);
     }
 
     // =========================================================================
@@ -4431,6 +4433,19 @@ private class DocGenMiscTests {
         Map<String, Object> data = new Map<String, Object>{ 'Amount' => 5000 };
         String result = DocGenService.processXmlForTest('{Amount:currency:GBP}', data);
         System.assert(result.contains('\u00A3'), 'GBP should contain pound sign, got: ' + result);
+    }
+
+    @IsTest
+    static void testNegativeCurrencySymbolBeforeNumber() {
+        Map<String, Object> data = new Map<String, Object>{ 'Amount' => -50 };
+
+        String usd = DocGenService.processXmlForTest('{Amount:currency}', data);
+        String gbp = DocGenService.processXmlForTest('{Amount:currency:GBP}', data);
+
+        System.assert(usd.contains('-$50.00'), 'Bare currency should render -$50.00, got: ' + usd);
+        System.assert(!usd.contains('$-'), 'Bare currency must not render $-, got: ' + usd);
+        System.assert(gbp.contains('-\u00A350.00'), 'GBP should render -\u00A350.00, got: ' + gbp);
+        System.assert(!gbp.contains('\u00A3-'), 'GBP must not render \u00A3-, got: ' + gbp);
     }
 
     @IsTest
