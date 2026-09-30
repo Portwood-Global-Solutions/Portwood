@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased - Canvas element flow linking
+
+### Fixed
+
+- **Canvas elements now follow growing elements.** Elements placed below another
+  overlapping element automatically move with it when its content grows or shrinks.
+  The canvas preview and generated PDF preserve the authored spacing, including
+  chained layouts such as table, summary, note, and signature blocks. Manual
+  **Moves with another element** links also retain their placed spacing.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
