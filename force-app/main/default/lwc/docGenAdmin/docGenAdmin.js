@@ -168,7 +168,8 @@ const TYPE_VALUE_HISTORY = {
     PowerPoint: '1.0',
     Excel: '1.5x',
     HTML: '1.61.0',
-    PDF: '3.03.0'
+    PDF: '3.03.0',
+    Canvas: '3.54.0'
 };
 
 /**
@@ -4572,7 +4573,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * "Type: bad value for restricted picklist field: Canvas" on save.
      */
     get missingTypeValuesMessage() {
-        const describe = (v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`;
         const onTemplate = this.missingTypeValues;
         const onVersion = this.missingVersionTypeValues;
         const all = Array.from(new Set([...onTemplate, ...onVersion]));
@@ -4586,15 +4586,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
 
         return (
-            `This org's Type picklist is missing: ${all.map(describe).join(', ')}. ` +
-            'That means the package upgrade did not fully apply its schema — a restricted ' +
-            'picklist value never reaches an org that was already installed before that value ' +
-            'existed, and no later upgrade brings it. ' +
-            `Add the missing values to ${fields.join(' AND ')} in Setup — ` +
-            (fields.length > 1
-                ? 'BOTH fields are needed, because saving writes the type to the template and to its version. '
-                : '') +
-            'Until then those template types cannot be created.'
+            `Missing Type picklist value: ${all.join(', ')}. ` +
+            `${all.includes('Canvas') ? 'Canvas must be active on ' : 'Add or activate the missing value on '}` +
+            `${fields.join(' and ')}. ` +
+            'Open the field link below, add or activate the value in Picklist Values, then click Re-check.'
         );
     }
 
@@ -4951,17 +4946,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * Returns an error string, or null when the create looks safe to attempt.
      */
     _preflightCreate() {
-        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(this.newTemplateType)) {
+        const missingFields = this._missingTypeFieldsForValue(this.newTemplateType);
+        if (missingFields.length) {
+            const versionSuffix = TYPE_VALUE_HISTORY[this.newTemplateType]
+                ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
+                : '';
+            const fieldText = missingFields.join(missingFields.length > 1 ? ' AND ' : '');
             return (
-                `This org's Template Type picklist does not contain "${this.newTemplateType}"` +
-                (TYPE_VALUE_HISTORY[this.newTemplateType]
-                    ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
-                    : '') +
-                '. The package upgrade did not fully apply its schema. Re-run the upgrade, or pick one of: ' +
-                this._orgTypeValues.join(', ')
+                `This org cannot create "${this.newTemplateType}" templates because ` +
+                `"${this.newTemplateType}"${versionSuffix} is missing from ${fieldText}. ` +
+                'Add or reactivate that picklist value in Setup, then click Re-check.'
             );
         }
         return null;
+    }
+
+    _missingTypeFieldsForValue(value) {
+        const fields = [];
+        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(value)) {
+            fields.push('Portwood Template > Type');
+        }
+        if (
+            this._orgVersionTypeValues &&
+            this._orgVersionTypeValues.length &&
+            !this._orgVersionTypeValues.includes(value)
+        ) {
+            fields.push('Portwood Template Version > Type');
+        }
+        return fields;
     }
 
     /**

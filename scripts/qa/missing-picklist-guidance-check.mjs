@@ -33,7 +33,14 @@ const ok = (c, m) => {
     if (!c) fail++;
 };
 
-const TYPE_VALUE_HISTORY = { HTML: '1.66.0', Excel: '2.30.0', PDF: '3.03.0', Canvas: '3.54.0' };
+const TYPE_VALUE_HISTORY = {
+    Word: '1.0',
+    PowerPoint: '1.0',
+    Excel: '1.5x',
+    HTML: '1.61.0',
+    PDF: '3.03.0',
+    Canvas: '3.54.0'
+};
 
 /** Mirrors the docGenAdmin getters. */
 function guidance(orgTemplateValues, orgVersionValues) {
@@ -47,16 +54,31 @@ function guidance(orgTemplateValues, orgVersionValues) {
     if (onTemplate.length) fields.push('Portwood Template > Type');
     if (onVersion.length) fields.push('Portwood Template Version > Type');
     const message =
-        `This org's Type picklist is missing: ${all.map((v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`).join(', ')}. ` +
-        'That means the package upgrade did not fully apply its schema — a restricted ' +
-        'picklist value never reaches an org that was already installed before that value ' +
-        'existed, and no later upgrade brings it. ' +
-        `Add the missing values to ${fields.join(' AND ')} in Setup — ` +
-        (fields.length > 1
-            ? 'BOTH fields are needed, because saving writes the type to the template and to its version. '
-            : '') +
-        'Until then those template types cannot be created.';
+        `Missing Type picklist value: ${all.join(', ')}. ` +
+        `${all.includes('Canvas') ? 'Canvas must be active on ' : 'Add or activate the missing value on '}` +
+        `${fields.join(' and ')}. ` +
+        'Open the field link below, add or activate the value in Picklist Values, then click Re-check.';
     return { has, message, fields };
+}
+
+/** Mirrors createTemplate's restricted-picklist preflight. */
+function preflightCreate(templateType, orgTemplateValues, orgVersionValues) {
+    const fields = [];
+    if (orgTemplateValues && orgTemplateValues.length && !orgTemplateValues.includes(templateType)) {
+        fields.push('Portwood Template > Type');
+    }
+    if (orgVersionValues && orgVersionValues.length && !orgVersionValues.includes(templateType)) {
+        fields.push('Portwood Template Version > Type');
+    }
+    if (!fields.length) return null;
+
+    const versionSuffix = TYPE_VALUE_HISTORY[templateType] ? ` (added in v${TYPE_VALUE_HISTORY[templateType]})` : '';
+    const fieldText = fields.join(fields.length > 1 ? ' AND ' : '');
+    return (
+        `This org cannot create "${templateType}" templates because ` +
+        `"${templateType}"${versionSuffix} is missing from ${fieldText}. ` +
+        'Add or reactivate that picklist value in Setup, then click Re-check.'
+    );
 }
 
 const FULL = ['Word', 'PowerPoint', 'Excel', 'HTML', 'PDF', 'Canvas'];
@@ -69,8 +91,8 @@ console.log('\nthe reported case: Canvas missing from BOTH picklists');
     ok(g.fields.length === 2, 'and names both fields');
     ok(g.message.includes('Portwood Template > Type'), 'names the template field');
     ok(g.message.includes('Portwood Template Version > Type'), 'names the version field');
-    ok(g.message.includes('BOTH fields are needed'), 'and says explicitly that both are needed');
-    ok(g.message.includes('Canvas (added in v3.54.0)'), 'and names the value with the version that introduced it');
+    ok(g.message.includes('Canvas must be active on'), 'says Canvas must be active');
+    ok(g.message.includes('Open the field link below'), 'gives the short admin action');
 }
 
 console.log('\nthe reported case, halfway fixed — this is where imax-vaughn got stuck');
@@ -90,6 +112,24 @@ console.log('\nthe reverse asymmetry is handled too');
     ok(g.fields.length === 1 && g.fields[0] === 'Portwood Template > Type', 'and names just that one');
 }
 
+console.log('\ncreate preflight blocks Canvas with the exact object that is missing it');
+{
+    const versionOnly = preflightCreate('Canvas', FULL, NO_CANVAS);
+    ok(!!versionOnly, 'blocks before the version insert can fail generically');
+    ok(versionOnly.includes('Portwood Template Version > Type'), 'names the version field when only it is missing Canvas');
+    ok(!versionOnly.includes('Portwood Template > Type AND'), 'does not blame the template field after it is fixed');
+
+    const templateOnly = preflightCreate('Canvas', NO_CANVAS, FULL);
+    ok(!!templateOnly, 'also blocks when only the template field is missing Canvas');
+    ok(templateOnly.includes('Portwood Template > Type'), 'names the template field');
+    ok(!templateOnly.includes('Portwood Template Version > Type'), 'does not blame the version field when it is complete');
+
+    const both = preflightCreate('Canvas', NO_CANVAS, NO_CANVAS);
+    ok(!!both, 'blocks when both fields are missing Canvas');
+    ok(both.includes('Portwood Template > Type AND Portwood Template Version > Type'), 'names both fields together');
+    ok(both.includes('"Canvas" (added in v3.54.0)'), 'names Canvas with the release that introduced it');
+}
+
 console.log('\na fully upgraded org stays quiet');
 {
     const g = guidance(FULL, FULL);
@@ -99,9 +139,9 @@ console.log('\na fully upgraded org stays quiet');
 console.log('\nolder gaps still reported, and de-duplicated across the two fields');
 {
     const g = guidance(['Word', 'PowerPoint', 'Excel'], ['Word', 'PowerPoint', 'Excel', 'HTML']);
-    ok(g.message.includes('PDF (added in v3.03.0)'), 'PDF is reported');
-    ok(g.message.includes('HTML (added in v1.66.0)'), 'HTML is reported');
-    ok((g.message.match(/PDF \(added/g) || []).length === 1, 'and each value is listed once, not once per field');
+    ok(g.message.includes('PDF'), 'PDF is reported');
+    ok(g.message.includes('HTML'), 'HTML is reported');
+    ok((g.message.match(/PDF/g) || []).length === 1, 'and each value is listed once, not once per field');
 }
 
 console.log('\nwires not resolved yet must not raise a false alarm');
