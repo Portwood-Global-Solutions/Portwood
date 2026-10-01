@@ -56,6 +56,14 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **Canvas conditional variants no longer leave empty rows in generated output** (#302).
+  Mutually exclusive flow boxes can now share a **Variant group**: the Designer still
+  shows each authored alternative in its vertical position so it can be selected and
+  edited, while the serializer emits the alternatives into one logical flow slot. The
+  next flow block follows the single active alternative instead of preserving space for
+  the inactive boxes. Variant group metadata round-trips through saved Canvas HTML, and
+  the serializer regression now covers the shared-slot spacing.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said
