@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Canvas designer: "Show sample data" renders the artboard with the bound Test
+  Record's real values (#284).** The artboard used to draw raw merge tags
+  (`{Client__r.BillingStreet}`) while the real PDF showed the merged value
+  (`1400 Harborview Parkway, Suite 900`) — different lengths, so a box's size on the
+  canvas routinely disagreed with the output. A new toolbar checkbox, off by default,
+  substitutes the bound Test Record's real field values into text and table boxes, with
+  real child row counts (capped at 8, with a "+N more rows" indicator) on
+  relationship-bound tables; a field that's empty on the record falls back to showing
+  its raw tag rather than going blank. `:currency` and `:date` format suffixes get an
+  approximate rendering (bare-$ US formatting, a short date) sized for layout purposes,
+  not the real engine's ISO-code/locale-aware formatting. Preview-only — resolved
+  values never reach the saved template body regardless of toggle state. A manual
+  Refresh action and the current status live in the Data panel next to the sample-record
+  picker. See UserGuide §5.1.3.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
