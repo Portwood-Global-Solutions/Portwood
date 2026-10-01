@@ -59,7 +59,7 @@ Two small fixes where the editor promised something the PDF did not deliver.
 - **Canvas setup now names the missing Type picklist field(s) in upgraded orgs (#303).**
   Older Portwood orgs can be missing the `Canvas` value on one or both restricted Type
   picklists. The admin page now checks both `Portwood Template > Type` and `Portwood
-  Template Version > Type`, tells admins exactly where to activate `Canvas`, and lets
+Template Version > Type`, tells admins exactly where to activate `Canvas`, and lets
   them re-check after fixing Setup instead of failing later with a generic save error.
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
