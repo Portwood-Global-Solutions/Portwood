@@ -34,6 +34,25 @@
                                         ></lightning-icon>
                                         {missingTypeValuesMessage}
                                     </p>
+                                    <p class="slds-text-body_small slds-var-m-top_x-small">
+                                        <template for:each={missingTypeFieldLinks} for:item="lnk">
+                                            <a
+                                                key={lnk.objectApiName}
+                                                href={lnk.url}
+                                                target="_blank"
+                                                rel="noopener"
+                                                class="slds-var-m-right_medium"
+                                                >Open {lnk.label} in Setup</a
+                                            >
+                                        </template>
+                                        <lightning-button
+                                            variant="brand"
+                                            label="Re-check"
+                                            title="Check the picklists again after adding the values"
+                                            onclick={handleRecheckTypeValues}
+                                            class="slds-var-m-left_x-small"
+                                        ></lightning-button>
+                                    </p>
                                 </div>
                             </template>
                             <!-- HTML-first authoring path picker -->

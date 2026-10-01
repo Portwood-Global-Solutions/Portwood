@@ -1138,6 +1138,19 @@
                     the query for you.
                 </p>
 
+                <label class="dg-panel-label">Variant group</label>
+                <input
+                    class="dg-panel-input"
+                    type="text"
+                    value={selVariantGroup}
+                    placeholder={variantGroupPlaceholder}
+                    onchange={handleVariantGroupChange}
+                />
+                <p class="dg-panel-note">
+                    Give mutually exclusive boxes the same group name so they share one flow slot instead of stacking
+                    separate empty alternatives.
+                </p>
+
                 <h4 class="dg-panel-sub">Arrange</h4>
                 <div class="dg-row">
                     <button class="dg-sbtn" data-dir="up" onclick={handleZStep} title="Bring forward">Forward</button>
