@@ -6,6 +6,7 @@ import getTemplateVersions from '@salesforce/apex/DocGenController.getTemplateVe
 import getVersionBody from '@salesforce/apex/DocGenController.getVersionBody';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
+import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
 import { loadScript } from 'lightning/platformResourceLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
@@ -33,6 +34,7 @@ import {
     symbolMarkup,
     newTableBox,
     tablePreviewHtml,
+    substituteSampleTags,
     snapBox,
     suggestTotals,
     buildQueryConfig,
@@ -165,6 +167,13 @@ export default class DocGenCanvas extends LightningElement {
     @track _showPageSetup = false;
 
     _loaded = false;
+    // True once loadBody() has actually finished and this.doc reflects the real
+    // template content — not merely once loadBody() has been CALLED. _loaded flips
+    // true synchronously at the top of loadBody(), before the async fetch that
+    // populates this.doc, so it cannot be used as a "the document is ready" signal;
+    // buildQueryConfig(this.doc) run before this is true sees the still-blank
+    // placeholder document and derives a near-empty Query Config.
+    _docLoaded = false;
     _templateId = null;
     _connected = false;
     // The document as STORED, so unsaved-change detection compares like with like.
@@ -337,6 +346,10 @@ export default class DocGenCanvas extends LightningElement {
     async handleSampleRecordChange(event) {
         const id = event.detail ? event.detail.recordId : null;
         this._sampleOverride = id;
+        // The record changed — whatever was resolved for the old one must not linger
+        // and be shown against the new one for even a moment.
+        this.resolvedSampleData = null;
+        this.sampleDataError = null;
         if (!id || !this.templateId) {
             return;
         }
@@ -350,6 +363,82 @@ export default class DocGenCanvas extends LightningElement {
             this.statusText = 'Preview record saved on the template';
         } catch (e) {
             this.statusText = 'Using that record for preview (not saved: ' + this.errText(e) + ')';
+        }
+        if (this.showSampleData) {
+            this.refreshSampleData();
+        }
+    }
+
+    /**
+     * Artboard "Show sample data" toggle — off by default, always an explicit choice.
+     * See refreshSampleData for the fetch this drives and
+     * previewHtmlFor/tablePreviewHtml for where resolvedSampleData is consumed.
+     */
+    @track showSampleData = false;
+    @track resolvedSampleData = null;
+    @track sampleDataLoading = false;
+    @track sampleDataError = null;
+
+    get sampleToggleDisabled() {
+        return !this.effectiveSampleRecordId;
+    }
+
+    get sampleDataStatusLabel() {
+        if (this.sampleDataLoading) {
+            return 'Loading sample data…';
+        }
+        if (this.sampleDataError) {
+            return 'Could not load sample data: ' + this.sampleDataError;
+        }
+        return "Artboard is showing this record's real values.";
+    }
+
+    handleToggleSampleData(event) {
+        this.showSampleData = event.target.checked;
+        if (this.showSampleData && !this.resolvedSampleData) {
+            this.refreshSampleData();
+        }
+    }
+
+    handleRefreshSampleData() {
+        return this.refreshSampleData();
+    }
+
+    /**
+     * The one fetch this feature makes. Called from exactly three places — toggle-on,
+     * a record change (handleSampleRecordChange), and the manual Refresh button —
+     * never per-keystroke and never from renderedCallback. Sends
+     * buildQueryConfig(this.doc), the config derived from tags actually placed right
+     * now, not the saved queryConfig — an author must see a field they just dragged
+     * onto a box before clicking Save or "Update the template's query".
+     *
+     * previewRecordData (DocGenController.cls) is reused as-is: it already resolves
+     * against an ad hoc Query Config string, decoupled from any saved template row,
+     * so this never needs to save anything first.
+     */
+    async refreshSampleData() {
+        if (!this.showSampleData || !this.effectiveSampleRecordId || !this.baseObject) {
+            this.resolvedSampleData = null;
+            return;
+        }
+        const cfg = buildQueryConfig(this.doc);
+        this.sampleDataLoading = true;
+        this.sampleDataError = null;
+        try {
+            const data = await previewRecordData({
+                recordId: this.effectiveSampleRecordId,
+                baseObject: this.baseObject,
+                queryConfig: cfg
+            });
+            this.resolvedSampleData = data || null;
+            if (!data) {
+                this.sampleDataError = 'No data returned for that record';
+            }
+        } catch (e) {
+            this.resolvedSampleData = null;
+            this.sampleDataError = this.errText(e);
+        } finally {
+            this.sampleDataLoading = false;
         }
     }
 
@@ -2043,6 +2132,7 @@ export default class DocGenCanvas extends LightningElement {
      */
     resetForTemplate() {
         this._loaded = false;
+        this._docLoaded = false;
         this._savedHtml = null;
         this.doc = blankDocument();
         this.selectedId = null;
@@ -2058,6 +2148,10 @@ export default class DocGenCanvas extends LightningElement {
         this.showData = false;
         this._showPageSetup = false;
         this._sampleOverride = null;
+        this.showSampleData = false;
+        this.resolvedSampleData = null;
+        this.sampleDataError = null;
+        this.sampleDataLoading = false;
         this._past = [];
         this._future = [];
         this.margins = { ...DEFAULT_MARGINS };
@@ -2231,6 +2325,18 @@ export default class DocGenCanvas extends LightningElement {
         } catch (e) {
             this.doc = blankDocument();
             this.statusText = 'Could not load the saved body: ' + (e.body ? e.body.message : e.message);
+        }
+        // this.doc now reflects the real template content (or is genuinely blank for
+        // a brand-new one) on every path above, success or failure — safe to derive
+        // a real Query Config from it from this point on.
+        //
+        // Covers the edge case where the toggle was already checked before this
+        // finished (buildQueryConfig(this.doc) against the still-blank placeholder
+        // document would have derived a near-empty Query Config) — nothing auto-turns
+        // the toggle on here, this only retries a fetch the user already asked for.
+        this._docLoaded = true;
+        if (this.showSampleData && !this.resolvedSampleData) {
+            this.refreshSampleData();
         }
     }
 
@@ -2901,7 +3007,9 @@ export default class DocGenCanvas extends LightningElement {
             return '<canvas class="dg-chart-canvas" data-chart-for="' + model.id + '"></canvas>';
         }
         if (model.kind === 'table') {
-            return tablePreviewHtml(model);
+            // preview-only — dataMap is never written back into model/this.doc, only
+            // read here to render real rows; serialize() never sees it.
+            return tablePreviewHtml(model, this.showSampleData ? this.resolvedSampleData : null);
         }
         if (model.kind === 'image') {
             const img = model.image || {};
@@ -3012,7 +3120,15 @@ export default class DocGenCanvas extends LightningElement {
                 '"></div>'
             );
         }
-        return model.html != null ? model.html : model.text || '';
+        const raw = model.html != null ? model.html : model.text || '';
+        if (!this.showSampleData || !this.resolvedSampleData) {
+            return raw;
+        }
+        // preview-only — substituteSampleTags returns a new string; raw is never
+        // mutated and model/this.doc are never written to, so serialize() (Save,
+        // getSerializedHtml) always saves the original tag markup regardless of
+        // toggle state.
+        return substituteSampleTags(raw, this.resolvedSampleData);
     }
 
     handleToolSelect(event) {
