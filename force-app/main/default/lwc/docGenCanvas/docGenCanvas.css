@@ -545,6 +545,21 @@ textarea.dg-cbox-text {
     font-size: 0.78rem;
 }
 
+.dg-qb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: var(--slds-g-color-neutral-base-30, #3e3e3c);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dg-qb-toggle input[type='checkbox'] {
+    cursor: pointer;
+    margin: 0;
+}
+
 /* The query is editable HERE because the canvas is where you discover it is wrong. */
 .dg-query-edit {
     width: 100%;
