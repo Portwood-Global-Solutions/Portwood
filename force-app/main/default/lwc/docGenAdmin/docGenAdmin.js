@@ -15233,7 +15233,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.isAutoCreating = false;
         this.showAdvancedOptions = false;
         this.newTemplateLogoChoice = 'none';
-        this.newTemplateType = 'Word';
+        this.newTemplateType = 'HTML';
         this.newTemplateDesc = '';
         this.newTemplateQuery = '';
         this.newTemplateOutputFormat = 'PDF';
