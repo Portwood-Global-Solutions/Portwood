@@ -399,7 +399,7 @@
                 <div class="divider"></div>
                 <h3 class="section-title">Step 3: Run Generation</h3>
                 <div
-                    class="run-bar slds-var-m-top_medium slds-grid slds-grid_align-center slds-grid_vertical-align-end slds-gutters_small"
+                    class="run-bar slds-var-m-top_medium slds-grid slds-grid_align-spread slds-grid_vertical-align-end slds-wrap slds-gutters_medium"
                 >
                     <div class="slds-col slds-size_1-of-3">
                         <lightning-input
@@ -436,9 +436,36 @@
                         </lightning-combobox>
                     </div>
 
-                    <div class="slds-col slds-var-m-top_small">
+                    <template if:true={showDuplexPadding}>
+                        <div class="slds-col slds-shrink-none">
+                            <div
+                                class="slds-form-element__label slds-grid slds-grid_vertical-align-center"
+                                style="gap: 0.25rem; margin-bottom: 0.125rem"
+                            >
+                                <span>Duplex Padding</span>
+                                <lightning-helptext
+                                    content="For double-sided printing — adds a blank page after any document with an odd page count so every document starts on the front of a sheet."
+                                ></lightning-helptext>
+                            </div>
+                            <lightning-input
+                                type="toggle"
+                                label="Duplex Padding"
+                                variant="label-hidden"
+                                message-toggle-active="On"
+                                message-toggle-inactive="Off"
+                                checked={duplexPadding}
+                                onchange={handleDuplexPaddingChange}
+                                disabled={isProcessing}
+                            >
+                            </lightning-input>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="slds-align_absolute-center slds-var-m-top_large">
+                    <div class="slds-text-align_center">
                         <template if:false={filterValidated}>
-                            <p class="slds-text-color_weak slds-text-body_small">
+                            <p class="slds-text-color_weak slds-text-body_small slds-var-m-bottom_xx-small">
                                 Validate your filter to enable generation.
                             </p>
                         </template>

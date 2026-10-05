@@ -1,0 +1,130 @@
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.4rem;
+    border-bottom: 1px solid #e5e5e5;
+    cursor: pointer;
+    border-radius: 0.25rem;
+}
+.brand-row:hover {
+    background: #f7f7f7;
+}
+.swatch {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.4rem;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+.brand-meta {
+    flex: 1;
+    min-width: 0;
+}
+.brand-name {
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+.brand-sub {
+    font-size: 0.6875rem;
+    color: #706e6b;
+}
+.status-pill {
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.05rem 0.45rem;
+    border-radius: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.status-pill.active {
+    color: #256a3c;
+    background: #f3fbf6;
+    border: 1px solid #b9e3c6;
+}
+.status-pill.inactive {
+    color: #706e6b;
+    background: #f4f4f4;
+    border: 1px solid #dddbda;
+}
+.add-form {
+    border: 1px dashed #c9c9c9;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    background: #fafafa;
+}
+.form-title {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #706e6b;
+    margin-bottom: 0.75rem;
+}
+.form-context {
+    font-size: 0.75rem;
+    color: #706e6b;
+    line-height: 1.5;
+    margin: 0 0 0.9rem;
+}
+.mini-preview {
+    border: 1px solid #dddbda;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    background: #f4f4f4;
+}
+.mp-header {
+    padding: 0.9rem 1rem;
+    text-align: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.8125rem;
+    transition: background-color 0.15s ease;
+}
+.mp-logo {
+    max-height: 40px;
+    max-width: 220px;
+    display: inline-block;
+}
+.mp-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+.mp-chip {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.3rem;
+    background: rgba(255, 255, 255, 0.25);
+    font-size: 0.5625rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.mp-body {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    font-size: 0.6875rem;
+    color: #444;
+}
+.mp-cta {
+    margin: 0 1rem 0.85rem;
+    text-align: center;
+    background: #5a4fcf;
+    color: #fff;
+    padding: 0.5rem;
+    border-radius: 0.3rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    transition: background-color 0.15s ease;
+}

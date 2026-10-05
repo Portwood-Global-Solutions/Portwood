@@ -1,4 +1,8 @@
 public without sharing class DocGenSignatureController {
+    private static final String INCOMPLETE_SIGNATURE_FIELDS_MESSAGE =
+        'Signing cannot be completed because one or more required signature fields are incomplete. ' +
+        'Please complete all required fields and try again.';
+
     // Legacy signing-window: requests created before Expires_At__c existed live this
     // long from creation. New requests stamp Expires_At__c (DocGenSignatureExpiry).
     private static final Integer TOKEN_EXPIRATION_HOURS = 48;
@@ -45,6 +49,61 @@ public without sharing class DocGenSignatureController {
         return required;
     }
 
+    /**
+     * Issue #407: a signer with placement records must complete every one before
+     * any finalization endpoint can mark the signer Signed. A signer with no
+     * placements is a legitimate legacy request and remains supported. The
+     * query is deliberately scoped to the current signer so future signers in a
+     * multi-signer request may still have pending placements.
+     */
+    private static String validateSignerPlacementsComplete(Id signerId) {
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signature_Placement__c.sObjectType,
+            new Set<String>{ 'Signer__c', 'Status__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signature_Placement__c> placements = [
+            SELECT Id, Status__c
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c = :signerId
+            WITH SYSTEM_MODE
+            FOR UPDATE
+        ];
+        Integer unsignedCount = 0;
+        for (DocGen_Signature_Placement__c placement : placements) {
+            if (placement.Status__c != 'Signed') {
+                unsignedCount++;
+            }
+        }
+        return unsignedCount > 0 ? INCOMPLETE_SIGNATURE_FIELDS_MESSAGE : null;
+    }
+
+    /**
+     * Partial-success DML does not throw. Convert a failed SaveResult into a
+     * visible signing error and record the diagnostic instead of continuing with
+     * inconsistent signer/request/placement state.
+     */
+    private static void requireDmlSuccess(Database.SaveResult saveResult, String operation, Id recordId) {
+        if (saveResult != null && saveResult.isSuccess()) {
+            return;
+        }
+        List<String> details = new List<String>();
+        if (saveResult != null) {
+            for (Database.Error err : saveResult.getErrors()) {
+                details.add(String.valueOf(err.getStatusCode()) + ': ' + err.getMessage());
+            }
+        }
+        String detail = details.isEmpty() ? 'No database error detail was returned.' : String.join(details, '; ');
+        System.debug(LoggingLevel.ERROR, 'Portwood: ' + operation + ' failed for ' + recordId + ': ' + detail);
+        DocGenErrorLogger.Entry entry = new DocGenErrorLogger.Entry();
+        entry.context = 'Signature Finalize';
+        entry.operation = operation;
+        entry.recordId = recordId == null ? null : String.valueOf(recordId);
+        entry.message = detail;
+        DocGenErrorLogger.log(entry);
+        throw new AuraHandledException('Your signature could not be saved. Please try again or contact the sender.');
+    }
+
     public class SignatureInitResponse {
         @AuraEnabled
         public Boolean isValid;
@@ -76,6 +135,11 @@ public without sharing class DocGenSignatureController {
         // auto-send the PIN to signerEmail (the code still goes only to the real inbox).
         @AuraEnabled
         public Boolean prefillEmail;
+        // #367 — resolved live (shown unless an admin checked "Hide Decline Button"
+        // org-wide or on the template), not stamped at send time, so an admin flip
+        // also applies to already-sent pending requests. Shows by default.
+        @AuraEnabled
+        public Boolean showDecline;
         // Signer form fields to render during e-signing. PUBLIC-SAFE projection
         // only — {key,label,type,required,choices}. The writeback flags and the
         // base-object field API names from the template config are deliberately
@@ -86,6 +150,10 @@ public without sharing class DocGenSignatureController {
     }
 
     public class SaveSignatureResult {
+        @AuraEnabled
+        public Boolean success;
+        @AuraEnabled
+        public String message;
         @AuraEnabled
         public Boolean isComplete;
         @AuraEnabled
@@ -102,6 +170,8 @@ public without sharing class DocGenSignatureController {
     public class SavePdfSignatureResult {
         @AuraEnabled
         public Boolean success;
+        @AuraEnabled
+        public String message;
         @AuraEnabled
         public Boolean isComplete;
         @AuraEnabled
@@ -197,7 +267,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(signerUpd, new Set<String>{ 'Field_Data_Json__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signerUpd, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signerUpd, false, AccessLevel.SYSTEM_MODE),
+            'Save signer form fields',
+            signerId
+        );
     }
 
     /**
@@ -293,7 +367,7 @@ public without sharing class DocGenSignatureController {
         // SYSTEM_MODE on the SOQL below; documented FLS describe signal here.
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Name', 'Form_Fields_Config__c' }
+            new Set<String>{ 'Name', 'Form_Fields_Config__c', 'Hide_Signer_Decline__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
@@ -315,7 +389,8 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Expires_At__c,
                 Signature_Request__r.Template__c,
                 Signature_Request__r.Template__r.Name,
-                Signature_Request__r.Template__r.Form_Fields_Config__c
+                Signature_Request__r.Template__r.Form_Fields_Config__c,
+                Signature_Request__r.Template__r.Hide_Signer_Decline__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -396,11 +471,25 @@ public without sharing class DocGenSignatureController {
 
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Signer__c.sObjectType,
-            new Set<String>{ 'Signer_Email__c', 'PIN_Attempts__c', 'Status__c', 'CreatedDate', 'Secure_Token__c' }
+            new Set<String>{
+                'Signer_Email__c',
+                'PIN_Attempts__c',
+                'Status__c',
+                'CreatedDate',
+                'Secure_Token__c',
+                'Signature_Request__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
-            SELECT Id, Signer_Email__c, PIN_Attempts__c, Status__c, CreatedDate, Signature_Request__r.Expires_At__c
+            SELECT
+                Id,
+                Signer_Email__c,
+                PIN_Attempts__c,
+                Status__c,
+                CreatedDate,
+                Signature_Request__c,
+                Signature_Request__r.Expires_At__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -461,7 +550,7 @@ public without sharing class DocGenSignatureController {
         Database.update(signer, false, AccessLevel.SYSTEM_MODE);
 
         // Send PIN via email
-        String emailError = sendPinEmail(signer.Signer_Email__c, pinStr);
+        String emailError = sendPinEmail(signer.Signer_Email__c, pinStr, signer.Signature_Request__c);
         if (emailError != null) {
             result.put('success', false);
             result.put('message', 'Failed to send verification email. Please contact the sender.');
@@ -598,11 +687,21 @@ public without sharing class DocGenSignatureController {
     /**
      * Sends the 6-digit PIN to the signer's email.
      */
-    private static String sendPinEmail(String email, String pin) {
+    private static String sendPinEmail(String email, String pin, Id requestId) {
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
 
+        // #369 — the request's template's Brand, if any, supplies its own OWA
+        // ahead of the org default; getBrand() already excludes inactive brands.
+        // This was previously missing entirely — the PIN email never resolved a
+        // brand at all, always rendering the shared/no-brand template regardless
+        // of what the signing template's Sending Brand was set to.
+        Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+        DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
+        String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+            ? activeBrand.OWA_Id__c
+            : (settings == null ? null : settings.Signature_OWA_Id__c);
+
         // OWA is required for guest user context — warn if not configured
-        String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
         if (String.isBlank(owaId) && UserInfo.getUserType() == 'Guest') {
             System.debug(
                 LoggingLevel.ERROR,
@@ -615,7 +714,9 @@ public without sharing class DocGenSignatureController {
         // (built-in default falls back automatically if no record exists).
         DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
             DocGenEmailTemplateService.TYPE_PIN,
-            new Map<String, String>{ 'Pin' => pin, 'ExpirationMinutes' => String.valueOf(PIN_EXPIRATION_MINUTES) }
+            new Map<String, String>{ 'Pin' => pin, 'ExpirationMinutes' => String.valueOf(PIN_EXPIRATION_MINUTES) },
+            null,
+            brandId
         );
 
         Messaging.SingleEmailMessage email2 = new Messaging.SingleEmailMessage();
@@ -677,6 +778,20 @@ public without sharing class DocGenSignatureController {
         Boolean requireVerification = parentReq.Require_Email_Verification__c != false; // null → required (default)
         res.requiresPin = requireVerification && (signer.PIN_Verified_At__c == null);
         res.prefillEmail = requireVerification && parentReq.Prefill_Signer_Email__c == true;
+
+        // #367 — Decline shows by default. It is hidden only when an admin checks
+        // "Hide Decline Button" — org-wide (Signature_Hide_Decline__c) or on this
+        // template (Hide_Signer_Decline__c). Both are plain checkboxes that read false
+        // when unset, so an upgrade never silently drops the button. A request with no
+        // template (raw source-document send) is gated by the org-wide switch alone.
+        // Resolved live (not stamped at send time) so flipping a switch also reaches
+        // signature requests that already went out.
+        DocGen_Settings__c declineSettings = DocGen_Settings__c.getOrgDefaults();
+        Boolean orgHidesDecline = declineSettings != null && declineSettings.Signature_Hide_Decline__c == true;
+        Boolean templateHidesDecline =
+            parentReq.Template__r != null &&
+            parentReq.Template__r.Hide_Signer_Decline__c == true;
+        res.showDecline = !orgHidesDecline && !templateHidesDecline;
 
         // Count total and signed signers
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
@@ -767,6 +882,12 @@ public without sharing class DocGenSignatureController {
         res.signerName = req.Signer_Name__c;
         res.totalSigners = 1;
         res.signedCount = 0;
+
+        // #367 — Decline shows by default. A legacy request carries no template,
+        // so only the org-wide "Hide Decline Button" switch can turn it off.
+        // Reads false when unset, so an upgrade never silently drops the button.
+        DocGen_Settings__c legacyDeclineSettings = DocGen_Settings__c.getOrgDefaults();
+        res.showDecline = !(legacyDeclineSettings != null && legacyDeclineSettings.Signature_Hide_Decline__c == true);
 
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
         DocGenFlsGuard.guestAssertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title' });
@@ -1111,6 +1232,7 @@ public without sharing class DocGenSignatureController {
         String formFieldJson
     ) {
         SaveSignatureResult result = new SaveSignatureResult();
+        result.success = false;
 
         // Validate token format
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
@@ -1182,6 +1304,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist the collected values BEFORE the
         // signer is finalized, so a required-field failure aborts the whole save
         // (no status change, nothing persisted) and the guest sees a clean error.
@@ -1198,7 +1326,7 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(Database.update(signer, false, AccessLevel.SYSTEM_MODE), 'Finalize signer', signer.Id);
 
         // Create audit trail immediately with all available data
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -1233,7 +1361,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create signature audit',
+            signer.Signature_Request__c
+        );
 
         // Check if all signers are now complete
         DocGenFlsGuard.guestAssertAccessible(
@@ -1264,7 +1396,11 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(parentReq, new Set<String>{ 'Status__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update signature request status',
+            parentReq.Id
+        );
 
         // All post-signature actions (PDF generation, notifications, sequential signing)
         // are deferred to system context via platform event.
@@ -1279,6 +1415,7 @@ public without sharing class DocGenSignatureController {
             System.debug(LoggingLevel.WARN, 'Portwood: Post-signature event publish failed: ' + e.getMessage());
         }
 
+        result.success = true;
         return result;
     }
 
@@ -1705,6 +1842,11 @@ public without sharing class DocGenSignatureController {
             }
         }
 
+        // #363 — a Word-authored hyperlink only holds an r:id; resolve it off the rels
+        // we already read here so the signed PDF keeps the clickable link the source
+        // template had. Every caller of this method feeds documentXml to convertToHtml.
+        documentXml = DocGenHtmlRenderer.resolveHyperlinkRelIds(documentXml, relsXml);
+
         return new Map<String, Object>{ 'documentXml' => documentXml, 'imagesByRelId' => imagesByRelId };
     }
 
@@ -1799,6 +1941,10 @@ public without sharing class DocGenSignatureController {
                 'Secure_Token__c'
             }
         );
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Hide_Signer_Decline__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
             SELECT
@@ -1808,6 +1954,8 @@ public without sharing class DocGenSignatureController {
                 Signer_Email__c,
                 Signature_Request__c,
                 Signature_Request__r.Expires_At__c,
+                Signature_Request__r.Template__c,
+                Signature_Request__r.Template__r.Hide_Signer_Decline__c,
                 Role_Name__c,
                 Contact__c,
                 CreatedDate
@@ -1837,6 +1985,21 @@ public without sharing class DocGenSignatureController {
         if (signer.Status__c == 'Declined') {
             result.put('success', false);
             result.put('message', 'You have already declined this request.');
+            return result;
+        }
+
+        // #367 — server-side enforcement, not just a hidden button: the same gate
+        // validateToken uses (Decline is shown unless an admin checked "Hide Decline
+        // Button" org-wide or on this template) must hold here too, or a signer could
+        // decline by calling this action directly and skipping the UI.
+        DocGen_Settings__c declineSettings = DocGen_Settings__c.getOrgDefaults();
+        Boolean orgHidesDecline = declineSettings != null && declineSettings.Signature_Hide_Decline__c == true;
+        Boolean templateHidesDecline =
+            signer.Signature_Request__r.Template__r != null &&
+            signer.Signature_Request__r.Template__r.Hide_Signer_Decline__c == true;
+        if (orgHidesDecline || templateHidesDecline) {
+            result.put('success', false);
+            result.put('message', 'Declining is not available for this document.');
             return result;
         }
 
@@ -2111,7 +2274,7 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(plc, new Set<String>{ 'Signed_Value__c', 'Status__c', 'Signed_At__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(plc, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(Database.update(plc, false, AccessLevel.SYSTEM_MODE), 'Save signature placement', plc.Id);
 
         return getSignerPlacements(token);
     }
@@ -2475,6 +2638,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist the collected values BEFORE the
         // signer is finalized, so a required-field failure aborts the whole save
         // (no status change, nothing persisted) and the guest sees a clean error.
@@ -2491,7 +2660,7 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(Database.update(signer, false, AccessLevel.SYSTEM_MODE), 'Finalize PDF signer', signer.Id);
 
         // Create audit trail immediately with all available data (mirrors saveSignature)
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -2526,7 +2695,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create PDF signature audit',
+            signer.Signature_Request__c
+        );
 
         // Check if all signers are now complete
         DocGenFlsGuard.guestAssertAccessible(
@@ -2577,13 +2750,20 @@ public without sharing class DocGenSignatureController {
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
         DocGenFlsGuard.guestAssertUpdateable(parentReq, new Set<String>{ 'Status__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update PDF signature request status',
+            parentReq.Id
+        );
 
         // M2: publish the platform event so DocGenSignaturePdfTrigger enqueues the
         // finalizer (it gates on remaining==0 and Template__c) to produce the signed
-        // document + certificate PDF on the related record. The M1 flat-PDF path has no
-        // template to re-render, so it records audit + status only and never publishes.
-        if (snapshotBacked) {
+        // document + certificate PDF on the related record.
+        // Also publish for a NON-final signer on any path (#379): the trigger sends the
+        // "signer completed" notice and, on a Sequential request, the next signer's
+        // email. The M1 flat-PDF completion path still records audit + status only and
+        // never publishes — there is nothing to re-render.
+        if (snapshotBacked || !result.isComplete) {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
             EventBus.publish(pdfEvent);
@@ -2684,6 +2864,12 @@ public without sharing class DocGenSignatureController {
             throw new AuraHandledException('Email verification is required before signing.');
         }
 
+        String placementError = validateSignerPlacementsComplete(signer.Id);
+        if (placementError != null) {
+            result.message = placementError;
+            return result;
+        }
+
         // Signer form fields: validate + persist before finalizing the signer (a
         // required-field failure aborts the save before any status/CV write).
         captureFormFieldData(signer.Id, signer.Signature_Request__c, token, formFieldJson);
@@ -2696,7 +2882,11 @@ public without sharing class DocGenSignatureController {
             new Set<String>{ 'Signature_Data__c', 'Status__c', 'Consent_Captured__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(signer, false, AccessLevel.SYSTEM_MODE),
+            'Finalize composited PDF signer',
+            signer.Id
+        );
 
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
         audit.Signature_Request__c = signer.Signature_Request__c;
@@ -2737,7 +2927,11 @@ public without sharing class DocGenSignatureController {
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE)[0],
+            'Create composited signature audit',
+            signer.Signature_Request__c
+        );
 
         // Remaining signers?
         DocGenFlsGuard.guestAssertAccessible(
@@ -2792,7 +2986,10 @@ public without sharing class DocGenSignatureController {
             if (!hashFixes.isEmpty()) {
                 DocGenFlsGuard.guestAssertUpdateable(hashFixes, new Set<String>{ 'Document_Hash_SHA256__c' });
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                Database.update(hashFixes, false, AccessLevel.SYSTEM_MODE);
+                List<Database.SaveResult> hashResults = Database.update(hashFixes, false, AccessLevel.SYSTEM_MODE);
+                for (Integer i = 0; i < hashResults.size(); i++) {
+                    requireDmlSuccess(hashResults[i], 'Update final signature audit hash', hashFixes[i].Id);
+                }
             }
         }
 
@@ -2901,7 +3098,11 @@ public without sharing class DocGenSignatureController {
         }
         DocGenFlsGuard.guestAssertUpdateable(parentReq, reqUpd);
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        requireDmlSuccess(
+            Database.update(parentReq, false, AccessLevel.SYSTEM_MODE),
+            'Update composited signature request status',
+            parentReq.Id
+        );
 
         // Signer form-field writeback: this guided drawn-signature path stores the
         // client-composited PDF directly and never enqueues TemplateSignaturePdfQueueable
@@ -2952,6 +3153,25 @@ public without sharing class DocGenSignatureController {
                 System.debug(
                     LoggingLevel.WARN,
                     'Portwood: composited signer completion email failed: ' + signerNotifEx.getMessage()
+                );
+            }
+        } else {
+            // Not the last signer. This client-composited path stores the PDF directly
+            // and otherwise never publishes DocGen_Signature_PDF__e, so
+            // DocGenSignaturePdfTrigger never runs for it: on a Sequential request the
+            // next signer is never emailed and the envelope stalls at "In Progress"
+            // (#379), and the sender never gets the "signer completed" notice. Hand off
+            // to the trigger exactly as saveSignature does — it gates PDF generation on
+            // remaining == 0, so an intermediate signer only triggers notifications.
+            try {
+                DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
+                pdfEvent.Request_Id__c = signer.Signature_Request__c;
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                EventBus.publish(pdfEvent);
+            } catch (Exception seqEx) {
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: composited sequential hand-off publish failed: ' + seqEx.getMessage()
                 );
             }
         }

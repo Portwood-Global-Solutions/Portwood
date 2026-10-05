@@ -53,6 +53,12 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
         global Boolean keepIndividualFiles;
 
         @InvocableVariable(
+            label='Duplex Padding'
+            description='Combined PDF only. Append one blank page after any document with an odd page count so every document starts on the front of a sheet when printed double-sided. Page numbers count real pages only. Ignored for Individual Files. Default: false.'
+        )
+        global Boolean duplexPadding;
+
+        @InvocableVariable(
             label='Batch Size'
             description='Records per batch transaction. Use 1 for complex templates, 10-50 for simple ones. Default: 1'
         )
@@ -116,7 +122,8 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                     mergePdf,
                     batchSize,
                     mergeOnly,
-                    req.sortOrder
+                    req.sortOrder,
+                    req.duplexPadding
                 );
                 res.jobId = jobId;
                 res.success = true;

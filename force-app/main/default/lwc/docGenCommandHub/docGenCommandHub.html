@@ -36,10 +36,18 @@
                         ></lightning-icon>
                         <span>Buttons</span>
                     </button>
+                    <button class={sendEmailTabClass} onclick={handleShowSendEmail}>
+                        <lightning-icon icon-name="utility:send" size="x-small" class="nav-icon"></lightning-icon>
+                        <span>Send Email</span>
+                    </button>
                 </template>
                 <button class={emailTabClass} onclick={handleShowEmail}>
                     <lightning-icon icon-name="utility:email" size="x-small" class="nav-icon"></lightning-icon>
                     <span>Email Templates</span>
+                </button>
+                <button class={brandsTabClass} onclick={handleShowBrands}>
+                    <lightning-icon icon-name="utility:apps" size="x-small" class="nav-icon"></lightning-icon>
+                    <span>Brands</span>
                 </button>
                 <button class={helpTabClass} onclick={handleShowHelp}>
                     <lightning-icon icon-name="utility:knowledge_base" size="x-small" class="nav-icon"></lightning-icon>
@@ -93,7 +101,7 @@
                             <p>Manage your document designs and create new ones.</p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-admin></c-doc-gen-admin>
+                            <c-doc-gen-admin onmanagebrands={handleShowBrands}></c-doc-gen-admin>
                         </div>
                     </template>
 
@@ -144,6 +152,22 @@
                         </div>
                     </template>
 
+                    <!-- SEND EMAIL BUTTONS -->
+                    <template if:true={showSendEmailSection}>
+                        <div class="panel-header">
+                            <div>
+                                <h2>Send Email Buttons</h2>
+                                <p>
+                                    Create record-page Send Email actions that generate a document, attach it to the
+                                    source record, and email it to selected or manually entered recipients.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <c-doc-gen-button-builder action-type="Email"></c-doc-gen-button-builder>
+                        </div>
+                    </template>
+
                     <!-- EMAIL TEMPLATES -->
                     <template if:true={isEmail}>
                         <div class="panel-header">
@@ -153,7 +177,21 @@
                             </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-email-templates></c-doc-gen-email-templates>
+                            <c-doc-gen-email-templates onmanagebrands={handleShowBrands}></c-doc-gen-email-templates>
+                        </div>
+                    </template>
+
+                    <!-- BRANDS -->
+                    <template if:true={isBrands}>
+                        <div class="panel-header">
+                            <h2>Brands</h2>
+                            <p>
+                                Set up a reusable sender identity — address, logo, and color — for each business unit,
+                                then choose it on any Portwood Template.
+                            </p>
+                        </div>
+                        <div class="panel-body">
+                            <c-doc-gen-brands></c-doc-gen-brands>
                         </div>
                     </template>
 
