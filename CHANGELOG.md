@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Canvas table snap guides now follow the rendered table height.** The designer now
+  measures table boxes after preview layout and syncs `box.h` to the actual rendered
+  height, so text and other elements snap to the bottom of expanded tables instead of
+  the original one-row footprint.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
