@@ -272,6 +272,37 @@ public with sharing class DocGenFlsGuard {
         }
     }
 
+    /**
+     * Runs guestAssertAccessible as an ADVISORY signal that never throws — logs
+     * and continues instead of aborting the caller. guestAssertAccessible's
+     * object-level verdict only bypasses for the 'Guest' user type; a caller
+     * that also runs as the Automated Process user (a platform-event trigger,
+     * an async finalizer — no permission set assigned, and not 'Guest' either)
+     * still gets a real throw from it, which silently abandons the whole read
+     * (#390 — loadActiveTemplates/queryAssetPublicUrl falling back to the
+     * built-in template on every Automated-Process-context signature email;
+     * the same shape hits DocGenBrandResolver's brand lookup). Use this instead
+     * of guestAssertAccessible for a SYSTEM_MODE, read-only, non-confidential
+     * internal-config read that must survive every execution context — the
+     * describe call still runs underneath, so the static-analysis FLS signal
+     * is preserved; only the verdict becomes advisory.
+     */
+    public static void advisoryAssertAccessible(Schema.SObjectType sot, Set<String> readFields) {
+        try {
+            guestAssertAccessible(sot, readFields);
+        } catch (Exception advisory) {
+            System.debug(
+                LoggingLevel.WARN,
+                'Portwood: FLS guard advisory-only for ' +
+                    sot +
+                    ' in this context (' +
+                    UserInfo.getUserType() +
+                    '): ' +
+                    advisory.getMessage()
+            );
+        }
+    }
+
     private static void guestAssertImpl(SObject record, Set<String> allowedFields, Boolean isUpdate) {
         if (record == null) {
             throw new DocGenException('Internal error: cannot enforce FLS on null record.');

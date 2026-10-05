@@ -1143,6 +1143,13 @@
                             .addEventListener('click', handleCompleteSigning);
 
                         // Decline button
+                        // #367 — Decline shows by default. The server sets
+                        // showDecline=false only when an admin turned on "Hide Decline
+                        // Button" org-wide or on this request's template; the gate is
+                        // re-enforced in declineSignature so hiding it can't be bypassed.
+                        if (!signerData || !signerData.showDecline) {
+                            document.getElementById('btn-decline').style.display = 'none';
+                        }
                         document.getElementById('btn-decline').addEventListener('click', function () {
                             showState('decline');
                         });
@@ -1450,8 +1457,14 @@
                             // signature...". The signature was never persisted.
                             '{}',
                             function (result, event) {
-                                if (!event.status) {
-                                    showError('Save failed: ' + (event.message || 'Unknown error'));
+                                if (!event.status || !result || result.success === false) {
+                                    // #407: the server refuses to finalize while a required placement is
+                                    // still Pending and says so in result.message. Show it instead of
+                                    // falling through to the "signature recorded" branch below.
+                                    showError(
+                                        (result && result.message) ||
+                                            'Save failed: ' + (event.message || 'Unknown error')
+                                    );
                                     return;
                                 }
                                 if (result.isComplete) {
@@ -1585,8 +1598,13 @@
                                 // formFieldJson — see the note on the other call site.
                                 '{}',
                                 function (result, event) {
-                                    if (!event.status) {
-                                        showError('Save failed: ' + (event.message || 'Unknown error'));
+                                    if (!event.status || !result || result.success === false) {
+                                        // #407: surface a server-side refusal (result.message) rather than
+                                        // reporting the signature as recorded.
+                                        showError(
+                                            (result && result.message) ||
+                                                'Save failed: ' + (event.message || 'Unknown error')
+                                        );
                                         return;
                                     }
                                     if (result.isComplete) {

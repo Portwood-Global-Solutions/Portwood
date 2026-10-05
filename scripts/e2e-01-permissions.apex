@@ -430,6 +430,17 @@ try {
             fail++;
             System.debug('USER FLD DocGen_Job__c.Sort_Order__c edit: FAIL');
         }
+
+        // #382 — DocGenBulkController.submitJobInternal and DocGenBatch/DocGenMergeJob
+        // read Duplex_Padding__c on every bulk job. A missing grant fails bulk
+        // generation for standard users (see the Sort_Order__c note above).
+        Boolean userJobDuplexOk = containsNs(editableJobFields, 'DocGen_Job__c.Duplex_Padding__c');
+        if (userJobDuplexOk) {
+            pass++;
+        } else {
+            fail++;
+            System.debug('USER FLD DocGen_Job__c.Duplex_Padding__c edit: FAIL');
+        }
     }
 } catch (Exception e) {
     fail++;

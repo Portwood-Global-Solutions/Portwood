@@ -92,7 +92,18 @@ global with sharing class DocGenEmailTemplateService {
      * @param messageOverride optional send-time replacement for the {Message} token value
      */
     global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride) {
-        return renderWith(getTemplate(type), tokens, messageOverride);
+        return render(type, tokens, messageOverride, null);
+    }
+
+    /**
+     * Renders an email for the given type, brand-aware (#369).
+     * @param brandId optional Portwood Brand — when set and active, its own
+     *                logo/color/company/footer win ahead of the org-wide
+     *                Signature Settings default. null behaves exactly as before
+     *                this parameter existed.
+     */
+    global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride, Id brandId) {
+        return renderWith(getTemplate(type, brandId), tokens, messageOverride, brandId);
     }
 
     /**
@@ -116,6 +127,18 @@ global with sharing class DocGenEmailTemplateService {
      * the Email Templates editor for live preview / test send of unsaved values.
      */
     public static RenderedEmail renderWith(TemplateDef def, Map<String, String> tokens, String messageOverride) {
+        return renderWith(def, tokens, messageOverride, null);
+    }
+
+    /**
+     * Brand-aware (#369) variant. brandId null behaves exactly as the 3-arg form.
+     */
+    public static RenderedEmail renderWith(
+        TemplateDef def,
+        Map<String, String> tokens,
+        String messageOverride,
+        Id brandId
+    ) {
         if (tokens == null) {
             tokens = new Map<String, String>();
         }
@@ -128,25 +151,52 @@ global with sharing class DocGenEmailTemplateService {
             def.bodyHtml = bi.bodyHtml;
         }
         DocGen_Settings__c settings = getSettings();
+        // #369: an active Brand's own identity sits between the per-type override
+        // (most specific — someone deliberately customized this email type) and the
+        // org-wide default (least specific — the org's fallback for everyone).
+        // getBrand() already returns null for an inactive/missing brand, so no
+        // separate active-check is needed here.
+        DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
 
-        // Resolve branding: template override -> org default -> hard default.
+        // Resolve branding: template override -> Brand -> org default -> hard default.
         String brand = safeBrandColor(
-            String.isNotBlank(def.brandColorOverride) ? def.brandColorOverride : settings.Signature_Email_Brand_Color__c
+            String.isNotBlank(def.brandColorOverride)
+                ? def.brandColorOverride
+                : (activeBrand != null && String.isNotBlank(activeBrand.Brand_Color__c))
+                      ? activeBrand.Brand_Color__c
+                      : settings.Signature_Email_Brand_Color__c
         );
         // Logo precedence: linked Shared Asset (resolved to its LATEST file's public
         // link at send time, so replacing the asset image updates every email with
-        // no template edit) -> stored URL override -> org default.
+        // no template edit) -> stored URL override -> Brand's own logo -> org default.
         String logo = null;
         if (String.isNotBlank(def.logoAssetKey)) {
             logo = resolveAssetPublicUrlByKey(def.logoAssetKey);
         }
+        if (String.isBlank(logo) && String.isNotBlank(def.logoUrlOverride)) {
+            logo = def.logoUrlOverride;
+        }
+        if (String.isBlank(logo) && activeBrand != null) {
+            if (String.isNotBlank(activeBrand.Logo_Asset_Key__c)) {
+                logo = resolveAssetPublicUrlByKey(activeBrand.Logo_Asset_Key__c);
+            }
+            if (String.isBlank(logo)) {
+                logo = String.isNotBlank(activeBrand.Logo_Url_Extended__c)
+                    ? activeBrand.Logo_Url_Extended__c.trim()
+                    : activeBrand.Logo_Url__c;
+            }
+        }
         if (String.isBlank(logo)) {
-            logo = String.isNotBlank(def.logoUrlOverride) ? def.logoUrlOverride : settings.Signature_Email_Logo_Url__c;
+            logo = settings.Signature_Email_Logo_Url__c;
         }
         String footer = String.isNotBlank(def.footerTextOverride)
             ? def.footerTextOverride
-            : settings.Signature_Email_Footer_Text__c;
-        String company = settings.Company_Name__c;
+            : (activeBrand != null && String.isNotBlank(activeBrand.Footer_Text__c))
+                  ? activeBrand.Footer_Text__c
+                  : settings.Signature_Email_Footer_Text__c;
+        String company = (activeBrand != null && String.isNotBlank(activeBrand.Company_Name__c))
+            ? activeBrand.Company_Name__c
+            : settings.Company_Name__c;
 
         // Build the full token set the body/subject can reference.
         Map<String, String> v = tokens.clone();
@@ -189,10 +239,22 @@ global with sharing class DocGenEmailTemplateService {
 
     /** Resolves the template definition for a type (record or built-in). Cached. */
     public static TemplateDef getTemplate(String type) {
+        return getTemplate(type, null);
+    }
+
+    /**
+     * Brand-aware (#369) variant. Resolution: (type, brandId)'s own record ->
+     * shared (type, no brand) record -> built-in. brandId null behaves exactly
+     * as the 1-arg form.
+     */
+    public static TemplateDef getTemplate(String type, Id brandId) {
         if (defCache == null) {
             loadActiveTemplates();
         }
-        TemplateDef def = defCache.get(type);
+        TemplateDef def = brandId != null ? defCache.get(comboKey(type, brandId)) : null;
+        if (def == null) {
+            def = defCache.get(comboKey(type, null));
+        }
         if (def == null) {
             def = builtInDef(type);
         }
@@ -207,17 +269,85 @@ global with sharing class DocGenEmailTemplateService {
         return def;
     }
 
+    /** Cache key for the (type, brand) combo — brandId null is the shared bucket. */
+    private static String comboKey(String type, Id brandId) {
+        return type + '::' + (brandId == null ? '' : brandId);
+    }
+
     // =====================================================================
     // Record loading (defensive — never throws to the caller)
     // =====================================================================
 
+    /**
+     * Every active-template + logo-asset read, isolated in a `without sharing`
+     * scope. `WITH SYSTEM_MODE` bypasses CRUD/FLS but NOT record sharing —
+     * sharing follows the sharing keyword of the class the query runs in, and
+     * this class is `with sharing`. DocGen_Email_Template__c and DocGen_Asset__c
+     * both ship externalSharingModel=Private, so a GUEST sender (Verification
+     * PIN, guided-path Completion/All-Signed) saw zero rows here before this
+     * fix: defCache stayed empty and getTemplate() fell back to builtInDef(),
+     * exactly as if no record existed. The logo vanished the same way (#390).
+     */
+    private without sharing class TemplateReader {
+        private List<DocGen_Email_Template__c> readActiveTemplates() {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT
+                    Type__c,
+                    Subject__c,
+                    Body_Html__c,
+                    Body_Plain__c,
+                    Brand_Color__c,
+                    Logo_Url__c,
+                    Logo_Url_Extended__c,
+                    Logo_Asset_Key__c,
+                    Logo_Height__c,
+                    Footer_Text__c,
+                    Layout_Mode__c,
+                    Brand__c
+                FROM DocGen_Email_Template__c
+                WHERE Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                ORDER BY LastModifiedDate DESC
+            ]; // NOPMD - package-internal object; CRUD via Portwood permission sets
+        }
+
+        private List<DocGen_Asset__c> readAssetByKey(String assetKey) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT
+                    Id,
+                    (
+                        SELECT ContentDocument.LatestPublishedVersionId
+                        FROM ContentDocumentLinks
+                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
+                        LIMIT 1
+                    )
+                FROM DocGen_Asset__c
+                WHERE Asset_Key__c = :assetKey
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+        }
+
+        private List<ContentDistribution> readDistributionByCv(Id cvId) {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            return [
+                SELECT ContentDownloadUrl
+                FROM ContentDistribution
+                WHERE ContentVersionId = :cvId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
+    }
+
     private static void loadActiveTemplates() {
         defCache = new Map<String, TemplateDef>();
         try {
-            // Guest signers send the PIN/completion emails, so this read must
-            // pass guest FLS. SYSTEM_MODE + guestAssertAccessible matches the
-            // established pattern for guest-reachable internal-object reads.
-            DocGenFlsGuard.guestAssertAccessible(
+            // Advisory FLS signal — must not abandon the load in a system context
+            // (Automated Process finalizer / platform-event trigger), see #390.
+            DocGenFlsGuard.advisoryAssertAccessible(
                 DocGen_Email_Template__c.sObjectType,
                 new Set<String>{
                     'Type__c',
@@ -231,31 +361,23 @@ global with sharing class DocGenEmailTemplateService {
                     'Logo_Height__c',
                     'Footer_Text__c',
                     'Layout_Mode__c',
-                    'Is_Active__c'
+                    'Is_Active__c',
+                    'Brand__c'
                 }
             );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Email_Template__c> rows = [
-                SELECT
-                    Type__c,
-                    Subject__c,
-                    Body_Html__c,
-                    Body_Plain__c,
-                    Brand_Color__c,
-                    Logo_Url__c,
-                    Logo_Url_Extended__c,
-                    Logo_Asset_Key__c,
-                    Logo_Height__c,
-                    Footer_Text__c,
-                    Layout_Mode__c
-                FROM DocGen_Email_Template__c
-                WHERE Is_Active__c = TRUE
-                WITH SYSTEM_MODE
-                ORDER BY LastModifiedDate DESC
-            ]; // NOPMD - package-internal object; CRUD via Portwood permission sets
+            // `without sharing` read — DocGen_Email_Template__c is externalSharingModel=Private,
+            // so a `with sharing` query returns zero rows for a guest sender (#390).
+            List<DocGen_Email_Template__c> rows = new TemplateReader().readActiveTemplates();
             for (DocGen_Email_Template__c r : rows) {
-                if (r.Type__c == null || defCache.containsKey(r.Type__c)) {
-                    continue; // first (most-recently-modified) active record per type wins
+                if (r.Type__c == null) {
+                    continue;
+                }
+                // #369 — key by (type, brand); brand null is the shared bucket. First
+                // (most-recently-modified) active record per combo wins — same tie-break
+                // rule the type-only cache always used.
+                String key = comboKey(r.Type__c, r.Brand__c);
+                if (defCache.containsKey(key)) {
+                    continue;
                 }
                 TemplateDef d = new TemplateDef();
                 d.type = r.Type__c;
@@ -273,7 +395,7 @@ global with sharing class DocGenEmailTemplateService {
                 d.logoHeight = r.Logo_Height__c == null ? null : Integer.valueOf(r.Logo_Height__c);
                 d.footerTextOverride = r.Footer_Text__c;
                 d.layoutMode = r.Layout_Mode__c == MODE_FULL_HTML ? MODE_FULL_HTML : MODE_MANAGED;
-                defCache.put(r.Type__c, d);
+                defCache.put(key, d);
             }
         } catch (Exception e) {
             // Object not deployed yet, FLS blocked, etc. — built-in defaults cover us.
@@ -541,22 +663,12 @@ global with sharing class DocGenEmailTemplateService {
 
     private static String queryAssetPublicUrl(String assetKey) {
         try {
-            DocGenFlsGuard.guestAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Asset__c> assets = [
-                SELECT
-                    Id,
-                    (
-                        SELECT ContentDocument.LatestPublishedVersionId
-                        FROM ContentDocumentLinks
-                        ORDER BY ContentDocument.CreatedDate DESC, ContentDocument.Id DESC
-                        LIMIT 1
-                    )
-                FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
+            // Advisory only — DocGen_Asset__c is also externalSharingModel=Private and
+            // read here from guest / Automated Process contexts; a throwing guard
+            // silently dropped the logo from those emails (#390). Reads go through
+            // the `without sharing` TemplateReader for the same reason.
+            DocGenFlsGuard.advisoryAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
+            List<DocGen_Asset__c> assets = new TemplateReader().readAssetByKey(assetKey);
             if (assets.isEmpty() || assets[0].ContentDocumentLinks.isEmpty()) {
                 return null;
             }
@@ -564,18 +676,11 @@ global with sharing class DocGenEmailTemplateService {
             if (cvId == null) {
                 return null;
             }
-            DocGenFlsGuard.guestAssertAccessible(
+            DocGenFlsGuard.advisoryAssertAccessible(
                 ContentDistribution.sObjectType,
                 new Set<String>{ 'ContentDownloadUrl', 'ContentVersionId' }
             );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<ContentDistribution> dists = [
-                SELECT ContentDownloadUrl
-                FROM ContentDistribution
-                WHERE ContentVersionId = :cvId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
+            List<ContentDistribution> dists = new TemplateReader().readDistributionByCv(cvId);
             return dists.isEmpty() ? null : dists[0].ContentDownloadUrl;
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: logo asset resolution fell back to URL: ' + e.getMessage());

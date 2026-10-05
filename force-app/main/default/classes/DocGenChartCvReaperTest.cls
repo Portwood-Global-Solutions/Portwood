@@ -3,7 +3,7 @@
 private class DocGenChartCvReaperTest {
     @TestSetup
     static void setup() {
-        TestDataFactory.assignAdminPermissionSet();
+        TestDataFactory.createStandardTestData();
     }
 
     private static ContentVersion makeChartCv(String suffix) {
@@ -55,6 +55,67 @@ private class DocGenChartCvReaperTest {
             [SELECT COUNT() FROM ContentVersion WHERE Title = 'CustomerContract'],
             'A file without the docgen_chart_ prefix must never be reaped'
         );
+    }
+
+    private static ContentVersion makeAgedCv(String title) {
+        ContentVersion cv = new ContentVersion(
+            Title = title,
+            PathOnClient = title + '.pdf',
+            VersionData = Blob.valueOf('fake-pdf-bytes')
+        );
+        Database.insert(cv, AccessLevel.SYSTEM_MODE);
+        // The reaper's age filter is on ContentVersion.CreatedDate; the parent
+        // ContentDocument is only ever deleted by id, never date-filtered.
+        Test.setCreatedDate(cv.Id, System.now().addMinutes(-120));
+        return cv;
+    }
+
+    @IsTest
+    static void oldPdfPartOfTerminalJobIsReaped() {
+        DocGen_Job__c job = TestDataFactory.createTestJob();
+        job.Status__c = 'Completed';
+        Database.update(job, AccessLevel.SYSTEM_MODE);
+        makeAgedCv('docgen_pdfpart_' + job.Id + '_00000');
+
+        Test.startTest();
+        Integer reaped = DocGenChartCvReaper.reap();
+        Test.stopTest();
+
+        System.assertEquals(1, reaped, 'A stale part whose job has finished is an orphan and must be reaped');
+        System.assertEquals(
+            0,
+            [SELECT COUNT() FROM ContentVersion WHERE Title LIKE 'docgen_pdfpart_%'],
+            'The orphaned part should be gone'
+        );
+    }
+
+    @IsTest
+    static void oldPdfPartOfRunningJobIsLeftAlone() {
+        DocGen_Job__c job = TestDataFactory.createTestJob();
+        job.Status__c = 'Processing';
+        Database.update(job, AccessLevel.SYSTEM_MODE);
+        // Old enough to pass the age filter, but the job is still running — a large
+        // bulk job's batch + merge can legitimately outlast ORPHAN_AGE_MINUTES.
+        makeAgedCv('docgen_pdfpart_' + job.Id + '_00000');
+
+        Test.startTest();
+        Integer reaped = DocGenChartCvReaper.reap();
+        Test.stopTest();
+
+        System.assertEquals(0, reaped, 'A part whose job is still Processing must never be reaped');
+        System.assertEquals(
+            1,
+            [SELECT COUNT() FROM ContentVersion WHERE Title LIKE 'docgen_pdfpart_%'],
+            'The in-flight part should survive'
+        );
+    }
+
+    @IsTest
+    static void parseJobIdRejectsNonPartTitles() {
+        System.assertEquals(null, DocGenChartCvReaper.parseJobId('docgen_chart_001abc_deadbeef'));
+        System.assertEquals(null, DocGenChartCvReaper.parseJobId('CustomerContract'));
+        System.assertEquals(null, DocGenChartCvReaper.parseJobId('docgen_pdfpart_notanid_00000'));
+        System.assertEquals(null, DocGenChartCvReaper.parseJobId(null));
     }
 
     @IsTest

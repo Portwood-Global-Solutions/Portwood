@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Duplex_Padding__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Combined PDF only. When true, each record's document is rendered as its own PDF and any document with an odd page count gets one blank page appended before the final merge, so every document starts on the front of a sheet when the packet is printed double-sided. When false, the existing HTML-concatenation merge is used unchanged.</description>
+    <label>Duplex Padding</label>
+    <type>Checkbox</type>
+</CustomField>

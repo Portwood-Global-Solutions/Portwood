@@ -240,4 +240,81 @@ private class DocGenCurrencyTest {
         System.assertEquals(100, DocGenCurrency.convert(100, null, 'EUR'), 'unknown source passes through');
         System.assertEquals(null, DocGenCurrency.convert(null, 'USD', 'EUR'), 'null amount stays null');
     }
+
+    // ─── #297: :convert on a PLAIN field, not just aggregates ────────────────
+    //
+    // It worked on aggregates and nowhere else. On a plain field the segment
+    // landed in the LOCALE slot: {Amount:currency:EUR:convert} parsed `convert`
+    // as a locale name, failed to match one, and formatted with default
+    // separators. The symbol changed to euro and the NUMBER did not move, so a
+    // $100 record rendered as a euro figure that was wrong by the exchange rate,
+    // in the currency it claimed to be in, with nothing to indicate it.
+    //
+    // Measured against main before the fix:
+    //   {Amount:currency:EUR}          -> EUR100.00
+    //   {Amount:currency:EUR:convert}  -> EUR100.00   <-- identical; convert did nothing
+    //   {Amount:currency:auto:convert} -> $100.00
+
+    private static String render(String tag, Map<String, Object> data) {
+        return DocGenService.processXmlForTest('<p>' + tag + '</p>', data).replace('<p>', '').replace('</p>', '');
+    }
+
+    @IsTest
+    static void convertOnAPlainFieldActuallyConverts() {
+        stubRates(); // USD 1.0, EUR 0.5
+        Map<String, Object> data = row(100, 'USD');
+        Test.startTest();
+        String withConvert = render('{Amount:currency:EUR:convert}', data);
+        String without = render('{Amount:currency:EUR}', data);
+        Test.stopTest();
+
+        System.assert(withConvert.contains('50'), ':convert must apply the rate. Got: ' + withConvert);
+        System.assert(without.contains('100'), 'without :convert the amount is untouched. Got: ' + without);
+        System.assertNotEquals(
+            without,
+            withConvert,
+            ':convert produced the same output as no convert — the segment was swallowed again'
+        );
+    }
+
+    @IsTest
+    static void convertComposesWithAnExplicitLocale() {
+        stubRates();
+        Test.startTest();
+        String out = render('{Amount:currency:EUR:de_DE:convert}', row(100, 'USD'));
+        Test.stopTest();
+        System.assert(out.contains('50'), 'the rate applies with a locale present. Got: ' + out);
+        System.assert(out.contains(','), 'and the German decimal separator survives. Got: ' + out);
+    }
+
+    @IsTest
+    static void convertToTheRecordsOwnCurrencyIsANoOp() {
+        stubRates();
+        Test.startTest();
+        String out = render('{Amount:currency:USD:convert}', row(100, 'USD'));
+        Test.stopTest();
+        System.assert(out.contains('100'), 'converting USD to USD must not move the number. Got: ' + out);
+    }
+
+    @IsTest
+    static void convertWithNoSourceCurrencyLeavesTheAmountAlone() {
+        stubRates();
+        // No CurrencyIsoCode on the record: there is nothing to convert FROM, so
+        // the amount must pass through rather than have a rate invented for it.
+        Test.startTest();
+        String out = render('{Amount:currency:EUR:convert}', new Map<String, Object>{ 'Amount' => 100 });
+        Test.stopTest();
+        System.assert(out.contains('100'), 'no source currency means no conversion. Got: ' + out);
+    }
+
+    @IsTest
+    static void plainCurrencyFormsAreUnaffected() {
+        stubRates();
+        Test.startTest();
+        Map<String, Object> data = row(100, 'USD');
+        System.assert(render('{Amount:currency}', data).contains('100'), 'bare :currency unchanged');
+        System.assert(render('{Amount:currency:EUR}', data).contains('100'), 'ISO with no convert unchanged');
+        System.assert(render('{Amount:currency:EUR:de_DE}', data).contains('100'), 'ISO + locale unchanged');
+        Test.stopTest();
+    }
 }

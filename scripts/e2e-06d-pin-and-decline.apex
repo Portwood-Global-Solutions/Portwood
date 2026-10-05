@@ -59,6 +59,11 @@ DocGen_Signature_Request__c decReq = new DocGen_Signature_Request__c(
 );
 insert new List<DocGen_Signature_Request__c>{ pinReq, decReq };
 
+// #367 — declineSignature gates on the org-wide + per-template "Hide Decline
+// Button" switches, both unchecked (Decline shown) by default, so this script's
+// decline scenarios need no setup. (An org that has turned "Hide Decline Button"
+// on would see these decline assertions fail — that is the gate working.)
+
 // One signer per scenario. Sharing a signer across scenarios would let an
 // earlier assertion's side effect (a spent attempt, a cleared hash, a lockout)
 // decide a later one.
@@ -355,6 +360,8 @@ try {
 Integer cleanupErrors = 0;
 try {
     Database.delete([SELECT Id FROM DocGen_Signature_Request__c WHERE Id IN (:pinReq.Id, :decReq.Id)], false);
+    // #367 — nothing to restore: the decline switches are left at their default
+    // (unchecked / Decline shown), the state every other script already expects.
 } catch (Exception e) {
     cleanupErrors++;
     System.debug('CLEANUP: ' + e.getMessage());

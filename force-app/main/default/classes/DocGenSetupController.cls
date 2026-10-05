@@ -50,6 +50,10 @@ public with sharing class DocGenSetupController {
             !(s != null && s.Signature_Skip_Email_Verification__c == true)
         );
         result.put('Signature_Prefill_Signer_Email__c', s != null && s.Signature_Prefill_Signer_Email__c == true);
+        // #367 — "Hide Decline Button" org-wide switch. Checkbox defaults false
+        // (unchecked = Decline shown), which is exactly the intended default and
+        // needs no reliance on a custom-setting defaultValue.
+        result.put('Signature_Hide_Decline__c', s != null && s.Signature_Hide_Decline__c == true);
         return result;
     }
 
@@ -458,6 +462,33 @@ public with sharing class DocGenSetupController {
         };
         DocGenFlsGuard.assertCreateable(settings, verifFields);
         DocGenFlsGuard.assertUpdateable(settings, verifFields);
+        /* code-analyzer-suppress ApexFlsViolation */
+        Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+    }
+
+    /**
+     * #367 — org-wide "Hide Decline Button" master switch. Resolved live on every
+     * signing-page load (DocGenSignatureController.validateToken), not stamped at send
+     * time, so flipping this also reaches already-sent, still-pending requests.
+     * Unchecked (the default) shows Decline everywhere. Checked hides it on every
+     * signing page regardless of per-template settings; while it is unchecked, an
+     * individual template can still hide Decline for itself via Hide_Signer_Decline__c
+     * (source-document sends with no template follow this switch alone).
+     * @param hideDecline true hides the Decline button org-wide; false (the default) shows it.
+     */
+    @AuraEnabled
+    public static void saveDeclineSettings(Boolean hideDecline) {
+        if (
+            !FeatureManagement.checkPermission('DocGen_Admin_Access') &&
+            !Schema.sObjectType.DocGen_Settings__c.isUpdateable()
+        ) {
+            throw DocGenService.ahe('Insufficient privileges to modify Portwood settings.');
+        }
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Hide_Decline__c = (hideDecline == true);
+        Set<String> declineFields = new Set<String>{ 'Signature_Hide_Decline__c' };
+        DocGenFlsGuard.assertCreateable(settings, declineFields);
+        DocGenFlsGuard.assertUpdateable(settings, declineFields);
         /* code-analyzer-suppress ApexFlsViolation */
         Database.upsert(settings, AccessLevel.SYSTEM_MODE);
     }

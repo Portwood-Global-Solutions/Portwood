@@ -536,7 +536,7 @@ HTML templates let you author in any tool that produces HTML — Google Docs is 
 - **Apple Pages** — File → Export To → HTML
 - **Hand-written HTML** — any text editor
 
-For single-file uploads (`.html` / `.htm`), Portwood scans for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render.
+Portwood scans the template body (and the Header / Footer HTML) for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render. It runs on save whichever way the body arrives — a `.html` / `.htm` upload, a cross-org template-bundle import, or Generate-with-AI — and self-heals on render for a body that somehow reached storage without it (v3.57+).
 
 #### 5.7.3 CSS rules — what works, what doesn't, and an LLM prompt
 
@@ -1032,7 +1032,7 @@ Example footer HTML:
 Three ways to get images into an HTML template:
 
 1. **Google Docs zip** — images inserted in the Google Doc are bundled into the `.zip` and extracted automatically on upload.
-2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on upload; each is saved as its own ContentVersion and the `src` is rewritten.
+2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on save — upload, template-bundle import, or Generate-with-AI alike — and each is saved as its own ContentVersion with the `src` rewritten (v3.57+ extends this beyond the upload path).
 3. **`{%Image:N}` / `{%FieldName}` merge tags** — same syntax as Word templates. Renders the Nth record-attached image, or a ContentVersion ID stored in a field. Emits `<img src="/sfc/...">` at merge time.
 
 #### 5.7.7 Loops in tables
@@ -1579,7 +1579,7 @@ Locale defaults: `en_US` → `MM/dd/yyyy`; `en_GB/AU/NZ/IE/IN` → `dd/MM/yyyy`;
 {Amount:currency:GBP}           £500,000.00
 ```
 
-Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS.
+Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS, ISK, VND.
 
 Zero-decimal currencies (JPY, KRW, CLP, VND, HUF, ISK, TWD) format without decimals automatically.
 
@@ -1621,6 +1621,7 @@ What to know:
 - **Advanced Currency Management dated rates are not used** — conversion applies your current static rate. See issue #273.
 - **Single-currency orgs are entirely unaffected.** None of this engages.
 - **Without `:convert`, nothing converts.** `{SUM:Lines.Amount:currency:EUR}` over EUR-only rows formats them as euros; it does not translate other currencies into euros.
+- **Beyond aggregates: `:convert` works on a plain currency field too (v3.57+).** `{Amount:currency:EUR:convert}` converts the record's own amount from its `CurrencyIsoCode` into the target ISO before formatting, and composes with locale (`:EUR:de_DE:convert`) and `auto`. A record with no source currency passes through unconverted; a missing rate raises the same "add it under Manage Currencies" error as above.
 
 #### Number formatting
 
@@ -2436,7 +2437,7 @@ Plain multiline (long text, textarea) fields work too — newlines in the field 
 
 Two ways to add a full-page watermark or background image to your PDF output:
 
-**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output.
+**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output. A **Watermark strength** control (Light 15% / Medium 30% / Strong 50% / Original) fades the image — the opacity is baked into the stored PNG because Flying Saucer has no CSS opacity, and Portwood keeps the unfaded original so changing the strength after upload re-fades from it rather than compounding. The new setting applies immediately and survives a page reload (v3.57+).
 
 **Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
 
@@ -2673,7 +2674,21 @@ For **Word, Excel and PowerPoint**, the file is assembled in your browser, so bo
 
 ### 8.3 Output format override
 
-If the template isn't locked (`Lock_Output_Format__c = false`), users see a toggle to switch between native and PDF. Flow actions also support the override via `outputFormatOverride` parameter.
+An output format override is available only when the template's **Lock Output Format** field is off (`Lock_Output_Format__c = false`). The available choices depend on the template type:
+
+| Template type  | Allowed override formats |
+| -------------- | ------------------------ |
+| Word           | **PDF** or **Word**      |
+| Excel          | **Excel**                |
+| PowerPoint     | **PowerPoint**           |
+| HTML or Canvas | **PDF**                  |
+| PDF            | **PDF**                  |
+
+The builder updates the choices when the template changes and clears an incompatible value before saving. Leave the field blank to use the template's default output format. A locked template has no override choice, and runtime requests that try to override it are rejected.
+
+Portwood does not convert between native Office formats: an Excel template cannot output Word or PowerPoint, and a PowerPoint template cannot output PDF. Word templates can be rendered as PDF because the PDF renderer supports Word input. Flow actions and the Apex API apply the same validation rules through the `outputFormatOverride` parameter.
+
+For buttons, use the canonical values `PDF`, `Word`, `Excel`, `PowerPoint`, or `HTML`. Existing configurations using common legacy aliases such as `DOCX`, `XLSX`, or `PPTX` are normalized automatically when the button runs.
 
 ### 8.4 PDF merge (combine with existing PDFs)
 
@@ -2704,7 +2719,35 @@ For the "this object always generates this one template" case, add the **Portwoo
 
 When an object has one active configuration (matching the record's type) the click generates immediately; with several, a small picker appears. **Save To Record** additionally attaches the file to the record's Files.
 
+**Open the document instead of (or as well as) downloading it.** The **Delivery Mode** field (Command Hub builder: _Delivery mode_) controls what happens after generation:
+
+| Delivery Mode          | Result                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| blank or `Download`    | The file downloads (the original behavior — existing buttons are unchanged).                                       |
+| `Preview`              | The file opens in the standard Salesforce file preview. Nothing downloads; the viewer has its own download button. |
+| `Preview_And_Download` | The file opens in the preview first; when you close it, the dialog offers a **Download** button.                   |
+
+Values are case-insensitive; anything unrecognized falls back to `Download`. Preview works whether or not **Save To Record** is checked (an unattached file is owned by the user who generated it). PDFs preview immediately; Word/PowerPoint/Excel previews depend on Salesforce generating a file rendition, which can take a moment on first open.
+
+**Preview with nothing left behind.** The regular Portwood Button action (`c:docGenButton`) always opens a small dialog, and closing that dialog cancels the preview it opened, so in Preview mode a finished dialog stays behind the file viewer. For a preview with no dialog at all, add the **Portwood Preview Button** (`c:docGenPreviewButton`) as the record action instead. It is a headless action: one click generates the document and opens the file preview. It uses the record's first active button whose Delivery Mode is **Preview** (and tells the user if there is none). Each preview still creates a file, saved to the record when **Save To Record** is on.
+
 > **Limitation:** this is a synchronous path — templates over the giant-query threshold (~2,000 child rows) will show an error instead of downloading. Use the Runner or a Flow with the Bulk/Giant actions for those.
+
+**Send Email buttons.** The Command Hub also has a **Send Email** button builder for record-page actions that generate a document, save it to the source record, and email it as an attachment. Open **Portwood app -> Command Hub -> Send Email**, click **New Send Email Button**, then choose the object, optional default template, record types, label, sort order, and active flag.
+
+Place the Send Email action the same way as the document button, but choose the Lightning Web Component `docGenSendEmailButton`. When the user launches it from a record, Portwood uses that clicked record automatically.
+
+The Send Email flow has three steps:
+
+1. **Template** - select the document template to generate. Template options show the friendly template name.
+2. **Preview** - review the generated document preview before sending.
+3. **Recipients & message** - choose an email address from the record when available, or type one or more manual email addresses. Add the subject and body, then send.
+
+Sending generates the document, links the generated file to the source record's Files, and sends the email to every selected/manual recipient with the generated document attached. If Salesforce blocks delivery, for example because org deliverability is restricted or the email service returns an error, the user sees the send error in the modal.
+
+**Who the email goes from, and what it can send.** The email is sent from the sender an admin configured for Portwood (Portwood → Signatures settings) when one is set and verified; otherwise it is sent as the user who clicked the button. Portwood never picks an org-wide address on its own. A Send Email button can address at most 10 recipients. If the button pins a template, that template is always used; otherwise the user can choose only among active templates built for the record's own object. The preview shows the merged document with its own layout and styling, with scripts, forms, frames and unsafe links removed and its CSS kept inside the preview; the final document is generated when you send.
+
+**Set a verified sender, or the email may never arrive.** If no verified org-wide address is configured, Salesforce sends as the clicking user, and when that user's email domain is not verified in your org it substitutes its own address. Salesforce still accepts the send and Portwood reports success, but the recipient's mail provider can silently drop it. Add an org-wide address on a domain you control (Setup → Organization-Wide Addresses), click the verification link Salesforce emails to it, then select it in Portwood → Signatures settings. Your domain should also authorise Salesforce to send for it (SPF and DKIM). Do not use a free-mail address such as `gmail.com` as the sender: in our testing, mail sent as a `@gmail.com` address through Salesforce was accepted but never delivered, while mail from a verified address on a company domain arrived. If Salesforce refuses the send outright, for example "your email address domain isn't verified", the dialog shows that message.
 
 ### 8.7 Document naming — Document Title Format tokens
 
@@ -2755,6 +2798,23 @@ Sorting applies to Individual Files too — it decides the order records are pro
 
 > **If your Flow passes a Record IDs collection:** SOQL does not preserve the order of that collection, so sorting the collection in the Flow has no effect on the document. Use **Sort Order**.
 
+### 9.1.2 Duplex Padding — every document starts on a fresh sheet
+
+When a **Combined PDF** is printed double-sided, a document with an **odd** page count leaves its last sheet half-used, and the next document starts on the back of it. **Duplex Padding** fixes that: before the merge, Portwood checks each document's page count and appends **one blank page** to any document that has an odd number of pages, so every document begins on the front of a sheet.
+
+- The toggle appears under the output mode once you pick **Combined PDF** or **Both** (it does nothing for Individual Files, so it is hidden there and forced off).
+- In **Both** mode only the combined bundle is padded — the individual per-record files come out standalone and unpadded (each one already starts on its own sheet).
+- The filler page is **completely blank** — no header, no footer, no watermark, no page number.
+- **Page numbers count real pages only.** Because each record is rendered as its own document and then stitched, `{PageNumber}` / `{TotalPages}` in the Header/Footer HTML fields ([§5.7.5](#575-page-numbers)) count per-document — a 3-page statement numbers `1 of 3, 2 of 3, 3 of 3`, and the blank filler after it carries no number. A plain Combined PDF, by contrast, numbers continuously across the whole bundle.
+- Documents with an **even** page count are never touched.
+- **Leave it off and nothing changes** — the Combined PDF is built exactly as before, with continuous numbering across the bundle.
+
+**Scale.** A duplex packet is assembled entirely in memory in one background job, so the ceiling depends on how large each rendered document is — not just the record count. A plain text document (a few KB per page) can reach the low hundreds; a branded template with a logo and/or non-Latin text — which embeds a font, often 60+ KB per record — can top out below 100, sometimes near 50. The pre-run analysis panel measures your template's Test Record, shows a **Duplex Packet** row with the specific limit it estimates, and disables the Run button above it. If a job does exceed the limit at run time, it ends as **Failed** with an error-log message telling you to run **Individual Files** — where each document already starts on its own sheet — or split the filter with a tighter query.
+
+> Set a **Test Record** on the template ([§5.3](#53-test-record)) so the analysis can size the limit to it. Without one it falls back to a flat ~400, which is optimistic for a branded template.
+
+**In Flows**, the `Portwood: Generate Bulk Documents` action exposes this as a **Duplex Padding** checkbox input; it is ignored unless the job is producing a Combined PDF.
+
 ### 9.2 Saved queries
 
 Save a filter as a reusable `DocGen_Saved_Query__c`. Gives non-technical users a drop-down of pre-built filters without writing SOQL. Created and managed in the Bulk Generation UI.
@@ -2767,7 +2827,7 @@ Command Hub → **Job History** tab. Every bulk job shows:
 
 - Status (Draft, Harvesting, Running, Completed, Completed with Errors, Recovering, Failed)
 - Record count + success/failure counts
-- Generated PDFs (clickable links)
+- Generated files (clickable links). Individual Files are linked to the bulk job as well as to their source records, so they can be retrieved from Job History.
 - Start + end time
 - Error messages (for failed jobs)
 
@@ -3016,6 +3076,8 @@ Any signer can decline with an optional reason. On decline:
 - Pending signers are NOT emailed.
 - The creator receives a decline notification with the reason.
 
+**Hiding the Decline button (v3.57+).** For formal or binding documents where you don't want signers to have a one-click way to refuse, you can turn the signer's **Decline** button off. A **Hide Decline Button** switch in the Command Hub's **Signature Settings** tab (§13.2) hides it on every signing page; a matching switch on an individual Portwood Template (Command Hub → My Templates → edit) hides it just for that template's requests. Both are off by default, so the button shows everywhere unless you turn one on. The switch is checked each time a signer opens their link, so turning it on hides Decline on requests that already went out, not just new ones — and the button is genuinely disabled, not merely hidden from view. A request sent from a source document with no template follows the org-wide switch alone.
+
 ### 10.12 Admin setup (one-time)
 
 Before signatures work in production, complete the checklist in **Signature Settings**:
@@ -3044,6 +3106,17 @@ Salesforce hides the guest user behind a few clicks. The full path:
 
 The **Signature Settings** page now covers setup only: public site URL, the **Send Emails From** address (Org-Wide Email Address), automated reminders, and signer verification defaults. Any branding values previously saved there are preserved and still act as the org-wide fallback when a template doesn't override them. Reply-to is automatically set to the request creator so signer replies route correctly.
 
+**Per-brand identity (v3.57+).** A **Portwood Brand** bundles a **Send emails from** address (its own Org-Wide Email Address), logo, color, company name, and footer into one reusable sender identity — set up on the **Brands** tab (§10.15). Point a Portwood Template at one with its **Sending Brand** field and every email a signature request triggers directly — request, verification PIN, signer-completed, all-signed, declined, completion — uses that brand. (The scheduled reminder email is not yet brand-aware; it still sends from the org-wide identity.) This is how one org runs two entities without their emails ever crossing: a different brand per template. Leave **Sending Brand** blank and everything behaves exactly as before.
+
+Resolution order for the **visual and wording pieces** (subject, body, color, logo, footer):
+
+1. a per-**(email type, brand)** override you saved on the Email Templates tab (§10.14) — the most specific
+2. the **Sending Brand**'s own identity
+3. the org-wide **Signature Settings** value
+4. the built-in default
+
+The **sender address** has no per-email-type layer — it's just the **Sending Brand**'s **Send emails from**, then the org-wide one.
+
 ### 10.14 Email Templates (Command Hub tab)
 
 Every email Portwood sends is a fully editable, brandable template — open **Portwood Command Hub → Email Templates**. Pick the email to edit from the dropdown:
@@ -3059,6 +3132,8 @@ Every email Portwood sends is a fully editable, brandable template — open **Po
 | Completion Confirmation | Signer  | Everyone has signed                   |
 
 For each template you can edit the **subject** and **body**, preview it live with sample data, send a **test email**, and **Reset to Default**. Leave the body blank to use the built-in default.
+
+**Brand selector (v3.57+).** Above the layout mode is a **Brand** dropdown. Leave it on **Shared / Default** to edit the copy every brand uses. Pick a brand to save a wording override for that one **(email type, brand)** pair — the most specific layer of the branding cascade (§10.13) — without touching the shared copy. The dropdown also has **+ New Brand…** to create one inline and **Manage brands…** to jump to the Brands tab (§10.15).
 
 **Two layout modes** (per template):
 
@@ -3077,9 +3152,87 @@ For each template you can edit the **subject** and **body**, preview it live wit
 
 > **Out of the box:** a default record for each template is created on install, so emails work immediately with zero setup. Delete a record to fall back to the built-in default.
 
+#### Changing a widget's wording or styling
+
+Each widget renders a fixed block of English text with **inline styles** — `{ActionButton}` always reads "Review & Sign Document," `{SecurityNote}` always says "This link is unique to you and will expire in _N_ hours." You cannot edit the text inside a widget, and because the widget's own inline styles win over any wrapper rule in most email clients, wrapping it in CSS won't recolor the button or relabel it either.
+
+**To change wording, stop using the widget and build the block yourself.** Every widget is assembled from ordinary merge tokens that you can place directly — so authoring your own gives you full control of both the words and the styling:
+
+| Instead of this widget | Use these tokens                      |
+| ---------------------- | ------------------------------------- |
+| `{ActionButton}`       | `{SignatureUrl}`                      |
+| `{DocumentInfo}`       | `{DocumentTitle}`, `{RoleName}`       |
+| `{SecurityNote}`       | `{SignatureUrl}`, `{ExpirationHours}` |
+| `{VerificationCode}`   | `{Pin}`, `{ExpirationMinutes}`        |
+
+A replacement for `{ActionButton}` with your own label and brand color — this is a plain `<a>`, so restyle it however you like:
+
+```html
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 24px auto">
+    <tr>
+        <td align="center" style="border-radius: 6px; background-color: #0b3d2e">
+            <a
+                href="{SignatureUrl}"
+                target="_blank"
+                style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;border-radius:6px;"
+                >Approve your agreement</a
+            >
+        </td>
+    </tr>
+</table>
+```
+
+And a replacement for `{SecurityNote}` in your own words:
+
+```html
+<p style="font-size: 13px; color: #706e6b; line-height: 1.5">
+    This link belongs to you alone and stops working after {ExpirationHours} hours. Trouble with the button? Paste this
+    into your browser:<br />
+    <a href="{SignatureUrl}" style="color: #0b3d2e">{SignatureUrl}</a>
+</p>
+```
+
+**To keep the widget but control what's around it,** wrap it — spacing, alignment and background of the surrounding container are yours, since those are properties of your element, not the widget's:
+
+```html
+<div style="background: #f7f9fa; padding: 20px; text-align: center; border-radius: 8px">{ActionButton}</div>
+```
+
+Use **Full custom HTML** layout mode (above) when you're replacing widgets wholesale, so Portwood adds no header/footer of its own around your markup.
+
+> **Which tokens are available depends on the email.** A token that isn't supplied for that email type renders as empty text and is then stripped. `{Pin}` / `{ExpirationMinutes}` exist only on the **Verification PIN** email; `{SignatureUrl}` / `{ExpirationHours}` / `{RoleName}` only on the emails that carry a signing link (Signature Request, Reminder). `{CompanyName}`, `{DocumentTitle}` and `{BrandColor}` are available everywhere. Use the live preview and **Send Test** on the Email Templates tab to confirm before saving.
+
 **Send-time customization.** When sending a single-template request (from the Signature Sender or the `Portwood: Create Signature Request` Flow action), you can type a **Custom Email Subject** and/or **Custom Email Message** that override the saved template for that one send. The subject supports merge tokens; the branded layout and signing button are always kept. Bulk/packet sends always use the saved templates.
 
 **Per-template default message (v3.28+).** Each Portwood Template has a **Default Email Message** field (Command Hub → template editor). When set, it becomes the `{Message}` text for signature requests sent from that template — pre-filled in the sender so you see exactly what will go out, and used automatically by Flow sends that leave the message blank. Resolution order: send-time custom message → template default → the email template's generic text. A quote template can say "Please see the attached proposal…" while an NDA template carries different copy, with no per-send typing.
+
+### 10.15 Brands (Command Hub tab)
+
+_New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point any Portwood Template at. Open **Portwood Command Hub → Brands**, then **+ Add Brand**:
+
+| Field                         | What it does                                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Brand name**                | Internal label only — how you pick this brand on a template. Not shown to signers.                                                                                                   |
+| **Send emails from**          | The Org-Wide Email Address every email in this brand's workflow sends from. Blank falls back to the org-wide **Send Emails From** in Signature Settings.                             |
+| **Company name**              | Shown in the branded header when there's no logo, and available as `{CompanyName}` in the body / subject.                                                                            |
+| **Logo URL** / **Asset file** | Same options as a per-template logo (§10.14) — a public URL of any length, or a linked Shared Asset that always resolves to its latest image.                                        |
+| **Footer text**               | The small line at the bottom of the branded chrome.                                                                                                                                  |
+| **Brand color**               | The header / button color.                                                                                                                                                           |
+| **Active**                    | An inactive brand can't be selected on a template, but templates already pointing at it keep the assignment and simply fall through to the org-wide default until you reactivate it. |
+
+**Assigning a brand.** Open a Portwood Template (Command Hub → My Templates → edit) and set its **Sending Brand** field. From then on the request, verification PIN, signer-completed, all-signed, declined, and completion emails for that template all use that brand — its address, logo, color, company name, and footer — unless a more specific per-(email type, brand) override exists on the Email Templates tab (§10.14). See §10.13 for the full cascade. (The automated reminder email is not yet brand-aware — it still sends from the org-wide **Send Emails From** identity.)
+
+**Setting up a second sending identity (walkthrough).** To run a second entity out of the same org:
+
+1. **Set up the entity's email address** — create and verify an Org-Wide Email Address for it, with **Allow All Profiles** enabled and DKIM configured on its domain, exactly as for the org-wide sender (§13.2). Until that's done, the brand's emails fall back to the org-wide address.
+2. **Add the brand** — Command Hub → Brands → **+ Add Brand**. Give it a **Brand name** (e.g. "Acme Advisors"), pick its **Send emails from** address, and set the **company name**, **logo**, **footer**, and **brand color**. Leave **Active** on. Save.
+3. **Point a template at it** — Command Hub → My Templates → open a template → in the editor's configuration panel, set **Sending Brand** → Save. Every request, PIN, and completion email sent from that template now uses the brand (the automated reminder email still uses the org-wide identity).
+4. _(Optional)_ **Tweak wording per email** — Command Hub → Email Templates → pick an email → set the **Brand** dropdown to that brand → edit the subject / body → Save.
+5. **Test** — send a signature request from that template and confirm the From address, logo, and color. Repeat 2–3 for each entity.
+
+**Per-brand OWA setup.** Each brand's **Send emails from** address needs the same production setup as the org-wide one (§13.2): a verified Org-Wide Email Address with **Allow All Profiles** enabled, on a DKIM-authenticated sending domain. Until then that brand's emails fall back to the org-wide sender.
+
+**Signing page and certificate.** The public signing page and the verification-certificate PDF stay on the org-wide branding — a brand controls the **emails**, not the guest-facing signing experience.
 
 ---
 
@@ -3150,7 +3303,7 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 
 ### 11.5 Recipe — Generate when dataset size is unpredictable
 
-**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+. You can't know at design time which path is right.
+**Use case:** a customer-portal screen Flow generates an invoice. Most invoices have 5–20 line items, but a few customers have 5,000+ — or a normal count with very large line-item descriptions. You can't know at design time which path is right.
 
 **Step:** **Portwood — Generate Document (Auto Giant Query)**.
 
@@ -3167,6 +3320,8 @@ For a truly storage-less path, drop into Apex: `DocGenService.generatePdfBlob(te
 - `isGiantQuery` — boolean so your Flow can branch
 
 **Pattern:** add a Decision element after the action. If `isGiantQuery = true`, send the user to a "your invoice is being prepared" screen with a polling component that watches the job. If `false`, present the file immediately.
+
+**How it routes (v3.57+).** The action estimates peak memory rather than counting rows alone — and when a dataset is borderline it measures one real child row, so a record with only a few hundred line items still routes async when each row carries a large rich-text description. Auto-routing to the background needs a **V3 query config**: a V1 or V2 query config that's over budget returns an error asking you to re-save it as V3 or use the Runner, and a non-Word template is pointed to the Runner (the background path is Word-only). The Runner's own on-screen size warning is based on row count and is advisory — it doesn't block generation.
 
 ### 11.6 Recipe — Send a contract for signature on Opportunity approval
 
@@ -3431,7 +3586,7 @@ Primary entry point from Apex. Use from triggers, scheduled Apex, or other servi
 | Method                                                                                                                   | Returns                                | Purpose                                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generateDocument(Id templateId, Id recordId)`                                                                           | `Id` (ContentDocumentId)               | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format.                                                                                                 |
-| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                                        |
+| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'Excel'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                            |
 | `generatePdfBlob(Id templateId, Id recordId)`                                                                            | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system.                                                                                                       |
 | `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)`                           | `Id`                                   | Same as `generateDocument` but skips the per-record data query and uses the supplied map instead. For custom bulk loops or callers that already have the data in hand.                                                |
 | `generatePdfBlobFromData(Id templateId, Map<String,Object> dataMap)`                                                     | `Map<String,Object>` (`blob`, `title`) | Renders a PDF straight from a caller-built data map — no SOQL, no recordId required. Lets you assemble external API responses, computed totals, or cross-object aggregations and merge them directly into a template. |
@@ -3568,6 +3723,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
 - **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
+- **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.
 
 Worth knowing inside My Templates:
@@ -3584,13 +3740,14 @@ Location: Portwood app → Command Hub → Signature Settings.
 Covers:
 
 - Site URL configuration
-- OWA (Org-Wide Email Address) selection
+- OWA (Org-Wide Email Address) selection — the org-wide sender; a template's **Sending Brand** (§10.15) can override it per brand
 - Signing-link expiration default (days; individual sends and the Flow action can override — §10.8)
 - Reminder enable/disable + comma-separated hour schedule (§10.8)
 - Signer verification org defaults — **Require Email Verification** and **Pre-fill Signer Email** (templates and individual sends can override; see §10.5)
+- **Hide Decline Button** (v3.57+) — turns the signer's **Decline** button off on every signing page; off by default, and a template can also hide it just for itself (§10.11)
 - Setup validation checklist (pass/fail for each prerequisite)
 
-Email branding (colors, logo, subject lines, body copy) lives in **Command Hub → Email Templates** (§10.14) as of v3.27 — it's no longer on this page.
+Email branding (colors, logo, subject lines, body copy) lives in **Command Hub → Email Templates** (§10.14) as of v3.27 — it's no longer on this page. Per-brand sender identity (address, logo, color, company name, footer) lives on the **Brands** tab (§10.15).
 
 ### 13.2.1 Error Logs
 
