@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Position__c</fullName>
+    <description>Whether the attachment is shown before or after the signing template pages.</description>
+    <externalId>false</externalId>
+    <label>Position</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Before</fullName><default>true</default><label>Before</label></value>
+            <value><fullName>After</fullName><default>false</default><label>After</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

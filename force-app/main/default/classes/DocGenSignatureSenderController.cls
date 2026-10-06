@@ -67,6 +67,13 @@ public with sharing class DocGenSignatureSenderController {
                 'Default_Email_Message__c'
             }
         );
+        // #412 — advisory, not strict: a non-sensitive template setting, added after senders'
+        // permission sets were built. An org on its own permission sets must not lose the
+        // template list on upgrade (same reasoning as Brand__c in DocGenBrandResolver).
+        DocGenFlsGuard.advisoryAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Attached_Documents__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template__c> all = [
             SELECT
@@ -78,7 +85,8 @@ public with sharing class DocGenSignatureSenderController {
                 Required_Permission_Sets__c,
                 Record_Filter__c,
                 Base_Object_API__c,
-                Default_Email_Message__c
+                Default_Email_Message__c,
+                Attached_Documents__c
             FROM DocGen_Template__c
             WITH SYSTEM_MODE
             ORDER BY Sort_Order__c ASC NULLS LAST, Name ASC
@@ -1459,8 +1467,146 @@ public with sharing class DocGenSignatureSenderController {
         Boolean sendEmails,
         Integer expirationDays
     ) {
+        return sendGuidedPdfRequest(
+            templateId,
+            relatedRecordId,
+            signersJson,
+            signingOrder,
+            documentTitleFormat,
+            emailMessage,
+            emailSubject,
+            requireVerification,
+            prefillSignerEmail,
+            sendEmails,
+            expirationDays,
+            null,
+            null
+        );
+    }
+
+    /**
+     * #412 — the canonical guided send plus existing PDFs from the related record (e.g. the
+     * engineering drawings on an Issued Drawing). Each file is pinned to its current
+     * ContentVersion and shown to signers as its own document, before or after the template
+     * (attachedDocumentPosition: 'Before' — the default — or 'After'). Signers must open every
+     * attached document before they can approve; the signed PDF records each one in an
+     * approval register. attachedDocumentIds takes ContentDocument or ContentVersion Ids of
+     * PDFs linked to relatedRecordId. Empty/null attachments behave exactly like
+     * createGuidedPdfSignatureRequest.
+     */
+    @AuraEnabled
+    public static List<SignerResult> createGuidedPdfSignatureRequestWithAttachments(
+        Id templateId,
+        String relatedRecordId,
+        String signersJson,
+        String signingOrder,
+        String documentTitleFormat,
+        String emailMessage,
+        String emailSubject,
+        Boolean requireVerification,
+        Boolean prefillSignerEmail,
+        Boolean sendEmails,
+        Integer expirationDays,
+        List<String> attachedDocumentIds,
+        String attachedDocumentPosition
+    ) {
+        try {
+            return sendGuidedPdfRequest(
+                templateId,
+                relatedRecordId,
+                signersJson,
+                signingOrder,
+                documentTitleFormat,
+                emailMessage,
+                emailSubject,
+                requireVerification,
+                prefillSignerEmail,
+                sendEmails,
+                expirationDays,
+                attachedDocumentIds,
+                attachedDocumentPosition
+            );
+        } catch (DocGenException e) {
+            AuraHandledException ae = new AuraHandledException(e.getMessage());
+            ae.setMessage(e.getMessage());
+            throw ae;
+        }
+    }
+
+    /**
+     * #412 — PDFs on a record that can be attached to a signature request, for the sender's
+     * picker. Runs as the sender (USER_MODE): only files they can see are listed. Files over the
+     * per-file cap are returned flagged rather than hidden, so the sender knows why one is
+     * unavailable.
+     */
+    @AuraEnabled
+    public static List<Map<String, Object>> getAttachableRecordPdfs(Id recordId) {
+        List<Map<String, Object>> files = new List<Map<String, Object>>();
+        if (recordId == null) {
+            return files;
+        }
+        Long maxBytes = DocGenSignatureAttachments.maxBytesPerFile();
+        for (ContentDocumentLink link : [
+            SELECT
+                ContentDocumentId,
+                ContentDocument.Title,
+                ContentDocument.FileExtension,
+                ContentDocument.ContentSize,
+                ContentDocument.LatestPublishedVersionId,
+                ContentDocument.LatestPublishedVersion.VersionNumber,
+                ContentDocument.ContentModifiedDate
+            FROM ContentDocumentLink
+            WHERE LinkedEntityId = :recordId AND ContentDocument.FileExtension = 'pdf'
+            WITH USER_MODE
+            ORDER BY ContentDocument.Title ASC
+            LIMIT 500
+        ]) {
+            Long size = link.ContentDocument.ContentSize == null ? 0 : link.ContentDocument.ContentSize;
+            files.add(
+                new Map<String, Object>{
+                    'contentDocumentId' => link.ContentDocumentId,
+                    'contentVersionId' => link.ContentDocument.LatestPublishedVersionId,
+                    'title' => link.ContentDocument.Title,
+                    'versionNumber' => link.ContentDocument.LatestPublishedVersion?.VersionNumber,
+                    'size' => size,
+                    'modifiedDate' => link.ContentDocument.ContentModifiedDate,
+                    'tooLarge' => size > maxBytes
+                }
+            );
+        }
+        return files;
+    }
+
+    /**
+     * The guided send itself, shared by the LWC entries above and the Flow action. Attachment
+     * validation failures throw DocGenException, which a Flow action can catch and report
+     * (an AuraHandledException raised outside an Aura/VF request is uncatchable).
+     */
+    public static List<SignerResult> sendGuidedPdfRequest(
+        Id templateId,
+        String relatedRecordId,
+        String signersJson,
+        String signingOrder,
+        String documentTitleFormat,
+        String emailMessage,
+        String emailSubject,
+        Boolean requireVerification,
+        Boolean prefillSignerEmail,
+        Boolean sendEmails,
+        Integer expirationDays,
+        List<String> attachedDocumentIds,
+        String attachedDocumentPosition
+    ) {
+        // #412: validate and pin attached documents first — before the merge and any DML — so a
+        // bad selection fails fast and nothing is created.
+        List<DocGenSignatureAttachments.AttachmentSpec> attachments = DocGenSignatureAttachments.resolveForSend(
+            relatedRecordId,
+            attachedDocumentIds,
+            attachedDocumentPosition
+        );
+
         List<DocGen_Template__c> tpls = [
-            SELECT Id, Name, Document_Title_Format__c
+            SELECT Id, Name, Document_Title_Format__c, Attached_Documents__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -1469,6 +1615,8 @@ public with sharing class DocGenSignatureSenderController {
         if (tpls.isEmpty()) {
             throw new AuraHandledException('Template not found.');
         }
+        // #412: the template decides whether attached documents are allowed or required.
+        DocGenSignatureAttachments.assertTemplateAllows(tpls[0].Attached_Documents__c, attachments.size());
 
         // Inherit the template's document-naming pattern so the SIGNED PDF follows the
         // same name the template uses for normal generation (e.g. "Waiver - {Name}
@@ -1517,6 +1665,12 @@ public with sharing class DocGenSignatureSenderController {
                 String.isNotBlank(shape[0].Base_Object_API__c) &&
                 String.isNotBlank(shape[0].Query_Config__c)
             ) {
+                if (!attachments.isEmpty()) {
+                    throw new DocGenException(
+                        'This template signs through a {#Signatures} loop block, which cannot carry attached ' +
+                        'documents. Add {@Signature_...} tags to the template to attach documents.'
+                    );
+                }
                 return createTemplateSnapshotRequest(
                     templateId,
                     relatedRecordId,
@@ -1650,6 +1804,12 @@ public with sharing class DocGenSignatureSenderController {
         // preview (getSourcePdfBase64) can read it (see shareViewingDocumentWithGuest).
         shareViewingDocumentWithGuest(viewCv.Id, req.Id);
 
+        // #412: attached documents go on the request before any signer is created or invited.
+        List<DocGen_Signature_Attachment__c> attachmentRows = DocGenSignatureAttachments.createForRequest(
+            req.Id,
+            attachments
+        );
+
         // Create signers at the PDF-viewer page (templateId=null skips the classic
         // placement creation — we create sentinel-keyed placements below).
         List<SignerResult> results = createSignersAndNotify(
@@ -1665,6 +1825,9 @@ public with sharing class DocGenSignatureSenderController {
             requireVerification,
             prefillSignerEmail
         );
+
+        // #412: one review row per signer per attached document.
+        DocGenSignatureAttachments.createReviewRows(req.Id, attachmentRows);
 
         // Map placements → signers by role (fallback: first signer), Tag_Text__c = sentinel.
         DocGenFlsGuard.assertAccessible(
@@ -1764,10 +1927,17 @@ public with sharing class DocGenSignatureSenderController {
             DocGen_Template__c.sObjectType,
             new Set<String>{ 'Name', 'Document_Title_Format__c' }
         );
+        // #412 — advisory, not strict: a non-sensitive template setting, added after senders'
+        // permission sets were built. An org on its own permission sets must not lose the
+        // template list on upgrade (same reasoning as Brand__c in DocGenBrandResolver).
+        DocGenFlsGuard.advisoryAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Attached_Documents__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         Map<Id, DocGen_Template__c> templateMap = new Map<Id, DocGen_Template__c>(
             [
-                SELECT Id, Name, Document_Title_Format__c
+                SELECT Id, Name, Document_Title_Format__c, Attached_Documents__c
                 FROM DocGen_Template__c
                 WHERE Id IN :templateIds
                 WITH SYSTEM_MODE
@@ -1776,6 +1946,17 @@ public with sharing class DocGenSignatureSenderController {
         for (Id tid : templateIds) {
             if (!templateMap.containsKey(tid)) {
                 throw new AuraHandledException('Template not found: ' + tid);
+            }
+            // #412: packets can't carry attached documents, so a template that requires them
+            // can't go out in one.
+            if (templateMap.get(tid).Attached_Documents__c == DocGenSignatureAttachments.MODE_REQUIRED) {
+                String packetError =
+                    '"' +
+                    templateMap.get(tid).Name +
+                    '" requires attached documents, so it must be sent on its own, not in a packet.';
+                AuraHandledException refusal = new AuraHandledException(packetError);
+                refusal.setMessage(packetError);
+                throw refusal;
             }
         }
         if (

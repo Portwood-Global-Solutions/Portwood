@@ -3832,6 +3832,15 @@
                                                 class="slds-var-m-top_medium"
                                             ></lightning-input>
                                         </template>
+                                        <!-- #412 — existing record PDFs (e.g. drawings) attached to signature requests -->
+                                        <lightning-combobox
+                                            label="Attached Documents (e-sign)"
+                                            value={editTemplateAttachedDocuments}
+                                            options={attachedDocumentsOptions}
+                                            onchange={handleAttachedDocumentsChange}
+                                            field-level-help="Lets senders attach PDFs that are already on the record, e.g. drawings for the signer to approve. Signers must open each one before they can sign, and the signed copy lists them. Off by default. Required makes every send of this template include at least one."
+                                            class="slds-var-m-top_medium"
+                                        ></lightning-combobox>
                                     </div>
                                     <div class="slds-col slds-size_1-of-2">
                                         <!-- #208 — per-template default email message -->

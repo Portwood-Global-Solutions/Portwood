@@ -1222,6 +1222,11 @@ public without sharing class DocGenSignatureService {
         }
 
         DocGen_Signature_Request__c req = requests[0];
+        // #412: a request with attached documents only finalizes on the signing page.
+        String attachmentError = DocGenSignatureAttachments.fallbackError(req.Id);
+        if (attachmentError != null) {
+            throw new SignatureException(attachmentError);
+        }
         // CxSAST: FLS enforced by Portwood permission sets; package-internal custom objects
         req.Signature_Data__c = typedName;
         // CxSAST: FLS enforced by Portwood permission sets; package-internal custom objects
