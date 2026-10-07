@@ -3186,10 +3186,6 @@
                     // step. The server records it (refused until every document was opened) and
                     // refuses approval without it; it records the confirmation, not that every page
                     // was read.
-                    function hasAttachments() {
-                        return !!(attachments && attachments.length);
-                    }
-
                     function showAttachmentsReviewed(show) {
                         var row = document.getElementById('attachments-reviewed-row');
                         row.style.display = show ? '' : 'none';
