@@ -569,10 +569,120 @@ public with sharing class DocGenDataRetriever {
         String limitClause;
         // Junction support
         Map<String, Object> junction;
+        // Optional. A lookup field on the PARENT node's record whose value is the join
+        // key, instead of the parent's own Id. Reaches the children of a parent's lookup:
+        // on a custom Project__c root with an Opportunity__c lookup, an
+        // OpportunityContactRole node with lookupField OpportunityId and parentKeyField
+        // Opportunity__c returns that Opportunity's contact roles, a relationship no
+        // subquery can express.
+        String parentKeyField;
+        // Optional. Stitch the first matching record as a plain object instead of a
+        // { totalSize, records } collection, so its fields read like a lookup
+        // ({PrimaryContact.Contact.Name}) with no loop. No match stitches an empty map.
+        // Matters most in Excel, where a loop that is its row's only tagged region clones
+        // the row per record and removes it for zero records.
+        Boolean single = false;
 
         // Effective data-map key: alias if present, else relationshipName.
         String dataMapKey() {
             return String.isNotBlank(alias) ? alias : relationshipName;
+        }
+    }
+
+    /**
+     * Parses the optional parentKeyField / single keys of a V3 node. Shared by the
+     * single-record and bulk parsers so both honour the same config.
+     */
+    private static void parseJoinOptions(TreeNode tn, Map<String, Object> n) {
+        Object pk = n.get('parentKeyField');
+        tn.parentKeyField = pk == null ? null : String.valueOf(pk).trim();
+        if (String.isBlank(tn.parentKeyField)) {
+            tn.parentKeyField = null;
+        }
+        tn.single = n.get('single') == true;
+    }
+
+    /**
+     * Validates each node's parentKeyField against its parent node's object (it must be
+     * a lookup there) and makes sure the parent node SELECTs it, so the join key is
+     * present on the parent data map. Throws on an unknown or non-reference field.
+     */
+    private static void resolveParentKeyFields(List<TreeNode> allNodes, Map<String, TreeNode> nodeMap) {
+        for (TreeNode tn : allNodes) {
+            if (tn.parentKeyField == null) {
+                continue;
+            }
+            TreeNode parent = nodeMap.get(tn.parentNodeId);
+            if (parent == null) {
+                throw new DocGenException('parentKeyField on node ' + tn.id + ' requires a parent node.');
+            }
+            Map<String, SObjectField> parentFieldMap = validateObjectName(parent.objectApiName)
+                .getDescribe()
+                .fields.getMap();
+            SObjectField f = parentFieldMap.get(tn.parentKeyField.toLowerCase());
+            if (f == null || f.getDescribe().getType() != Schema.DisplayType.REFERENCE) {
+                throw new DocGenException(
+                    'parentKeyField "' + tn.parentKeyField + '" is not a lookup field on ' + parent.objectApiName + '.'
+                );
+            }
+            tn.parentKeyField = f.getDescribe().getName();
+            Boolean selected = false;
+            for (String existing : parent.fields) {
+                if (existing.equalsIgnoreCase(tn.parentKeyField)) {
+                    selected = true;
+                    break;
+                }
+            }
+            if (!selected) {
+                parent.fields.add(tn.parentKeyField);
+            }
+        }
+    }
+
+    /**
+     * Adds a field to a SELECT list unless it is already there (case-insensitive).
+     * The lookup field used to be appended unconditionally, so a node that also listed
+     * it in "fields" produced "duplicate field selected", the child query failed, and
+     * its collection silently came back empty.
+     */
+    private static void addFieldOnce(List<String> selectFields, String field) {
+        if (String.isBlank(field)) {
+            return;
+        }
+        for (String existing : selectFields) {
+            if (existing.equalsIgnoreCase(field)) {
+                return;
+            }
+        }
+        selectFields.add(field);
+    }
+
+    /** The join key a child node uses for one parent record: its Id, or its parentKeyField value. */
+    private static Id joinKeyFor(TreeNode child, Map<String, Object> parentData) {
+        Object v = parentData.get(child.parentKeyField != null ? child.parentKeyField : 'Id');
+        if (v == null) {
+            return null;
+        }
+        try {
+            return Id.valueOf(String.valueOf(v));
+        } catch (Exception e) {
+            return null; // non-Id value — nothing to join on
+        }
+    }
+
+    /** Stitches a child node's records onto one parent: a collection, or (single) the first record as an object. */
+    private static void stitchChild(
+        Map<String, Object> parentData,
+        TreeNode child,
+        List<Map<String, Object>> childRecords
+    ) {
+        if (child.single) {
+            parentData.put(child.dataMapKey(), childRecords.isEmpty() ? new Map<String, Object>() : childRecords[0]);
+        } else {
+            parentData.put(
+                child.dataMapKey(),
+                new Map<String, Object>{ 'totalSize' => childRecords.size(), 'records' => childRecords }
+            );
         }
     }
 
@@ -612,6 +722,7 @@ public with sharing class DocGenDataRetriever {
             tn.orderByClause = (String) n.get('orderBy');
             tn.limitClause = (String) n.get('limit');
             tn.junction = (Map<String, Object>) n.get('junction');
+            parseJoinOptions(tn, n);
 
             tn.fields = new List<String>();
             List<Object> flds = (List<Object>) n.get('fields');
@@ -674,6 +785,8 @@ public with sharing class DocGenDataRetriever {
             }
             seenKeysPerParent.add(key);
         }
+        // parentKeyField joins: validate, and make each parent node SELECT its join key.
+        resolveParentKeyFields(allNodes, nodeMap);
 
         // Query root: SELECT fields, parentFields FROM object WHERE Id = :recordId
         List<String> rootSelect = new List<String>();
@@ -755,6 +868,7 @@ public with sharing class DocGenDataRetriever {
             tn.orderByClause = (String) n.get('orderBy');
             tn.limitClause = (String) n.get('limit');
             tn.junction = (Map<String, Object>) n.get('junction');
+            parseJoinOptions(tn, n);
 
             tn.fields = new List<String>();
             List<Object> flds = (List<Object>) n.get('fields');
@@ -818,6 +932,8 @@ public with sharing class DocGenDataRetriever {
             }
             seenKeysPerParent.add(key);
         }
+        // parentKeyField joins: validate, and make each parent node SELECT its join key.
+        resolveParentKeyFields(allNodes, nodeMap);
 
         // Bulk root query: SELECT fields FROM object WHERE Id IN :recordIds
         List<String> rootSelect = new List<String>();
@@ -884,20 +1000,19 @@ public with sharing class DocGenDataRetriever {
                 continue;
             }
 
-            // Collect parent record IDs
+            // Collect parent record IDs (the parent's Id, or its parentKeyField lookup value)
             Set<Id> parentIds = new Set<Id>();
             if (isSingleParent) {
-                Object idVal = parentDataMap.get('Id');
-                if (idVal != null) {
-                    try {
-                        parentIds.add(Id.valueOf(String.valueOf(idVal)));
-                    } catch (Exception e) {
-                        // Intentionally swallowed — non-ID value in parent record
-                        String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
-                    }
+                Id joinKey = joinKeyFor(child, parentDataMap);
+                if (joinKey != null) {
+                    parentIds.add(joinKey);
                 }
             }
             if (parentIds.isEmpty()) {
+                if (child.parentKeyField != null) {
+                    // Parent's lookup is blank: still stitch an empty result so tags render blank
+                    stitchChild(parentDataMap, child, new List<Map<String, Object>>());
+                }
                 continue;
             }
 
@@ -908,7 +1023,7 @@ public with sharing class DocGenDataRetriever {
             }
             selectFields.addAll(child.fields);
             selectFields.addAll(child.parentFields);
-            selectFields.add(child.lookupField);
+            addFieldOnce(selectFields, child.lookupField);
 
             // Junction fields
             if (child.junction != null) {
@@ -1008,25 +1123,14 @@ public with sharing class DocGenDataRetriever {
                 grouped.get(parentRecId).add(mapSObject(rec));
             }
 
-            // Stitch into parent
-            Object parentIdVal = parentDataMap.get('Id');
-            if (parentIdVal != null) {
-                Id parentRecId;
-                try {
-                    parentRecId = Id.valueOf(String.valueOf(parentIdVal));
-                } catch (Exception e) {
-                    // Non-ID value in parent Id field — skip stitching
-                    continue;
-                }
-
-                List<Map<String, Object>> childRecords = grouped.containsKey(parentRecId)
-                    ? grouped.get(parentRecId)
+            // Stitch into parent (keyed by the same join key the query used)
+            Id stitchKey = joinKeyFor(child, parentDataMap);
+            if (stitchKey != null) {
+                List<Map<String, Object>> childRecords = grouped.containsKey(stitchKey)
+                    ? grouped.get(stitchKey)
                     : new List<Map<String, Object>>();
 
-                parentDataMap.put(
-                    child.dataMapKey(),
-                    new Map<String, Object>{ 'totalSize' => childRecords.size(), 'records' => childRecords }
-                );
+                stitchChild(parentDataMap, child, childRecords);
 
                 // Junction stitching: if this node has a junction config, stitch target data
                 if (child.junction != null) {
@@ -1068,8 +1172,21 @@ public with sharing class DocGenDataRetriever {
                 continue;
             }
 
-            // Collect ALL parent record IDs
-            Set<Id> parentIds = parentDataMaps.keySet();
+            // Collect ALL parent join keys (record Ids, or each parent's parentKeyField value)
+            Set<Id> parentIds;
+            if (child.parentKeyField == null) {
+                parentIds = parentDataMaps.keySet();
+            } else {
+                parentIds = new Set<Id>();
+                for (Map<String, Object> parentData : parentDataMaps.values()) {
+                    Id joinKey = joinKeyFor(child, parentData);
+                    if (joinKey != null) {
+                        parentIds.add(joinKey);
+                    } else {
+                        stitchChild(parentData, child, new List<Map<String, Object>>());
+                    }
+                }
+            }
             if (parentIds.isEmpty()) {
                 continue;
             }
@@ -1081,7 +1198,7 @@ public with sharing class DocGenDataRetriever {
             }
             selectFields.addAll(child.fields);
             selectFields.addAll(child.parentFields);
-            selectFields.add(child.lookupField);
+            addFieldOnce(selectFields, child.lookupField);
 
             // Junction fields
             if (child.junction != null) {
@@ -1223,14 +1340,18 @@ public with sharing class DocGenDataRetriever {
             Map<Id, Map<String, Object>> allChildDataMaps = new Map<Id, Map<String, Object>>();
             for (Id parentRecId : parentDataMaps.keySet()) {
                 Map<String, Object> parentData = parentDataMaps.get(parentRecId);
-                List<Map<String, Object>> childRecords = grouped.containsKey(parentRecId)
-                    ? grouped.get(parentRecId)
+                // Several parents can share one parentKeyField value (two projects on one
+                // Opportunity); they share the same read-only child maps, so grandchild
+                // stitching below lands once and is visible to every parent.
+                Id joinKey = child.parentKeyField == null ? parentRecId : joinKeyFor(child, parentData);
+                if (joinKey == null) {
+                    continue; // already stitched empty above
+                }
+                List<Map<String, Object>> childRecords = grouped.containsKey(joinKey)
+                    ? grouped.get(joinKey)
                     : new List<Map<String, Object>>();
 
-                parentData.put(
-                    child.dataMapKey(),
-                    new Map<String, Object>{ 'totalSize' => childRecords.size(), 'records' => childRecords }
-                );
+                stitchChild(parentData, child, childRecords);
 
                 // Junction stitching
                 if (child.junction != null) {
@@ -2403,6 +2524,16 @@ public with sharing class DocGenDataRetriever {
             String countsKey = String.isNotBlank(alias) ? alias : relationshipName;
 
             if (String.isBlank(childObject) || String.isBlank(lookupField) || String.isBlank(relationshipName)) {
+                continue;
+            }
+
+            // A parentKeyField node joins through a lookup on its parent, not this record's
+            // Id, so a count against recordId means nothing, and the giant-query path cannot
+            // follow that join. A single node merges one record, however many match. Leaving
+            // either uncounted keeps it on the standard path.
+            Boolean joinsThroughLookup =
+                n.get('parentKeyField') != null && String.isNotBlank(String.valueOf(n.get('parentKeyField')));
+            if (joinsThroughLookup || n.get('single') == true) {
                 continue;
             }
 

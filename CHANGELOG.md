@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- V3 query trees can join a child through a lookup on its parent using `parentKeyField`, and
+  merge one matching record as an object with `single: true`. The visual query builder preserves
+  these settings when saving. Child queries now select their lookup field only once (#452).
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
