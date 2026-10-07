@@ -4593,6 +4593,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     handleAttachedDocumentsChange(event) {
         this.editTemplateAttachedDocuments = event.detail.value;
     }
+    // #412 — sends with attached documents are refused while Decline is hidden.
+    get attachedDocumentsDeclineWarning() {
+        if (!this.editTemplateAttachedDocuments || this.editTemplateAttachedDocuments === 'Off') {
+            return null;
+        }
+        if (this.orgHideDecline) {
+            return 'Decline is hidden org-wide (Signature Settings), so sends with attached documents will be refused. Signers need to be able to approve or decline what they review.';
+        }
+        if (this.editTemplateHideDecline) {
+            return 'Hide Decline Button is on for this template, so sends with attached documents will be refused. Signers need to be able to approve or decline what they review.';
+        }
+        return null;
+    }
 
     get isBuilderDisabled() {
         return this.isManualQuery;

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signature_Attachment_Max_File_MB__c</fullName>
+    <defaultValue>20</defaultValue>
+    <description>Org-wide cap on each attached document (#412), in MB. Blank uses the default, 20.</description>
+    <externalId>false</externalId>
+    <label>Attached Document Max Size (MB)</label>
+    <precision>4</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

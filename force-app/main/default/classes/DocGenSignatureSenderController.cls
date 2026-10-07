@@ -13,6 +13,42 @@ public with sharing class DocGenSignatureSenderController {
     }
 
     /**
+     * #412 — everything a guided PDF send takes, for createGuidedPdfSignatureRequestV2 and the
+     * Flow action. New send options go here, not into another createGuidedPdfSignatureRequest
+     * overload. A null field behaves as it does in the 11-argument method.
+     */
+    public class GuidedPdfSendOptions {
+        @AuraEnabled
+        public Id templateId { get; set; }
+        @AuraEnabled
+        public String relatedRecordId { get; set; }
+        @AuraEnabled
+        public String signersJson { get; set; }
+        @AuraEnabled
+        public String signingOrder { get; set; }
+        @AuraEnabled
+        public String documentTitleFormat { get; set; }
+        @AuraEnabled
+        public String emailMessage { get; set; }
+        @AuraEnabled
+        public String emailSubject { get; set; }
+        @AuraEnabled
+        public Boolean requireVerification { get; set; }
+        @AuraEnabled
+        public Boolean prefillSignerEmail { get; set; }
+        @AuraEnabled
+        public Boolean sendEmails { get; set; }
+        @AuraEnabled
+        public Integer expirationDays { get; set; }
+        // ContentDocument or ContentVersion Ids of PDFs linked to relatedRecordId, in signing order.
+        @AuraEnabled
+        public List<String> attachedDocumentIds { get; set; }
+        // 'Before' (the default) or 'After' the template.
+        @AuraEnabled
+        public String attachedDocumentPosition { get; set; }
+    }
+
+    /**
      * Parses a JSON array of template IDs and returns it deduped, preserving order.
      * The LWC sender's template picker can append the same templateId twice when a
      * user clicks faster than the awaited getTemplateSignaturePlacements call resolves —
@@ -1467,69 +1503,36 @@ public with sharing class DocGenSignatureSenderController {
         Boolean sendEmails,
         Integer expirationDays
     ) {
-        return sendGuidedPdfRequest(
-            templateId,
-            relatedRecordId,
-            signersJson,
-            signingOrder,
-            documentTitleFormat,
-            emailMessage,
-            emailSubject,
-            requireVerification,
-            prefillSignerEmail,
-            sendEmails,
-            expirationDays,
-            null,
-            null
-        );
+        GuidedPdfSendOptions options = new GuidedPdfSendOptions();
+        options.templateId = templateId;
+        options.relatedRecordId = relatedRecordId;
+        options.signersJson = signersJson;
+        options.signingOrder = signingOrder;
+        options.documentTitleFormat = documentTitleFormat;
+        options.emailMessage = emailMessage;
+        options.emailSubject = emailSubject;
+        options.requireVerification = requireVerification;
+        options.prefillSignerEmail = prefillSignerEmail;
+        options.sendEmails = sendEmails;
+        options.expirationDays = expirationDays;
+        return sendGuidedPdfRequest(options);
     }
 
     /**
-     * #412 — the canonical guided send plus existing PDFs from the related record (e.g. the
-     * engineering drawings on an Issued Drawing). Each file is pinned to its current
-     * ContentVersion and shown to signers as its own document, before or after the template
-     * (attachedDocumentPosition: 'Before' — the default — or 'After'). Signers must open every
-     * attached document before they can approve; the signed PDF records each one in an
-     * approval register. attachedDocumentIds takes ContentDocument or ContentVersion Ids of
-     * PDFs linked to relatedRecordId. Empty/null attachments behave exactly like
-     * createGuidedPdfSignatureRequest.
+     * #412 — the guided send, taking its options as one object (GuidedPdfSendOptions). It does
+     * everything the 11-argument method does, and can also attach existing PDFs from the related
+     * record (e.g. the engineering drawings on an Issued Drawing): each file is pinned to its
+     * current ContentVersion and shown to signers as its own document, before or after the
+     * template. Signers must open every attached document and confirm they reviewed them before
+     * they can approve; the signed PDF records each one in an approval register. No attachments
+     * behaves exactly like createGuidedPdfSignatureRequest.
      */
     @AuraEnabled
-    public static List<SignerResult> createGuidedPdfSignatureRequestWithAttachments(
-        Id templateId,
-        String relatedRecordId,
-        String signersJson,
-        String signingOrder,
-        String documentTitleFormat,
-        String emailMessage,
-        String emailSubject,
-        Boolean requireVerification,
-        Boolean prefillSignerEmail,
-        Boolean sendEmails,
-        Integer expirationDays,
-        List<String> attachedDocumentIds,
-        String attachedDocumentPosition
-    ) {
+    public static List<SignerResult> createGuidedPdfSignatureRequestV2(GuidedPdfSendOptions options) {
         try {
-            return sendGuidedPdfRequest(
-                templateId,
-                relatedRecordId,
-                signersJson,
-                signingOrder,
-                documentTitleFormat,
-                emailMessage,
-                emailSubject,
-                requireVerification,
-                prefillSignerEmail,
-                sendEmails,
-                expirationDays,
-                attachedDocumentIds,
-                attachedDocumentPosition
-            );
+            return sendGuidedPdfRequest(options);
         } catch (DocGenException e) {
-            AuraHandledException ae = new AuraHandledException(e.getMessage());
-            ae.setMessage(e.getMessage());
-            throw ae;
+            throw DocGenService.ahe(e.getMessage());
         }
     }
 
@@ -1582,31 +1585,32 @@ public with sharing class DocGenSignatureSenderController {
      * validation failures throw DocGenException, which a Flow action can catch and report
      * (an AuraHandledException raised outside an Aura/VF request is uncatchable).
      */
-    public static List<SignerResult> sendGuidedPdfRequest(
-        Id templateId,
-        String relatedRecordId,
-        String signersJson,
-        String signingOrder,
-        String documentTitleFormat,
-        String emailMessage,
-        String emailSubject,
-        Boolean requireVerification,
-        Boolean prefillSignerEmail,
-        Boolean sendEmails,
-        Integer expirationDays,
-        List<String> attachedDocumentIds,
-        String attachedDocumentPosition
-    ) {
+    public static List<SignerResult> sendGuidedPdfRequest(GuidedPdfSendOptions options) {
+        if (options == null) {
+            throw new DocGenException('Send options are required.');
+        }
+        Id templateId = options.templateId;
+        String relatedRecordId = options.relatedRecordId;
+        String signersJson = options.signersJson;
+        String signingOrder = options.signingOrder;
+        String documentTitleFormat = options.documentTitleFormat;
+        String emailMessage = options.emailMessage;
+        String emailSubject = options.emailSubject;
+        Boolean requireVerification = options.requireVerification;
+        Boolean prefillSignerEmail = options.prefillSignerEmail;
+        Boolean sendEmails = options.sendEmails;
+        Integer expirationDays = options.expirationDays;
+
         // #412: validate and pin attached documents first — before the merge and any DML — so a
         // bad selection fails fast and nothing is created.
         List<DocGenSignatureAttachments.AttachmentSpec> attachments = DocGenSignatureAttachments.resolveForSend(
             relatedRecordId,
-            attachedDocumentIds,
-            attachedDocumentPosition
+            options.attachedDocumentIds,
+            options.attachedDocumentPosition
         );
 
         List<DocGen_Template__c> tpls = [
-            SELECT Id, Name, Document_Title_Format__c, Attached_Documents__c
+            SELECT Id, Name, Document_Title_Format__c, Attached_Documents__c, Hide_Signer_Decline__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -1615,8 +1619,10 @@ public with sharing class DocGenSignatureSenderController {
         if (tpls.isEmpty()) {
             throw new AuraHandledException('Template not found.');
         }
-        // #412: the template decides whether attached documents are allowed or required.
+        // #412: the template decides whether attached documents are allowed or required, and
+        // attached documents need Decline available.
         DocGenSignatureAttachments.assertTemplateAllows(tpls[0].Attached_Documents__c, attachments.size());
+        DocGenSignatureAttachments.assertDeclineAvailable(tpls[0].Hide_Signer_Decline__c, attachments.size());
 
         // Inherit the template's document-naming pattern so the SIGNED PDF follows the
         // same name the template uses for normal generation (e.g. "Waiver - {Name}

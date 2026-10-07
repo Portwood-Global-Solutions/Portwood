@@ -18,10 +18,25 @@
  * are addressed by their position (index) within the token's own request.
  */
 public inherited sharing class DocGenSignatureAttachments {
+    // Org-wide limits, set in Signature Settings (DocGen_Settings__c). A blank or out-of-range
+    // setting falls back to the default. Ceilings exist only where there is a technical reason:
+    // each file is served whole in one Apex REST response (measured cleanly to 16 MB; the heap
+    // headroom that allows it is undocumented), and each file adds a review row per signer.
+    public static final Integer DEFAULT_MAX_FILES = 100;
+    public static final Integer DEFAULT_MAX_FILE_MB = 20;
+    public static final Integer DEFAULT_MAX_TOTAL_MB = 200;
+    public static final Integer CEILING_MAX_FILES = 200;
+    public static final Integer CEILING_MAX_FILE_MB = 50;
+    public static final Integer CEILING_MAX_TOTAL_MB = 99999;
+    private static final Long BYTES_PER_MB = 1024L * 1024L;
+
+    // Test overrides for the settings above, in files and bytes.
     @TestVisible
-    private static Integer maxAttachments = 100;
+    private static Integer maxAttachments;
     @TestVisible
-    private static Long maxBytesPerAttachment = 20L * 1024L * 1024L; // 20 MB
+    private static Long maxBytesPerAttachment;
+    @TestVisible
+    private static Long maxBytesPerRequest;
     @TestVisible
     private static Boolean failCreateForTest = false; // proves a failed send commits nothing
 
@@ -92,9 +107,98 @@ public inherited sharing class DocGenSignatureAttachments {
         }
     }
 
-    /** The per-file size cap, for the sender's picker. */
+    /**
+     * Attached documents need a clear approve-or-decline choice, so they can't be sent while
+     * Decline is hidden, org-wide (Signature Settings) or on the template.
+     */
+    public static void assertDeclineAvailable(Boolean templateHidesDecline, Integer attachmentCount) {
+        if (attachmentCount == null || attachmentCount == 0) {
+            return;
+        }
+        if (orgHidesDecline()) {
+            throw new DocGenException(
+                'Attached documents need Decline available, so signers can approve or decline them. ' +
+                'Turn off Hide Decline Button in Signature Settings to attach documents.'
+            );
+        }
+        if (templateHidesDecline == true) {
+            throw new DocGenException(
+                'Attached documents need Decline available, so signers can approve or decline them. ' +
+                'Turn off Hide Decline on this template to attach documents.'
+            );
+        }
+    }
+
+    private static Boolean orgHidesDecline() {
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        return settings != null && settings.Signature_Hide_Decline__c == true;
+    }
+
+    /** How many documents one request can attach (Signature Settings, default 100). */
+    public static Integer maxFiles() {
+        if (maxAttachments != null) {
+            return maxAttachments;
+        }
+        return limitSettings().get('maxFiles');
+    }
+
+    /** The per-file size cap, in bytes (Signature Settings, default 20 MB). Also used by the sender's picker. */
     public static Long maxBytesPerFile() {
-        return maxBytesPerAttachment;
+        if (maxBytesPerAttachment != null) {
+            return maxBytesPerAttachment;
+        }
+        return BYTES_PER_MB * limitSettings().get('maxFileMb');
+    }
+
+    /** The cap on a request's attached documents together, in bytes (Signature Settings, default 200 MB). */
+    public static Long maxBytesTotal() {
+        if (maxBytesPerRequest != null) {
+            return maxBytesPerRequest;
+        }
+        return BYTES_PER_MB * limitSettings().get('maxTotalMb');
+    }
+
+    /** The limits in effect, as the admin enters them: whole numbers of files and MB. */
+    public static Map<String, Integer> limitSettings() {
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        return new Map<String, Integer>{
+            'maxFiles' => limitSetting(
+                settings?.Signature_Attachment_Max_Files__c,
+                DEFAULT_MAX_FILES,
+                CEILING_MAX_FILES
+            ),
+            'maxFileMb' => limitSetting(
+                settings?.Signature_Attachment_Max_File_MB__c,
+                DEFAULT_MAX_FILE_MB,
+                CEILING_MAX_FILE_MB
+            ),
+            'maxTotalMb' => limitSetting(
+                settings?.Signature_Attachment_Max_Total_MB__c,
+                DEFAULT_MAX_TOTAL_MB,
+                CEILING_MAX_TOTAL_MB
+            )
+        };
+    }
+
+    /**
+     * Checks one limit an admin entered: blank keeps the default; otherwise a whole number from 1
+     * to the ceiling. Returns an error for the admin, or null when it is fine.
+     */
+    public static String limitError(String label, Decimal value, Integer ceiling) {
+        if (value == null) {
+            return null;
+        }
+        if (value != value.round(System.RoundingMode.DOWN) || value < 1 || value > ceiling) {
+            return label + ' must be a whole number from 1 to ' + ceiling + '.';
+        }
+        return null;
+    }
+
+    private static Integer limitSetting(Decimal value, Integer defaultValue, Integer ceiling) {
+        if (value == null || value < 1 || value > ceiling) {
+            return defaultValue;
+        }
+        return value.intValue();
     }
 
     /**
@@ -144,11 +248,12 @@ public inherited sharing class DocGenSignatureAttachments {
         if (ordered.isEmpty()) {
             return specs;
         }
-        if (ordered.size() > maxAttachments) {
-            throw new DocGenException(
-                'A signature request can carry at most ' + maxAttachments + ' attached documents.'
-            );
+        Integer fileLimit = maxFiles();
+        if (ordered.size() > fileLimit) {
+            throw new DocGenException('A signature request can carry at most ' + fileLimit + ' attached documents.');
         }
+        Long fileBytesLimit = maxBytesPerFile();
+        Long totalBytesLimit = maxBytesTotal();
 
         // USER_MODE: the sender must be able to read every file they attach.
         List<ContentVersion> versions = [
@@ -180,6 +285,7 @@ public inherited sharing class DocGenSignatureAttachments {
         }
 
         Set<Id> usedDocuments = new Set<Id>();
+        Long totalBytes = 0;
         for (Id fileId : ordered) {
             ContentVersion cv = fileId.getSobjectType() == ContentVersion.sObjectType
                 ? byVersion.get(fileId)
@@ -195,14 +301,14 @@ public inherited sharing class DocGenSignatureAttachments {
                     '"' + cv.Title + '" is not a PDF. Only PDF files can be attached for signing.'
                 );
             }
-            if (cv.ContentSize != null && cv.ContentSize > maxBytesPerAttachment) {
+            if (cv.ContentSize != null && cv.ContentSize > fileBytesLimit) {
                 throw new DocGenException(
                     '"' +
                         cv.Title +
                         '" is ' +
                         megabytes(cv.ContentSize) +
                         ' MB. Attached documents can be at most ' +
-                        megabytes(maxBytesPerAttachment) +
+                        megabytes(fileBytesLimit) +
                         ' MB each.'
                 );
             }
@@ -219,6 +325,16 @@ public inherited sharing class DocGenSignatureAttachments {
             spec.position = pos;
             spec.sortOrder = specs.size();
             specs.add(spec);
+            totalBytes += cv.ContentSize == null ? 0 : cv.ContentSize;
+        }
+        if (totalBytes > totalBytesLimit) {
+            throw new DocGenException(
+                'The selected documents total ' +
+                    megabytes(totalBytes) +
+                    ' MB. A signature request can carry at most ' +
+                    megabytes(totalBytesLimit) +
+                    ' MB of attached documents.'
+            );
         }
         return specs;
     }
@@ -364,11 +480,6 @@ public inherited sharing class DocGenSignatureAttachments {
     }
 
     /**
-     * The approval register for the signed PDF: every attachment in order, with each signer who
-     * opened it and when. Rides on the signature certificate, which already shows every signer's
-     * name to each signer of the request. Empty when the request has no attachments.
-     */
-    /**
      * The register for a signer's own request, only once their link passes the full guest gate
      * (PIN verified when required, not expired, request still open) — the certificate endpoint
      * it rides on checks less. Empty otherwise.
@@ -381,6 +492,50 @@ public inherited sharing class DocGenSignatureAttachments {
         return registerForRequest(gate.signer.Signature_Request__c);
     }
 
+    /**
+     * The review confirmations for the register, behind the same gate as registerForToken: each
+     * signer who confirmed they reviewed the attached documents, and when, in signing order.
+     */
+    public static List<Map<String, Object>> reviewConfirmationsForToken(String token) {
+        GuestResult gate = resolveSigner(token);
+        if (gate.status != 200) {
+            return new List<Map<String, Object>>();
+        }
+        return reviewConfirmationsForRequest(gate.signer.Signature_Request__c);
+    }
+
+    public static List<Map<String, Object>> reviewConfirmationsForRequest(Id requestId) {
+        List<Map<String, Object>> confirmations = new List<Map<String, Object>>();
+        if (attachmentCount(requestId) == 0) {
+            return confirmations;
+        }
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signer__c.sObjectType,
+            new Set<String>{ 'Signer_Name__c', 'Sort_Order__c', 'Signature_Request__c', 'Attachments_Reviewed_At__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        for (DocGen_Signer__c signer : [
+            SELECT Signer_Name__c, Attachments_Reviewed_At__c
+            FROM DocGen_Signer__c
+            WHERE Signature_Request__c = :requestId AND Attachments_Reviewed_At__c != NULL
+            WITH SYSTEM_MODE
+            ORDER BY Sort_Order__c ASC, Attachments_Reviewed_At__c ASC
+        ]) {
+            confirmations.add(
+                new Map<String, Object>{
+                    'name' => signer.Signer_Name__c,
+                    'at' => signer.Attachments_Reviewed_At__c.format('MMMM d, yyyy h:mm a z')
+                }
+            );
+        }
+        return confirmations;
+    }
+
+    /**
+     * The approval register for the signed PDF: every attachment in order, with each signer who
+     * opened it and when. Rides on the signature certificate, which already shows every signer's
+     * name to each signer of the request. Empty when the request has no attachments.
+     */
     public static List<Map<String, Object>> registerForRequest(Id requestId) {
         List<Map<String, Object>> register = manifestForSigner(requestId, null);
         if (register.isEmpty()) {
@@ -460,6 +615,7 @@ public inherited sharing class DocGenSignatureAttachments {
                 'Status__c',
                 'CreatedDate',
                 'PIN_Verified_At__c',
+                'Attachments_Reviewed_At__c',
                 'Signature_Request__c',
                 'Secure_Token__c'
             }
@@ -475,6 +631,7 @@ public inherited sharing class DocGenSignatureAttachments {
                 Status__c,
                 CreatedDate,
                 PIN_Verified_At__c,
+                Attachments_Reviewed_At__c,
                 Signature_Request__c,
                 Signature_Request__r.Status__c,
                 Signature_Request__r.Expires_At__c,
@@ -637,9 +794,76 @@ public inherited sharing class DocGenSignatureAttachments {
     }
 
     /**
-     * Approve gate: null when the signer may finalize; otherwise a message for the signer. Counts
-     * against the request's attachments (not just existing review rows) so a missing review row
-     * can never read as "all opened".
+     * Records the signer's confirmation that they reviewed the attached documents, the last step
+     * before approving. Accepted only once every attachment has been delivered to and opened by
+     * this signer. It records what the signer confirmed, not that every page was read.
+     * Idempotent: the first confirmation is kept.
+     */
+    public static Map<String, Object> confirmReviewed(String token) {
+        GuestResult r = resolveSigner(token);
+        if (r.status != 200) {
+            return new Map<String, Object>{ 'success' => false, 'message' => r.error };
+        }
+        if (attachmentCount(r.signer.Signature_Request__c) == 0) {
+            return new Map<String, Object>{
+                'success' => false,
+                'message' => 'This request has no attached documents.'
+            };
+        }
+        String notViewed = validateAllViewed(r.signer.Id, r.signer.Signature_Request__c);
+        if (notViewed != null) {
+            return new Map<String, Object>{ 'success' => false, 'message' => notViewed };
+        }
+        if (r.signer.Attachments_Reviewed_At__c == null) {
+            DocGen_Signer__c confirmed = new DocGen_Signer__c(
+                Id = r.signer.Id,
+                Attachments_Reviewed_At__c = System.now()
+            );
+            DocGenFlsGuard.guestAssertUpdateable(confirmed, new Set<String>{ 'Attachments_Reviewed_At__c' });
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            Database.update(confirmed, AccessLevel.SYSTEM_MODE);
+            r.signer.Attachments_Reviewed_At__c = confirmed.Attachments_Reviewed_At__c;
+        }
+        return new Map<String, Object>{
+            'success' => true,
+            'reviewedAt' => isoUtc(r.signer.Attachments_Reviewed_At__c)
+        };
+    }
+
+    /**
+     * Approve gate: null when the signer may finalize; otherwise a message for the signer. Every
+     * attachment must have been opened, and the signer must have confirmed they reviewed them.
+     */
+    public static String approvalError(Id signerId, Id requestId) {
+        if (attachmentCount(requestId) == 0) {
+            return null;
+        }
+        String notViewed = validateAllViewed(signerId, requestId);
+        if (notViewed != null) {
+            return notViewed;
+        }
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signer__c.sObjectType,
+            new Set<String>{ 'Attachments_Reviewed_At__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signer__c> signers = [
+            SELECT Attachments_Reviewed_At__c
+            FROM DocGen_Signer__c
+            WHERE Id = :signerId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (signers.isEmpty() || signers[0].Attachments_Reviewed_At__c == null) {
+            return 'Confirm that you have reviewed the attached documents before approving. Decline is still available.';
+        }
+        return null;
+    }
+
+    /**
+     * Every attachment opened: null when so; otherwise a message for the signer. Counts against
+     * the request's attachments (not just existing review rows) so a missing review row can never
+     * read as "all opened".
      */
     public static String validateAllViewed(Id signerId, Id requestId) {
         Integer remaining = unviewedCount(signerId, requestId);

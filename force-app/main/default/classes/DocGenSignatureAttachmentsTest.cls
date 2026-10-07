@@ -3,7 +3,9 @@
  *   - send-side validation and pinning (sender controller + Flow action)
  *   - the guest surface: manifest, REST fetch, view tracking — token, PIN, expiry,
  *     terminal-state and index gates
- *   - the approve gate, the refused server re-render fallbacks, and the register
+ *   - the approve gate (every document opened, review confirmed), the refused server
+ *     re-render fallbacks, and the register
+ *   - Decline must stay available, and the org-wide limits
  */
 @IsTest
 private class DocGenSignatureAttachmentsTest {
@@ -88,21 +90,18 @@ private class DocGenSignatureAttachmentsTest {
     }
 
     private static void send(Id tplId, String signers, List<String> ids, String position, Boolean requirePin) {
-        DocGenSignatureSenderController.createGuidedPdfSignatureRequestWithAttachments(
-            tplId,
-            account().Id,
-            signers,
-            'Parallel',
-            null,
-            null,
-            null,
-            requirePin,
-            false,
-            false,
-            7,
-            ids,
-            position
-        );
+        DocGenSignatureSenderController.GuidedPdfSendOptions options = new DocGenSignatureSenderController.GuidedPdfSendOptions();
+        options.templateId = tplId;
+        options.relatedRecordId = account().Id;
+        options.signersJson = signers;
+        options.signingOrder = 'Parallel';
+        options.requireVerification = requirePin;
+        options.prefillSignerEmail = false;
+        options.sendEmails = false;
+        options.expirationDays = 7;
+        options.attachedDocumentIds = ids;
+        options.attachedDocumentPosition = position;
+        DocGenSignatureSenderController.createGuidedPdfSignatureRequestV2(options);
     }
 
     private static DocGen_Signer__c signer(Id tplId) {
@@ -137,6 +136,12 @@ private class DocGenSignatureAttachmentsTest {
         }
         Assert.fail('Expected the send to be refused');
         return null;
+    }
+
+    private static void hideDeclineOrgWide() {
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Hide_Decline__c = true;
+        upsert settings;
     }
 
     private static DocGenSignatureController.SavePdfSignatureResult composite(String token) {
@@ -240,9 +245,12 @@ private class DocGenSignatureAttachmentsTest {
         String badPosition = expectSendError(tplId, drawingIds(), 'Sideways');
         DocGenSignatureAttachments.maxAttachments = 1;
         String tooMany = expectSendError(tplId, drawingIds(), 'Before');
-        DocGenSignatureAttachments.maxAttachments = 100;
+        DocGenSignatureAttachments.maxAttachments = null;
         DocGenSignatureAttachments.maxBytesPerAttachment = 5;
         String tooBig = expectSendError(tplId, drawingIds(), 'Before');
+        DocGenSignatureAttachments.maxBytesPerAttachment = null;
+        DocGenSignatureAttachments.maxBytesPerRequest = 25;
+        String tooMuch = expectSendError(tplId, drawingIds(), 'Before');
         Test.stopTest();
 
         Assert.isTrue(notPdf.contains('is not a PDF'), notPdf);
@@ -252,6 +260,7 @@ private class DocGenSignatureAttachmentsTest {
         Assert.isTrue(badPosition.contains('Before or After'), badPosition);
         Assert.isTrue(tooMany.contains('at most 1'), tooMany);
         Assert.isTrue(tooBig.contains('MB each'), tooBig);
+        Assert.isTrue(tooMuch.contains('MB of attached documents'), tooMuch);
         Assert.areEqual(0, [SELECT COUNT() FROM DocGen_Signature_Request__c], 'A refused send creates nothing');
     }
 
@@ -487,6 +496,7 @@ private class DocGenSignatureAttachmentsTest {
         DocGenSignatureController.SavePdfSignatureResult stillBlocked = composite(s.Secure_Token__c);
         DocGenSignatureAttachments.serve(s.Secure_Token__c, 1); // stores the SHA-256
         Map<String, Object> second = DocGenSignatureController.markAttachmentViewed(s.Secure_Token__c, 1);
+        DocGenSignatureController.confirmAttachmentsReviewed(s.Secure_Token__c);
         Map<String, Object> cert = DocGenSignatureController.getSignatureCertificate(s.Secure_Token__c);
         DocGenSignatureController.SavePdfSignatureResult approved = composite(s.Secure_Token__c);
         Test.stopTest();
@@ -854,5 +864,184 @@ private class DocGenSignatureAttachmentsTest {
             }
         }
         Assert.isTrue(listed, 'The sender reads the setting with the template list');
+    }
+
+    // ------------------------------------------------- review confirmation
+
+    @IsTest
+    static void approveGate_requiresReviewConfirmation_andRegistersIt() {
+        Id tplId = createTaggedTemplate();
+        send(tplId, oneSigner(), new List<String>{ documentId('GA-001 General Arrangement') }, 'Before', false);
+        DocGen_Signer__c s = signer(tplId);
+        signAllPlacements(s.Id);
+
+        Test.startTest();
+        Map<String, Object> early = DocGenSignatureController.confirmAttachmentsReviewed(s.Secure_Token__c);
+        DocGenSignatureAttachments.serve(s.Secure_Token__c, 0);
+        DocGenSignatureController.markAttachmentViewed(s.Secure_Token__c, 0);
+        DocGenSignatureController.SavePdfSignatureResult unconfirmed = composite(s.Secure_Token__c);
+        Map<String, Object> confirmed = DocGenSignatureController.confirmAttachmentsReviewed(s.Secure_Token__c);
+        Datetime firstAt = [SELECT Attachments_Reviewed_At__c FROM DocGen_Signer__c WHERE Id = :s.Id]
+        .Attachments_Reviewed_At__c;
+        Map<String, Object> again = DocGenSignatureController.confirmAttachmentsReviewed(s.Secure_Token__c);
+        List<Object> reviews = (List<Object>) DocGenSignatureController.getSignatureCertificate(s.Secure_Token__c)
+            .get('attachmentReviews');
+        DocGenSignatureController.SavePdfSignatureResult approved = composite(s.Secure_Token__c);
+        Test.stopTest();
+
+        Assert.areEqual(false, early.get('success'), 'No confirmation before every document is opened');
+        Assert.isTrue(((String) early.get('message')).contains('not yet opened'), (String) early.get('message'));
+        Assert.isFalse(unconfirmed.success, 'Opening alone does not approve');
+        Assert.isTrue(unconfirmed.message.contains('Confirm that you have reviewed'), unconfirmed.message);
+        Assert.areEqual(true, confirmed.get('success'), 'Confirmation recorded');
+        Assert.isNotNull(confirmed.get('reviewedAt'), 'Confirmation time returned');
+        Assert.areEqual(true, again.get('success'), 'Idempotent');
+        Assert.areEqual(
+            firstAt,
+            [SELECT Attachments_Reviewed_At__c FROM DocGen_Signer__c WHERE Id = :s.Id].Attachments_Reviewed_At__c,
+            'First confirmation time kept'
+        );
+        Assert.areEqual(1, reviews.size(), 'Register lists the confirmation');
+        Assert.areEqual('Ada Approver', ((Map<String, Object>) reviews[0]).get('name'), 'Signer named');
+        Assert.isTrue(approved.success, 'Approval failed: ' + approved.message);
+    }
+
+    @IsTest
+    static void confirmReviewed_isGatedAndNeedsAttachments() {
+        Id tplId = createTaggedTemplate();
+        send(tplId, oneSigner(), drawingIds(), 'Before', true);
+        DocGen_Signer__c pinSigner = signer(tplId);
+        Id plainTpl = createTaggedTemplate();
+        send(plainTpl, oneSigner(), null, null, false);
+        DocGen_Signer__c plainSigner = signer(plainTpl);
+
+        Test.startTest();
+        Map<String, Object> beforePin = DocGenSignatureController.confirmAttachmentsReviewed(pinSigner.Secure_Token__c);
+        List<Object> reviewsBeforePin = (List<Object>) DocGenSignatureController.getSignatureCertificate(
+                pinSigner.Secure_Token__c
+            )
+            .get('attachmentReviews');
+        Map<String, Object> noAttachments = DocGenSignatureController.confirmAttachmentsReviewed(
+            plainSigner.Secure_Token__c
+        );
+        Map<String, Object> badToken = DocGenSignatureController.confirmAttachmentsReviewed('nope');
+        Test.stopTest();
+
+        Assert.areEqual(false, beforePin.get('success'), 'PIN gate applies');
+        Assert.areEqual(0, reviewsBeforePin.size(), 'No confirmations before the PIN check');
+        Assert.areEqual(false, noAttachments.get('success'), 'Nothing to confirm without attachments');
+        Assert.areEqual(false, badToken.get('success'), 'Bad token refused');
+        Assert.areEqual(
+            0,
+            [SELECT COUNT() FROM DocGen_Signer__c WHERE Attachments_Reviewed_At__c != NULL],
+            'Nothing recorded'
+        );
+    }
+
+    // ------------------------------------------------------------- decline
+
+    @IsTest
+    static void send_refusedWhileDeclineIsHidden() {
+        Id tplId = createTaggedTemplate();
+        DocGen_Template__c hiding = new DocGen_Template__c(Id = createTaggedTemplate(), Hide_Signer_Decline__c = true);
+        update hiding;
+
+        Test.startTest();
+        String templateMessage = expectSendError(hiding.Id, drawingIds(), 'Before');
+        send(hiding.Id, oneSigner(), null, null, false); // no attachments: Hide Decline works as before
+        hideDeclineOrgWide();
+        String orgMessage = expectSendError(tplId, drawingIds(), 'Before');
+        Test.stopTest();
+
+        Assert.isTrue(templateMessage.contains('Hide Decline on this template'), templateMessage);
+        Assert.isTrue(orgMessage.contains('Hide Decline Button in Signature Settings'), orgMessage);
+        Assert.areEqual(1, [SELECT COUNT() FROM DocGen_Signature_Request__c], 'Only the send without attachments');
+    }
+
+    @IsTest
+    static void declineStaysAvailableIfHiddenAfterSend() {
+        Id tplId = createTaggedTemplate();
+        send(tplId, oneSigner(), drawingIds(), 'Before', false);
+        DocGen_Signer__c s = signer(tplId);
+        hideDeclineOrgWide();
+
+        Test.startTest();
+        DocGenSignatureController.SignatureInitResponse init = DocGenSignatureController.validateToken(
+            s.Secure_Token__c
+        );
+        Map<String, Object> declined = DocGenSignatureController.declineSignature(
+            s.Secure_Token__c,
+            'Wrong revision',
+            '1.2.3.4',
+            'JUnit/1.0'
+        );
+        Test.stopTest();
+
+        Assert.isTrue(init.showDecline, 'A request with attached documents always offers Decline');
+        Assert.areEqual(true, declined.get('success'), 'And the server accepts it');
+    }
+
+    // -------------------------------------------------------------- limits
+
+    @IsTest
+    static void limits_comeFromSettingsWithDefaults() {
+        Map<String, Integer> defaults = DocGenSignatureAttachments.limitSettings();
+        Long defaultFileBytes = DocGenSignatureAttachments.maxBytesPerFile();
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Attachment_Max_Files__c = 1;
+        settings.Signature_Attachment_Max_File_MB__c = 5;
+        settings.Signature_Attachment_Max_Total_MB__c = 0; // out of range: the default applies
+        upsert settings;
+        Id tplId = createTaggedTemplate();
+
+        Test.startTest();
+        String tooMany = expectSendError(tplId, drawingIds(), 'Before');
+        Test.stopTest();
+
+        Assert.areEqual(100, defaults.get('maxFiles'), 'Default files');
+        Assert.areEqual(20, defaults.get('maxFileMb'), 'Default MB per file');
+        Assert.areEqual(200, defaults.get('maxTotalMb'), 'Default total MB');
+        Assert.areEqual(20L * 1024 * 1024, defaultFileBytes, 'Default bytes per file');
+        Assert.areEqual(1, DocGenSignatureAttachments.maxFiles(), 'Setting applies');
+        Assert.areEqual(5L * 1024 * 1024, DocGenSignatureAttachments.maxBytesPerFile(), 'MB setting applies');
+        Assert.areEqual(200L * 1024 * 1024, DocGenSignatureAttachments.maxBytesTotal(), 'Out of range: default');
+        Assert.isTrue(tooMany.contains('at most 1 attached'), tooMany);
+    }
+
+    @IsTest
+    static void saveAttachmentLimits_validatesAndStores() {
+        Test.startTest();
+        DocGenSetupController.saveAttachmentLimits(10, 50, 150);
+        Map<String, Object> saved = DocGenSetupController.getSettingsFresh();
+        List<String> refusals = new List<String>();
+        for (
+            List<Integer> bad : new List<List<Integer>>{
+                new List<Integer>{ 0, 50, 150 },
+                new List<Integer>{ 10, 201, 150 },
+                new List<Integer>{ 51, 50, 150 },
+                new List<Integer>{ 30, 50, 20 }
+            }
+        ) {
+            try {
+                DocGenSetupController.saveAttachmentLimits(bad[0], bad[1], bad[2]);
+                refusals.add(null);
+            } catch (AuraHandledException e) {
+                refusals.add(e.getMessage());
+            }
+        }
+        DocGenSetupController.saveAttachmentLimits(null, null, null);
+        Map<String, Object> cleared = DocGenSetupController.getSettingsFresh();
+        Test.stopTest();
+
+        Assert.areEqual(10, saved.get('Signature_Attachment_Max_File_MB__c'), 'MB per file saved');
+        Assert.areEqual(50, saved.get('Signature_Attachment_Max_Files__c'), 'Files saved');
+        Assert.areEqual(150, saved.get('Signature_Attachment_Max_Total_MB__c'), 'Total saved');
+        Assert.isTrue(refusals[0].contains('from 1 to 50'), String.valueOf(refusals[0]));
+        Assert.isTrue(refusals[1].contains('from 1 to 200'), String.valueOf(refusals[1]));
+        Assert.isTrue(refusals[2].contains('from 1 to 50'), String.valueOf(refusals[2]));
+        Assert.isTrue(refusals[3].contains('at least the max size of one document'), String.valueOf(refusals[3]));
+        Assert.areEqual(20, cleared.get('Signature_Attachment_Max_File_MB__c'), 'Blank reports the default');
+        Assert.areEqual(100, cleared.get('Signature_Attachment_Max_Files__c'), 'Blank reports the default');
+        Assert.areEqual(200, cleared.get('Signature_Attachment_Max_Total_MB__c'), 'Blank reports the default');
     }
 }

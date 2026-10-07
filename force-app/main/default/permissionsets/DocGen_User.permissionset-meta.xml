@@ -1064,6 +1064,26 @@
         <field>DocGen_Signer_Attachment__c.Viewed_At__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Settings__c.Signature_Attachment_Max_File_MB__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Settings__c.Signature_Attachment_Max_Files__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Settings__c.Signature_Attachment_Max_Total_MB__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signer__c.Attachments_Reviewed_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Portwood User</label>
     <objectPermissions>

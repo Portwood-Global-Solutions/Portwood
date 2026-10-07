@@ -890,6 +890,12 @@ public without sharing class DocGenSignatureController {
         }
 
         res.attachmentCount = DocGenSignatureAttachments.attachmentCount(parentReq.Id);
+        // #412 — a request with attached documents always offers Decline: the signer approves
+        // or declines what they reviewed. Such requests can't be sent while Decline is hidden;
+        // this keeps the choice if an admin hides Decline after sending.
+        if (res.attachmentCount > 0) {
+            res.showDecline = true;
+        }
 
         return res;
     }
@@ -935,6 +941,17 @@ public without sharing class DocGenSignatureController {
     @RemoteAction
     public static Map<String, Object> markAttachmentViewed(String token, Integer index) {
         return DocGenSignatureAttachments.markViewed(token, index);
+    }
+
+    /**
+     * #412 — records the signer's confirmation that they reviewed the attached documents. The
+     * page calls this when the signer ticks the confirmation and submits; it is refused until
+     * every attached document has been opened, and approval is refused without it.
+     */
+    @AuraEnabled
+    @RemoteAction
+    public static Map<String, Object> confirmAttachmentsReviewed(String token) {
+        return DocGenSignatureAttachments.confirmReviewed(token);
     }
 
     private static SignatureInitResponse validateLegacyRequest(DocGen_Signature_Request__c req) {
@@ -2114,7 +2131,12 @@ public without sharing class DocGenSignatureController {
         Boolean templateHidesDecline =
             signer.Signature_Request__r.Template__r != null &&
             signer.Signature_Request__r.Template__r.Hide_Signer_Decline__c == true;
-        if (orgHidesDecline || templateHidesDecline) {
+        // #412 — except a request with attached documents, which always offers Decline (see
+        // validateToken).
+        if (
+            (orgHidesDecline || templateHidesDecline) &&
+            !DocGenSignatureAttachments.requestHasAttachments(signer.Signature_Request__c)
+        ) {
             result.put('success', false);
             result.put('message', 'Declining is not available for this document.');
             return result;
@@ -3061,8 +3083,9 @@ public without sharing class DocGenSignatureController {
             return result;
         }
 
-        // #412: approval requires the signer to have opened every attached document.
-        String attachmentError = DocGenSignatureAttachments.validateAllViewed(signer.Id, signer.Signature_Request__c);
+        // #412: approval requires the signer to have opened every attached document and
+        // confirmed they reviewed them.
+        String attachmentError = DocGenSignatureAttachments.approvalError(signer.Id, signer.Signature_Request__c);
         if (attachmentError != null) {
             result.message = attachmentError;
             return result;
@@ -3587,7 +3610,8 @@ public without sharing class DocGenSignatureController {
             'verifyUrl' => DocGenSignatureService.buildVerifyUrl(reqId),
             // #412 — the approval register: each attached document and who opened it when.
             // Only for a link that passes the attachment gate (PIN, expiry, open request).
-            'attachments' => DocGenSignatureAttachments.registerForToken(token)
+            'attachments' => DocGenSignatureAttachments.registerForToken(token),
+            'attachmentReviews' => DocGenSignatureAttachments.reviewConfirmationsForToken(token)
         };
     }
 }

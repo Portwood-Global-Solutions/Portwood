@@ -73,6 +73,10 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Readonly</behavior>
+                <field>Attachments_Reviewed_At__c</field>
+            </layoutItems>
+            <layoutItems>
+                <behavior>Readonly</behavior>
                 <field>PIN_Expires_At__c</field>
             </layoutItems>
             <layoutItems>

@@ -1277,6 +1277,13 @@
                                 electronically.
                             </label>
                         </div>
+                        <!-- #412 — final step only, on requests with attached documents. -->
+                        <div id="attachments-reviewed-row" class="consent-row" style="margin: 12px 0 0; display: none">
+                            <input id="attachments-reviewed-checkbox" type="checkbox" />
+                            <label id="attachments-reviewed-label" for="attachments-reviewed-checkbox">
+                                I confirm I have reviewed the attached documents.
+                            </label>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button id="modal-cancel" class="btn" type="button">Cancel</button>
@@ -3175,6 +3182,57 @@
                         return false;
                     }
 
+                    // #412 — the signer confirms they reviewed the attached documents, at the final
+                    // step. The server records it (refused until every document was opened) and
+                    // refuses approval without it; it records the confirmation, not that every page
+                    // was read.
+                    function hasAttachments() {
+                        return !!(attachments && attachments.length);
+                    }
+
+                    function showAttachmentsReviewed(show) {
+                        var row = document.getElementById('attachments-reviewed-row');
+                        row.style.display = show ? '' : 'none';
+                        document.getElementById('attachments-reviewed-checkbox').checked = false;
+                        if (show) {
+                            document.getElementById('attachments-reviewed-label').textContent =
+                                attachments.length === 1
+                                    ? 'I confirm I have reviewed the attached document.'
+                                    : 'I confirm I have reviewed the ' + attachments.length + ' attached documents.';
+                        }
+                    }
+
+                    function attachmentsReviewedOk() {
+                        return (
+                            document.getElementById('attachments-reviewed-row').style.display === 'none' ||
+                            document.getElementById('attachments-reviewed-checkbox').checked
+                        );
+                    }
+
+                    function confirmAttachmentsReviewed() {
+                        if (!hasAttachments()) return Promise.resolve(null);
+                        return new Promise(function (resolve, reject) {
+                            Visualforce.remoting.Manager.invokeAction(
+                                '{!$RemoteAction.DocGenSignatureController.confirmAttachmentsReviewed}',
+                                token,
+                                function (result, event) {
+                                    if (!event.status || !result || result.success === false) {
+                                        reject(
+                                            new Error(
+                                                (result && result.message) ||
+                                                    event.message ||
+                                                    'Your review confirmation could not be recorded. Please try again.'
+                                            )
+                                        );
+                                        return;
+                                    }
+                                    resolve(result);
+                                },
+                                { escape: false }
+                            );
+                        });
+                    }
+
                     // ===== GUIDED SIGN-SPOT OVERLAY =====
                     // Maps this signer's placements to located positions in the PDF and
                     // walks them field-to-field. Only a request with zero placement records
@@ -3813,6 +3871,43 @@
                             }
                             y -= 10;
                         }
+                        var reviews = cert.attachmentReviews || [];
+                        if (y - (64 + Math.max(1, reviews.length) * 12) < 60) newPage(true);
+                        y -= 4;
+                        page.drawText('Review confirmations', {
+                            x: CERT_LEFT,
+                            y: y,
+                            size: 11,
+                            font: helvBold
+                        });
+                        y -= 15;
+                        y = drawWrappedText(
+                            page,
+                            'Each signer below confirmed that they had reviewed the attached documents before ' +
+                                'signing. This records their confirmation; it does not show that every page was read.',
+                            { x: CERT_LEFT, y: y, size: 9, font: helv, color: gray, lineHeight: 12 }
+                        );
+                        y -= 4;
+                        if (!reviews.length) {
+                            page.drawText('(none recorded)', {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 8.5,
+                                font: helv,
+                                color: gray
+                            });
+                        }
+                        for (var k = 0; k < reviews.length; k++) {
+                            if (y < 72) newPage(true);
+                            y = drawWrappedText(page, winAnsi(reviews[k].name + ', ' + reviews[k].at), {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 8.5,
+                                font: helv,
+                                color: gray,
+                                lineHeight: 12
+                            });
+                        }
                     }
 
                     function addCertificatePage(doc, helv, helvBold, cert, meStamp) {
@@ -3999,7 +4094,8 @@
                                 return '';
                             }
                         })();
-                        return getCertificateData()
+                        return confirmAttachmentsReviewed()
+                            .then(getCertificateData)
                             .then(function (cert) {
                                 // #412 — never finish an attachment request without its register:
                                 // a missing or short register would leave an approval that doesn't
@@ -4010,7 +4106,9 @@
                                     expected &&
                                     (!cert ||
                                         (cert.othersAllSigned &&
-                                            (!cert.attachments || cert.attachments.length !== expected)))
+                                            (!cert.attachments ||
+                                                cert.attachments.length !== expected ||
+                                                !cert.attachmentReviews)))
                                 ) {
                                     throw new Error(
                                         'The attached-documents register could not be loaded. Please try again.'
@@ -4499,6 +4597,7 @@
 
                         // Per-spot capture: no consent here (collected once at final submit).
                         consentRow.style.display = 'none';
+                        showAttachmentsReviewed(false);
                         // Form fields are collected once at final submit, not per-spot.
                         hideFormFields();
                         showModalMsg('', 'info');
@@ -4568,10 +4667,14 @@
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
                             (total > 0
                                 ? "You've completed all " + total + ' field' + (total > 1 ? 's' : '') + '. '
-                                : '') + 'Confirm your consent to finalize.';
+                                : '') +
+                            (hasAttachments()
+                                ? 'Confirm your review and consent to finalize.'
+                                : 'Confirm your consent to finalize.');
                         document.getElementById('modal-typed-name').parentNode.style.display = 'none';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').checked = false;
+                        showAttachmentsReviewed(hasAttachments());
                         var finalBtn = document.getElementById('btn-sign-submit');
                         finalBtn.className = 'btn btn-brand';
                         finalBtn.textContent = 'Finish & Submit';
@@ -4797,6 +4900,7 @@
                         document.getElementById('modal-draw-group').style.display = 'none';
                         document.getElementById('modal-typed-name').parentNode.style.display = 'none';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = 'none';
+                        showAttachmentsReviewed(false);
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Your Information';
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
                             'Complete these fields, then sign to finish.';
@@ -4840,6 +4944,9 @@
                             syncSignatureInputState();
                             updateSignSubmitState();
                         });
+                        document
+                            .getElementById('attachments-reviewed-checkbox')
+                            .addEventListener('change', updateSignSubmitState);
                         // Native date inputs (DatePick) fire 'change' on selection, not always 'input'.
                         document.getElementById('modal-typed-name').addEventListener('change', function () {
                             signatureInputSource = this.value.trim() ? 'typed' : null;
@@ -4867,6 +4974,7 @@
                         document.getElementById('modal-draw-group').style.display = isTypeOnly() ? 'none' : '';
                         document.getElementById('modal-typed-name').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = 'none';
+                        showAttachmentsReviewed(false);
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Sign Document';
                         document.querySelector('#sign-modal .modal-subtitle').textContent = isTypeOnly()
                             ? 'Type your full name to sign this document.'
@@ -4926,8 +5034,9 @@
                         } else if (modalMode === 'final') {
                             // Guided final step: every field was already signed individually, so
                             // only the consent affirmation is required (the name comes from the
-                            // signer record — we don't re-ask for it).
-                            btn.disabled = !consentVal;
+                            // signer record — we don't re-ask for it). #412: plus the review
+                            // confirmation when the request has attached documents.
+                            btn.disabled = !consentVal || !attachmentsReviewedOk();
                         } else {
                             // 'pdf' legacy flow has separate signature-entry and consent steps.
                             var signatureReady = !!(nameVal || DrawPad.hasInk());
@@ -5135,7 +5244,7 @@
                     // Guided: all spots done — capture consent + finalize the signature.
                     function handleFinalSubmit() {
                         var consentGiven = document.getElementById('modal-consent-checkbox').checked;
-                        if (!consentGiven) return;
+                        if (!consentGiven || !attachmentsReviewedOk()) return;
                         // Name is no longer re-typed here (#183) — use the name already on the
                         // signer record (what pre-filled each field). Fall back to the input only
                         // if, somehow, the record has no name.
