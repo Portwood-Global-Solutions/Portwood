@@ -10880,10 +10880,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += '</head><body>';
         if (String.isNotBlank(header) && !headerHasCounters) {
-            html += '<div class="docgen-running-header">' + clampRunningImages(header) + '</div>';
+            html += '<div class="docgen-running-header">' + clampRunningImages(wrapNonLatinGlyphs(header)) + '</div>';
         }
         if (String.isNotBlank(footer) && !footerHasCounters) {
-            html += '<div class="docgen-running-footer">' + clampRunningImages(footer) + '</div>';
+            html += '<div class="docgen-running-footer">' + clampRunningImages(wrapNonLatinGlyphs(footer)) + '</div>';
         }
         html += wrapNonLatinGlyphs(body == null ? '' : body);
         html += '</body></html>';
@@ -11166,6 +11166,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(s))
             return s;
         s = decodeHighCodepointEntities(s);
+        s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();
         Boolean needsWrap = false;
         for (Integer i = 0; i < len; i++) {
@@ -11209,7 +11210,19 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 i++;
                 continue;
             }
-            if (codepointNeedsUnicodeFont(cp)) {
+            if (codepointNeedsPdfGlyphImage(cp)) {
+                if (runStart >= 0) {
+                    out +=
+                        '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' +
+                        s.substring(runStart, i) +
+                        '</span>';
+                    runStart = -1;
+                }
+                out += pdfGlyphImageHtml(cp);
+            } else if (codepointNeedsUnicodeFont(cp)) {
+                if (runStart < 0)
+                    runStart = i;
+            } else if (nextCodepointIsCombiningMark(s, i, len)) {
                 if (runStart < 0)
                     runStart = i;
             } else {
@@ -11233,7 +11246,85 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return out;
     }
 
+    private static Boolean nextCodepointIsCombiningMark(String s, Integer i, Integer len) {
+        return i + 1 < len && codepointIsCombiningMark(s.charAt(i + 1));
+    }
+
+    private static Boolean codepointIsCombiningMark(Integer cp) {
+        return (cp >= 768 && cp <= 879) || (cp >= 6832 && cp <= 6911) || (cp >= 7616 && cp <= 7679);
+    }
+
+    private static String normalizeLatinCombiningMarks(String s) {
+        if (String.isBlank(s)) {
+            return s;
+        }
+        String commaBelow = String.fromCharArray(new List<Integer>{ 806 });
+        return s.replace('S' + commaBelow, String.fromCharArray(new List<Integer>{ 536 }))
+            .replace('s' + commaBelow, String.fromCharArray(new List<Integer>{ 537 }));
+    }
+
+    private static Boolean codepointNeedsPdfGlyphImage(Integer cp) {
+        return cp ==
+            8377 || // ₹ Indian rupee
+            cp == 8381 || // ₽ Russian ruble
+            cp == 8378 || // ₺ Turkish lira
+            cp == 8369 || // ₱ Philippine peso
+            cp == 8372 || // ₴ Ukrainian hryvnia
+            cp == 8383 || // ₿ Bitcoin
+            cp == 8382 || // ₾ Georgian lari
+            cp == 1423 || // ֏ Armenian dram
+            cp == 8380 || // ₼ Azerbaijani manat
+            cp == 536 || // Ș Latin capital S with comma below
+            cp == 8376; // ₸ Kazakhstani tenge
+    }
+
+    private static String pdfGlyphImageHtml(Integer cp) {
+        String hex = pdfGlyphResourceSuffix(cp);
+        String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
+        return '<img src="/resource/DocGenPdfGlyphs/u' +
+            hex +
+            '.png" alt="' +
+            ch +
+            '" style="height:0.95em;width:auto;vertical-align:-0.12em;display:inline-block;"/>';
+    }
+
+    private static String pdfGlyphResourceSuffix(Integer cp) {
+        if (cp == 8377)
+            return '20b9';
+        if (cp == 8381)
+            return '20bd';
+        if (cp == 8378)
+            return '20ba';
+        if (cp == 8369)
+            return '20b1';
+        if (cp == 8372)
+            return '20b4';
+        if (cp == 8383)
+            return '20bf';
+        if (cp == 8382)
+            return '20be';
+        if (cp == 1423)
+            return '058f';
+        if (cp == 8380)
+            return '20bc';
+        if (cp == 536)
+            return '0218';
+        return '20b8';
+    }
+
     private static Boolean codepointNeedsUnicodeFont(Integer cp) {
+        if (
+            cp == 269 ||
+            cp == 321 ||
+            cp == 322 ||
+            cp == 346 ||
+            cp == 347 ||
+            cp == 350 ||
+            cp == 351 ||
+            cp == 536 ||
+            cp == 537
+        )
+            return true; // Selected Latin Extended letters blank in the PDF base fonts
         if (cp <= 591)
             return false; // Latin-1 + Latin Extended-A/B
         if (cp == 8211 || cp == 8212)
@@ -11262,6 +11353,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (highCodepointEntityMap != null)
             return highCodepointEntityMap;
         highCodepointEntityMap = new Map<String, Integer>{
+            'Sacute' => 346,
+            'sacute' => 347,
+            'Scedil' => 350,
+            'scedil' => 351,
+            'Scomma' => 536,
+            'scomma' => 537,
             'alpha' => 945,
             'beta' => 946,
             'gamma' => 947,
@@ -11388,7 +11485,47 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 s = s.replace(token, String.fromCharArray(new List<Integer>{ entityMap.get(name) }));
             }
         }
+        Matcher numeric = Pattern.compile('&#(x[0-9a-fA-F]+|[0-9]+);').matcher(s);
+        String out = '';
+        Integer last = 0;
+        while (numeric.find()) {
+            Integer cp = parseHtmlEntityCodepoint(numeric.group(1));
+            if (cp != null && codepointNeedsUnicodeFont(cp)) {
+                out += s.substring(last, numeric.start()) + String.fromCharArray(new List<Integer>{ cp });
+                last = numeric.end();
+            }
+        }
+        if (last > 0) {
+            s = out + s.substring(last);
+        }
         return s;
+    }
+
+    private static Integer parseHtmlEntityCodepoint(String raw) {
+        if (String.isBlank(raw)) {
+            return null;
+        }
+        Boolean hex = raw.startsWithIgnoreCase('x');
+        String digits = hex ? raw.substring(1) : raw;
+        if (String.isBlank(digits)) {
+            return null;
+        }
+        Integer value = 0;
+        for (Integer i = 0; i < digits.length(); i++) {
+            Integer c = digits.charAt(i);
+            Integer n;
+            if (c >= 48 && c <= 57) {
+                n = c - 48;
+            } else if (hex && c >= 65 && c <= 70) {
+                n = c - 55;
+            } else if (hex && c >= 97 && c <= 102) {
+                n = c - 87;
+            } else {
+                return null;
+            }
+            value = value * (hex ? 16 : 10) + n;
+        }
+        return value;
     }
 
     private static Boolean hasPageCounterTokens(String html) {

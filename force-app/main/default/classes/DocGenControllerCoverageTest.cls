@@ -391,6 +391,41 @@ private class DocGenControllerCoverageTest {
     }
 
     @IsTest
+    static void wrapNonLatinGlyphsCoversExtendedCurrencyGlyphs() {
+        String decomposedSComma = 'S' + String.fromCharArray(new List<Integer>{ 806 });
+        String input =
+            '<p>Á É Í Ó Ú Ł Ś Ş Ș ' +
+            decomposedSComma +
+            ' &Scomma; &Scedil; &scedil; &Sacute; ₹ ₽ ₺ ₱ ₴ ₿ ₾ ֏ ₼ ₸ ł ś ş ș č &#8377; &#x0141;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(input);
+        System.assert(wrapped.contains('Arial Unicode MS'), 'Missing PDF glyphs should get the Unicode font span');
+        System.assert(wrapped.contains('Ł'), 'Literal L-stroke should survive the wrapping pass');
+        System.assert(wrapped.contains('Ś'), 'S-acute should survive the wrapping pass');
+        System.assert(wrapped.contains('Ș'), 'S-comma should survive the wrapping pass');
+        System.assert(!wrapped.contains(decomposedSComma), 'Decomposed S-comma should normalize before PDF rendering');
+        System.assert(wrapped.contains('Ș'), 'Decomposed S-comma should normalize to precomposed S-comma');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            'Precomposed S-comma should use PDF glyph image fallback'
+        );
+        System.assert(wrapped.contains('Ş'), 'S-cedilla entity should decode before wrapping');
+        System.assert(!wrapped.contains('&Scedil;'), 'S-cedilla entity should not remain escaped');
+        System.assert(wrapped.contains('₹'), 'Numeric rupee entity should decode before wrapping');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u20b9.png'),
+            'Rupee should use PDF glyph image fallback'
+        );
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u20bf.png'),
+            'Bitcoin should use PDF glyph image fallback'
+        );
+        System.assert(
+            !wrapped.contains('&#8377;'),
+            'High numeric entities should become literal glyphs inside the span'
+        );
+    }
+
+    @IsTest
     static void getDocGenTemplatesForRecordReturnsList() {
         Account acct = new Account(Name = 'GetForRec ' + Datetime.now().getTime());
         insert acct;
