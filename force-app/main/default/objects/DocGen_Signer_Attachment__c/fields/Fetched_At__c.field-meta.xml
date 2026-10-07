@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Fetched_At__c</fullName>
+    <description
+    >When the attachment's bytes were first delivered to this signer's signing link. Viewed At can only be recorded after this.</description>
+    <externalId>false</externalId>
+    <label>Fetched At</label>
+    <required>false</required>
+    <type>DateTime</type>
+</CustomField>

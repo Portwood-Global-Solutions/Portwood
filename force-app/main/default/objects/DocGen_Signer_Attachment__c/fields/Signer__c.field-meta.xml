@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signer__c</fullName>
+    <externalId>false</externalId>
+    <label>Signer</label>
+    <referenceTo>DocGen_Signer__c</referenceTo>
+    <relationshipLabel>Signer Attachments</relationshipLabel>
+    <relationshipName>Signer_Attachments</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

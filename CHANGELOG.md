@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Attach existing PDFs from the record to a signature request: drawing approval (#412).**
+  A guided signature request can now carry PDFs that already sit on the related record (an
+  issued drawing set, a specification), shown to signers alongside the template instead of
+  being merged into it. The template is the approval form; each attachment is its own
+  document on the signing page.
+    - **Opt-in per template.** A new **Attached Documents** setting on the template:
+      _Off_ (default), _Optional_ or _Required_. Existing templates and senders see no change
+      until a template opts in. The rule is enforced for every entry point: Off refuses
+      attachments, Required refuses a send without any, and a Required template can't go in a
+      packet. Edited in Command Hub → My Templates, and carried by template export/import.
+    - **Send.** For a template that opts in, the Signature Sender lists the record's PDFs
+      with Select all and a Before/After position. The preview lists the ticked files in signing
+      order and opens them in Salesforce's file viewer. Flow gets the same through two new optional
+      inputs on **Portwood: Create Signature Request**: **Attached Documents** (file Ids) and
+      **Attached Documents Position**. Each file is pinned to its version at send. PDFs on the
+      related record only, refused for `{#Signatures}` loop-only templates. A bad selection is
+      reported, never half-sent. The Sender calls a new options-object method,
+      `createGuidedPdfSignatureRequestV2(GuidedPdfSendOptions)`, which the Flow action shares, so
+      future send options don't need another overload.
+    - **Limits, set per org.** A new **Attached Documents** section in Signature Settings: max
+      size of one document (default 20 MB, up to 50), max documents per request (default 100,
+      up to 200) and max total size (default 200 MB). Checked at send.
+    - **Decline stays available.** A send with attached documents is refused while Decline is
+      hidden on the template or org-wide, and the template editor warns about it. If Decline is
+      hidden after sending, these requests still offer it.
+    - **Sign.** A document switcher with per-document ticks. Attachments show one at a time
+      in PDF.js's own viewer component (added to the `pdfjs4` static resource at the same
+      4.7.76 build). It draws only the pages in view, so a 14-page A1 set opens at the page
+      you jump to. Drag to pan; Ctrl+scroll, trackpad pinch or two-finger pinch zooms the
+      drawing around the pointer, not the page; + / − / Fit buttons too. Attachments stream as raw bytes from a new token-keyed guest Apex REST
+      endpoint (`signature-attachment`), because drawings run past what Visualforce
+      remoting can carry. 16.6 MB sheets load in seconds. The browser checks each download
+      against the server's SHA-256.
+    - **Approve gate.** Every attachment must be opened, and the signer must then tick
+      "I confirm I have reviewed the attached documents" (`DocGen_Signer__c.Attachments_Reviewed_At__c`,
+      recorded only once every document was opened), before they can finish. This is enforced
+      in the page and in `saveCompositedSignedPdf`; the server re-render fallbacks are refused for
+      requests with attachments. Decline is unaffected.
+    - **Approval register.** The signed PDF gains an **Attached Documents** page before the
+      Certificate of Completion, listing each attachment's version, size, SHA-256 and who
+      opened it when, then each signer's review confirmation. The register says the confirmation
+      records what the signer confirmed, not that every page was read. The attachments
+      themselves stay unchanged on the record.
+    - New objects: `DocGen_Signature_Attachment__c` (the pinned file per request) and
+      `DocGen_Signer_Attachment__c` (each signer's review of each file: opened now, markup
+      later). They appear as related lists on the signature request and signer layouts.
+      Permission sets are updated; the guest set gets no access to the new objects, only
+      class access to the REST endpoint. Orgs on their own permission sets see no change
+      until they use the feature: the Sender reads the new template field through the
+      advisory FLS guard (like `Brand__c`), so its template list never fails on upgrade.
+
+### Fixed
+
+- **The signing page is sharp on phones and HiDPI screens, and stays sharp when you
+  zoom (#413).** The guided signing viewer drew each PDF page onto a canvas sized in CSS
+  pixels and ignored `devicePixelRatio`, so on any high-density screen — every modern
+  phone, most laptops — the document was rasterised at a half to a third of the screen's
+  resolution and upscaled: soft text, and pinch-zoom only magnified the blur. Two
+  changes:
+    - **Device resolution.** Page canvases are backed at the device's pixel ratio (up to
+      3×) while displaying at the same size, bounded by a per-canvas cap (iOS Safari
+      refuses a canvas over 16.7 MP) and a whole-document pixel budget so a long document
+      can't exhaust a phone's canvas memory. A page that hits a cap renders no worse than
+      before.
+    - **Zoom re-renders.** Once a pinch-zoom (or a desktop browser-zoom change) settles,
+      the pages in view are re-rendered at the zoomed resolution — the current render
+      stays on screen until the sharp one is ready — within a shared zoom pixel budget.
+      Pages that scroll out of view drop back to their base render, so memory stays
+      bounded; a quick pinch in and out re-renders nothing. While zoomed, the viewer also
+      watches the view position directly, so scrolling or flinging to another page
+      sharpens it once the view settles — a zoomed pan on a phone doesn't reliably fire
+      scroll events, and without this the next page stayed soft until the signer
+      re-zoomed. On an A3 drawing pinched to 5× on a phone that is ~5× the detail it had
+      before.
+
+    Sign-spot placement and the composited stamps are unchanged — anchors and stamping read
+    the CSS-pixel viewport, never the canvas — verified by signing the same template before
+    the change, after it, and after a zoom cycle: every placement operator in the signed PDF
+    was identical. Covered by `scripts/qa/signing-page-dpr-check.mjs`, which lifts the
+    sizing and zoom logic straight out of the page.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,

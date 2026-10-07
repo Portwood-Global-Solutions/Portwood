@@ -3791,6 +3791,30 @@
                                                 class="slds-var-m-top_medium"
                                             ></lightning-input>
                                         </template>
+                                        <!-- #412 — existing record PDFs (e.g. drawings) attached to signature requests -->
+                                        <lightning-combobox
+                                            label="Attached Documents (e-sign)"
+                                            value={editTemplateAttachedDocuments}
+                                            options={attachedDocumentsOptions}
+                                            onchange={handleAttachedDocumentsChange}
+                                            field-level-help="Lets senders attach PDFs that are already on the record, e.g. drawings for the signer to approve. Signers must open each one and confirm they reviewed them before they can sign, and the signed copy lists them. Needs Decline available. Off by default. Required makes every send of this template include at least one."
+                                            class="slds-var-m-top_medium"
+                                        ></lightning-combobox>
+                                        <template if:true={attachedDocumentsDeclineWarning}>
+                                            <div
+                                                class="slds-box slds-box_x-small slds-theme_warning slds-var-m-top_x-small"
+                                                role="note"
+                                            >
+                                                <p class="slds-text-body_small">
+                                                    <lightning-icon
+                                                        icon-name="utility:warning"
+                                                        size="x-small"
+                                                        class="slds-var-m-right_x-small"
+                                                    ></lightning-icon>
+                                                    {attachedDocumentsDeclineWarning}
+                                                </p>
+                                            </div>
+                                        </template>
                                     </div>
                                     <div class="slds-col slds-size_1-of-2">
                                         <!-- #208 — per-template default email message -->

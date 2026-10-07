@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Attachment__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <externalId>false</externalId>
+    <label>Attachment</label>
+    <referenceTo>DocGen_Signature_Attachment__c</referenceTo>
+    <relationshipLabel>Signer Attachments</relationshipLabel>
+    <relationshipName>Signer_Attachments</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

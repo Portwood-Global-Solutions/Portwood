@@ -2,5 +2,5 @@
 <StaticResource xmlns="http://soap.sforce.com/2006/04/metadata">
     <cacheControl>Public</cacheControl>
     <contentType>application/zip</contentType>
-    <description>PDF.js 4.7.76 (legacy ESM build, .mjs renamed to .js for JS MIME). Fixes CVE-2024-4367. Replaces the pdfjs (2.x) resource for the guided signing viewer. Build-time asset, no callout. See THIRD-PARTY-NOTICES.md.</description>
+    <description>PDF.js 4.7.76 legacy ESM build (.mjs renamed .js): core + worker for the signing viewer, plus its viewer component for attached documents. Fixes CVE-2024-4367. No callout. See THIRD-PARTY-NOTICES.md.</description>
 </StaticResource>

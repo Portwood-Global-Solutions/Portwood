@@ -7,6 +7,7 @@ import validateSignatureSetup from '@salesforce/apex/DocGenSetupController.valid
 import saveReminderSettings from '@salesforce/apex/DocGenSetupController.saveReminderSettings';
 import saveVerificationSettings from '@salesforce/apex/DocGenSetupController.saveVerificationSettings';
 import saveDeclineSettings from '@salesforce/apex/DocGenSetupController.saveDeclineSettings';
+import saveAttachmentLimits from '@salesforce/apex/DocGenSetupController.saveAttachmentLimits';
 
 export default class DocGenSignatureSettings extends LightningElement {
     @track isLoaded = false;
@@ -37,6 +38,11 @@ export default class DocGenSignatureSettings extends LightningElement {
     // #367 — org-wide "Hide Decline Button" switch, unchecked by default (Decline shown).
     @track hideDecline = false;
 
+    // #412 — limits on the existing PDFs a signature request can attach.
+    @track attachmentMaxFileMb = 20;
+    @track attachmentMaxFiles = 100;
+    @track attachmentMaxTotalMb = 200;
+
     // Setup checks
     @track setupChecks = [];
     @track setupChecksLoaded = false;
@@ -65,6 +71,9 @@ export default class DocGenSignatureSettings extends LightningElement {
             this.requireVerification = data.Signature_Require_Email_Verification__c !== false;
             this.prefillEmail = data.Signature_Prefill_Signer_Email__c === true;
             this.hideDecline = data.Signature_Hide_Decline__c === true;
+            this.attachmentMaxFileMb = data.Signature_Attachment_Max_File_MB__c || 20;
+            this.attachmentMaxFiles = data.Signature_Attachment_Max_Files__c || 100;
+            this.attachmentMaxTotalMb = data.Signature_Attachment_Max_Total_MB__c || 200;
         } catch (_err) {
             // Settings not yet created — use defaults
         }
@@ -114,6 +123,15 @@ export default class DocGenSignatureSettings extends LightningElement {
     }
     handleHideDeclineChange(e) {
         this.hideDecline = e.target.checked;
+    }
+    handleAttachmentMaxFileMbChange(e) {
+        this.attachmentMaxFileMb = e.target.value;
+    }
+    handleAttachmentMaxFilesChange(e) {
+        this.attachmentMaxFiles = e.target.value;
+    }
+    handleAttachmentMaxTotalMbChange(e) {
+        this.attachmentMaxTotalMb = e.target.value;
     }
 
     handleRefreshChecks() {
@@ -177,6 +195,12 @@ export default class DocGenSignatureSettings extends LightningElement {
             });
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveDeclineSettings({ hideDecline: this.hideDecline });
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
+            await saveAttachmentLimits({
+                maxFileMb: parseInt(this.attachmentMaxFileMb, 10) || null,
+                maxFiles: parseInt(this.attachmentMaxFiles, 10) || null,
+                maxTotalMb: parseInt(this.attachmentMaxTotalMb, 10) || null
+            });
             this.saveSuccess = true;
             this.saveMessage =
                 'Settings saved successfully.' + (this.reminderEnabled ? ' Reminders scheduled hourly.' : '');
