@@ -1573,7 +1573,8 @@ public with sharing class DocGenSignatureSenderController {
                     'versionNumber' => link.ContentDocument.LatestPublishedVersion?.VersionNumber,
                     'size' => size,
                     'modifiedDate' => link.ContentDocument.ContentModifiedDate,
-                    'tooLarge' => size > maxBytes
+                    'tooLarge' => size > maxBytes,
+                    'maxBytes' => maxBytes // the org's per-file limit, for the picker's note
                 }
             );
         }

@@ -288,6 +288,7 @@ private class DocGenSignatureAttachmentsTest {
         Assert.areEqual('GA-001 General Arrangement', files[0].get('title'), 'Sorted by title');
         Assert.isNotNull(files[0].get('contentVersionId'), 'Latest version reported');
         Assert.areEqual(true, files[0].get('tooLarge'), 'Over the cap is flagged, not hidden');
+        Assert.areEqual(10L, files[0].get('maxBytes'), 'The limit is reported for the note');
         Assert.areEqual(0, DocGenSignatureSenderController.getAttachableRecordPdfs(null).size(), 'Null record');
     }
 
