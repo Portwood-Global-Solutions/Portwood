@@ -453,6 +453,57 @@ private class DocGenPageSetupTest {
     }
 
     @IsTest
+    static void longHyperlinkTextGetsPdfBreaksWithoutChangingHref() {
+        String url =
+            'https://www.example.com/portwood/document-generation/salesforce/testing/long-url-overflow/' +
+            'page-boundary-validation/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        String wrapped = DocGenService.wrapHtmlForPdf(
+            '<p><a href="' + url + '">' + url + '</a></p>',
+            '',
+            null,
+            null
+        );
+
+        System.assert(wrapped.contains('href="' + url + '"'), 'Link destination must remain exact: ' + wrapped);
+        System.assert(wrapped.contains('<wbr/>'), 'Long visible URL text should receive PDF break points: ' + wrapped);
+        System.assert(
+            !wrapped.contains('href="' + url.substring(0, 24) + '<wbr/>'),
+            'Break points must not be inserted into href attributes: ' + wrapped
+        );
+    }
+
+    @IsTest
+    static void shortHyperlinkTextIsLeftAlone() {
+        String wrapped = DocGenService.wrapHtmlForPdf(
+            '<p><a href="https://example.com/support">Support</a></p>',
+            '',
+            null,
+            null
+        );
+
+        System.assert(!wrapped.contains('<wbr/>'), 'Short link labels should not be modified: ' + wrapped);
+        System.assert(wrapped.contains('>Support</a>'), 'Short link text should remain unchanged: ' + wrapped);
+    }
+
+    @IsTest
+    static void longStyledHyperlinkTextGetsPdfBreaks() {
+        String url =
+            'https://www.example.com/portwood/document-generation/salesforce/testing/long-url-overflow/' +
+            'page-boundary-validation/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        String label =
+            '<span style="font-weight:bold">' +
+            url.substring(0, 65) +
+            '</span><span>' +
+            url.substring(65) +
+            '</span>';
+        String wrapped = DocGenService.wrapHtmlForPdf('<p><a href="' + url + '">' + label + '</a></p>', '', null, null);
+
+        System.assert(wrapped.contains('href="' + url + '"'), 'Styled link destination must remain exact: ' + wrapped);
+        System.assert(wrapped.contains('<wbr/>'), 'Styled long visible URL text should receive break points: ' + wrapped);
+        System.assert(wrapped.contains('<span style="font-weight:bold">'), 'Existing inline styling must survive: ' + wrapped);
+    }
+
+    @IsTest
     static void wordVAlignCenterBecomesCssMiddle() {
         // Word says center; CSS table cells only accept top | middle | bottom.
         // Emitting "center" verbatim produced an INVALID declaration that Flying

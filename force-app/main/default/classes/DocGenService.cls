@@ -10880,14 +10880,138 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += '</head><body>';
         if (String.isNotBlank(header) && !headerHasCounters) {
-            html += '<div class="docgen-running-header">' + clampRunningImages(header) + '</div>';
+            html +=
+                '<div class="docgen-running-header">' +
+                clampRunningImages(wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(header))) +
+                '</div>';
         }
         if (String.isNotBlank(footer) && !footerHasCounters) {
-            html += '<div class="docgen-running-footer">' + clampRunningImages(footer) + '</div>';
+            html +=
+                '<div class="docgen-running-footer">' +
+                clampRunningImages(wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(footer))) +
+                '</div>';
         }
-        html += wrapNonLatinGlyphs(body == null ? '' : body);
+        html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
         return html;
+    }
+
+    private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
+    private static final Integer LONG_HYPERLINK_TEXT_CHUNK = 24;
+
+    @TestVisible
+    private static String addBreaksToLongHyperlinkText(String html) {
+        if (String.isBlank(html) || !html.toLowerCase().contains('<a')) {
+            return html;
+        }
+
+        Matcher m = Pattern.compile('(?is)<a\\b[^>]*>.*?</a>').matcher(html);
+        String out = '';
+        Integer last = 0;
+        while (m.find()) {
+            out += html.substring(last, m.start());
+            out += addBreaksToOneLongHyperlink(m.group(0));
+            last = m.end();
+        }
+        out += html.substring(last);
+        return out;
+    }
+
+    private static String addBreaksToOneLongHyperlink(String anchorHtml) {
+        Integer openEnd = anchorHtml.indexOf('>');
+        Integer closeStart = anchorHtml.toLowerCase().lastIndexOf('</a>');
+        if (openEnd < 0 || closeStart <= openEnd || anchorHtml.toLowerCase().contains('<wbr')) {
+            return anchorHtml;
+        }
+
+        String linkInnerHtml = anchorHtml.substring(openEnd + 1, closeStart);
+        String visible = stripTags(linkInnerHtml).replace('&nbsp;', ' ').trim();
+        String visibleLower = visible.toLowerCase();
+        if (
+            !(visibleLower.startsWith('http://') || visibleLower.startsWith('https://')) ||
+            !hasLongUnbrokenRun(visible, LONG_HYPERLINK_TEXT_THRESHOLD)
+        ) {
+            return anchorHtml;
+        }
+
+        return anchorHtml.substring(0, openEnd + 1) +
+            addWbrToLongTextNodes(linkInnerHtml) +
+            anchorHtml.substring(closeStart);
+    }
+
+    private static Boolean hasLongUnbrokenRun(String text, Integer threshold) {
+        Integer run = 0;
+        for (Integer i = 0; i < text.length(); i++) {
+            Integer cp = text.charAt(i);
+            if (cp <= 32 || cp == 160) {
+                run = 0;
+            } else {
+                run++;
+                if (run >= threshold) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String addWbrToLongTextNodes(String html) {
+        String out = '';
+        Integer run = 0;
+        Integer i = 0;
+        while (i < html.length()) {
+            Integer cp = html.charAt(i);
+            if (cp == 60) {
+                Integer endTag = html.indexOf('>', i);
+                if (endTag < 0) {
+                    out += html.substring(i);
+                    break;
+                }
+                out += html.substring(i, endTag + 1);
+                i = endTag + 1;
+                continue;
+            }
+
+            String token;
+            if (cp == 38) {
+                Integer endEntity = html.indexOf(';', i);
+                if (endEntity > i && endEntity - i <= 12) {
+                    token = html.substring(i, endEntity + 1);
+                    i = endEntity + 1;
+                } else {
+                    token = html.substring(i, i + 1);
+                    i++;
+                }
+            } else {
+                token = html.substring(i, i + 1);
+                i++;
+            }
+
+            if (cp <= 32 || cp == 160) {
+                run = 0;
+                out += token;
+                continue;
+            }
+
+            out += token;
+            run++;
+            if (shouldBreakAfterUrlToken(token) || Math.mod(run, LONG_HYPERLINK_TEXT_CHUNK) == 0) {
+                out += '<wbr/>';
+            }
+        }
+        return out;
+    }
+
+    private static Boolean shouldBreakAfterUrlToken(String token) {
+        return token == '/' ||
+            token == '.' ||
+            token == '?' ||
+            token == '&amp;' ||
+            token == '&' ||
+            token == '=' ||
+            token == '-' ||
+            token == '_' ||
+            token == '#';
     }
 
     /** Height the clamp gives an unsized running image, in inches. */
