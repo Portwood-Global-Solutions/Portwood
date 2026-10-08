@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased - DOCX header/footer PDF spacing
+
+### Fixed
+
+- **DOCX-to-PDF header/body spacing for compact table-based headers.** The PDF renderer now
+  measures DOCX headers using table-aware layout so cells in the same row are treated side by
+  side, not stacked vertically. This reduces excess blank space between compact headers and the
+  body while still reserving enough room for repeated headers on later pages.
+- **Repeated-page body overlap with DOCX headers.** Body content now starts after the measured
+  header bottom plus a small clearance, preventing multipage tables from collapsing into
+  repeated page headers.
+- **DOCX footer over-reservation.** Compact footers no longer inflate the bottom margin unless
+  the footer content itself needs more space.
+- **Header logo/table positioning.** Word vertical table merges (`w:vMerge`) are rendered as
+  HTML rowspans so logos and other merged header cells keep their intended position.
+
+### Improved
+
+- Header/footer height estimation now honors direct run font sizes from `<w:sz>` and
+  style-inherited font sizes from `stylesXml`, with 11pt used only as a fallback.
+- Empty header/footer paragraphs are trimmed from PDF chrome so they do not create visible blank
+  lines.
+- DOCX image height estimation continues to use `wp:extent` dimensions.
+- First-page headers and footers are measured separately from default headers and footers.
+
+### Tests
+
+- Added and updated `DocGenHtmlRendererTest` coverage for compact headers, multi-row table
+  headers, repeated-page clearance, first-page headers, compact footers, inherited font sizes,
+  and Word vertical table merges.
+- Verified focused Apex tests: `218/218` passing (`DocGenHtmlRendererTest`,
+  `DocGenHtmlTemplateTest`, `DocGenPageSetupTest`).
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,
