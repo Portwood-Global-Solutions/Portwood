@@ -3054,20 +3054,24 @@ public without sharing class DocGenSignatureController {
         DocGenFlsGuard.guestAssertCreateable(cv, new Set<String>{ 'Title', 'PathOnClient', 'VersionData' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         Database.insert(cv, AccessLevel.SYSTEM_MODE);
+        Id savedContentDocumentId = [
+            SELECT ContentDocumentId
+            FROM ContentVersion
+            WHERE Id = :cv.Id
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]
+        .ContentDocumentId;
 
         DocGen_Signature_Request__c parentReq = new DocGen_Signature_Request__c(Id = signer.Signature_Request__c);
         parentReq.Status__c = result.isComplete ? 'Signed' : 'In Progress';
         Set<String> reqUpd = new Set<String>{ 'Status__c' };
+        if (result.isComplete) {
+            parentReq.Protected_Signed_Content_Document_Id__c = String.valueOf(savedContentDocumentId);
+        }
         if (!result.isComplete) {
             // Point the next signer's viewer at the just-composited PDF.
-            ContentVersion nextCv = [
-                SELECT Id, ContentDocumentId
-                FROM ContentVersion
-                WHERE Id = :cv.Id
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            parentReq.Source_Document_Id__c = nextCv.Id;
+            parentReq.Source_Document_Id__c = cv.Id;
             reqUpd.add('Source_Document_Id__c');
             // Share this intermediate composited PDF with the next signer (often a
             // guest) so their viewer's getSourcePdfBase64 can read it. Without the
@@ -3079,7 +3083,7 @@ public without sharing class DocGenSignatureController {
             // Best-effort: never block signing on the share.
             try {
                 ContentDocumentLink nextCdl = new ContentDocumentLink();
-                nextCdl.ContentDocumentId = nextCv.ContentDocumentId;
+                nextCdl.ContentDocumentId = savedContentDocumentId;
                 nextCdl.LinkedEntityId = signer.Signature_Request__c;
                 nextCdl.ShareType = 'V';
                 nextCdl.Visibility = 'AllUsers';
