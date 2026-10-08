@@ -457,12 +457,7 @@ private class DocGenPageSetupTest {
         String url =
             'https://www.example.com/portwood/document-generation/salesforce/testing/long-url-overflow/' +
             'page-boundary-validation/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        String wrapped = DocGenService.wrapHtmlForPdf(
-            '<p><a href="' + url + '">' + url + '</a></p>',
-            '',
-            null,
-            null
-        );
+        String wrapped = DocGenService.wrapHtmlForPdf('<p><a href="' + url + '">' + url + '</a></p>', '', null, null);
 
         System.assert(wrapped.contains('href="' + url + '"'), 'Link destination must remain exact: ' + wrapped);
         System.assert(wrapped.contains('<wbr/>'), 'Long visible URL text should receive PDF break points: ' + wrapped);
@@ -499,8 +494,14 @@ private class DocGenPageSetupTest {
         String wrapped = DocGenService.wrapHtmlForPdf('<p><a href="' + url + '">' + label + '</a></p>', '', null, null);
 
         System.assert(wrapped.contains('href="' + url + '"'), 'Styled link destination must remain exact: ' + wrapped);
-        System.assert(wrapped.contains('<wbr/>'), 'Styled long visible URL text should receive break points: ' + wrapped);
-        System.assert(wrapped.contains('<span style="font-weight:bold">'), 'Existing inline styling must survive: ' + wrapped);
+        System.assert(
+            wrapped.contains('<wbr/>'),
+            'Styled long visible URL text should receive break points: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('<span style="font-weight:bold">'),
+            'Existing inline styling must survive: ' + wrapped
+        );
     }
 
     @IsTest
