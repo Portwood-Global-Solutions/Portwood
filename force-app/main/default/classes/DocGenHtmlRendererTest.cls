@@ -2872,7 +2872,7 @@ private class DocGenHtmlRendererTest {
         String html = DocGenHtmlRenderer.convertToHtml(docXml);
 
         System.assert(
-            html.contains('margin: 0.77'),
+            html.contains('margin: 0.9'),
             'The sample compact three-row header should place the body just after the header bottom: ' + html
         );
     }
@@ -2937,6 +2937,10 @@ private class DocGenHtmlRendererTest {
             'Empty header paragraphs around a table should not become visible blank lines in PDF chrome: ' + html
         );
         System.assert(
+            html.contains('<p style="font-size:8'),
+            'Header paragraphs should carry run font size so PDF line boxes match the measured header height: ' + html
+        );
+        System.assert(
             !html.contains('</table><p style="margin:0;">&nbsp;</p></div><div class="docgen-body-content">'),
             'A trailing empty header paragraph should not add blank space between the header table and body: ' + html
         );
@@ -2986,7 +2990,7 @@ private class DocGenHtmlRendererTest {
             'Normal pages should also use their default header bottom as the body start: ' + html
         );
         System.assert(
-            html.contains('@page :first { margin: 2.12in 1in 1in 1in;'),
+            html.contains('@page :first { margin: 2.25in 1in 1in 1in;'),
             'The first page should get a body start based on its tall first-page header bottom plus clearance: ' + html
         );
     }
@@ -3002,7 +3006,7 @@ private class DocGenHtmlRendererTest {
         String html = DocGenHtmlRenderer.convertToHtml(docXml);
 
         System.assert(
-            html.contains('margin: 2.12in 1in 1in 1in;'),
+            html.contains('margin: 2.25in 1in 1in 1in;'),
             'A DOCX default header should place the body just after the header bottom: ' + html
         );
     }

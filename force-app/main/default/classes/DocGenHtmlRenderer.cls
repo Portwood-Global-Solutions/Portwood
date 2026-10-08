@@ -1576,6 +1576,14 @@ public with sharing class DocGenHtmlRenderer {
             pageBreakBefore = true;
         }
 
+        if (!style.contains('font-size:') && headingLevel == 0 && isTitle == false && String.isNotBlank(content)) {
+            Integer paragraphHalfPoints = resolveParagraphFontHalfPoints(pXml);
+            if (paragraphHalfPoints != null) {
+                Decimal ptSize = paragraphHalfPoints * HALF_POINTS_TO_PT;
+                style += (String.isNotBlank(style) ? ';' : '') + 'font-size:' + ptSize + 'pt';
+            }
+        }
+
         // Empty paragraph with bottom border = horizontal rule
         if (String.isBlank(content) && String.isNotBlank(pPr) && pPr.contains('<w:pBdr')) {
             String bottomBdr = extractElement(pPr, 'w:bottom');
@@ -1627,6 +1635,31 @@ public with sharing class DocGenHtmlRenderer {
             '>' +
             content +
             '</p>';
+    }
+
+    private static Integer resolveParagraphFontHalfPoints(String pXml) {
+        Integer maxHalfPoints = null;
+        Integer cursor = 0;
+        while (cursor < pXml.length()) {
+            Integer szStart = pXml.indexOf('<w:sz', cursor);
+            if (szStart == -1) {
+                break;
+            }
+            Integer szEnd = pXml.indexOf('>', szStart);
+            if (szEnd == -1) {
+                break;
+            }
+            String val = extractAttrFromTag(pXml.substring(szStart, szEnd), 'w:val');
+            if (val != null && val.isNumeric()) {
+                Integer halfPoints = Integer.valueOf(val);
+                maxHalfPoints = maxHalfPoints == null ? halfPoints : Math.max(maxHalfPoints, halfPoints);
+            }
+            cursor = szEnd + 1;
+        }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = resolveReferencedStyleFontHalfPoints(pXml);
+        }
+        return maxHalfPoints;
     }
 
     /**
@@ -3278,7 +3311,7 @@ public with sharing class DocGenHtmlRenderer {
     }
 
     private static final Decimal CHROME_OVERLAP_TOLERANCE_IN = 0.08;
-    private static final Decimal HEADER_BODY_CLEARANCE_IN = 0.22;
+    private static final Decimal HEADER_BODY_CLEARANCE_IN = 0.35;
 
     private static FirstPageChromeReservation reserveSpaceForHeaderFooter(
         Map<String, Decimal> dims,
