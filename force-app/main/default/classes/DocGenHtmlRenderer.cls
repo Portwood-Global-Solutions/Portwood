@@ -1010,8 +1010,8 @@ public with sharing class DocGenHtmlRenderer {
 
         String out = '';
         Integer i = 0;
-        Boolean inTag = false;
         Integer runStart = -1;
+        List<PdfGlyphStyle> styleStack = new List<PdfGlyphStyle>{ new PdfGlyphStyle('11pt', false) };
         while (i < len) {
             Integer cp = s.charAt(i);
             if (cp == 60) {
@@ -1022,20 +1022,16 @@ public with sharing class DocGenHtmlRenderer {
                         '</span>';
                     runStart = -1;
                 }
-                inTag = true;
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (cp == 62) {
-                inTag = false;
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (inTag) {
-                out += s.substring(i, i + 1);
-                i++;
+                Integer tagEnd = s.indexOf('>', i);
+                if (tagEnd < 0) {
+                    out += s.substring(i, i + 1);
+                    i++;
+                    continue;
+                }
+                String tag = s.substring(i, tagEnd + 1);
+                updatePdfGlyphStyleStack(styleStack, tag);
+                out += tag;
+                i = tagEnd + 1;
                 continue;
             }
             if (codepointNeedsPdfGlyphImage(cp)) {
@@ -1046,7 +1042,7 @@ public with sharing class DocGenHtmlRenderer {
                         '</span>';
                     runStart = -1;
                 }
-                out += pdfGlyphImageHtml(cp);
+                out += pdfGlyphImageHtml(cp, styleStack[styleStack.size() - 1]);
             } else if (codepointNeedsUnicodeFont(cp)) {
                 if (runStart < 0)
                     runStart = i;
@@ -1106,14 +1102,148 @@ public with sharing class DocGenHtmlRenderer {
             cp == 8376; // ₸ Kazakhstani tenge
     }
 
-    private static String pdfGlyphImageHtml(Integer cp) {
+    private class PdfGlyphStyle {
+        String fontSize;
+        Boolean bold;
+
+        PdfGlyphStyle(String fontSize, Boolean bold) {
+            this.fontSize = String.isBlank(fontSize) ? '11pt' : fontSize;
+            this.bold = bold == true;
+        }
+    }
+
+    private static void updatePdfGlyphStyleStack(List<PdfGlyphStyle> styleStack, String tag) {
+        String tagName = pdfGlyphTagName(tag);
+        if (String.isBlank(tagName)) {
+            return;
+        }
+        String lower = tag.toLowerCase();
+        if (lower.startsWith('</')) {
+            if (styleStack.size() > 1) {
+                styleStack.remove(styleStack.size() - 1);
+            }
+            return;
+        }
+        if (pdfGlyphIsVoidTag(tagName, lower)) {
+            return;
+        }
+
+        PdfGlyphStyle parent = styleStack[styleStack.size() - 1];
+        String fontSize = parent.fontSize;
+        Boolean bold = parent.bold || tagName == 'b' || tagName == 'strong';
+        if (tagName == 'h1') {
+            fontSize = '20pt';
+            bold = true;
+        } else if (tagName == 'h2') {
+            fontSize = '16pt';
+            bold = true;
+        } else if (tagName == 'h3') {
+            fontSize = '14pt';
+            bold = true;
+        } else if (tagName == 'h4') {
+            fontSize = '12pt';
+            bold = true;
+        } else if (tagName == 'h5') {
+            fontSize = '11pt';
+            bold = true;
+        } else if (tagName == 'h6') {
+            fontSize = '10pt';
+            bold = true;
+        }
+
+        String style = pdfGlyphStyleAttr(tag);
+        String tagFontSize = normalizePdfGlyphFontSize(pdfGlyphCssValue(style, 'font-size'));
+        if (String.isNotBlank(tagFontSize)) {
+            fontSize = tagFontSize;
+        }
+        String weight = pdfGlyphCssValue(style, 'font-weight');
+        if (String.isNotBlank(weight)) {
+            bold = pdfGlyphFontWeightIsBold(weight);
+        }
+        styleStack.add(new PdfGlyphStyle(fontSize, bold));
+    }
+
+    private static String pdfGlyphTagName(String tag) {
+        Matcher m = Pattern.compile('(?i)^<\\s*/?\\s*([a-z0-9]+)').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(1).toLowerCase() : null;
+    }
+
+    private static Boolean pdfGlyphIsVoidTag(String tagName, String lowerTag) {
+        return lowerTag.endsWith('/>') ||
+            tagName == 'br' ||
+            tagName == 'hr' ||
+            tagName == 'img' ||
+            tagName == 'input' ||
+            tagName == 'meta' ||
+            tagName == 'link';
+    }
+
+    private static String pdfGlyphStyleAttr(String tag) {
+        Matcher m = Pattern.compile('(?is)\\sstyle\\s*=\\s*([\'"])(.*?)\\1').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(2) : '';
+    }
+
+    private static String pdfGlyphCssValue(String style, String property) {
+        if (String.isBlank(style)) {
+            return null;
+        }
+        Matcher m = Pattern.compile('(?i)(^|;)\\s*' + property + '\\s*:\\s*([^;]+)').matcher(style);
+        return m.find() ? m.group(2).trim() : null;
+    }
+
+    private static String normalizePdfGlyphFontSize(String fontSize) {
+        if (String.isBlank(fontSize)) {
+            return null;
+        }
+        String value = fontSize.trim().toLowerCase().replaceAll('\\s+', '');
+        return Pattern.matches('^[0-9]+(\\.[0-9]+)?(pt|px)$', value) ? value : null;
+    }
+
+    private static Boolean pdfGlyphFontWeightIsBold(String weight) {
+        String value = weight == null ? '' : weight.trim().toLowerCase();
+        if (value == 'bold' || value == 'bolder') {
+            return true;
+        }
+        if (value == 'normal' || value == 'lighter') {
+            return false;
+        }
+        try {
+            return Integer.valueOf(value) >= 600;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
         String hex = pdfGlyphResourceSuffix(cp);
         String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
-        return '<img src="/resource/DocGenPdfGlyphs/u' +
+        String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
+        String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
+        String img =
+            '<img src="/resource/DocGenPdfGlyphs/u' +
             hex +
             '.png" alt="' +
             ch +
-            '" style="height:0.95em;width:auto;vertical-align:-0.12em;display:inline-block;"/>';
+            '" style="' +
+            imgStyle +
+            '"/>';
+        if (glyphStyle == null || glyphStyle.bold != true) {
+            return img;
+        }
+        return '<span style="display:inline-block;vertical-align:-0.20em;width:' +
+            size +
+            ';height:' +
+            size +
+            ';white-space:nowrap;">' +
+            img +
+            '<img src="/resource/DocGenPdfGlyphs/u' +
+            hex +
+            '.png" alt="" style="' +
+            imgStyle +
+            'margin-left:-' +
+            size +
+            ';position:relative;left:0.03em;"/>' +
+            '</span>';
     }
 
     private static String pdfGlyphResourceSuffix(Integer cp) {

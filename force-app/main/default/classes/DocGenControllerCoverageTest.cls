@@ -416,12 +416,37 @@ private class DocGenControllerCoverageTest {
             'Rupee should use PDF glyph image fallback'
         );
         System.assert(
+            wrapped.contains('style="height:11pt;width:11pt;vertical-align:-0.20em;display:inline-block;"'),
+            'PDF glyph image fallback should use the default body font-size when no closer font-size exists'
+        );
+        System.assert(
             wrapped.contains('/resource/DocGenPdfGlyphs/u20bf.png'),
             'Bitcoin should use PDF glyph image fallback'
         );
         System.assert(
             !wrapped.contains('&#8377;'),
             'High numeric entities should become literal glyphs inside the span'
+        );
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsSizesPdfGlyphImagesFromContainingText() {
+        String html =
+            '<p style="font-size:18pt;font-weight:bold;">Total: &#8377;</p>' +
+            '<p style="font-size:10pt;">Crypto: &#8383;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        System.assert(
+            wrapped.contains('height:18pt;width:18pt'),
+            'Bold paragraph glyph image should use the paragraph font size'
+        );
+        System.assert(
+            wrapped.contains('vertical-align:-0.20em;width:18pt') &&
+            wrapped.contains('margin-left:-18pt;position:relative;left:0.03em;'),
+            'Bold paragraph glyph image should get the bold overlay treatment'
+        );
+        System.assert(
+            wrapped.contains('height:10pt;width:10pt'),
+            'Separated glyph image should use its own paragraph font size'
         );
     }
 
