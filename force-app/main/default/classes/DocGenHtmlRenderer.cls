@@ -476,22 +476,37 @@ public with sharing class DocGenHtmlRenderer {
             footerHtml = footerHtml.replace('<p>', '<p style="margin:0;">');
             headerFirstHtml = headerFirstHtml.replace('<p>', '<p style="margin:0;">');
             footerFirstHtml = footerFirstHtml.replace('<p>', '<p style="margin:0;">');
-        }
 
-        // Build dynamic page CSS from document dimensions + styles
-        // (wmPageDims was computed above for watermark sizing; reuse here)
-        Map<String, Decimal> pageDims = wmPageDims;
-        reserveSpaceForHeaderFooter(pageDims, documentXml, headerXml, footerXml, headerFirstXml, footerFirstXml);
-        String cellPadding = resolveDefaultCellPadding();
-        Boolean hasHeader = String.isNotBlank(headerHtml);
-        Boolean hasFooter = String.isNotBlank(footerHtml);
-        Boolean hasHeaderFirst = String.isNotBlank(headerFirstHtml);
-        Boolean hasFooterFirst = String.isNotBlank(footerFirstHtml);
+            headerHtml = trimEmptyChromeParagraphs(headerHtml);
+            footerHtml = trimEmptyChromeParagraphs(footerHtml);
+            headerFirstHtml = trimEmptyChromeParagraphs(headerFirstHtml);
+            footerFirstHtml = trimEmptyChromeParagraphs(footerFirstHtml);
+        }
 
         // Check if document has a title page (Different First Page in Word)
         // <w:titlePg/> in the final <w:sectPr> means page 1 gets a separate
         // header/footer pair (or none, if no first-typed reference exists).
         Boolean hasTitlePage = isOoxmlOnOffElementTrue(documentXml, 'w:titlePg');
+
+        // Build dynamic page CSS from document dimensions + styles
+        // (wmPageDims was computed above for watermark sizing; reuse here)
+        Map<String, Decimal> pageDims = wmPageDims;
+        FirstPageChromeReservation firstPageReservation = reserveSpaceForHeaderFooter(
+            pageDims,
+            documentXml,
+            headerXml,
+            footerXml,
+            headerFirstXml,
+            footerFirstXml,
+            hasTitlePage
+        );
+        String cellPadding = resolveDefaultCellPadding();
+        Boolean hasHeader = String.isNotBlank(headerHtml);
+        Boolean hasFooter = String.isNotBlank(footerHtml);
+        Boolean hasHeaderFirst = String.isNotBlank(headerFirstHtml);
+        Boolean hasFooterFirst = String.isNotBlank(footerFirstHtml);
+        Decimal headerDistance = readPageDistanceInches(documentXml, 'w:header', 0.5);
+        Decimal footerDistance = readPageDistanceInches(documentXml, 'w:footer', 0.5);
 
         // Build @page rule with running header/footer margin boxes (Flying Saucer)
         // CSS @page rule order: properties before nested margin boxes.
@@ -520,10 +535,16 @@ public with sharing class DocGenHtmlRenderer {
             dynamicPageCss += ' ' + watermarkPageBgCss;
         }
         if (hasHeader) {
-            dynamicPageCss += ' @top-center { content: element(docgen-running-header); }';
+            dynamicPageCss +=
+                ' @top-center { content: element(docgen-running-header); vertical-align: top; padding-top: ' +
+                headerDistance +
+                'in; }';
         }
         if (hasFooter) {
-            dynamicPageCss += ' @bottom-center { content: element(docgen-running-footer); }';
+            dynamicPageCss +=
+                ' @bottom-center { content: element(docgen-running-footer); vertical-align: bottom; padding-bottom: ' +
+                footerDistance +
+                'in; }';
         }
         dynamicPageCss += ' }';
 
@@ -534,13 +555,31 @@ public with sharing class DocGenHtmlRenderer {
         //   3. No headers/footers at all → no rule needed.
         if (hasTitlePage) {
             String firstPageCss = '';
+            if (firstPageReservation != null && firstPageReservation.hasOverrides == true) {
+                firstPageCss +=
+                    'margin: ' +
+                    firstPageReservation.marginTop +
+                    'in ' +
+                    pageDims.get('marginRight') +
+                    'in ' +
+                    firstPageReservation.marginBottom +
+                    'in ' +
+                    pageDims.get('marginLeft') +
+                    'in; ';
+            }
             if (hasHeaderFirst) {
-                firstPageCss += '@top-center { content: element(docgen-running-header-first); }';
+                firstPageCss +=
+                    '@top-center { content: element(docgen-running-header-first); vertical-align: top; padding-top: ' +
+                    headerDistance +
+                    'in; }';
             } else if (hasHeader) {
                 firstPageCss += '@top-center { content: normal; }';
             }
             if (hasFooterFirst) {
-                firstPageCss += '@bottom-center { content: element(docgen-running-footer-first); }';
+                firstPageCss +=
+                    '@bottom-center { content: element(docgen-running-footer-first); vertical-align: bottom; padding-bottom: ' +
+                    footerDistance +
+                    'in; }';
             } else if (hasFooter) {
                 firstPageCss += '@bottom-center { content: normal; }';
             }
@@ -2687,6 +2726,9 @@ public with sharing class DocGenHtmlRenderer {
         String headerRows = '';
         String bodyRows = '';
         Integer cursor = 0;
+        Integer rowIndex = 0;
+        Map<String, Integer> verticalMergeRowspans = calculateVerticalMergeRowspans(tblXml);
+        Set<String> verticalMergeContinuationCells = calculateVerticalMergeContinuationCells(tblXml);
         while (cursor < tblXml.length()) {
             Integer trStart = tblXml.indexOf('<w:tr', cursor);
             if (trStart == -1) {
@@ -2699,12 +2741,23 @@ public with sharing class DocGenHtmlRenderer {
             }
 
             String rowXml = tblXml.substring(trStart, trEnd);
-            String rowHtml = processTableRow(rowXml, images, tblPr, cellInsideH, cellInsideV, isBidiVisual);
+            String rowHtml = processTableRow(
+                rowXml,
+                images,
+                tblPr,
+                cellInsideH,
+                cellInsideV,
+                isBidiVisual,
+                verticalMergeRowspans,
+                verticalMergeContinuationCells,
+                rowIndex
+            );
             if (rowIsHeader(rowXml)) {
                 headerRows += rowHtml;
             } else {
                 bodyRows += rowHtml;
             }
+            rowIndex++;
             cursor = trEnd;
         }
         String rows = bodyRows;
@@ -2746,9 +2799,13 @@ public with sharing class DocGenHtmlRenderer {
         String tblPr,
         String cellInsideH,
         String cellInsideV,
-        Boolean isBidiVisual
+        Boolean isBidiVisual,
+        Map<String, Integer> verticalMergeRowspans,
+        Set<String> verticalMergeContinuationCells,
+        Integer rowIndex
     ) {
         Integer cursor = 0;
+        Integer cellIndex = 0;
 
         Boolean isHeader = rowIsHeader(trXml);
 
@@ -2764,9 +2821,22 @@ public with sharing class DocGenHtmlRenderer {
                 break;
             }
 
-            cellList.add(
-                processTableCell(trXml.substring(tcStart, tcEnd), images, tblPr, cellInsideH, cellInsideV, isHeader)
-            );
+            String cellKey = rowIndex + ':' + cellIndex;
+            if (!verticalMergeContinuationCells.contains(cellKey)) {
+                Integer rowspan = verticalMergeRowspans.containsKey(cellKey) ? verticalMergeRowspans.get(cellKey) : 0;
+                cellList.add(
+                    processTableCell(
+                        trXml.substring(tcStart, tcEnd),
+                        images,
+                        tblPr,
+                        cellInsideH,
+                        cellInsideV,
+                        isHeader,
+                        rowspan
+                    )
+                );
+            }
+            cellIndex++;
             cursor = tcEnd;
         }
 
@@ -2780,6 +2850,123 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         return '<tr>' + String.join(cellList, '') + '</tr>';
+    }
+
+    private static Map<String, Integer> calculateVerticalMergeRowspans(String tblXml) {
+        Map<String, Integer> rowspans = new Map<String, Integer>();
+        List<String> rows = extractDirectTableRows(tblXml);
+        for (Integer rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            List<String> cells = extractDirectTableCells(rows[rowIndex]);
+            for (Integer cellIndex = 0; cellIndex < cells.size(); cellIndex++) {
+                String tcPr = extractDirectTableCellProperties(cells[cellIndex]);
+                if (!isVerticalMergeRestart(tcPr)) {
+                    continue;
+                }
+                Integer span = 1;
+                for (Integer nextRowIndex = rowIndex + 1; nextRowIndex < rows.size(); nextRowIndex++) {
+                    List<String> nextCells = extractDirectTableCells(rows[nextRowIndex]);
+                    if (cellIndex >= nextCells.size()) {
+                        break;
+                    }
+                    String nextTcPr = extractDirectTableCellProperties(nextCells[cellIndex]);
+                    if (!isVerticalMergeContinuation(nextTcPr)) {
+                        break;
+                    }
+                    span++;
+                }
+                if (span > 1) {
+                    rowspans.put(rowIndex + ':' + cellIndex, span);
+                }
+            }
+        }
+        return rowspans;
+    }
+
+    private static Set<String> calculateVerticalMergeContinuationCells(String tblXml) {
+        Set<String> cellsToSkip = new Set<String>();
+        List<String> rows = extractDirectTableRows(tblXml);
+        for (Integer rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            List<String> cells = extractDirectTableCells(rows[rowIndex]);
+            for (Integer cellIndex = 0; cellIndex < cells.size(); cellIndex++) {
+                String tcPr = extractDirectTableCellProperties(cells[cellIndex]);
+                if (isVerticalMergeContinuation(tcPr)) {
+                    cellsToSkip.add(rowIndex + ':' + cellIndex);
+                }
+            }
+        }
+        return cellsToSkip;
+    }
+
+    private static List<String> extractDirectTableRows(String tblXml) {
+        List<String> rows = new List<String>();
+        Integer cursor = 0;
+        while (cursor < tblXml.length()) {
+            Integer trStart = tblXml.indexOf('<w:tr', cursor);
+            if (trStart == -1) {
+                break;
+            }
+            Integer trEnd = findClosingTag(tblXml, trStart, 'w:tr');
+            if (trEnd == -1) {
+                break;
+            }
+            rows.add(tblXml.substring(trStart, trEnd));
+            cursor = trEnd;
+        }
+        return rows;
+    }
+
+    private static List<String> extractDirectTableCells(String trXml) {
+        List<String> cells = new List<String>();
+        Integer cursor = 0;
+        while (cursor < trXml.length()) {
+            Integer tcStart = trXml.indexOf('<w:tc', cursor);
+            if (tcStart == -1) {
+                break;
+            }
+            Integer tcEnd = findClosingTag(trXml, tcStart, 'w:tc');
+            if (tcEnd == -1) {
+                break;
+            }
+            cells.add(trXml.substring(tcStart, tcEnd));
+            cursor = tcEnd;
+        }
+        return cells;
+    }
+
+    private static String extractDirectTableCellProperties(String tcXml) {
+        String tcPr = null;
+        Integer tcPrIdx = tcXml.indexOf('<w:tcPr');
+        if (tcPrIdx != -1) {
+            Integer firstChildIdx = -1;
+            Integer pIdx = tcXml.indexOf('<w:p');
+            Integer tblIdx = tcXml.indexOf('<w:tbl');
+            if (pIdx != -1) {
+                firstChildIdx = pIdx;
+            }
+            if (tblIdx != -1 && (firstChildIdx == -1 || tblIdx < firstChildIdx)) {
+                firstChildIdx = tblIdx;
+            }
+            if (firstChildIdx == -1 || tcPrIdx < firstChildIdx) {
+                tcPr = extractElement(tcXml, 'w:tcPr');
+            }
+        }
+        return tcPr;
+    }
+
+    private static Boolean isVerticalMergeRestart(String tcPr) {
+        if (String.isBlank(tcPr) || !tcPr.contains('<w:vMerge')) {
+            return false;
+        }
+        String val = extractAttr(tcPr, 'w:vMerge', 'w:val');
+        return val == 'restart';
+    }
+
+    private static Boolean isVerticalMergeContinuation(String tcPr) {
+        if (String.isBlank(tcPr) || !tcPr.contains('<w:vMerge')) {
+            return false;
+        }
+        String val = extractAttr(tcPr, 'w:vMerge', 'w:val');
+        return String.isBlank(val) || val == 'continue';
     }
 
     /**
@@ -2820,7 +3007,8 @@ public with sharing class DocGenHtmlRenderer {
         String tblPr,
         String cellInsideH,
         String cellInsideV,
-        Boolean isHeader
+        Boolean isHeader,
+        Integer rowspan
     ) {
         List<String> styles = new List<String>();
         Integer colspan = 0;
@@ -2918,6 +3106,9 @@ public with sharing class DocGenHtmlRenderer {
         }
         if (colspan > 1) {
             attrs += ' colspan="' + colspan + '"';
+        }
+        if (rowspan != null && rowspan > 1) {
+            attrs += ' rowspan="' + rowspan + '"';
         }
 
         return '<' + tag + attrs + '>' + content + '</' + tag + '>';
@@ -3080,44 +3271,77 @@ public with sharing class DocGenHtmlRenderer {
      * page margin boxes, so tall Word headers overlap body text unless we expand
      * the PDF margin box to fit the authored header/footer content.
      */
-    private static void reserveSpaceForHeaderFooter(
+    private class FirstPageChromeReservation {
+        Boolean hasOverrides = false;
+        Decimal marginTop;
+        Decimal marginBottom;
+    }
+
+    private static final Decimal CHROME_OVERLAP_TOLERANCE_IN = 0.08;
+    private static final Decimal HEADER_BODY_CLEARANCE_IN = 0.22;
+
+    private static FirstPageChromeReservation reserveSpaceForHeaderFooter(
         Map<String, Decimal> dims,
         String documentXml,
         String headerXml,
         String footerXml,
         String headerFirstXml,
-        String footerFirstXml
+        String footerFirstXml,
+        Boolean hasTitlePage
     ) {
+        FirstPageChromeReservation first = new FirstPageChromeReservation();
         if (dims == null || String.isBlank(documentXml)) {
-            return;
+            return first;
         }
+        Decimal baseTop = dims.containsKey('marginTop') ? dims.get('marginTop') : 1;
+        Decimal baseBottom = dims.containsKey('marginBottom') ? dims.get('marginBottom') : 1;
         Decimal headerDistance = readPageDistanceInches(documentXml, 'w:header', 0.5);
-        Decimal footerDistance = readPageDistanceInches(documentXml, 'w:footer', 0.5);
-        Decimal headerHeight = Math.max(
-            estimateDocxFragmentHeightInches(headerXml),
-            estimateDocxFragmentHeightInches(headerFirstXml)
-        );
-        Decimal footerHeight = Math.max(
-            estimateDocxFragmentHeightInches(footerXml),
-            estimateDocxFragmentHeightInches(footerFirstXml)
-        );
-        Decimal safetyGap = 0.08;
+        Decimal headerHeight = estimateDocxFragmentHeightInches(headerXml);
+        Decimal footerHeight = estimateDocxFragmentHeightInches(footerXml);
 
         if (headerHeight > 0 && dims.containsKey('marginTop')) {
-            Decimal neededTop = headerDistance + headerHeight + safetyGap;
-            if (neededTop > dims.get('marginTop')) {
-                dims.put('marginTop', neededTop);
-            }
+            dims.put('marginTop', headerDistance + headerHeight + HEADER_BODY_CLEARANCE_IN);
         }
         if (footerHeight > 0 && dims.containsKey('marginBottom')) {
-            Decimal neededBottom = footerDistance + footerHeight + safetyGap;
-            if (neededBottom > dims.get('marginBottom')) {
+            Decimal neededBottom = footerHeight;
+            if (neededBottom > baseBottom + CHROME_OVERLAP_TOLERANCE_IN) {
                 dims.put('marginBottom', neededBottom);
             }
+        }
+        first.marginTop = dims.containsKey('marginTop') ? dims.get('marginTop') : baseTop;
+        first.marginBottom = dims.containsKey('marginBottom') ? dims.get('marginBottom') : baseBottom;
+        if (hasTitlePage == true) {
+            Decimal firstTop = baseTop;
+            Decimal firstBottom = baseBottom;
+            Decimal firstHeaderHeight = estimateDocxFragmentHeightInches(headerFirstXml);
+            Decimal firstFooterHeight = estimateDocxFragmentHeightInches(footerFirstXml);
+            if (firstHeaderHeight > 0) {
+                firstTop = headerDistance + firstHeaderHeight + HEADER_BODY_CLEARANCE_IN;
+            }
+            if (firstFooterHeight > 0) {
+                Decimal neededFirstBottom = firstFooterHeight;
+                if (neededFirstBottom > baseBottom + CHROME_OVERLAP_TOLERANCE_IN) {
+                    firstBottom = neededFirstBottom;
+                }
+            }
+            first.marginTop = firstTop;
+            first.marginBottom = firstBottom;
+            first.hasOverrides = firstTop != dims.get('marginTop') || firstBottom != dims.get('marginBottom');
         }
         if (dims.containsKey('pageHeight') && dims.containsKey('marginTop') && dims.containsKey('marginBottom')) {
             dims.put('contentHeight', dims.get('pageHeight') - dims.get('marginTop') - dims.get('marginBottom') - 0.2);
         }
+        return first;
+    }
+
+    private static String trimEmptyChromeParagraphs(String html) {
+        if (String.isBlank(html)) {
+            return html;
+        }
+        String emptyParagraph = '<p[^>]*>\\s*(?:&nbsp;|&#160;|\\u00A0)?\\s*</p>';
+        html = html.replaceAll('(?is)^(?:\\s*' + emptyParagraph + '\\s*)+', '');
+        html = html.replaceAll('(?is)(?:\\s*' + emptyParagraph + '\\s*)+$', '');
+        return html;
     }
 
     private static Decimal readPageDistanceInches(String xml, String attrName, Decimal fallbackInches) {
@@ -3132,12 +3356,29 @@ public with sharing class DocGenHtmlRenderer {
         if (String.isBlank(xml)) {
             return 0;
         }
+        return estimateDocxBlockHeightInches(xml);
+    }
+
+    private static Decimal estimateDocxBlockHeightInches(String xml) {
+        if (String.isBlank(xml)) {
+            return 0;
+        }
         Decimal height = 0;
         Integer cursor = 0;
         while (cursor < xml.length()) {
             Integer pStart = xml.indexOf('<w:p', cursor);
-            if (pStart == -1) {
+            Integer tblStart = xml.indexOf('<w:tbl', cursor);
+            if (pStart == -1 && tblStart == -1) {
                 break;
+            }
+            if (tblStart != -1 && (pStart == -1 || tblStart < pStart)) {
+                Integer tblEnd = findClosingTag(xml, tblStart, 'w:tbl');
+                if (tblEnd == -1) {
+                    break;
+                }
+                height += estimateDocxTableHeightInches(xml.substring(tblStart, tblEnd));
+                cursor = tblEnd;
+                continue;
             }
             Integer pOpenEnd = xml.indexOf('>', pStart);
             Integer pEnd = xml.indexOf('</w:p>', pStart);
@@ -3165,8 +3406,51 @@ public with sharing class DocGenHtmlRenderer {
         return height;
     }
 
+    private static Decimal estimateDocxTableHeightInches(String tblXml) {
+        Decimal height = 0;
+        Integer cursor = 0;
+        while (cursor < tblXml.length()) {
+            Integer trStart = tblXml.indexOf('<w:tr', cursor);
+            if (trStart == -1) {
+                break;
+            }
+            Integer trEnd = findClosingTag(tblXml, trStart, 'w:tr');
+            if (trEnd == -1) {
+                break;
+            }
+            height += estimateDocxTableRowHeightInches(tblXml.substring(trStart, trEnd));
+            cursor = trEnd;
+        }
+        return height;
+    }
+
+    private static Decimal estimateDocxTableRowHeightInches(String trXml) {
+        Decimal rowHeight = 0;
+        Integer cursor = 0;
+        while (cursor < trXml.length()) {
+            Integer tcStart = trXml.indexOf('<w:tc', cursor);
+            if (tcStart == -1) {
+                break;
+            }
+            Integer tcEnd = findClosingTag(trXml, tcStart, 'w:tc');
+            if (tcEnd == -1) {
+                break;
+            }
+            String tcXml = trXml.substring(tcStart, tcEnd);
+            rowHeight = Math.max(
+                rowHeight,
+                estimateDocxBlockHeightInches(tcXml) + readCellVerticalPaddingInches(tcXml)
+            );
+            cursor = tcEnd;
+        }
+        if (rowHeight <= 0 && String.isNotBlank(trXml.replaceAll('(?is)<[^>]+>', '').trim())) {
+            rowHeight = estimateParagraphRunHeightInches(trXml);
+        }
+        return rowHeight;
+    }
+
     private static Decimal estimateParagraphRunHeightInches(String pXml) {
-        Integer maxHalfPoints = 22;
+        Integer maxHalfPoints = null;
         Integer cursor = 0;
         while (cursor < pXml.length()) {
             Integer szStart = pXml.indexOf('<w:sz', cursor);
@@ -3179,12 +3463,57 @@ public with sharing class DocGenHtmlRenderer {
             }
             String val = extractAttrFromTag(pXml.substring(szStart, szEnd), 'w:val');
             if (val != null && val.isNumeric()) {
-                maxHalfPoints = Math.max(maxHalfPoints, Integer.valueOf(val));
+                Integer halfPoints = Integer.valueOf(val);
+                maxHalfPoints = maxHalfPoints == null ? halfPoints : Math.max(maxHalfPoints, halfPoints);
             }
             cursor = szEnd + 1;
         }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = resolveReferencedStyleFontHalfPoints(pXml);
+        }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = 22;
+        }
         Decimal points = maxHalfPoints / 2.0;
         return (points * 1.15) / 72.0;
+    }
+
+    private static Integer resolveReferencedStyleFontHalfPoints(String pXml) {
+        List<String> styleIds = new List<String>();
+        String rStyle = extractAttr(pXml, 'w:rStyle', 'w:val');
+        if (String.isNotBlank(rStyle)) {
+            styleIds.add(rStyle);
+        }
+        String pStyle = extractAttr(pXml, 'w:pStyle', 'w:val');
+        if (String.isNotBlank(pStyle)) {
+            styleIds.add(pStyle);
+        }
+        for (String styleId : styleIds) {
+            Map<String, String> attrs = resolveStyleTextAttributes(styleId);
+            String fontSize = attrs.get('fontSize');
+            if (fontSize != null && fontSize.isNumeric()) {
+                return Integer.valueOf(fontSize);
+            }
+        }
+        return null;
+    }
+
+    private static Decimal readCellVerticalPaddingInches(String tcXml) {
+        String tcPr = extractElement(tcXml, 'w:tcPr');
+        String tcMar = String.isNotBlank(tcPr) && tcPr.contains('<w:tcMar') ? extractElement(tcPr, 'w:tcMar') : null;
+        if (String.isBlank(tcMar)) {
+            return 0;
+        }
+        Decimal padding = 0;
+        String top = extractAttr(tcMar, 'w:top', 'w:w');
+        String bottom = extractAttr(tcMar, 'w:bottom', 'w:w');
+        if (top != null && Pattern.matches('-?\\d+', top)) {
+            padding += Math.abs(Integer.valueOf(top)) / 1440.0;
+        }
+        if (bottom != null && Pattern.matches('-?\\d+', bottom)) {
+            padding += Math.abs(Integer.valueOf(bottom)) / 1440.0;
+        }
+        return padding;
     }
 
     private static Decimal estimateParagraphObjectHeightInches(String pXml) {
