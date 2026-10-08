@@ -1729,6 +1729,20 @@ Empty loops (null or empty child list) render nothing — no error.
 - Inside the block: **`{GroupName}`** is the group's value (use it as the header); the inner **`{#<Relationship>}…{/<Relationship>}`** loops only that group's members; and **`{SUM|COUNT|AVG|MIN|MAX:<Relationship>.Field}`** aggregate just that group.
 - Works identically in Word and HTML templates. An empty/absent relationship renders nothing.
 
+**Reaching parent-level data from inside a loop — `{~Label}`.** A tag inside a loop normally only sees the current row's own data — a merge tag or `{#ChartBucket}` that depends on a **different**, sibling relationship on the parent record resolves to nothing. Wrap that content in `{~Label}…{/Label}` to resolve it against the top-level record instead, no matter how deeply nested the tag itself is:
+
+```
+{#Contacts}
+  {LastName}:
+  {~Pipeline}{#ChartBucket:Opportunities:StageName}{key_label} {percent}%{/ChartBucket}{/Pipeline}
+{/Contacts}
+```
+
+- `Label` is a free-form match key, not a relationship name — it only pairs the tag with its closing `{/Label}`. Pick one that's unique across the whole template; a `{~Offices}` and an unrelated `{#Offices}` sharing the same label text can miscount each other's nesting depth.
+- Works at any nesting depth, including inside another `{~Label}` block.
+- Composes with `{#ChartBucket}` — a chart wrapped in `{~Label}` resolves against the parent record even when the whole block sits inside an unrelated loop.
+- **Not supported inside a giant-query loop** (a relationship over the 2,000-row threshold) — using it there fails generation immediately with a clear error instead of silently rendering blank.
+
 ### 7.4 Conditionals
 
 #### Boolean conditional

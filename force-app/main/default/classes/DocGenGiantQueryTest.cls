@@ -787,6 +787,83 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testGiantQueryBatchRejectsRootAnchorTagSynchronously() {
+        // #439 scope limit: {~Label} root-anchor tags resolve against the root
+        // data map, but each giant-query chunk renders its row body against a
+        // flat, field-limited per-record map with no sibling-relationship data,
+        // by design. Rather than silently rendering every {~} blank across a
+        // large job, the constructor must throw IMMEDIATELY — before
+        // Database.executeBatch ever runs — so this is asserted directly on
+        // construction, not via job status after an async failure.
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+
+            Map<String, Object> childNodeConfig = new Map<String, Object>{
+                'object' => 'Contact',
+                'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName' },
+                'parentFields' => new List<String>()
+            };
+            String innerXml = '<w:tr><w:tc>{~Offices}{#Offices__r}{City__c}{/Offices__r}{/Offices}</w:tc></w:tr>';
+
+            Test.startTest();
+            try {
+                DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
+                    null,
+                    tpl.Id,
+                    acc.Id,
+                    childNodeConfig,
+                    innerXml,
+                    'PDF'
+                );
+                System.assert(false, 'Expected a DocGenException for a {~} tag inside a giant-query loop body.');
+            } catch (DocGenException e) {
+                System.assert(
+                    e.getMessage().contains('not supported inside giant-query loops'),
+                    'Unexpected exception message: ' + e.getMessage()
+                );
+            }
+            Test.stopTest();
+        }
+    }
+
+    @IsTest
+    static void testGiantQueryBatchWithoutRootAnchorTagConstructsNormally() {
+        // Guard must be scoped to the literal '{~' substring — ordinary
+        // giant-query templates (no root-anchor tag) must be unaffected.
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+
+            Map<String, Object> childNodeConfig = new Map<String, Object>{
+                'object' => 'Contact',
+                'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName' },
+                'parentFields' => new List<String>()
+            };
+            String innerXml = '<w:tr><w:tc>{FirstName}</w:tc></w:tr>';
+
+            Test.startTest();
+            DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
+                null,
+                tpl.Id,
+                acc.Id,
+                childNodeConfig,
+                innerXml,
+                'PDF'
+            );
+            Test.stopTest();
+
+            System.assertNotEquals(null, batch, 'construction must succeed without a {~} tag present');
+        }
+    }
+
+    @IsTest
     static void testGetSortedChildIds() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {

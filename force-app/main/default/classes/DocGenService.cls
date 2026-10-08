@@ -42,6 +42,29 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     @TestVisible
     public static Map<String, Object> reservedMergeData;
 
+    // Root-anchor {~Label}...{/Label} tags (#439): a loop body has no reach to a
+    // sibling relationship on the parent record, since rowContext() swaps the data
+    // context to the current row's own map. {~Label} defers its body instead of
+    // evaluating it against the row — the FIRST (outermost) processXml call in a
+    // transaction "owns" this queue (pendingRootTagJobs == null means unowned) and
+    // drains it once, against the ROOT data map it was called with, after its own
+    // output is built. Every recursive processXml call sees the queue already set
+    // and just enqueues into it. Must stay null outside of an active render or it
+    // leaks into the next independent processXml call in the same transaction.
+    private static List<RootTagJob> pendingRootTagJobs;
+    private static Map<String, Object> rootDataContext;
+    private static Integer rootTagMarkerSeq = 0;
+    private static final Integer ROOT_TAG_JOB_LIMIT = 100;
+
+    private class RootTagJob {
+        String marker;
+        String innerXml;
+        RootTagJob(String marker, String innerXml) {
+            this.marker = marker;
+            this.innerXml = innerXml;
+        }
+    }
+
     /**
      * Sets the admin-uploaded watermark override on the renderer (if one exists
      * on the active version of the given template). When set, the renderer uses
@@ -3986,6 +4009,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     private static String processXml(String xml, Map<String, Object> data) {
+        // Root-anchor {~Label} ownership (#439): the FIRST processXml call in a
+        // transaction to see pendingRootTagJobs == null owns the queue — it's
+        // responsible for draining it (below) and clearing it in the finally so it
+        // never leaks into the next independent processXml call (header/footer/body
+        // are each separate top-level calls sharing this transaction). The
+        // try/finally must wrap the WHOLE body, including the chart preprocessing
+        // immediately below, not just the tag-scan loop — those calls can throw
+        // too, and a leaked non-null queue would make every later call in this
+        // transaction think it's nested and never drain its own jobs.
+        Boolean ownsRootTagPass = pendingRootTagJobs == null;
+        if (ownsRootTagPass) {
+            pendingRootTagJobs = new List<RootTagJob>();
+            rootDataContext = data;
+        }
+        try {
+            return processXmlInner(xml, data, ownsRootTagPass);
+        } finally {
+            if (ownsRootTagPass) {
+                pendingRootTagJobs = null;
+                rootDataContext = null;
+            }
+        }
+    }
+
+    private static String processXmlInner(String xml, Map<String, Object> data, Boolean ownsRootTagPass) {
         // Chart tag expansion: rewrites {Chart:rel:field:style:opts} into the
         // corresponding substitution. HTML templates get the CSS-bar snippet
         // (with embedded {#ChartBucket:...} loops, which feed through the
@@ -4584,6 +4632,47 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         output += sectionResult;
                         cursor = (closeTagEnd != -1 ? closeTagEnd + 1 : sectionEnd);
                     }
+                } else if (tagContent.startsWith('~')) {
+                    // Root-anchor tag (#439): {~Label}...{/Label} defers its body
+                    // instead of evaluating it against the current row context —
+                    // the raw inner text is queued and resolved against
+                    // rootDataContext once the owning processXml call finishes
+                    // (see drainRootTagJobs / RootTagJob above). Label is a
+                    // free-form match key, not a relationship or field name — it
+                    // only has to be unique against any other {#Label}/{^Label}/
+                    // {~Label} sharing the same literal text, since
+                    // findBalancedEnd's depth counter tracks by label text alone,
+                    // not by which prefix opened it.
+                    String label = tagContent.substring(1).trim();
+                    Integer sectionEnd = findBalancedEnd(xml, tagClose + 1, label);
+                    if (sectionEnd == -1) {
+                        String snippet = xml.substring(Math.max(0, tagStartPos - 40), Math.min(len, tagStartPos + 40));
+                        String lineInfo = currentTemplateType == 'HTML'
+                            ? ' (line ' + (xml.substring(0, tagStartPos).countMatches('\n') + 1) + ')'
+                            : '';
+                        throw new DocGenException(
+                            'Malformed root-anchor tag: missing closing "{/' +
+                                label +
+                                '}" for "{~' +
+                                label +
+                                '}"' +
+                                lineInfo +
+                                ' opened near "' +
+                                snippet +
+                                '".'
+                        );
+                    }
+                    if (pendingRootTagJobs.size() >= ROOT_TAG_JOB_LIMIT) {
+                        throw new DocGenException(
+                            'Too many {~} root-anchor tags in one document (limit ' + ROOT_TAG_JOB_LIMIT + ').'
+                        );
+                    }
+                    String innerXml = xml.substring(tagClose + 1, sectionEnd);
+                    Integer closeTagEnd = xml.indexOf('}', sectionEnd);
+                    String marker = '{{__ROOTTAG_' + (rootTagMarkerSeq++) + '__}}';
+                    pendingRootTagJobs.add(new RootTagJob(marker, innerXml));
+                    output += marker;
+                    cursor = (closeTagEnd != -1 ? closeTagEnd + 1 : sectionEnd);
                 } else if (tagContent.startsWith('/')) {
                     output += '{' + rawTag + '}';
                     cursor = tagClose + 1;
@@ -4842,6 +4931,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 );
             }
         }
+        if (ownsRootTagPass) {
+            output = drainRootTagJobs(output);
+        }
         return output;
     }
 
@@ -4929,6 +5021,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return null;
     }
 
+    // NOTE on {~Label} (#439): depth tracking below is keyed on the label's literal
+    // text only, not on which prefix (#, ^, ~) opened it. A {~Offices} nested inside
+    // an unrelated {#Offices}...{/Offices} section (same text, different prefix)
+    // will corrupt both sections' depth counts. Root-anchor labels must be unique
+    // across the whole template, not just within their own nesting scope.
     private static Integer findBalancedEnd(String xml, Integer startSearch, String key) {
         Integer depth = 1;
         Integer cursor = startSearch;
@@ -4961,7 +5058,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 isOpener = content.equals('#GroupBy') || content.startsWith('#GroupBy ');
                 isCloser = content.equals('/GroupBy');
             } else {
-                isOpener = content.equals('#' + key) || content.equals('^' + key);
+                isOpener = content.equals('#' + key) || content.equals('^' + key) || content.equals('~' + key);
                 isCloser = content.equals('/' + key);
             }
             if (isOpener) {
@@ -4975,6 +5072,25 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             cursor = nextClose + 1;
         }
         return -1;
+    }
+
+    // Resolves every queued {~Label} job against rootDataContext and splices the
+    // result into `result` in place of its marker (#439). Only the owning
+    // processXml call (the one that initialized pendingRootTagJobs) calls this,
+    // once, after its own output is fully built. Drains with an index cursor over
+    // the LIVE list rather than a snapshot: resolving job N via processXml can
+    // itself enqueue more jobs if job N's content contains a nested {~Label}, and
+    // those need draining too before this returns. ROOT_TAG_JOB_LIMIT (checked at
+    // enqueue time in the dispatch branch above) bounds this loop.
+    private static String drainRootTagJobs(String result) {
+        Integer i = 0;
+        while (i < pendingRootTagJobs.size()) {
+            RootTagJob job = pendingRootTagJobs[i];
+            String rendered = processXml(job.innerXml, rootDataContext);
+            result = result.replace(job.marker, rendered);
+            i++;
+        }
+        return result;
     }
 
     // Find the {:else} that belongs to the *current* section, ignoring any
