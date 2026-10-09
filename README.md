@@ -448,12 +448,15 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships **every two weeks, on a Friday**. Next release: **2026-09-11**, then 09-25, 10-09, 10-23.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-10-23**, then 11-06, 11-20.
 
 Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
 | Version     | Headline                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records              |
+| **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                  |
+| **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                              |
 | **v3.56.0** | Set the label size on a chart; bold on Arial Unicode MS no longer silently does nothing                                         |
 | **v3.55.0** | Elements that travel together on the Canvas, named blocks, and charts on datasets that used to be too big                       |
 | **v3.54.0** | **Canvas designer (Beta)** — design a document in the browser, no Word or HTML needed                                           |
@@ -470,6 +473,8 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability**: the Canvas Designer gets a run of maturity fixes — a **Show sample data** toggle renders the artboard with a Test Record's real values instead of raw merge tags, mutually exclusive boxes can share a **Variant group** so inactive alternatives no longer leave empty space in output, elements below a growing table now follow it automatically, and a table bound to `{#ChartBucket}` resolves correctly instead of printing raw tags — so a chart with its numbers in a table beside it, one of the most common chart layouts, is now authorable in Canvas, not just Word and HTML. Signature audit records are now tamper-evident: document hashes and IP addresses can't be altered after the record is created. `{~Label}` lets a tag inside a loop reach data on a sibling relationship of the parent record — useful for a per-item chart that needs company-wide context. Also fixed: special/accented currency characters (including `Ș`/`ș`) in fillable PDFs, negative currency sign placement, long hyperlinks wrapping instead of clipping, and DOCX→PDF header/footer spacing. See the CHANGELOG for details.
 
 **v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms**: a Portwood Button can now open the generated file in Salesforce's file preview, download it, or preview it and then offer a Download button (**Delivery Mode**), and a new **Portwood Preview Button** opens the preview with no dialog at all. New **Send Email** buttons generate a document from a record, let the user preview it, and email it as an attachment to addresses from the record or typed by hand, saving the file to the record; for delivery, choose a verified sender on a domain you control. Signing is safer: a signer can no longer finish while a required signature, initials or date field is still unsigned, and the signing pages now stop with a clear message instead of quietly reporting success when the fields cannot be found. Fillable PDF forms now keep accented Latin characters such as _Árvore_ and _Solicitação_ (characters outside Latin-1, like curly quotes or `€`, still come out as `?`). The Designer's **PDF Preview** now opens in Salesforce's file viewer, which works under Lightning Web Security. Document button output-format choices now match the template's type, including Excel. Bulk **Individual Files** are also linked to the bulk job. See the CHANGELOG for details.
 
