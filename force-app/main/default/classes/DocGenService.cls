@@ -11653,6 +11653,34 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return value.setScale(2) + m.group(2);
     }
 
+    // Cached per-transaction — see DocGenHtmlRenderer.cachedGlyphResourcePrefix.
+    private static String cachedGlyphResourcePrefix = null;
+
+    /**
+     * See DocGenHtmlRenderer.glyphResourcePrefix — same fix, same reason, mirrored
+     * here per CLAUDE.md's note that this glyph-fallback logic is duplicated across
+     * both files and must be kept in step. Queries StaticResource.NamespacePrefix
+     * directly rather than any Apex reflection trick.
+     */
+    private static String glyphResourcePrefix() {
+        if (cachedGlyphResourcePrefix != null) {
+            return cachedGlyphResourcePrefix;
+        }
+        cachedGlyphResourcePrefix = '';
+        for (StaticResource sr : [
+            SELECT NamespacePrefix
+            FROM StaticResource
+            WHERE Name = 'DocGenPdfGlyphs'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]) {
+            if (String.isNotBlank(sr.NamespacePrefix)) {
+                cachedGlyphResourcePrefix = sr.NamespacePrefix + '__';
+            }
+        }
+        return cachedGlyphResourcePrefix;
+    }
+
     private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
         String hex = pdfGlyphResourceSuffix(cp);
         String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
@@ -11672,7 +11700,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // gives Flying Saucer a distinct cache key per size, so same-size
         // reuse still shares a cache entry while different sizes don't
         // collide.
-        String sizedSrc = '/resource/DocGenPdfGlyphs/u' + hex + '.png?sz=' + EncodingUtil.urlEncode(size, 'UTF-8');
+        String sizedSrc =
+            '/resource/' +
+            glyphResourcePrefix() +
+            'DocGenPdfGlyphs/u' +
+            hex +
+            '.png?sz=' +
+            EncodingUtil.urlEncode(size, 'UTF-8');
         String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
         String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
         if (glyphStyle == null || glyphStyle.bold != true) {

@@ -1275,6 +1275,43 @@ public with sharing class DocGenHtmlRenderer {
         return value.setScale(2) + m.group(2);
     }
 
+    // Cached per-transaction — glyphResourcePrefix() can be called many times when a
+    // document uses several non-Latin characters; the resource's namespace never
+    // changes mid-transaction.
+    private static String cachedGlyphResourcePrefix = null;
+
+    /**
+     * Namespaced static resource URLs need the package namespace prefixed
+     * (`portwoodglobal__DocGenPdfGlyphs`) when this code is running inside an
+     * installed managed package — a bare `/resource/DocGenPdfGlyphs/...` only
+     * resolves in an unnamespaced/unpackaged org. Queries the StaticResource
+     * record's own NamespacePrefix directly rather than relying on any Apex
+     * reflection trick (class.getName() namespace behavior is not something this
+     * codebase had verified), so this is correct regardless of calling context.
+     * Found via a real package-install smoke test: every non-Latin glyph fallback
+     * (Ș/ș, Armenian ֏, the currency symbols) rendered as a broken-image icon baked
+     * into the PDF in a real subscriber-shaped org, despite passing in every
+     * source-deployed, unnamespaced scratch org this was tested in all release.
+     */
+    private static String glyphResourcePrefix() {
+        if (cachedGlyphResourcePrefix != null) {
+            return cachedGlyphResourcePrefix;
+        }
+        cachedGlyphResourcePrefix = '';
+        for (StaticResource sr : [
+            SELECT NamespacePrefix
+            FROM StaticResource
+            WHERE Name = 'DocGenPdfGlyphs'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]) {
+            if (String.isNotBlank(sr.NamespacePrefix)) {
+                cachedGlyphResourcePrefix = sr.NamespacePrefix + '__';
+            }
+        }
+        return cachedGlyphResourcePrefix;
+    }
+
     private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
         String hex = pdfGlyphResourceSuffix(cp);
         String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
@@ -1294,7 +1331,13 @@ public with sharing class DocGenHtmlRenderer {
         // gives Flying Saucer a distinct cache key per size, so same-size
         // reuse still shares a cache entry while different sizes don't
         // collide.
-        String sizedSrc = '/resource/DocGenPdfGlyphs/u' + hex + '.png?sz=' + EncodingUtil.urlEncode(size, 'UTF-8');
+        String sizedSrc =
+            '/resource/' +
+            glyphResourcePrefix() +
+            'DocGenPdfGlyphs/u' +
+            hex +
+            '.png?sz=' +
+            EncodingUtil.urlEncode(size, 'UTF-8');
         String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
         String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
         if (glyphStyle == null || glyphStyle.bold != true) {
