@@ -119,6 +119,31 @@ private class DocGenSignatureImmutabilityTest {
     }
 
     @IsTest
+    static void auditBlocksIpAddressChangesButAllowsOtherFields() {
+        DocGen_Signature_Request__c req = createRequest();
+        DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c(
+            Signature_Request__c = req.Id,
+            Signer_Name__c = 'Immutable Signer',
+            Signer_Email__c = 'signer@example.com',
+            Signed_Date__c = System.now(),
+            IP_Address__c = '203.0.113.10'
+        );
+        insert audit;
+
+        Database.SaveResult ipEditResult = Database.update(
+            new DocGen_Signature_Audit__c(Id = audit.Id, IP_Address__c = '198.51.100.1'),
+            false
+        );
+        System.assertEquals(false, ipEditResult.isSuccess(), 'Recorded IP address cannot be changed once set');
+
+        Database.SaveResult normalEditResult = Database.update(
+            new DocGen_Signature_Audit__c(Id = audit.Id, Verification_Method__c = 'Email PIN'),
+            false
+        );
+        System.assertEquals(true, normalEditResult.isSuccess(), 'Non-IP audit edits remain allowed');
+    }
+
+    @IsTest
     static void finalizedRequestBlocksSnapshotHashChanges() {
         DocGen_Signature_Request__c req = new DocGen_Signature_Request__c(
             Status__c = 'Sent',
@@ -148,6 +173,39 @@ private class DocGenSignatureImmutabilityTest {
             true,
             statusEditResult.isSuccess(),
             'Other finalized request fields are not locked by this guard'
+        );
+    }
+
+    @IsTest
+    static void finalizedRequestBlocksFrozenDocumentCvIdChanges() {
+        DocGen_Signature_Request__c req = new DocGen_Signature_Request__c(
+            Status__c = 'Sent',
+            Frozen_Document_CV_Id__c = '068000000000001AAA'
+        );
+        insert req;
+
+        // Pre-finalization: legitimate decline/cancel flows null this out — must stay allowed.
+        Database.SaveResult preFinalizeClearResult = Database.update(
+            new DocGen_Signature_Request__c(Id = req.Id, Frozen_Document_CV_Id__c = null),
+            false
+        );
+        System.assertEquals(
+            true,
+            preFinalizeClearResult.isSuccess(),
+            'Clearing the frozen document reference before finalization (decline/cancel) remains allowed'
+        );
+        update new DocGen_Signature_Request__c(Id = req.Id, Frozen_Document_CV_Id__c = '068000000000001AAA');
+
+        update new DocGen_Signature_Request__c(Id = req.Id, Status__c = 'Signed');
+
+        Database.SaveResult frozenDocEditResult = Database.update(
+            new DocGen_Signature_Request__c(Id = req.Id, Frozen_Document_CV_Id__c = '068000000000099AAA'),
+            false
+        );
+        System.assertEquals(
+            false,
+            frozenDocEditResult.isSuccess(),
+            'Finalized frozen-document reference cannot be repointed'
         );
     }
 

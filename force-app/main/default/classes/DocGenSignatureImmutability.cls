@@ -1,8 +1,10 @@
 public without sharing class DocGenSignatureImmutability {
     private static final String AUDIT_DELETE_LOCK_MESSAGE = 'Signature audit records cannot be deleted after creation.';
     private static final String AUDIT_HASH_LOCK_MESSAGE = 'Document Hash (SHA-256) cannot be changed after it is filled.';
+    private static final String AUDIT_IP_LOCK_MESSAGE = 'IP Address cannot be changed after it is recorded.';
     private static final String FILE_LOCK_MESSAGE = 'Signed document files are immutable after creation. Create a new signature request instead of editing, versioning, or deleting this file.';
     private static final String SNAPSHOT_LOCK_MESSAGE = 'Snapshot Hash cannot be changed after the signature request is finalized.';
+    private static final String FROZEN_DOC_LOCK_MESSAGE = 'Frozen Document CV Id cannot be changed after the signature request is finalized.';
     private static final String SIGNED_STATUS_LOCK_MESSAGE = 'Signature request status cannot be changed after it is Signed.';
     private static Boolean internalHashFinalization = false;
 
@@ -27,6 +29,9 @@ public without sharing class DocGenSignatureImmutability {
             if (documentHashChanged(audit, oldAudit)) {
                 audit.addError(AUDIT_HASH_LOCK_MESSAGE);
             }
+            if (ipAddressChanged(audit, oldAudit)) {
+                audit.addError(AUDIT_IP_LOCK_MESSAGE);
+            }
         }
     }
 
@@ -42,11 +47,15 @@ public without sharing class DocGenSignatureImmutability {
     ) {
         for (DocGen_Signature_Request__c req : newRecords) {
             DocGen_Signature_Request__c oldReq = oldMap.get(req.Id);
-            if (oldReq == null || req.Snapshot_Hash__c == oldReq.Snapshot_Hash__c) {
+            if (oldReq == null) {
                 continue;
             }
-            if (isFinalized(req) || isFinalized(oldReq)) {
+            Boolean finalized = isFinalized(req) || isFinalized(oldReq);
+            if (req.Snapshot_Hash__c != oldReq.Snapshot_Hash__c && finalized) {
                 req.addError(SNAPSHOT_LOCK_MESSAGE);
+            }
+            if (req.Frozen_Document_CV_Id__c != oldReq.Frozen_Document_CV_Id__c && finalized) {
+                req.addError(FROZEN_DOC_LOCK_MESSAGE);
             }
         }
     }
@@ -129,6 +138,13 @@ public without sharing class DocGenSignatureImmutability {
             return true;
         }
         return audit.Document_Hash_SHA256__c != oldAudit.Document_Hash_SHA256__c;
+    }
+
+    private static Boolean ipAddressChanged(DocGen_Signature_Audit__c audit, DocGen_Signature_Audit__c oldAudit) {
+        if (oldAudit == null) {
+            return true;
+        }
+        return audit.IP_Address__c != oldAudit.IP_Address__c;
     }
 
     private static Boolean isFinalized(DocGen_Signature_Request__c req) {
