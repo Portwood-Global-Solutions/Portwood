@@ -457,6 +457,25 @@ try {
     System.debug('CURRENCY AGG AUTO ISK ZERO-DECIMAL: FAIL — ' + e.getMessage());
 }
 
+// #427 — negative symbol-before currencies keep the sign before the symbol.
+// The broken output was "$-50.00"; templates should render the conventional
+// "-$50.00" shape for bare currency and explicit symbol-before currencies.
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'Amount' => -50 };
+    String usd = DocGenService.processXmlForTest('<w:t>{Amount:currency}</w:t>', data);
+    String gbp = DocGenService.processXmlForTest('<w:t>{Amount:currency:GBP}</w:t>', data);
+    if (usd.contains('-$50.00') && !usd.contains('$-') && gbp.contains('-£50.00') && !gbp.contains('£-')) {
+        pass++;
+        System.debug('CURRENCY NEGATIVE SYMBOL-BEFORE SIGN (#427): PASS — ' + usd + ' | ' + gbp);
+    } else {
+        fail++;
+        System.debug('CURRENCY NEGATIVE SYMBOL-BEFORE SIGN (#427): FAIL — ' + usd + ' | ' + gbp);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CURRENCY NEGATIVE SYMBOL-BEFORE SIGN (#427): FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX5 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')

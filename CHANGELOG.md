@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased - DOCX header/footer PDF spacing
+## Unreleased
 
 ### Fixed
 
+- Negative currency values in generated templates now place the minus sign before symbol-before currencies. For example, `{Amount:currency}` renders `-$50.00` instead of `$-50.00`, and `{Amount:currency:GBP}` renders `-£50.00` instead of `£-50.00`. Symbol-after locale output, such as German/French-style `-50,00 €`, is unchanged.
 - **DOCX-to-PDF header/body spacing for compact table-based headers.** The PDF renderer now
   measures DOCX headers using table-aware layout so cells in the same row are treated side by
   side, not stacked vertically. This reduces excess blank space between compact headers and the

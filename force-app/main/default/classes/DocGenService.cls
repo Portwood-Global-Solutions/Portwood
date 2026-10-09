@@ -6209,7 +6209,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
     /** Backward-compat bare-:currency output: hardcoded $ with US separators. */
     private static String formatCurrencyDollarFallback(Decimal num) {
-        return '$' + formatNumberLocale(num.setScale(2, RoundingMode.HALF_UP), ',', '.');
+        Decimal scaled = num.setScale(2, RoundingMode.HALF_UP);
+        Boolean negative = scaled < 0;
+        String formatted = formatNumberLocale(negative ? scaled.abs() : scaled, ',', '.');
+        return (negative ? '-$' : '$') + formatted;
     }
 
     /** Formats `num` with the symbol for `iso` and the separators/placement for `locale`. */
@@ -6230,6 +6233,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         if (symbolAfter) {
             return formatted + ' ' + symbol.trim();
+        }
+        if (scaled < 0) {
+            return '-' + symbol + formatNumberLocale(scaled.abs(), groupSep, decSep);
         }
         return symbol + formatted;
     }
