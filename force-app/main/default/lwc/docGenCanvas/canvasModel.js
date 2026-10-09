@@ -1506,11 +1506,29 @@ function tableToHtml(box) {
 }
 
 /**
- * The table as the CANVAS should show it: same cells, same widths, same borders, but
- * the {#Rel} loop markers replaced by two sample rows. Showing the raw marker would
- * put stray text in the artboard; showing one row would hide the fact that it repeats.
+ * Caps how many real child rows a bound table draws on the artboard. A real child
+ * list can be arbitrarily large; rendering all of it would both misrepresent the
+ * table (a real template paginates, the artboard does not) and tax the artboard's
+ * DOM. Tunable — picked to read as "a list", not a load-bearing number.
  */
-export function tablePreviewHtml(box) {
+const MAX_PREVIEW_ROWS = 8;
+
+/**
+ * The table as the CANVAS should show it: same cells, same widths, same borders, but
+ * the {#Rel} loop markers replaced by sample rows.
+ *
+ * `dataMap` is optional — the real record data resolved for the "Show sample data"
+ * toggle (docGenCanvas.js's resolvedSampleData), keyed the way
+ * DocGenDataRetriever.mapSObject shapes it: a bound relationship is
+ * `{totalSize, records:[...]}` on the map. When it's absent (toggle off, not yet
+ * loaded, or every existing caller/test that still calls tablePreviewHtml(box)
+ * alone) this renders EXACTLY as before — two canned sample rows, raw tag text.
+ * When present, real child rows (capped at MAX_PREVIEW_ROWS) replace the canned
+ * rows, and each cell's tag resolves against that row's own data via
+ * substituteSampleTags. Never mutates `box` — see substituteSampleTags's own
+ * preview-only contract.
+ */
+export function tablePreviewHtml(box, dataMap) {
     const t = box.table || {};
     const cols = t.columns || [];
     const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
@@ -1558,26 +1576,33 @@ export function tablePreviewHtml(box) {
         out += '</tr></thead>';
     }
     out += '<tbody>';
-    // The repeating body. Two sample rows when bound to a relationship, so it reads as
-    // a list rather than a single row.
-    const sampleRows = t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
     const subRel = (t.subRelationship || '').trim();
     const subs = t.subColumns || [];
     const stx = { ...DEFAULT_SUB_TEXT, ...(t.subText || {}) };
     const indent = t.subIndent == null ? 12 : t.subIndent;
 
+    // Real data available for this relationship: use it and cap at MAX_PREVIEW_ROWS.
+    // Otherwise fall through to the canned placeholder — two sample rows when bound to
+    // a relationship, so it still reads as a list rather than a single row.
+    const relEntry = dataMap && t.relationship ? dataMap[t.relationship] : null;
+    const relRows = relEntry && Array.isArray(relEntry.records) ? relEntry.records : null;
+    const realCount = relRows ? relRows.length : null;
+    const sampleRows =
+        realCount != null ? Math.min(realCount, MAX_PREVIEW_ROWS) : t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
+
     for (let i = 0; i < sampleRows; i++) {
+        const rowData = relRows ? relRows[i] : null;
         out +=
             '<tr>' +
             cols
                 .map(
-                    (c, i) =>
+                    (c, ci) =>
                         '<td' +
-                        spanAttr(i, cols.length, pvTotal) +
+                        spanAttr(ci, cols.length, pvTotal) +
                         ' style="' +
                         cellCss +
                         '">' +
-                        esc(c.tag || '') +
+                        substituteSampleTags(c.tag || '', rowData, { escapeLiterals: true }) +
                         '</td>'
                 )
                 .join('') +
@@ -1596,27 +1621,50 @@ export function tablePreviewHtml(box) {
                 ';' +
                 (stx.bold ? ' font-weight: bold;' : ' font-weight: normal;') +
                 (t.subFill ? ' background: ' + t.subFill + ';' : '');
-            out +=
-                '<tr>' +
-                subs
-                    .map((c, j) => {
-                        const pad = j === 0 ? ' padding-left: ' + (t.cellPadding + indent) + 'pt;' : '';
-                        return (
-                            '<td' +
-                            spanAttr(j, subs.length, pvTotal) +
-                            ' style="' +
-                            scss +
-                            pad +
-                            '">' +
-                            esc(c.tag || '') +
-                            '</td>'
-                        );
-                    })
-                    .join('') +
-                '</tr>';
+            const subEntry = rowData && subRel ? rowData[subRel] : null;
+            const subRows = subEntry && Array.isArray(subEntry.records) ? subEntry.records : null;
+            const subRealCount = subRows ? subRows.length : null;
+            const subSampleRows = subRealCount != null ? Math.min(subRealCount, MAX_PREVIEW_ROWS) : 1;
+            for (let j2 = 0; j2 < subSampleRows; j2++) {
+                const subRowData = subRows ? subRows[j2] : null;
+                out +=
+                    '<tr>' +
+                    subs
+                        .map((c, j) => {
+                            const pad = j === 0 ? ' padding-left: ' + (t.cellPadding + indent) + 'pt;' : '';
+                            return (
+                                '<td' +
+                                spanAttr(j, subs.length, pvTotal) +
+                                ' style="' +
+                                scss +
+                                pad +
+                                '">' +
+                                substituteSampleTags(c.tag || '', subRowData, { escapeLiterals: true }) +
+                                '</td>'
+                            );
+                        })
+                        .join('') +
+                    '</tr>';
+            }
         }
     }
-    if (t.relationship) {
+    if (realCount != null) {
+        // Real data: show the true remainder, or nothing when every row already fit —
+        // showing "…" when the cap wasn't even reached would misrepresent the record.
+        if (realCount > MAX_PREVIEW_ROWS) {
+            const extra = realCount - MAX_PREVIEW_ROWS;
+            out +=
+                '<tr><td colspan="' +
+                Math.max(1, pvTotal) +
+                '" style="' +
+                cellCss +
+                ' font-style: italic; color: #6b7280;">… ' +
+                extra +
+                ' more row' +
+                (extra === 1 ? '' : 's') +
+                '</td></tr>';
+        }
+    } else if (t.relationship) {
         out +=
             '<tr><td colspan="' +
             Math.max(1, pvTotal) +
@@ -3318,6 +3366,122 @@ const NON_FIELD_TAGS =
     /^(Today|Now|PageNumber|TotalPages|RowNumber|RunningUser(\.[A-Za-z0-9_]+)?|SUM|COUNT|AVG|MIN|MAX|IF|ELSE)/i;
 
 /**
+ * Matches a merge tag, capturing an optional structural prefix (#, /, ^, %) and the
+ * tag body. Shared by every tag-scanning function in this file — `matchAll`/`replace`
+ * never mutate the `lastIndex` of the regex they're called on (the engine resets it
+ * per call), so one module-level instance is safe to reuse rather than a copy per use.
+ */
+const MERGE_TAG_RE = /\{([#/^%]?)([A-Za-z0-9_.:=&'"\s-]+?)\}/g;
+
+/**
+ * Walks a dotted tag body (e.g. Client__r.BillingStreet) through the nested record
+ * shape DocGenDataRetriever.mapSObject actually produces — parent lookups are nested
+ * maps, child relationships are {totalSize, records}. Returns undefined on any
+ * missing segment, which the caller treats as "not resolvable."
+ */
+function resolveTagPath(path, dataMap) {
+    let cur = dataMap;
+    for (const seg of path.split('.')) {
+        if (cur == null || typeof cur !== 'object') return undefined;
+        cur = cur[seg];
+    }
+    return cur;
+}
+
+/**
+ * Approximate display formatting for the two format suffixes that most change a
+ * value's LENGTH — currency and date — which is what this feature actually cares
+ * about (box sizing), not visual fidelity. Deliberately does not attempt the real
+ * engine's ISO-code/locale/auto-detect/live-conversion currency grammar
+ * (DocGenService.cls's buildCurrencyAmount and friends, several hundred lines) or
+ * real date-locale formatting — replicating that here would be a second
+ * implementation to keep in sync forever, the exact trap CLAUDE.md warns about for
+ * merge-tag resolution paths. `currency` always renders as bare-$ US formatting
+ * (the engine's own backward-compat default for `{Field:currency}` with no ISO
+ * given, so this matches the common case exactly and is merely approximate for an
+ * explicit ISO/locale/auto form). Any other/unknown format falls through to the
+ * plain value, same as before this existed.
+ */
+function approxFormatForPreview(value, format) {
+    if (!format) return value;
+    const fmt = format.trim().toLowerCase();
+    if (fmt === 'currency' && typeof value === 'number') {
+        return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (fmt === 'date' && (typeof value === 'string' || value instanceof Date)) {
+        const d = value instanceof Date ? value : new Date(value);
+        if (!isNaN(d.getTime())) {
+            // Parse as UTC-date-only (Salesforce Date fields have no time component) so
+            // the displayed day doesn't shift with the browser's local timezone.
+            const utc =
+                typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + 'T00:00:00Z') : d;
+            return utc.toLocaleDateString('en-US', { timeZone: 'UTC' });
+        }
+    }
+    return value;
+}
+
+/**
+ * Substitutes real field values for merge tags in preview text — CANVAS RENDERING
+ * ONLY. Never mutates its input and returns a new string; callers must not feed the
+ * result back into box.html/box.text or `serialize` would start saving resolved
+ * values instead of tags (see docGenCanvas.js's previewHtmlFor/tablePreviewHtml call
+ * sites for the "preview-only, never touches this.doc" contract this depends on).
+ *
+ * Structural tags ({#...}, {/...}, {^...}, {%...}) and non-field tags (Today,
+ * PageNumber, SUM, ...) are left untouched — the same classification
+ * `collectFromText` uses, so what gets substituted here is exactly what the derived
+ * Query Config actually queries for. A tag that resolves to null/undefined/'' (or to
+ * a nested object rather than a leaf value — e.g. a relationship name used bare)
+ * falls back to its own raw text, so a box never collapses to nothing or prints
+ * "[object Object]" because a field happened to be blank or mis-typed.
+ *
+ * `escapeLiterals`: false (default) for rich-text/HTML box content, where the
+ * surrounding markup is already safe HTML and only the substituted VALUE needs
+ * escaping. true for plain-text sources (a table column's raw `tag` string), where
+ * the whole result — literal text and all — needs HTML-escaping the way `esc()` used
+ * to apply to the entire string before any substitution existed.
+ */
+export function substituteSampleTags(rawText, dataMap, opts) {
+    const escapeLiterals = !!(opts && opts.escapeLiterals);
+    const text = String(rawText || '');
+    if (!dataMap) {
+        return escapeLiterals ? esc(text) : text;
+    }
+    let out = '';
+    let lastIndex = 0;
+    for (const m of text.matchAll(MERGE_TAG_RE)) {
+        const whole = m[0];
+        const prefix = m[1];
+        const rawBody = m[2];
+        const literal = text.slice(lastIndex, m.index);
+        out += escapeLiterals ? esc(literal) : literal;
+        lastIndex = m.index + whole.length;
+
+        if (prefix === '#' || prefix === '/' || prefix === '^' || prefix === '%') {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        const segments = rawBody.trim().split(':');
+        const body = segments[0].trim();
+        const format = segments[1];
+        if (!body || NON_FIELD_TAGS.test(body) || body.indexOf('(') !== -1 || body.indexOf(' ') !== -1) {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        const value = resolveTagPath(body, dataMap);
+        if (value == null || value === '' || typeof value === 'object') {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        out += esc(String(approxFormatForPreview(value, format)));
+    }
+    const tail = text.slice(lastIndex);
+    out += escapeLiterals ? esc(tail) : tail;
+    return out;
+}
+
+/**
  * Walks text for merge tags, TRACKING loop context.
  *
  * A text box can hold hand-written loops, including one inside another — which is the
@@ -3333,7 +3497,7 @@ const NON_FIELD_TAGS =
  */
 function collectFromText(text, out, rel) {
     const stack = rel ? [rel] : [];
-    for (const m of String(text || '').matchAll(/\{([#/^%]?)([A-Za-z0-9_.:=&'"\s-]+?)\}/g)) {
+    for (const m of String(text || '').matchAll(MERGE_TAG_RE)) {
         const prefix = m[1];
         let body = m[2].trim();
         if (prefix === '#') {

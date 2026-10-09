@@ -1315,6 +1315,19 @@
                     ></lightning-combobox>
                 </template>
                 <span class="dg-qb-sep"></span>
+                <label
+                    class="dg-qb-toggle"
+                    title="Preview boxes with the Test Record's real values instead of merge-tag text — pick a record and refresh under Data"
+                >
+                    <input
+                        type="checkbox"
+                        checked={showSampleData}
+                        onchange={handleToggleSampleData}
+                        disabled={sampleToggleDisabled}
+                    />
+                    Show sample data
+                </label>
+                <span class="dg-qb-sep"></span>
                 <button class="dg-qb-btn dg-qb-wide" onclick={handleEditTemplate} title="Open this template's settings">
                     Template
                 </button>
@@ -1509,6 +1522,23 @@
                                 Preview renders a real PDF from this record. Changing it here saves it on the template
                                 as the sample record.
                             </p>
+                            <template lwc:if={showSampleData}>
+                                <template lwc:if={sampleDataError}>
+                                    <p class="dg-panel-warn">{sampleDataStatusLabel}</p>
+                                </template>
+                                <template lwc:else>
+                                    <p class="dg-panel-note">{sampleDataStatusLabel}</p>
+                                </template>
+                                <button
+                                    class="dg-sbtn"
+                                    onclick={handleRefreshSampleData}
+                                    disabled={sampleDataLoading}
+                                    title="Re-fetch this record's values — e.g. after adding a field tag that wasn't queried before"
+                                >
+                                    <template lwc:if={sampleDataLoading}>Loading…</template>
+                                    <template lwc:else>Refresh sample data</template>
+                                </button>
+                            </template>
                         </div>
                     </template>
                     <template lwc:if={hasBaseObject}>

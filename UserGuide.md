@@ -382,7 +382,15 @@ Choose **Start from a Blank Canvas** in the Create New wizard, or open any Canva
 
 **The properties panel** shows everything about the selected block: its name, content (a rich-text editor, or an HTML source view), fill, border, padding, a **Show only when** condition, layering, and position.
 
-**The toolbar** carries Template (settings), Preview (a real PDF from your sample record), Import HTML, Export HTML, the version picker, and Save.
+**The toolbar** carries Template (settings), Preview (a real PDF from your sample record), Import HTML, Export HTML, the version picker, Save, and a **Show sample data** checkbox.
+
+#### Show sample data
+
+Merge tags and the values they resolve to are rarely the same length — `{Schedule_Impact_Days__c}` is 25 characters standing in for `14`. Off, the artboard draws the tags themselves, so a box sized to fit a long tag can be the wrong size for the short real value, and vice versa. On, it substitutes the Test Record's real field values and — for a relationship-bound Table block — its real row count (up to 8 rows, with a "+N more rows" line beyond that), so what you're sizing on screen is much closer to what actually prints.
+
+It's off by default; turn it on from the toolbar checkbox once a Test Record is picked under **Data**. A field that's blank on the record shows its tag rather than going empty, so a box never collapses to nothing. `:currency` and `:date` tags get an approximate rendering sized for layout, not the exact formatting the real merge engine would apply. This never touches what gets saved — switching it on and off, or saving with it on, doesn't change the template body.
+
+A **Refresh** action and a status line live in the **Data** panel next to the record picker, for re-fetching after you change the bound record or add a field the artboard hasn't queried yet.
 
 #### What you place is what prints
 
