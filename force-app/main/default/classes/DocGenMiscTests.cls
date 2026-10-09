@@ -11487,4 +11487,63 @@ private class DocGenMiscTests {
         );
         System.assert(merged.contains('Short Code'), 'Header label must survive the strip.');
     }
+
+    // =========================================================================
+    // DocGenService — {~Label} root-anchor tag (#439)
+    // =========================================================================
+    // Functional/engine coverage (resolution, nesting, the real repro) lives in
+    // scripts/e2e-07-syntax6.apex — these tests cover what anonymous Apex cannot:
+    // the static-field ownership pattern's leak safety, and exceeding the job cap.
+
+    @IsTest
+    static void rootAnchorStaticsDoNotLeakAcrossIndependentCalls() {
+        // A {~} render that throws mid-resolution must still clear the static
+        // ownership fields via the owning call's finally block — otherwise every
+        // later, UNRELATED processXml call in the same transaction would wrongly
+        // see pendingRootTagJobs already set, think it's "nested", and never
+        // drain its own {~} jobs (they'd leak into the output as raw markers).
+        Test.startTest();
+        try {
+            DocGenService.processXmlForTest('{~Unclosed}no closer here', new Map<String, Object>{ 'X' => 1 });
+            System.assert(false, 'Expected a DocGenException for the unclosed root-anchor tag.');
+        } catch (Exception e) {
+            System.assert(
+                e.getMessage().contains('Malformed root-anchor tag'),
+                'Unexpected exception for the unclosed tag: ' + e.getMessage()
+            );
+        }
+
+        // A second, unrelated {~} render in the same test method/transaction must
+        // resolve cleanly — proving the first call's statics were cleared, not
+        // leaked.
+        String result = DocGenService.processXmlForTest('{~Y}{Name}{/Y}', new Map<String, Object>{ 'Name' => 'Clean' });
+        Test.stopTest();
+
+        System.assertEquals('Clean', result, 'Second, independent {~} render must not see leaked state: ' + result);
+    }
+
+    @IsTest
+    static void rootAnchorJobLimitThrowsInsteadOfLoopingUnbounded() {
+        // Builds 101 distinct {~Label} tags programmatically — well past
+        // ROOT_TAG_JOB_LIMIT (100) — to prove the cap throws a clear
+        // DocGenException rather than growing the job queue unbounded. Done in a
+        // real test class, not an e2e script, because 101 literal tags would blow
+        // the Anonymous Apex 20,000-char ceiling those scripts are bound by.
+        String xml = '';
+        for (Integer i = 0; i < 101; i++) {
+            xml += '{~L' + i + '}{X}{/L' + i + '}';
+        }
+
+        Test.startTest();
+        try {
+            DocGenService.processXmlForTest(xml, new Map<String, Object>{ 'X' => 'v' });
+            System.assert(false, 'Expected a DocGenException once the root-anchor job cap is exceeded.');
+        } catch (Exception e) {
+            System.assert(
+                e.getMessage().contains('Too many {~} root-anchor tags'),
+                'Unexpected exception at the job cap: ' + e.getMessage()
+            );
+        }
+        Test.stopTest();
+    }
 }

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Added — `{~Label}` reaches parent-level data from inside a loop (#439)
+
+Inside a `{#Relationship}…{/Relationship}` loop, a tag depending on a
+**different**, sibling relationship on the parent record used to resolve to
+nothing — the loop body only ever sees the current row's own data, with no
+way back to anything else on the parent. The only workaround was moving that
+content entirely outside the loop, which breaks its natural reading
+position (this is the shape behind reports where a per-item chart ends up
+bunched at the end of the document instead of sitting beside each item).
+
+`{~Label}…{/Label}` fixes this: its body resolves against the **top-level
+record**, no matter how deeply nested the tag itself is.
+
+```
+{#Contacts}
+  {LastName}:
+  {~Pipeline}{#ChartBucket:Opportunities:StageName}{key_label} {percent}%{/ChartBucket}{/Pipeline}
+{/Contacts}
+```
+
+Each `Contacts` row now gets its own copy of the company-wide pipeline
+chart — previously that `{#ChartBucket}` rendered empty, since
+`Opportunities` isn't a relationship on a Contact. `Label` is a free-form
+match key, not a relationship name — it only pairs the tag with its closer,
+and must be unique across the whole template (it shares the engine's
+section-balancing logic with `{#…}`/`{^…}`, which tracks nesting depth by
+label text, not by which prefix opened it). See UserGuide §7.3.
+
+Composes with `{#ChartBucket}` — a chart wrapped in `{~Label}` resolves
+against the parent record even when the whole block sits inside an
+unrelated loop (found and fixed while building this: the chart resolver's
+own depth-tracker didn't originally recognize `{~` as a section opener,
+which would have resolved a wrapped chart too early, against the wrong
+row).
+
+**Not supported inside a giant-query loop** (a relationship over the
+2,000-row threshold) — using `{~…}` there fails the generation job
+immediately with a clear error rather than silently rendering every
+instance blank, since a giant-query chunk's row data is deliberately kept
+flat and parent-relationship-free to bound per-batch memory.
+
 ### Fixed
 
 - Negative currency values in generated templates now place the minus sign before symbol-before currencies. For example, `{Amount:currency}` renders `-$50.00` instead of `$-50.00`, and `{Amount:currency:GBP}` renders `-£50.00` instead of `£-50.00`. Symbol-after locale output, such as German/French-style `-50,00 €`, is unchanged.
