@@ -45,6 +45,11 @@ flat and parent-relationship-free to bound per-batch memory.
 
 ### Fixed
 
+- **Canvas elements now follow growing elements.** Elements placed below another
+  overlapping element automatically move with it when its content grows or shrinks.
+  The canvas preview and generated PDF preserve the authored spacing, including
+  chained layouts such as table, summary, note, and signature blocks. Manual
+  **Moves with another element** links also retain their placed spacing.
 - **Canvas table snap guides now follow the rendered table height.** The designer now
   measures table boxes after preview layout and syncs `box.h` to the actual rendered
   height, so text and other elements snap to the bottom of expanded tables instead of

@@ -55,6 +55,7 @@ import {
     signatureBoxSize,
     SIGNATURE_TYPES,
     htmlToCanvas,
+    buildAnchorGroups,
     anchorRoot,
     wouldCycle,
     boxLabel,
@@ -875,50 +876,114 @@ export default class DocGenCanvas extends LightningElement {
      */
     get renderedBoards() {
         const canDelete = (this.doc.artboards || []).length > 1;
-        return this.doc.artboards.map((board, idx) => ({
-            id: board.id,
-            index: idx + 1,
-            canDelete,
-            boxes: board.boxes.map((b) => ({
-                ...b,
-                // The on-screen box carries the SAME styling the serializer will emit.
-                // If the canvas showed 11pt sans and the PDF rendered 12pt serif, the
-                // whole premise of this editor would be false — so both read the one
-                // style object rather than each having their own idea of it.
-                style:
-                    'position:absolute;left:' +
-                    inToPx(b.x, this.zoom) +
-                    'px;top:' +
-                    inToPx(b.y, this.zoom) +
-                    'px;width:' +
-                    inToPx(b.w, this.zoom) +
-                    'px;min-height:' +
-                    inToPx(b.h, this.zoom) +
-                    'px;z-index:' +
-                    (b.z || 0) +
-                    ';' +
-                    this.screenStyle(b),
-                cls: b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox',
-                isSelected: b.id === this.selectedId,
-                // NOTHING is edited on the artboard now — text through the panel's
-                // rich-text editor, tables through the column editor. The artboard is a
-                // faithful preview you arrange, which is what makes it trustworthy.
-                // A named block leads with its name — on a busy page that is the only
-                // part of this badge anyone reads.
-                readout:
-                    (b.name ? b.name + ' · ' : '') +
-                    b.x.toFixed(2) +
-                    'in, ' +
-                    b.y.toFixed(2) +
-                    'in · ' +
-                    b.w.toFixed(2) +
-                    'in',
-                // A linked box reported "Pinned" here, which is what its `mode` field
-                // still says — but the link is what actually decides where it lands,
-                // so that was the panel confidently describing the wrong thing.
-                modeLabel: this.boxModeLabel(b, board)
-            }))
-        }));
+        return this.doc.artboards.map((board, idx) => {
+            const layout = this.screenFollowLayout(board);
+            return {
+                id: board.id,
+                index: idx + 1,
+                canDelete,
+                boxes: board.boxes.map((b) => this.renderedBox(b, board, layout))
+            };
+        });
+    }
+
+    renderedBox(b, board, layout) {
+        const pos = layout.get(b.id) || { x: b.x, y: b.y, h: b.h };
+        return {
+            ...b,
+            style:
+                'position:absolute;left:' +
+                inToPx(pos.x, this.zoom) +
+                'px;top:' +
+                inToPx(pos.y, this.zoom) +
+                'px;width:' +
+                inToPx(b.w, this.zoom) +
+                'px;min-height:' +
+                inToPx(pos.h, this.zoom) +
+                'px;z-index:' +
+                (b.z || 0) +
+                ';' +
+                this.screenStyle(b),
+            cls: b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox',
+            isSelected: b.id === this.selectedId,
+            readout:
+                (b.name ? b.name + ' · ' : '') +
+                b.x.toFixed(2) +
+                'in, ' +
+                b.y.toFixed(2) +
+                'in · ' +
+                b.w.toFixed(2) +
+                'in',
+            modeLabel: this.boxModeLabel(b, board)
+        };
+    }
+
+    screenFollowLayout(board) {
+        const layout = new Map();
+        for (const b of board.boxes || []) {
+            layout.set(b.id, { x: b.x, y: b.y, h: this.screenBoxHeightIn(b) });
+        }
+        for (const group of buildAnchorGroups(board.boxes || [])) {
+            if (group.length < 2) {
+                continue;
+            }
+            const head = group[0];
+            let visualBottom = head.y + this.screenBoxHeightIn(head);
+            let authoredBottom = head.y + head.h;
+            group.slice(1).forEach((member) => {
+                const authoredGap = Math.max(0, member.y - authoredBottom);
+                const y = visualBottom + authoredGap;
+                const h = this.screenBoxHeightIn(member);
+                layout.set(member.id, { x: member.x, y, h });
+                visualBottom = y + h;
+                authoredBottom = member.y + member.h;
+            });
+        }
+        return layout;
+    }
+
+    screenBoxHeightIn(box) {
+        if (!box) {
+            return 0;
+        }
+        if (box.kind === 'text') {
+            const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
+            const borderPt = st.borderWidth > 0 ? st.borderWidth * 2 : 0;
+            const contentWidth = Math.max(0.1, (box.w || 0.5) - ((st.padding || 0) * 2 + borderPt) / 72);
+            const charsPerLine = Math.max(1, Math.floor((contentWidth * 72) / Math.max(6, st.size || 11) / 0.55));
+            const source = String(box.html != null && box.html !== '' ? box.html : box.text || '')
+                .replace(/<br\s*\/?\s*>/gi, '\n')
+                .replace(/<[^>]*>/g, '');
+            const lines = source
+                .split(/\r?\n/)
+                .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+            const lineIn = (Math.max(6, st.size || 11) * 1.2 + (st.padding || 0) * 2 + borderPt) / 72;
+            return Math.max(box.h || 0, lines * lineIn);
+        }
+        if (box.kind !== 'table') {
+            return box ? box.h : 0;
+        }
+        const t = box.table || {};
+        const padPt = t.cellPadding == null ? 6 : t.cellPadding;
+        const lineIn = (size) => (Math.max(6, size || 11) * 1.2 + padPt * 2) / 72;
+        let rows = 0;
+        let h = 0;
+        if (t.showHeader) {
+            h += lineIn((t.headerText || {}).size || 10.5);
+        }
+        const sampleRows = t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
+        rows += sampleRows;
+        if (t.relationship) {
+            rows += 1;
+        }
+        rows += (t.rows || []).length;
+        if (t.totals && t.totals.enabled) {
+            rows += 1;
+        }
+        const subRows = (t.subRelationship || '').trim() && (t.subColumns || []).length ? sampleRows : 0;
+        h += rows * lineIn((t.rowText || {}).size || 11);
+        h += subRows * lineIn((t.subText || {}).size || 10);
+        return Math.max(box.h || 0, h);
     }
 
     boxModeLabel(b, board) {
@@ -3107,6 +3172,10 @@ export default class DocGenCanvas extends LightningElement {
             fresh = newTextBox(x, y, 2.5, 0.4);
         }
         this.pushHistory('place');
+        const followTarget = this.autoFollowTarget(fresh, target.boxes || []);
+        if (followTarget) {
+            Object.assign(fresh, this.followPatch(fresh, followTarget));
+        }
         const box = clampBox(fresh, this.geo);
         target.boxes = [...target.boxes, box];
         this.doc = { ...this.doc };
@@ -3122,10 +3191,39 @@ export default class DocGenCanvas extends LightningElement {
             signature: 'Signature',
             text: 'Text box'
         };
-        this.statusText = (LABELS[tool] || 'Box') + ' placed';
+        this.statusText = followTarget
+            ? (LABELS[tool] || 'Box') + ' placed, following ' + boxLabel(followTarget)
+            : (LABELS[tool] || 'Box') + ' placed';
         if (tool === 'image') {
             this.loadImageLibrary();
         }
+    }
+
+    autoFollowTarget(box, siblings) {
+        if (!box || box.positionMode === 'follows') {
+            return null;
+        }
+        const overlapsX = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w;
+        return (
+            (siblings || [])
+                .filter((candidate) => candidate && candidate.id !== box.id)
+                .filter((candidate) => overlapsX(box, candidate))
+                .filter((candidate) => box.y >= candidate.y + this.screenBoxHeightIn(candidate))
+                .sort((a, b) => {
+                    const aBottom = a.y + this.screenBoxHeightIn(a);
+                    const bBottom = b.y + this.screenBoxHeightIn(b);
+                    return bBottom - aBottom;
+                })[0] || null
+        );
+    }
+
+    followPatch(box, target) {
+        const visualGap = Math.max(0, box.y - (target.y + this.screenBoxHeightIn(target)));
+        return {
+            positionMode: 'follows',
+            anchorTo: target.id,
+            y: Math.round((target.y + target.h + visualGap) * 1000) / 1000
+        };
     }
 
     handleBoxMouseDown(event) {
@@ -3703,8 +3801,11 @@ export default class DocGenCanvas extends LightningElement {
                 .filter((b) => b && b.y <= box.y)
                 .pop();
             const pick = (above && above.id) || (this.anchorOptions[0] || {}).value || '';
-            this.applyToBox(box.id, { positionMode: 'follows', anchorTo: pick });
             const target = this._siblingsById.get(pick);
+            this.applyToBox(
+                box.id,
+                target ? this.followPatch(box, target) : { positionMode: 'follows', anchorTo: pick }
+            );
             this.statusText = target
                 ? 'Now follows ' + boxLabel(target)
                 : 'Set to follow — pick the element it should travel with';
@@ -3736,8 +3837,8 @@ export default class DocGenCanvas extends LightningElement {
             this.statusText = 'That element cannot be followed — it would loop back on itself';
             return;
         }
-        this.applyToBox(box.id, { positionMode: 'follows', anchorTo: id });
         const target = this._siblingsById.get(id);
+        this.applyToBox(box.id, target ? this.followPatch(box, target) : { positionMode: 'follows', anchorTo: id });
         this.statusText = target ? 'Now follows ' + boxLabel(target) : 'Link updated';
     }
 
