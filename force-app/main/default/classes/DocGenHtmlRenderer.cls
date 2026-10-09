@@ -1099,6 +1099,7 @@ public with sharing class DocGenHtmlRenderer {
             cp == 1423 || // ֏ Armenian dram
             cp == 8380 || // ₼ Azerbaijani manat
             cp == 536 || // Ș Latin capital S with comma below
+            cp == 537 || // ș Latin small s with comma below
             cp == 8376; // ₸ Kazakhstani tenge
     }
 
@@ -1214,10 +1215,32 @@ public with sharing class DocGenHtmlRenderer {
         }
     }
 
+    // Real lowercase letterforms run smaller than their capital — matched to the
+    // actual Arial glyph proportions measured off-platform (capital ~208px tall,
+    // lowercase ~168px tall, ratio ~0.8), not an arbitrary guess. Every other
+    // glyph here has no case distinction (currency symbols), so this only ever
+    // applies to cp 537.
+    private static Decimal pdfGlyphSizeScaleFactor(Integer cp) {
+        return cp == 537 ? 0.8 : 1.0;
+    }
+
+    private static String scalePdfGlyphSize(String size, Decimal factor) {
+        if (factor == 1.0) {
+            return size;
+        }
+        Matcher m = Pattern.compile('^([0-9]+(?:\\.[0-9]+)?)(pt|px)$').matcher(size);
+        if (!m.matches()) {
+            return size;
+        }
+        Decimal value = Decimal.valueOf(m.group(1)) * factor;
+        return value.setScale(2) + m.group(2);
+    }
+
     private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
         String hex = pdfGlyphResourceSuffix(cp);
         String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
         String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
+        size = scalePdfGlyphSize(size, pdfGlyphSizeScaleFactor(cp));
         String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
         String img =
             '<img src="/resource/DocGenPdfGlyphs/u' +
@@ -1267,6 +1290,8 @@ public with sharing class DocGenHtmlRenderer {
             return '20bc';
         if (cp == 536)
             return '0218';
+        if (cp == 537)
+            return '0219';
         return '20b8';
     }
 

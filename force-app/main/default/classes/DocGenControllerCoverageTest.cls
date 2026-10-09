@@ -451,6 +451,35 @@ private class DocGenControllerCoverageTest {
     }
 
     @IsTest
+    static void wrapNonLatinGlyphsLowercaseSCommaUsesSmallerImageFallback() {
+        // #438 follow-up: the capital S-comma (Ș, cp 536) got an image fallback,
+        // but the lowercase (ș, cp 537) was left on the plain 'Arial Unicode MS'
+        // font-span path — which doesn't actually render this glyph in
+        // Blob.toPdf, so it rendered as nothing. Confirmed by generating a real
+        // PDF: [ș] rendered as [] (invisible) before this fix, [ş]-shaped and
+        // visible after. Must go through the same image-fallback path as the
+        // capital, sized smaller to match the real letterform relationship
+        // (not just the capital's image reused at full size).
+        String wrapped = DocGenService.wrapNonLatinGlyphs('<p>[ș] [Ș]</p>');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0219.png'),
+            'Lowercase S-comma should use its own PDF glyph image fallback, not the font-span path: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            'Capital S-comma should still use its image fallback: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('height:8.80pt;width:8.80pt'),
+            'Lowercase S-comma image should render at 80% of the default 11pt body size: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('height:11pt;width:11pt'),
+            'Capital S-comma image should stay at the full default body size: ' + wrapped
+        );
+    }
+
+    @IsTest
     static void getDocGenTemplatesForRecordReturnsList() {
         Account acct = new Account(Name = 'GetForRec ' + Datetime.now().getTime());
         insert acct;
