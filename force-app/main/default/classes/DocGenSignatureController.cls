@@ -2953,46 +2953,6 @@ public without sharing class DocGenSignatureController {
         result.remaining = remaining;
         result.isComplete = (remaining == 0);
 
-        // Multi-signer upload verification fix: on the guided/drawn path each signer
-        // composites onto the previous signer's output (a chain), and each signer's
-        // audit is stamped with the hash of the document AS OF their signing. Only the
-        // FINAL signer's hash therefore equals the delivered PDF, so uploading the
-        // signed document to the verify page (verifyDocument → WHERE Document_Hash =
-        // fileHash) returned just one signer, while the token path (verifyByRequestId)
-        // correctly returned all. On completion, back-fill every signer's audit for
-        // this request with the final document hash so BOTH verify paths return the
-        // full roster. (The typed/server path already shares one hash via its
-        // finalizer.)
-        if (result.isComplete) {
-            String finalHash = audit.Document_Hash_SHA256__c;
-            DocGenFlsGuard.guestAssertAccessible(
-                DocGen_Signature_Audit__c.sObjectType,
-                new Set<String>{ 'Signature_Request__c', 'Document_Hash_SHA256__c', 'Signer_Name__c' }
-            );
-            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<DocGen_Signature_Audit__c> reqAudits = [
-                SELECT Id, Document_Hash_SHA256__c
-                FROM DocGen_Signature_Audit__c
-                WHERE Signature_Request__c = :signer.Signature_Request__c AND Signer_Name__c != 'SYSTEM'
-                WITH SYSTEM_MODE
-            ];
-            List<DocGen_Signature_Audit__c> hashFixes = new List<DocGen_Signature_Audit__c>();
-            for (DocGen_Signature_Audit__c a : reqAudits) {
-                if (a.Document_Hash_SHA256__c != finalHash) {
-                    a.Document_Hash_SHA256__c = finalHash;
-                    hashFixes.add(a);
-                }
-            }
-            if (!hashFixes.isEmpty()) {
-                DocGenFlsGuard.guestAssertUpdateable(hashFixes, new Set<String>{ 'Document_Hash_SHA256__c' });
-                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                List<Database.SaveResult> hashResults = Database.update(hashFixes, false, AccessLevel.SYSTEM_MODE);
-                for (Integer i = 0; i < hashResults.size(); i++) {
-                    requireDmlSuccess(hashResults[i], 'Update final signature audit hash', hashFixes[i].Id);
-                }
-            }
-        }
-
         // Persist the composited PDF.
         String baseName = (signer.Signature_Request__r != null &&
             signer.Signature_Request__r.Template__r != null)
@@ -3054,20 +3014,24 @@ public without sharing class DocGenSignatureController {
         DocGenFlsGuard.guestAssertCreateable(cv, new Set<String>{ 'Title', 'PathOnClient', 'VersionData' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         Database.insert(cv, AccessLevel.SYSTEM_MODE);
+        Id savedContentDocumentId = [
+            SELECT ContentDocumentId
+            FROM ContentVersion
+            WHERE Id = :cv.Id
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]
+        .ContentDocumentId;
 
         DocGen_Signature_Request__c parentReq = new DocGen_Signature_Request__c(Id = signer.Signature_Request__c);
         parentReq.Status__c = result.isComplete ? 'Signed' : 'In Progress';
         Set<String> reqUpd = new Set<String>{ 'Status__c' };
+        if (result.isComplete) {
+            parentReq.Protected_Signed_Content_Document_Id__c = String.valueOf(savedContentDocumentId);
+        }
         if (!result.isComplete) {
             // Point the next signer's viewer at the just-composited PDF.
-            ContentVersion nextCv = [
-                SELECT Id, ContentDocumentId
-                FROM ContentVersion
-                WHERE Id = :cv.Id
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            parentReq.Source_Document_Id__c = nextCv.Id;
+            parentReq.Source_Document_Id__c = cv.Id;
             reqUpd.add('Source_Document_Id__c');
             // Share this intermediate composited PDF with the next signer (often a
             // guest) so their viewer's getSourcePdfBase64 can read it. Without the
@@ -3079,7 +3043,7 @@ public without sharing class DocGenSignatureController {
             // Best-effort: never block signing on the share.
             try {
                 ContentDocumentLink nextCdl = new ContentDocumentLink();
-                nextCdl.ContentDocumentId = nextCv.ContentDocumentId;
+                nextCdl.ContentDocumentId = savedContentDocumentId;
                 nextCdl.LinkedEntityId = signer.Signature_Request__c;
                 nextCdl.ShareType = 'V';
                 nextCdl.Visibility = 'AllUsers';

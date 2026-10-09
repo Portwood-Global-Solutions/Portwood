@@ -236,6 +236,43 @@ private class DocGenTemplateLinterTest {
         );
     }
 
+    // =========================================================================
+    // {~Label} root-anchor tag (#439) — Label is a free-form match key, not a
+    // relationship name, so it must not be existence-checked the way {#Label}
+    // loop relationships are, while still being pairing-checked like any
+    // {#…}/{^…} section.
+    // =========================================================================
+
+    @isTest
+    static void rootAnchorTagIsNotFlaggedAsAnUnknownLoopRelationship() {
+        // Opportunities is a real child relationship of Account (unlike
+        // OpportunityLineItems, which is a child of Opportunity, not Account) —
+        // the nested loop must resolve cleanly so this test isolates the
+        // root-anchor behavior, not an unrelated schema mismatch.
+        String html = '<html><body><table><tr><td>{~Offices}{#Opportunities}{Amount}{/Opportunities}{/Offices}</td></tr></table></body></html>';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        System.assertEquals(
+            null,
+            findRule(findings, 'Loop relationship not found'),
+            '{~Offices} is a root-anchor label, not a relationship name — must not be existence-checked: ' + findings
+        );
+    }
+
+    @isTest
+    static void unclosedRootAnchorTagStillReportsUnclosedLoop() {
+        // {~Label} is section-shaped like {#…}/{^…} and must still be pairing-
+        // checked — an unclosed one fails generation with the same "Malformed
+        // loop tag" error, so it must produce the SAME warning, not a silently
+        // skipped one.
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
+            '<p>{~Offices}</p><p>{Name}</p>',
+            accountTemplate('Name')
+        );
+        DocGenAiHtmlValidator.Finding f = findRule(findings, 'Unclosed loop tag');
+        System.assertNotEquals(null, f, 'an unclosed {~Label} must still be flagged, same as {#…}/{^…}');
+        System.assert(f.detail.contains('{~Offices}'), 'the warning must name the tag: ' + f.detail);
+    }
+
     @isTest
     static void lintNeverThrowsOnGarbage() {
         Test.startTest();

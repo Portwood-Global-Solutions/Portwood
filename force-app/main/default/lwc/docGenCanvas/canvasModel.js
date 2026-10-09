@@ -261,6 +261,7 @@ export function newTextBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         x: round3(xIn),
         y: round3(yIn),
         w: round3(wIn),
@@ -360,6 +361,7 @@ export function newTableBox(xIn, yIn, wIn) {
         mode: 'flow',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         table: {
             ...DEFAULT_TABLE_STYLE,
@@ -410,6 +412,7 @@ export function newImageBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         image: {
             // A Portwood ASSET KEY, not a file URL. `{%asset:<key>}` resolves at
@@ -469,6 +472,7 @@ export function newShapeBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         shape: { ...DEFAULT_SHAPE },
         x: round3(xIn),
@@ -771,6 +775,7 @@ export function newCodeBox(xIn, yIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         code: { ...DEFAULT_CODE },
         x: round3(xIn),
@@ -909,6 +914,7 @@ export function newChartBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         chart: { ...DEFAULT_CHART },
         x: round3(xIn),
@@ -926,6 +932,7 @@ export function newSignatureBox(xIn, yIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         signature: { ...DEFAULT_SIGNATURE },
         x: round3(xIn),
@@ -1404,7 +1411,48 @@ function subLoopRow(t, parentColCount, boxFont) {
             );
         })
         .join('');
-    return '{#' + rel + '}<tr data-dg-row="subloop" data-dg-subrel="' + esc(rel) + '">' + cells + '</tr>{/' + rel + '}';
+    return (
+        '{#' +
+        rel +
+        '}<tr data-dg-row="subloop" data-dg-subrel="' +
+        esc(rel) +
+        '">' +
+        cells +
+        '</tr>{/' +
+        loopCloseKey(rel) +
+        '}'
+    );
+}
+
+/**
+ * The closing tag for a loop opener, mirroring the engine's own rule (#310).
+ *
+ * Some openers carry ARGUMENTS the closer does not repeat. The engine balances
+ * on the bare key — DocGenChartBucketResolver's close tag is the literal
+ * `{/ChartBucket}` — but the serializer emitted `'{/' + relationship + '}'`,
+ * so a table bound to `ChartBucket:Rel:Field` closed with
+ * `{/ChartBucket:Rel:Field}`, which nothing matches. The block was left
+ * unresolved and the table printed its raw tags.
+ *
+ * That made a chart with its numbers in a table beside it — the commonest chart
+ * layout there is — authorable in Word and HTML but NOT in Canvas.
+ *
+ * This mirrors DocGenTemplateLinter.balanceKey, which mirrors
+ * DocGenService.findBalancedEnd. Keep the three in step.
+ */
+function loopCloseKey(rel) {
+    const name = String(rel || '').trim();
+    const upper = name.toUpperCase();
+    if (upper === 'IF' || upper.startsWith('IF ')) {
+        return 'IF';
+    }
+    if (upper === 'GROUPBY' || upper.startsWith('GROUPBY ')) {
+        return 'GroupBy';
+    }
+    if (upper === 'CHARTBUCKET' || upper.startsWith('CHARTBUCKET:')) {
+        return 'ChartBucket';
+    }
+    return name;
 }
 
 function tableToHtml(box) {
@@ -1479,7 +1527,7 @@ function tableToHtml(box) {
         // The sub loop lives INSIDE the parent loop, after the parent's row, so each
         // parent record is followed by its own children. Outside it, the grandchildren
         // would all pile up once at the end under whichever parent happened to be last.
-        out += '{#' + t.relationship + '}' + loopRow + subRow + '{/' + t.relationship + '}';
+        out += '{#' + t.relationship + '}' + loopRow + subRow + '{/' + loopCloseKey(t.relationship) + '}';
     } else if (!(t.rows || []).length) {
         // No loop and no literal rows — keep one row so the table is not just a header.
         out += loopRow;
@@ -1499,11 +1547,29 @@ function tableToHtml(box) {
 }
 
 /**
- * The table as the CANVAS should show it: same cells, same widths, same borders, but
- * the {#Rel} loop markers replaced by two sample rows. Showing the raw marker would
- * put stray text in the artboard; showing one row would hide the fact that it repeats.
+ * Caps how many real child rows a bound table draws on the artboard. A real child
+ * list can be arbitrarily large; rendering all of it would both misrepresent the
+ * table (a real template paginates, the artboard does not) and tax the artboard's
+ * DOM. Tunable — picked to read as "a list", not a load-bearing number.
  */
-export function tablePreviewHtml(box) {
+const MAX_PREVIEW_ROWS = 8;
+
+/**
+ * The table as the CANVAS should show it: same cells, same widths, same borders, but
+ * the {#Rel} loop markers replaced by sample rows.
+ *
+ * `dataMap` is optional — the real record data resolved for the "Show sample data"
+ * toggle (docGenCanvas.js's resolvedSampleData), keyed the way
+ * DocGenDataRetriever.mapSObject shapes it: a bound relationship is
+ * `{totalSize, records:[...]}` on the map. When it's absent (toggle off, not yet
+ * loaded, or every existing caller/test that still calls tablePreviewHtml(box)
+ * alone) this renders EXACTLY as before — two canned sample rows, raw tag text.
+ * When present, real child rows (capped at MAX_PREVIEW_ROWS) replace the canned
+ * rows, and each cell's tag resolves against that row's own data via
+ * substituteSampleTags. Never mutates `box` — see substituteSampleTags's own
+ * preview-only contract.
+ */
+export function tablePreviewHtml(box, dataMap) {
     const t = box.table || {};
     const cols = t.columns || [];
     const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
@@ -1551,26 +1617,33 @@ export function tablePreviewHtml(box) {
         out += '</tr></thead>';
     }
     out += '<tbody>';
-    // The repeating body. Two sample rows when bound to a relationship, so it reads as
-    // a list rather than a single row.
-    const sampleRows = t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
     const subRel = (t.subRelationship || '').trim();
     const subs = t.subColumns || [];
     const stx = { ...DEFAULT_SUB_TEXT, ...(t.subText || {}) };
     const indent = t.subIndent == null ? 12 : t.subIndent;
 
+    // Real data available for this relationship: use it and cap at MAX_PREVIEW_ROWS.
+    // Otherwise fall through to the canned placeholder — two sample rows when bound to
+    // a relationship, so it still reads as a list rather than a single row.
+    const relEntry = dataMap && t.relationship ? dataMap[t.relationship] : null;
+    const relRows = relEntry && Array.isArray(relEntry.records) ? relEntry.records : null;
+    const realCount = relRows ? relRows.length : null;
+    const sampleRows =
+        realCount != null ? Math.min(realCount, MAX_PREVIEW_ROWS) : t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
+
     for (let i = 0; i < sampleRows; i++) {
+        const rowData = relRows ? relRows[i] : null;
         out +=
             '<tr>' +
             cols
                 .map(
-                    (c, i) =>
+                    (c, ci) =>
                         '<td' +
-                        spanAttr(i, cols.length, pvTotal) +
+                        spanAttr(ci, cols.length, pvTotal) +
                         ' style="' +
                         cellCss +
                         '">' +
-                        esc(c.tag || '') +
+                        substituteSampleTags(c.tag || '', rowData, { escapeLiterals: true }) +
                         '</td>'
                 )
                 .join('') +
@@ -1589,27 +1662,50 @@ export function tablePreviewHtml(box) {
                 ';' +
                 (stx.bold ? ' font-weight: bold;' : ' font-weight: normal;') +
                 (t.subFill ? ' background: ' + t.subFill + ';' : '');
-            out +=
-                '<tr>' +
-                subs
-                    .map((c, j) => {
-                        const pad = j === 0 ? ' padding-left: ' + (t.cellPadding + indent) + 'pt;' : '';
-                        return (
-                            '<td' +
-                            spanAttr(j, subs.length, pvTotal) +
-                            ' style="' +
-                            scss +
-                            pad +
-                            '">' +
-                            esc(c.tag || '') +
-                            '</td>'
-                        );
-                    })
-                    .join('') +
-                '</tr>';
+            const subEntry = rowData && subRel ? rowData[subRel] : null;
+            const subRows = subEntry && Array.isArray(subEntry.records) ? subEntry.records : null;
+            const subRealCount = subRows ? subRows.length : null;
+            const subSampleRows = subRealCount != null ? Math.min(subRealCount, MAX_PREVIEW_ROWS) : 1;
+            for (let j2 = 0; j2 < subSampleRows; j2++) {
+                const subRowData = subRows ? subRows[j2] : null;
+                out +=
+                    '<tr>' +
+                    subs
+                        .map((c, j) => {
+                            const pad = j === 0 ? ' padding-left: ' + (t.cellPadding + indent) + 'pt;' : '';
+                            return (
+                                '<td' +
+                                spanAttr(j, subs.length, pvTotal) +
+                                ' style="' +
+                                scss +
+                                pad +
+                                '">' +
+                                substituteSampleTags(c.tag || '', subRowData, { escapeLiterals: true }) +
+                                '</td>'
+                            );
+                        })
+                        .join('') +
+                    '</tr>';
+            }
         }
     }
-    if (t.relationship) {
+    if (realCount != null) {
+        // Real data: show the true remainder, or nothing when every row already fit —
+        // showing "…" when the cap wasn't even reached would misrepresent the record.
+        if (realCount > MAX_PREVIEW_ROWS) {
+            const extra = realCount - MAX_PREVIEW_ROWS;
+            out +=
+                '<tr><td colspan="' +
+                Math.max(1, pvTotal) +
+                '" style="' +
+                cellCss +
+                ' font-style: italic; color: #6b7280;">… ' +
+                extra +
+                ' more row' +
+                (extra === 1 ? '' : 's') +
+                '</td></tr>';
+        }
+    } else if (t.relationship) {
         out +=
             '<tr><td colspan="' +
             Math.max(1, pvTotal) +
@@ -2024,7 +2120,8 @@ function baseAuthoringAttrs(box, withId) {
         (box.name ? ' data-dg-name="' + esc(box.name) + '"' : '') +
         (box.positionMode === 'follows' && box.anchorTo ? ' data-dg-anchor="' + esc(box.anchorTo) + '"' : '') +
         (box.keepTogether ? ' data-dg-keep="1"' : '') +
-        (box.condition ? ' data-dg-if="' + esc(box.condition) + '"' : '')
+        (box.condition ? ' data-dg-if="' + esc(box.condition) + '"' : '') +
+        (box.variantGroup ? ' data-dg-variant-group="' + esc(box.variantGroup) + '"' : '')
     );
 }
 
@@ -2079,6 +2176,10 @@ function wrapCondition(box, inner) {
         return inner;
     }
     return '{#IF ' + esc(cond) + '}' + inner + '{/IF}';
+}
+
+function variantGroupKey(box) {
+    return String((box && box.variantGroup) || '').trim();
 }
 
 /**
@@ -2304,6 +2405,85 @@ function groupToHtml(members, cursor) {
     );
 }
 
+/**
+ * Emits mutually exclusive conditional alternatives as peers in the same flow slot.
+ *
+ * The ordinary flow chain advances the layout cursor after every authored box. That is
+ * right for independent blocks, but wrong for alternatives such as "Customer A",
+ * "Customer B" and "Customer C": false conditions remove their boxes at merge time,
+ * yet their authored heights have already pushed the next flow block down. A variant
+ * group keeps each alternative's own condition and styling, but measures every member
+ * from the same incoming cursor so inactive alternatives do not reserve extra rows.
+ */
+function variantGroupToHtml(members, cursor) {
+    const slotY = variantSlotTop(members);
+    return members
+        .map((m) =>
+            wrapCondition(
+                m,
+                '<div class="dg-flow"' +
+                    authoringAttrs(m) +
+                    ' style="margin: ' +
+                    round3(Math.max(0, slotY - (cursor || 0))) +
+                    'in 0 0 ' +
+                    m.x +
+                    'in; width: ' +
+                    outerToContentWidth(m) +
+                    'in; ' +
+                    styleCss(m) +
+                    '">' +
+                    boxInnerHtml(m) +
+                    '</div>'
+            )
+        )
+        .join('\n  ');
+}
+
+function variantSlotTop(members) {
+    return Math.min(...members.map((m) => m.y));
+}
+
+function variantCollapsedBottom(members) {
+    const sorted = members.slice().sort((p, q) => p.y - q.y || p.x - q.x);
+    const gaps = [];
+    for (let i = 1; i < sorted.length; i += 1) {
+        const gap = round3(sorted[i].y - sorted[i - 1].y);
+        if (gap > 0) {
+            gaps.push(gap);
+        }
+    }
+    if (gaps.length) {
+        gaps.sort((p, q) => p - q);
+        return sorted[sorted.length - 1].y + gaps[Math.floor(gaps.length / 2)];
+    }
+    const top = variantSlotTop(sorted);
+    return top + Math.max(...sorted.map((m) => m.h));
+}
+
+function flowSlotBottom(members) {
+    return Math.max(...members.map((m) => m.y + m.h));
+}
+
+function buildVariantFlowGroups(boxes, excludedIds) {
+    const byKey = new Map();
+    for (const box of boxes || []) {
+        if (!box || box.mode !== 'flow' || (excludedIds && excludedIds.has(box.id))) {
+            continue;
+        }
+        const key = variantGroupKey(box);
+        if (!key) {
+            continue;
+        }
+        if (!byKey.has(key)) {
+            byKey.set(key, []);
+        }
+        byKey.get(key).push(box);
+    }
+    return [...byKey.values()]
+        .filter((members) => members.length > 1)
+        .map((members) => members.slice().sort((p, q) => p.y - q.y || p.x - q.x));
+}
+
 /** The rendered content of a box, without its positioning wrapper. */
 function boxInnerHtml(box) {
     if (box.kind === 'table') {
@@ -2410,16 +2590,24 @@ export function serialize(doc, geo) {
             // group is pushed by a flow box above it and vice versa. Emitting them in
             // separate passes would let the two interleave wrongly on the page.
             const groups = buildAnchorGroups(b.boxes || []).filter((g) => g.length > 1);
+            const variantGroups = buildVariantFlowGroups(b.boxes || [], anchored);
+            const variantGrouped = new Set();
+            variantGroups.forEach((g) => g.forEach((m) => variantGrouped.add(m.id)));
             const flowSingles = (b.boxes || [])
                 .filter((x) => !anchored.has(x.id))
+                .filter((x) => !variantGrouped.has(x.id))
                 .filter((x) => x.mode === 'flow')
                 .map((x) => [x]);
-            const chain = [...groups, ...flowSingles].sort((p, q) => p[0].y - q[0].y);
+            const chain = [...groups, ...variantGroups, ...flowSingles].sort((p, q) => p[0].y - q[0].y);
             let cursor = 0;
             const flowHtml = chain.map((members) => {
-                const out = members.length > 1 ? groupToHtml(members, cursor) : boxToHtml(members[0], cursor);
-                const last = members[members.length - 1];
-                cursor = last.y + last.h;
+                const isVariantGroup = members.length > 1 && !!variantGroupKey(members[0]);
+                const out = isVariantGroup
+                    ? variantGroupToHtml(members, cursor)
+                    : members.length > 1
+                      ? groupToHtml(members, cursor)
+                      : boxToHtml(members[0], cursor);
+                cursor = isVariantGroup ? variantCollapsedBottom(members) : flowSlotBottom(members);
                 return out;
             });
             const inner = [...pinned.map((x) => boxToHtml(x, 0)), ...flowHtml].join('\n  ');
@@ -2541,7 +2729,11 @@ function readTable(wrapper, tableEl) {
     // {#Rel} was silently gone. The wrapper still holds it wherever the parser moved it.
     // READ, to find the {#Rel} marker the parser may have moved. No write.
     // eslint-disable-next-line @lwc/lwc/no-inner-html
-    const m = /\{#([A-Za-z0-9_]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
+    // The opener may carry ARGUMENTS — `{#ChartBucket:Rel:Field}` — so this cannot be
+    // [A-Za-z0-9_]+ (#310). With the narrow pattern a bucket table read back as an
+    // unbound table, which is why the documented string-replace workaround did not
+    // survive a round trip through the designer.
+    const m = /\{#([^{}]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
     t.relationship = m ? m[1] : '';
     const count = Math.max(ths.length, tds.length);
     for (let i = 0; i < count; i++) {
@@ -2664,6 +2856,7 @@ export function deserialize(html) {
                 const az = parseInt(el.getAttribute('data-dg-z'), 10);
                 box.z = isNaN(az) ? 0 : az;
                 box.condition = el.getAttribute('data-dg-if') || '';
+                box.variantGroup = el.getAttribute('data-dg-variant-group') || '';
                 box.name = el.getAttribute('data-dg-name') || '';
                 // Prefer the AUTHORING attributes; fall back to reading the CSS only
                 // for documents saved before they existed.
@@ -3218,6 +3411,122 @@ const NON_FIELD_TAGS =
     /^(Today|Now|PageNumber|TotalPages|RowNumber|RunningUser(\.[A-Za-z0-9_]+)?|SUM|COUNT|AVG|MIN|MAX|IF|ELSE)/i;
 
 /**
+ * Matches a merge tag, capturing an optional structural prefix (#, /, ^, %) and the
+ * tag body. Shared by every tag-scanning function in this file — `matchAll`/`replace`
+ * never mutate the `lastIndex` of the regex they're called on (the engine resets it
+ * per call), so one module-level instance is safe to reuse rather than a copy per use.
+ */
+const MERGE_TAG_RE = /\{([#/^%]?)([A-Za-z0-9_.:=&'"\s-]+?)\}/g;
+
+/**
+ * Walks a dotted tag body (e.g. Client__r.BillingStreet) through the nested record
+ * shape DocGenDataRetriever.mapSObject actually produces — parent lookups are nested
+ * maps, child relationships are {totalSize, records}. Returns undefined on any
+ * missing segment, which the caller treats as "not resolvable."
+ */
+function resolveTagPath(path, dataMap) {
+    let cur = dataMap;
+    for (const seg of path.split('.')) {
+        if (cur == null || typeof cur !== 'object') return undefined;
+        cur = cur[seg];
+    }
+    return cur;
+}
+
+/**
+ * Approximate display formatting for the two format suffixes that most change a
+ * value's LENGTH — currency and date — which is what this feature actually cares
+ * about (box sizing), not visual fidelity. Deliberately does not attempt the real
+ * engine's ISO-code/locale/auto-detect/live-conversion currency grammar
+ * (DocGenService.cls's buildCurrencyAmount and friends, several hundred lines) or
+ * real date-locale formatting — replicating that here would be a second
+ * implementation to keep in sync forever, the exact trap CLAUDE.md warns about for
+ * merge-tag resolution paths. `currency` always renders as bare-$ US formatting
+ * (the engine's own backward-compat default for `{Field:currency}` with no ISO
+ * given, so this matches the common case exactly and is merely approximate for an
+ * explicit ISO/locale/auto form). Any other/unknown format falls through to the
+ * plain value, same as before this existed.
+ */
+function approxFormatForPreview(value, format) {
+    if (!format) return value;
+    const fmt = format.trim().toLowerCase();
+    if (fmt === 'currency' && typeof value === 'number') {
+        return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (fmt === 'date' && (typeof value === 'string' || value instanceof Date)) {
+        const d = value instanceof Date ? value : new Date(value);
+        if (!isNaN(d.getTime())) {
+            // Parse as UTC-date-only (Salesforce Date fields have no time component) so
+            // the displayed day doesn't shift with the browser's local timezone.
+            const utc =
+                typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + 'T00:00:00Z') : d;
+            return utc.toLocaleDateString('en-US', { timeZone: 'UTC' });
+        }
+    }
+    return value;
+}
+
+/**
+ * Substitutes real field values for merge tags in preview text — CANVAS RENDERING
+ * ONLY. Never mutates its input and returns a new string; callers must not feed the
+ * result back into box.html/box.text or `serialize` would start saving resolved
+ * values instead of tags (see docGenCanvas.js's previewHtmlFor/tablePreviewHtml call
+ * sites for the "preview-only, never touches this.doc" contract this depends on).
+ *
+ * Structural tags ({#...}, {/...}, {^...}, {%...}) and non-field tags (Today,
+ * PageNumber, SUM, ...) are left untouched — the same classification
+ * `collectFromText` uses, so what gets substituted here is exactly what the derived
+ * Query Config actually queries for. A tag that resolves to null/undefined/'' (or to
+ * a nested object rather than a leaf value — e.g. a relationship name used bare)
+ * falls back to its own raw text, so a box never collapses to nothing or prints
+ * "[object Object]" because a field happened to be blank or mis-typed.
+ *
+ * `escapeLiterals`: false (default) for rich-text/HTML box content, where the
+ * surrounding markup is already safe HTML and only the substituted VALUE needs
+ * escaping. true for plain-text sources (a table column's raw `tag` string), where
+ * the whole result — literal text and all — needs HTML-escaping the way `esc()` used
+ * to apply to the entire string before any substitution existed.
+ */
+export function substituteSampleTags(rawText, dataMap, opts) {
+    const escapeLiterals = !!(opts && opts.escapeLiterals);
+    const text = String(rawText || '');
+    if (!dataMap) {
+        return escapeLiterals ? esc(text) : text;
+    }
+    let out = '';
+    let lastIndex = 0;
+    for (const m of text.matchAll(MERGE_TAG_RE)) {
+        const whole = m[0];
+        const prefix = m[1];
+        const rawBody = m[2];
+        const literal = text.slice(lastIndex, m.index);
+        out += escapeLiterals ? esc(literal) : literal;
+        lastIndex = m.index + whole.length;
+
+        if (prefix === '#' || prefix === '/' || prefix === '^' || prefix === '%') {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        const segments = rawBody.trim().split(':');
+        const body = segments[0].trim();
+        const format = segments[1];
+        if (!body || NON_FIELD_TAGS.test(body) || body.indexOf('(') !== -1 || body.indexOf(' ') !== -1) {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        const value = resolveTagPath(body, dataMap);
+        if (value == null || value === '' || typeof value === 'object') {
+            out += escapeLiterals ? esc(whole) : whole;
+            continue;
+        }
+        out += esc(String(approxFormatForPreview(value, format)));
+    }
+    const tail = text.slice(lastIndex);
+    out += escapeLiterals ? esc(tail) : tail;
+    return out;
+}
+
+/**
  * Walks text for merge tags, TRACKING loop context.
  *
  * A text box can hold hand-written loops, including one inside another — which is the
@@ -3233,7 +3542,7 @@ const NON_FIELD_TAGS =
  */
 function collectFromText(text, out, rel) {
     const stack = rel ? [rel] : [];
-    for (const m of String(text || '').matchAll(/\{([#/^%]?)([A-Za-z0-9_.:=&'"\s-]+?)\}/g)) {
+    for (const m of String(text || '').matchAll(MERGE_TAG_RE)) {
         const prefix = m[1];
         let body = m[2].trim();
         if (prefix === '#') {

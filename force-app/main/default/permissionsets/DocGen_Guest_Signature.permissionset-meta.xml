@@ -159,6 +159,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
+        <field>DocGen_Signature_Request__c.Protected_Signed_Content_Document_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
         <field>DocGen_Signature_Request__c.Snapshot_Hash__c</field>
         <readable>true</readable>
     </fieldPermissions>

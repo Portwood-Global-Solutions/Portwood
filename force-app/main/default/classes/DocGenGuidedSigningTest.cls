@@ -388,12 +388,10 @@ private class DocGenGuidedSigningTest {
     @IsTest
     static void multiSigner_uploadVerificationReturnsAllSigners() {
         // Regression: on the guided/drawn path each signer composites onto the previous
-        // signer's PDF (a chain), so each signer's audit was stamped with the hash of the
-        // document AS OF their signing. Only the FINAL signer's hash matched the delivered
-        // file, so uploading the signed PDF to the verify page (verifyDocument, hash lookup)
-        // returned just ONE signer while the token path (verifyByRequestId) returned all. On
-        // completion we back-fill every signer's audit with the final document hash so BOTH
-        // verify paths return the full roster.
+        // signer's PDF (a chain), so each signer's audit is stamped with the hash of the
+        // document AS OF their signing. Only the FINAL signer's hash matches the delivered
+        // file, so uploading the signed PDF to the verify page must resolve the matching
+        // request and return every signer without rewriting earlier immutable audit hashes.
         Id tplId = createTaggedTemplate();
         Account a = [SELECT Id FROM Account LIMIT 1];
         DocGenSignatureSenderController.createGuidedPdfSignatureRequest(tplId, a.Id, signersJson2(), 'Parallel', null);
@@ -433,7 +431,7 @@ private class DocGenGuidedSigningTest {
             null
         );
         System.assertEquals(false, r1.isComplete, 'First signer does not complete the request');
-        // Signer two completes — triggers the audit-hash back-fill.
+        // Signer two completes the request.
         DocGenSignatureController.SavePdfSignatureResult r2 = DocGenSignatureController.saveCompositedSignedPdf(
             signers[1].Secure_Token__c,
             finalB64,
@@ -446,20 +444,17 @@ private class DocGenGuidedSigningTest {
 
         System.assertEquals(true, r2.isComplete, 'Second signer completes the request');
 
-        // Both signers' audits now carry the SAME final document hash.
+        // Each signer audit keeps the hash of the document as it existed when that
+        // signer signed; those hashes are immutable evidence and must not be back-filled.
         List<DocGen_Signature_Audit__c> audits = [
             SELECT Signer_Name__c, Document_Hash_SHA256__c
             FROM DocGen_Signature_Audit__c
             WHERE Signature_Request__c = :requestId AND Signer_Name__c != 'SYSTEM'
+            ORDER BY Signed_Date__c ASC
         ];
         System.assertEquals(2, audits.size(), 'One audit per signer');
-        for (DocGen_Signature_Audit__c au : audits) {
-            System.assertEquals(
-                finalHash,
-                au.Document_Hash_SHA256__c,
-                'Every signer audit must carry the final document hash after completion: ' + au.Signer_Name__c
-            );
-        }
+        System.assertEquals(intermediateHash, audits[0].Document_Hash_SHA256__c, 'First audit keeps its original hash');
+        System.assertEquals(finalHash, audits[1].Document_Hash_SHA256__c, 'Final audit carries the delivered PDF hash');
 
         // Uploading the delivered PDF (final hash) now returns BOTH signers — the bug was
         // that this returned only the last signer.
@@ -472,14 +467,14 @@ private class DocGenGuidedSigningTest {
             'verifyDocument(finalHash) must return every signer, not just the last one'
         );
 
-        // The pre-completion intermediate hash was overwritten and no longer resolves.
+        // The pre-completion intermediate hash also resolves the same request audit roster.
         List<DocGenAuthenticatorController.VerificationResult> byIntermediate = DocGenAuthenticatorController.verifyDocument(
             intermediateHash
         );
         System.assertEquals(
-            0,
+            2,
             byIntermediate.size(),
-            'Intermediate composite hash must no longer match after back-fill'
+            'verifyDocument(intermediateHash) must also return the request signer roster'
         );
     }
 
