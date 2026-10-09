@@ -45,6 +45,17 @@ flat and parent-relationship-free to bound per-batch memory.
 
 ### Fixed
 
+- **Canvas table loops bound to an argument-carrying opener (`ChartBucket:...`, `IF ...`,
+  `GroupBy ...`) rendered their raw merge tags instead of resolving** (#310). The Canvas
+  serializer closed every table loop by repeating the opener's full text instead of its bare key,
+  so a bucket table closed with `{/ChartBucket:Rel:Field}` — but the engine's resolvers balance on
+  `{/ChartBucket}`, so nothing matched and the block was left unresolved. A chart with its numbers
+  in a table beside it, one of the most common chart layouts, was authorable in Word and HTML but
+  not in Canvas. Fixed generally via a new `loopCloseKey()` that mirrors
+  `DocGenTemplateLinter.balanceKey`, applied at both the parent loop and the grandchild sub-loop.
+  The Import HTML reader had the mirror-image bug — its binding regex couldn't match an opener
+  carrying arguments, so a bucket table came back unbound on reopen — fixed alongside it. Plain
+  relationship loops are unchanged.
 - **Canvas conditional variants no longer leave empty rows in generated output** (#302).
   Mutually exclusive flow boxes can now share a **Variant group**: the Designer still
   shows each authored alternative in its vertical position so it can be selected and
