@@ -1035,6 +1035,7 @@ public with sharing class DocGenHtmlRenderer {
         if (String.isBlank(s))
             return s;
         s = decodeHighCodepointEntities(s);
+        s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();
         Boolean needsWrap = false;
         for (Integer i = 0; i < len; i++) {
@@ -1048,8 +1049,8 @@ public with sharing class DocGenHtmlRenderer {
 
         String out = '';
         Integer i = 0;
-        Boolean inTag = false;
         Integer runStart = -1;
+        List<PdfGlyphStyle> styleStack = new List<PdfGlyphStyle>{ new PdfGlyphStyle('11pt', false) };
         while (i < len) {
             Integer cp = s.charAt(i);
             if (cp == 60) {
@@ -1060,23 +1061,31 @@ public with sharing class DocGenHtmlRenderer {
                         '</span>';
                     runStart = -1;
                 }
-                inTag = true;
-                out += s.substring(i, i + 1);
-                i++;
+                Integer tagEnd = s.indexOf('>', i);
+                if (tagEnd < 0) {
+                    out += s.substring(i, i + 1);
+                    i++;
+                    continue;
+                }
+                String tag = s.substring(i, tagEnd + 1);
+                updatePdfGlyphStyleStack(styleStack, tag);
+                out += tag;
+                i = tagEnd + 1;
                 continue;
             }
-            if (cp == 62) {
-                inTag = false;
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (inTag) {
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (codepointNeedsUnicodeFont(cp)) {
+            if (codepointNeedsPdfGlyphImage(cp)) {
+                if (runStart >= 0) {
+                    out +=
+                        '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' +
+                        s.substring(runStart, i) +
+                        '</span>';
+                    runStart = -1;
+                }
+                out += pdfGlyphImageHtml(cp, styleStack[styleStack.size() - 1]);
+            } else if (codepointNeedsUnicodeFont(cp)) {
+                if (runStart < 0)
+                    runStart = i;
+            } else if (nextCodepointIsCombiningMark(s, i, len)) {
                 if (runStart < 0)
                     runStart = i;
             } else {
@@ -1100,7 +1109,252 @@ public with sharing class DocGenHtmlRenderer {
         return out;
     }
 
+    private static Boolean nextCodepointIsCombiningMark(String s, Integer i, Integer len) {
+        return i + 1 < len && codepointIsCombiningMark(s.charAt(i + 1));
+    }
+
+    private static Boolean codepointIsCombiningMark(Integer cp) {
+        return (cp >= 768 && cp <= 879) || (cp >= 6832 && cp <= 6911) || (cp >= 7616 && cp <= 7679);
+    }
+
+    private static String normalizeLatinCombiningMarks(String s) {
+        if (String.isBlank(s)) {
+            return s;
+        }
+        String commaBelow = String.fromCharArray(new List<Integer>{ 806 });
+        return s.replace('S' + commaBelow, String.fromCharArray(new List<Integer>{ 536 }))
+            .replace('s' + commaBelow, String.fromCharArray(new List<Integer>{ 537 }));
+    }
+
+    private static Boolean codepointNeedsPdfGlyphImage(Integer cp) {
+        return cp ==
+            8377 || // ₹ Indian rupee
+            cp == 8381 || // ₽ Russian ruble
+            cp == 8378 || // ₺ Turkish lira
+            cp == 8369 || // ₱ Philippine peso
+            cp == 8372 || // ₴ Ukrainian hryvnia
+            cp == 8383 || // ₿ Bitcoin
+            cp == 8382 || // ₾ Georgian lari
+            cp == 1423 || // ֏ Armenian dram
+            cp == 8380 || // ₼ Azerbaijani manat
+            cp == 536 || // Ș Latin capital S with comma below
+            cp == 537 || // ș Latin small s with comma below
+            cp == 8376; // ₸ Kazakhstani tenge
+    }
+
+    private class PdfGlyphStyle {
+        String fontSize;
+        Boolean bold;
+
+        PdfGlyphStyle(String fontSize, Boolean bold) {
+            this.fontSize = String.isBlank(fontSize) ? '11pt' : fontSize;
+            this.bold = bold == true;
+        }
+    }
+
+    private static void updatePdfGlyphStyleStack(List<PdfGlyphStyle> styleStack, String tag) {
+        String tagName = pdfGlyphTagName(tag);
+        if (String.isBlank(tagName)) {
+            return;
+        }
+        String lower = tag.toLowerCase();
+        if (lower.startsWith('</')) {
+            if (styleStack.size() > 1) {
+                styleStack.remove(styleStack.size() - 1);
+            }
+            return;
+        }
+        if (pdfGlyphIsVoidTag(tagName, lower)) {
+            return;
+        }
+
+        PdfGlyphStyle parent = styleStack[styleStack.size() - 1];
+        String fontSize = parent.fontSize;
+        Boolean bold = parent.bold || tagName == 'b' || tagName == 'strong';
+        if (tagName == 'h1') {
+            fontSize = '20pt';
+            bold = true;
+        } else if (tagName == 'h2') {
+            fontSize = '16pt';
+            bold = true;
+        } else if (tagName == 'h3') {
+            fontSize = '14pt';
+            bold = true;
+        } else if (tagName == 'h4') {
+            fontSize = '12pt';
+            bold = true;
+        } else if (tagName == 'h5') {
+            fontSize = '11pt';
+            bold = true;
+        } else if (tagName == 'h6') {
+            fontSize = '10pt';
+            bold = true;
+        }
+
+        String style = pdfGlyphStyleAttr(tag);
+        String tagFontSize = normalizePdfGlyphFontSize(pdfGlyphCssValue(style, 'font-size'));
+        if (String.isNotBlank(tagFontSize)) {
+            fontSize = tagFontSize;
+        }
+        String weight = pdfGlyphCssValue(style, 'font-weight');
+        if (String.isNotBlank(weight)) {
+            bold = pdfGlyphFontWeightIsBold(weight);
+        }
+        styleStack.add(new PdfGlyphStyle(fontSize, bold));
+    }
+
+    private static String pdfGlyphTagName(String tag) {
+        Matcher m = Pattern.compile('(?i)^<\\s*/?\\s*([a-z0-9]+)').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(1).toLowerCase() : null;
+    }
+
+    private static Boolean pdfGlyphIsVoidTag(String tagName, String lowerTag) {
+        return lowerTag.endsWith('/>') ||
+            tagName == 'br' ||
+            tagName == 'hr' ||
+            tagName == 'img' ||
+            tagName == 'input' ||
+            tagName == 'meta' ||
+            tagName == 'link';
+    }
+
+    private static String pdfGlyphStyleAttr(String tag) {
+        Matcher m = Pattern.compile('(?is)\\sstyle\\s*=\\s*([\'"])(.*?)\\1').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(2) : '';
+    }
+
+    private static String pdfGlyphCssValue(String style, String property) {
+        if (String.isBlank(style)) {
+            return null;
+        }
+        Matcher m = Pattern.compile('(?i)(^|;)\\s*' + property + '\\s*:\\s*([^;]+)').matcher(style);
+        return m.find() ? m.group(2).trim() : null;
+    }
+
+    private static String normalizePdfGlyphFontSize(String fontSize) {
+        if (String.isBlank(fontSize)) {
+            return null;
+        }
+        String value = fontSize.trim().toLowerCase().replaceAll('\\s+', '');
+        return Pattern.matches('^[0-9]+(\\.[0-9]+)?(pt|px)$', value) ? value : null;
+    }
+
+    private static Boolean pdfGlyphFontWeightIsBold(String weight) {
+        String value = weight == null ? '' : weight.trim().toLowerCase();
+        if (value == 'bold' || value == 'bolder') {
+            return true;
+        }
+        if (value == 'normal' || value == 'lighter') {
+            return false;
+        }
+        try {
+            return Integer.valueOf(value) >= 600;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Real lowercase letterforms run smaller than their capital — matched to the
+    // actual Arial glyph proportions measured off-platform (capital ~208px tall,
+    // lowercase ~168px tall, ratio ~0.8), not an arbitrary guess. Every other
+    // glyph here has no case distinction (currency symbols), so this only ever
+    // applies to cp 537.
+    private static Decimal pdfGlyphSizeScaleFactor(Integer cp) {
+        return cp == 537 ? 0.8 : 1.0;
+    }
+
+    private static String scalePdfGlyphSize(String size, Decimal factor) {
+        if (factor == 1.0) {
+            return size;
+        }
+        Matcher m = Pattern.compile('^([0-9]+(?:\\.[0-9]+)?)(pt|px)$').matcher(size);
+        if (!m.matches()) {
+            return size;
+        }
+        Decimal value = Decimal.valueOf(m.group(1)) * factor;
+        return value.setScale(2) + m.group(2);
+    }
+
+    private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
+        String hex = pdfGlyphResourceSuffix(cp);
+        String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
+        String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
+        size = scalePdfGlyphSize(size, pdfGlyphSizeScaleFactor(cp));
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout —
+        // then reuses that same cached size for every OTHER occurrence of the
+        // same URL in the document, regardless of what size each one actually
+        // requests. A template using the same glyph at two different sizes
+        // (e.g. body text and a heading) ends up with one of them badly
+        // mis-sized. Confirmed by direct testing: a single occurrence at any
+        // size renders correctly; two occurrences of the same URL at
+        // different sizes always leaves one broken, and which one breaks
+        // flips with processing order. The query string below is inert for
+        // Salesforce's static resource server (same file either way) but
+        // gives Flying Saucer a distinct cache key per size, so same-size
+        // reuse still shares a cache entry while different sizes don't
+        // collide.
+        String sizedSrc = '/resource/DocGenPdfGlyphs/u' + hex + '.png?sz=' + EncodingUtil.urlEncode(size, 'UTF-8');
+        String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
+        String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
+        if (glyphStyle == null || glyphStyle.bold != true) {
+            return img;
+        }
+        return '<span style="display:inline-block;vertical-align:-0.20em;width:' +
+            size +
+            ';height:' +
+            size +
+            ';white-space:nowrap;">' +
+            img +
+            '<img src="' +
+            sizedSrc +
+            '" alt="" style="' +
+            imgStyle +
+            'margin-left:-' +
+            size +
+            ';position:relative;left:0.03em;"/>' +
+            '</span>';
+    }
+
+    private static String pdfGlyphResourceSuffix(Integer cp) {
+        if (cp == 8377)
+            return '20b9';
+        if (cp == 8381)
+            return '20bd';
+        if (cp == 8378)
+            return '20ba';
+        if (cp == 8369)
+            return '20b1';
+        if (cp == 8372)
+            return '20b4';
+        if (cp == 8383)
+            return '20bf';
+        if (cp == 8382)
+            return '20be';
+        if (cp == 1423)
+            return '058f';
+        if (cp == 8380)
+            return '20bc';
+        if (cp == 536)
+            return '0218';
+        if (cp == 537)
+            return '0219';
+        return '20b8';
+    }
+
     private static Boolean codepointNeedsUnicodeFont(Integer cp) {
+        if (
+            cp == 269 ||
+            cp == 321 ||
+            cp == 322 ||
+            cp == 346 ||
+            cp == 347 ||
+            cp == 350 ||
+            cp == 351 ||
+            cp == 536 ||
+            cp == 537
+        )
+            return true; // Selected Latin Extended letters blank in the PDF base fonts
         if (cp <= 591)
             return false;
         if (cp == 8211 || cp == 8212)
@@ -1129,6 +1383,12 @@ public with sharing class DocGenHtmlRenderer {
         if (highCodepointEntityMap != null)
             return highCodepointEntityMap;
         highCodepointEntityMap = new Map<String, Integer>{
+            'Sacute' => 346,
+            'sacute' => 347,
+            'Scedil' => 350,
+            'scedil' => 351,
+            'Scomma' => 536,
+            'scomma' => 537,
             // Greek lowercase
             'alpha' => 945,
             'beta' => 946,
@@ -1259,7 +1519,47 @@ public with sharing class DocGenHtmlRenderer {
                 s = s.replace(token, String.fromCharArray(new List<Integer>{ entityMap.get(name) }));
             }
         }
+        Matcher numeric = Pattern.compile('&#(x[0-9a-fA-F]+|[0-9]+);').matcher(s);
+        String out = '';
+        Integer last = 0;
+        while (numeric.find()) {
+            Integer cp = parseHtmlEntityCodepoint(numeric.group(1));
+            if (cp != null && codepointNeedsUnicodeFont(cp)) {
+                out += s.substring(last, numeric.start()) + String.fromCharArray(new List<Integer>{ cp });
+                last = numeric.end();
+            }
+        }
+        if (last > 0) {
+            s = out + s.substring(last);
+        }
         return s;
+    }
+
+    private static Integer parseHtmlEntityCodepoint(String raw) {
+        if (String.isBlank(raw)) {
+            return null;
+        }
+        Boolean hex = raw.startsWithIgnoreCase('x');
+        String digits = hex ? raw.substring(1) : raw;
+        if (String.isBlank(digits)) {
+            return null;
+        }
+        Integer value = 0;
+        for (Integer i = 0; i < digits.length(); i++) {
+            Integer c = digits.charAt(i);
+            Integer n;
+            if (c >= 48 && c <= 57) {
+                n = c - 48;
+            } else if (hex && c >= 65 && c <= 70) {
+                n = c - 55;
+            } else if (hex && c >= 97 && c <= 102) {
+                n = c - 87;
+            } else {
+                return null;
+            }
+            value = value * (hex ? 16 : 10) + n;
+        }
+        return value;
     }
 
     /**
