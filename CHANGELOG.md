@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
+
+Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
+80.52% coverage
+
+Sixteen fixes and features land together this release — the Canvas Designer gets a run of
+maturity fixes (sample data preview, conditional variant groups, element linking, chart-in-table
+support), signature audit records become tamper-evident, and a batch of PDF rendering issues
+(special currency characters, negative currency, long hyperlinks, DOCX header spacing) are
+resolved.
+
 ### Added — `{~Label}` reaches parent-level data from inside a loop (#439)
 
 Inside a `{#Relationship}…{/Relationship}` loop, a tag depending on a
@@ -32,19 +43,51 @@ label text, not by which prefix opened it). See UserGuide §7.3.
 
 Composes with `{#ChartBucket}` — a chart wrapped in `{~Label}` resolves
 against the parent record even when the whole block sits inside an
-unrelated loop (found and fixed while building this: the chart resolver's
-own depth-tracker didn't originally recognize `{~` as a section opener,
-which would have resolved a wrapped chart too early, against the wrong
-row).
-
-**Not supported inside a giant-query loop** (a relationship over the
-2,000-row threshold) — using `{~…}` there fails the generation job
+unrelated loop. **Not supported inside a giant-query loop** (a relationship
+over the 2,000-row threshold) — using `{~…}` there fails the generation job
 immediately with a clear error rather than silently rendering every
 instance blank, since a giant-query chunk's row data is deliberately kept
 flat and parent-relationship-free to bound per-batch memory.
 
+### Added
+
+- **Canvas designer: "Show sample data" renders the artboard with the bound Test
+  Record's real values (#284).** The artboard used to draw raw merge tags
+  (`{Client__r.BillingStreet}`) while the real PDF showed the merged value
+  (`1400 Harborview Parkway, Suite 900`) — different lengths, so a box's size on the
+  canvas routinely disagreed with the output. A new toolbar checkbox, off by default,
+  substitutes the bound Test Record's real field values into text and table boxes, with
+  real child row counts (capped at 8, with a "+N more rows" indicator) on
+  relationship-bound tables; a field that's empty on the record falls back to showing
+  its raw tag rather than going blank. `:currency` and `:date` format suffixes get an
+  approximate rendering (bare-$ US formatting, a short date) sized for layout purposes,
+  not the real engine's ISO-code/locale-aware formatting. Preview-only — resolved
+  values never reach the saved template body regardless of toggle state. A manual
+  Refresh action and the current status live in the Data panel next to the sample-record
+  picker. See UserGuide §5.1.3.
+
 ### Fixed
 
+- **Canvas Type picklist guidance (#303).** Creating a Canvas-type template through the
+  generic Lightning "New" record form used to fail with a raw "bad value for restricted
+  picklist field: Canvas" error on upgraded orgs missing that picklist value. The admin
+  page now detects the gap on both `Portwood Template` and `Portwood Template Version`,
+  names exactly which field(s) to fix, and lets the admin re-check after fixing Setup.
+- **New templates now default to HTML instead of Word (#433).**
+- **Special and accented currency characters, including Ș/ș and ₹ ₽ ₺ ₱ ₴ ₸, now render
+  in generated PDFs (#438)** instead of printing as boxes or question marks.
+- **Long hyperlinks no longer extend beyond page boundaries in generated PDFs (#449).**
+- **Saving a template twice no longer replaces the author's entire stylesheet with a
+  hardcoded portrait shell (#319).** The Visual Designer's second "Save as New Version"
+  on a template with a custom `<style>` block (e.g. `@page { size: Letter landscape }`)
+  used to discard the original CSS and page orientation.
+- **Signature audit records are now tamper-evident (#442).** Document hashes and IP
+  addresses on `DocGen_Signature_Audit__c` can no longer be altered or deleted after the
+  record is created — only the one legitimate, system-controlled transition (blank hash →
+  finalized SHA-256) is still allowed.
+- **PDF glyph fallback images (Ș/ș, Armenian ֏, and currency symbols such as ₹ ₽ ₺ ₱) now
+  render correctly for every customer, not just some.** The underlying static resource URL
+  did not account for the package's install namespace in every org shape.
 - **Canvas table loops bound to an argument-carrying opener (`ChartBucket:...`, `IF ...`,
   `GroupBy ...`) rendered their raw merge tags instead of resolving** (#310). The Canvas
   serializer closed every table loop by repeating the opener's full text instead of its bare key,
@@ -108,40 +151,11 @@ flat and parent-relationship-free to bound per-batch memory.
   the footer content itself needs more space.
 - **Header logo/table positioning.** Word vertical table merges (`w:vMerge`) are rendered as
   HTML rowspans so logos and other merged header cells keep their intended position.
-
-### Improved
-
 - Header/footer height estimation now honors direct run font sizes from `<w:sz>` and
   style-inherited font sizes from `stylesXml`, with 11pt used only as a fallback.
 - Empty header/footer paragraphs are trimmed from PDF chrome so they do not create visible blank
   lines.
-- DOCX image height estimation continues to use `wp:extent` dimensions.
-- First-page headers and footers are measured separately from default headers and footers.
-
-### Tests
-
-- Added and updated `DocGenHtmlRendererTest` coverage for compact headers, multi-row table
-  headers, repeated-page clearance, first-page headers, compact footers, inherited font sizes,
-  and Word vertical table merges.
-- Verified focused Apex tests: `218/218` passing (`DocGenHtmlRendererTest`,
-  `DocGenHtmlTemplateTest`, `DocGenPageSetupTest`).
-
-### Added
-
-- **Canvas designer: "Show sample data" renders the artboard with the bound Test
-  Record's real values (#284).** The artboard used to draw raw merge tags
-  (`{Client__r.BillingStreet}`) while the real PDF showed the merged value
-  (`1400 Harborview Parkway, Suite 900`) — different lengths, so a box's size on the
-  canvas routinely disagreed with the output. A new toolbar checkbox, off by default,
-  substitutes the bound Test Record's real field values into text and table boxes, with
-  real child row counts (capped at 8, with a "+N more rows" indicator) on
-  relationship-bound tables; a field that's empty on the record falls back to showing
-  its raw tag rather than going blank. `:currency` and `:date` format suffixes get an
-  approximate rendering (bare-$ US formatting, a short date) sized for layout purposes,
-  not the real engine's ISO-code/locale-aware formatting. Preview-only — resolved
-  values never reach the saved template body regardless of toggle state. A manual
-  Refresh action and the current status live in the Data panel next to the sample-record
-  picker. See UserGuide §5.1.3.
+- First-page headers and footers are now measured separately from default headers and footers.
 
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
