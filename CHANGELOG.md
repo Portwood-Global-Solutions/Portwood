@@ -1,8 +1,149 @@
 # Changelog
 
-## Unreleased - V3 query tree: join through a parent's lookup
+## Unreleased
+
+### Added — `{~Label}` reaches parent-level data from inside a loop (#439)
+
+Inside a `{#Relationship}…{/Relationship}` loop, a tag depending on a
+**different**, sibling relationship on the parent record used to resolve to
+nothing — the loop body only ever sees the current row's own data, with no
+way back to anything else on the parent. The only workaround was moving that
+content entirely outside the loop, which breaks its natural reading
+position (this is the shape behind reports where a per-item chart ends up
+bunched at the end of the document instead of sitting beside each item).
+
+`{~Label}…{/Label}` fixes this: its body resolves against the **top-level
+record**, no matter how deeply nested the tag itself is.
+
+```
+{#Contacts}
+  {LastName}:
+  {~Pipeline}{#ChartBucket:Opportunities:StageName}{key_label} {percent}%{/ChartBucket}{/Pipeline}
+{/Contacts}
+```
+
+Each `Contacts` row now gets its own copy of the company-wide pipeline
+chart — previously that `{#ChartBucket}` rendered empty, since
+`Opportunities` isn't a relationship on a Contact. `Label` is a free-form
+match key, not a relationship name — it only pairs the tag with its closer,
+and must be unique across the whole template (it shares the engine's
+section-balancing logic with `{#…}`/`{^…}`, which tracks nesting depth by
+label text, not by which prefix opened it). See UserGuide §7.3.
+
+Composes with `{#ChartBucket}` — a chart wrapped in `{~Label}` resolves
+against the parent record even when the whole block sits inside an
+unrelated loop (found and fixed while building this: the chart resolver's
+own depth-tracker didn't originally recognize `{~` as a section opener,
+which would have resolved a wrapped chart too early, against the wrong
+row).
+
+**Not supported inside a giant-query loop** (a relationship over the
+2,000-row threshold) — using `{~…}` there fails the generation job
+immediately with a clear error rather than silently rendering every
+instance blank, since a giant-query chunk's row data is deliberately kept
+flat and parent-relationship-free to bound per-batch memory.
+
+### Fixed
+
+- **Canvas table loops bound to an argument-carrying opener (`ChartBucket:...`, `IF ...`,
+  `GroupBy ...`) rendered their raw merge tags instead of resolving** (#310). The Canvas
+  serializer closed every table loop by repeating the opener's full text instead of its bare key,
+  so a bucket table closed with `{/ChartBucket:Rel:Field}` — but the engine's resolvers balance on
+  `{/ChartBucket}`, so nothing matched and the block was left unresolved. A chart with its numbers
+  in a table beside it, one of the most common chart layouts, was authorable in Word and HTML but
+  not in Canvas. Fixed generally via a new `loopCloseKey()` that mirrors
+  `DocGenTemplateLinter.balanceKey`, applied at both the parent loop and the grandchild sub-loop.
+  The Import HTML reader had the mirror-image bug — its binding regex couldn't match an opener
+  carrying arguments, so a bucket table came back unbound on reopen — fixed alongside it. Plain
+  relationship loops are unchanged.
+- **Canvas conditional variants no longer leave empty rows in generated output** (#302).
+  Mutually exclusive flow boxes can now share a **Variant group**: the Designer still
+  shows each authored alternative in its vertical position so it can be selected and
+  edited, while the serializer emits the alternatives into one logical flow slot. The
+  next flow block follows the single active alternative instead of preserving space for
+  the inactive boxes. Variant group metadata round-trips through saved Canvas HTML, and
+  the serializer regression now covers the shared-slot spacing.
+- **Canvas elements now follow growing elements.** Elements placed below another
+  overlapping element automatically move with it when its content grows or shrinks.
+  The canvas preview and generated PDF preserve the authored spacing, including
+  chained layouts such as table, summary, note, and signature blocks. Manual
+  **Moves with another element** links also retain their placed spacing.
+- **Canvas table snap guides now follow the rendered table height.** The designer now
+  measures table boxes after preview layout and syncs `box.h` to the actual rendered
+  height, so text and other elements snap to the bottom of expanded tables instead of
+  the original one-row footprint.
+- **Canvas Import HTML flattened an exported document to one element, discarding every
+  box, condition and coordinate (#301).** The Canvas designer's **Import HTML** button
+  called `htmlToCanvas()` unconditionally — the converter meant for arbitrary foreign
+  HTML, which deliberately groups consecutive blocks into a single box. Handed a
+  document the Canvas designer itself had just exported, it folded the whole thing into
+  one box and reported "Imported 1 element(s)." **Import HTML** now tries to open the
+  file as a canvas document first (the same rule `loadBody()` already followed when
+  reopening a saved template) and only falls back to the foreign-HTML converter when the
+  file isn't canvas-shaped. Export → Import is a real round trip again; importing
+  genuinely foreign HTML is unaffected.
+- **Designer: a merge tag inserted into a running header or footer without typing
+  afterward could be silently dropped on save (#322).** `Header_Html__c`/`Footer_Html__c`
+  were only refreshed from the header/footer band's live contenteditable DOM on the
+  band's native `input` event. A tag chip click, a drag-and-drop insert, or retyping a
+  pill's tag key all mutate the band directly and never fire that event, so "Save as New
+  Version" reported success while the field it wrote kept its pre-insert value — proven
+  against the actual saved record, not just the on-screen canvas. Save now re-reads the
+  live header and footer immediately before saving, the same way Preview already did, so
+  a save can never persist a stale value. Separately, a failed cleanup pass on staged
+  HTML (the step that strips pill and preview-layer markup before a body is saved) no
+  longer silently hands back the original, unsanitized text as if it had succeeded — it
+  now surfaces as an error instead. This addresses the immediate data-loss/leak trigger
+  #322 reported; the broader architectural ask in that issue — separating the pill
+  decoration layer from the document entirely — remains open.
+- Negative currency values in generated templates now place the minus sign before symbol-before currencies. For example, `{Amount:currency}` renders `-$50.00` instead of `$-50.00`, and `{Amount:currency:GBP}` renders `-£50.00` instead of `£-50.00`. Symbol-after locale output, such as German/French-style `-50,00 €`, is unchanged.
+- **DOCX-to-PDF header/body spacing for compact table-based headers.** The PDF renderer now
+  measures DOCX headers using table-aware layout so cells in the same row are treated side by
+  side, not stacked vertically. This reduces excess blank space between compact headers and the
+  body while still reserving enough room for repeated headers on later pages.
+- **Repeated-page body overlap with DOCX headers.** Body content now starts after the measured
+  header bottom plus a small clearance, preventing multipage tables from collapsing into
+  repeated page headers.
+- **DOCX footer over-reservation.** Compact footers no longer inflate the bottom margin unless
+  the footer content itself needs more space.
+- **Header logo/table positioning.** Word vertical table merges (`w:vMerge`) are rendered as
+  HTML rowspans so logos and other merged header cells keep their intended position.
+
+### Improved
+
+- Header/footer height estimation now honors direct run font sizes from `<w:sz>` and
+  style-inherited font sizes from `stylesXml`, with 11pt used only as a fallback.
+- Empty header/footer paragraphs are trimmed from PDF chrome so they do not create visible blank
+  lines.
+- DOCX image height estimation continues to use `wp:extent` dimensions.
+- First-page headers and footers are measured separately from default headers and footers.
+
+### Tests
+
+- Added and updated `DocGenHtmlRendererTest` coverage for compact headers, multi-row table
+  headers, repeated-page clearance, first-page headers, compact footers, inherited font sizes,
+  and Word vertical table merges.
+- Verified focused Apex tests: `218/218` passing (`DocGenHtmlRendererTest`,
+  `DocGenHtmlTemplateTest`, `DocGenPageSetupTest`).
 
 ### Added
+
+- **Canvas designer: "Show sample data" renders the artboard with the bound Test
+  Record's real values (#284).** The artboard used to draw raw merge tags
+  (`{Client__r.BillingStreet}`) while the real PDF showed the merged value
+  (`1400 Harborview Parkway, Suite 900`) — different lengths, so a box's size on the
+  canvas routinely disagreed with the output. A new toolbar checkbox, off by default,
+  substitutes the bound Test Record's real field values into text and table boxes, with
+  real child row counts (capped at 8, with a "+N more rows" indicator) on
+  relationship-bound tables; a field that's empty on the record falls back to showing
+  its raw tag rather than going blank. `:currency` and `:date` format suffixes get an
+  approximate rendering (bare-$ US formatting, a short date) sized for layout purposes,
+  not the real engine's ISO-code/locale-aware formatting. Preview-only — resolved
+  values never reach the saved template body regardless of toggle state. A manual
+  Refresh action and the current status live in the Data panel next to the sample-record
+  picker. See UserGuide §5.1.3.
+
+### Added — V3 child nodes can join through a lookup on their parent (#452)
 
 - **`parentKeyField` on V3 child nodes.** A node can join on a lookup field of its parent
   record instead of the parent's Id, which reaches records related to that lookup. For example,
@@ -24,7 +165,7 @@
   and re-emits them on every save. `single` also round-trips on nodes the builder can edit, and
   forces V3 output since V1 SOQL cannot express it.
 
-### Fixed
+### Fixed — a V3 child node that listed its own lookup field rendered empty (#452)
 
 - **A V3 child node that listed its own lookup field came back empty.** The lookup field was
   always appended to the child's SELECT, so listing it in `fields` too selected it twice; the
