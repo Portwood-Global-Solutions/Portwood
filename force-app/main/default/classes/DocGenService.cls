@@ -11412,15 +11412,23 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
         String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
         size = scalePdfGlyphSize(size, pdfGlyphSizeScaleFactor(cp));
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout —
+        // then reuses that same cached size for every OTHER occurrence of the
+        // same URL in the document, regardless of what size each one actually
+        // requests. A template using the same glyph at two different sizes
+        // (e.g. body text and a heading) ends up with one of them badly
+        // mis-sized. Confirmed by direct testing: a single occurrence at any
+        // size renders correctly; two occurrences of the same URL at
+        // different sizes always leaves one broken, and which one breaks
+        // flips with processing order. The query string below is inert for
+        // Salesforce's static resource server (same file either way) but
+        // gives Flying Saucer a distinct cache key per size, so same-size
+        // reuse still shares a cache entry while different sizes don't
+        // collide.
+        String sizedSrc = '/resource/DocGenPdfGlyphs/u' + hex + '.png?sz=' + EncodingUtil.urlEncode(size, 'UTF-8');
         String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
-        String img =
-            '<img src="/resource/DocGenPdfGlyphs/u' +
-            hex +
-            '.png" alt="' +
-            ch +
-            '" style="' +
-            imgStyle +
-            '"/>';
+        String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
         if (glyphStyle == null || glyphStyle.bold != true) {
             return img;
         }
@@ -11430,9 +11438,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             size +
             ';white-space:nowrap;">' +
             img +
-            '<img src="/resource/DocGenPdfGlyphs/u' +
-            hex +
-            '.png" alt="" style="' +
+            '<img src="' +
+            sizedSrc +
+            '" alt="" style="' +
             imgStyle +
             'margin-left:-' +
             size +

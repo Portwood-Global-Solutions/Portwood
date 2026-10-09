@@ -451,6 +451,49 @@ private class DocGenControllerCoverageTest {
     }
 
     @IsTest
+    static void wrapNonLatinGlyphsSameGlyphAtDifferentSizesGetsDistinctUrls() {
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout,
+        // then reuses that cached size for every OTHER occurrence of the same
+        // URL — regardless of what size each one actually requests. Confirmed
+        // by generating real PDFs: the same rupee glyph used at 11pt then
+        // 24pt in one document rendered the 11pt one as a giant, overflowing
+        // symbol (it inherited the 24pt-sized cache entry). A single
+        // occurrence of any size, or two occurrences of the SAME size, is
+        // unaffected. The fix gives each distinct requested size its own
+        // cache key via an inert query string Salesforce's static resource
+        // server ignores (same file either way) but Flying Saucer treats as
+        // a distinct URL.
+        String html =
+            '<p>First at default size: &#8377;</p>' + '<p style="font-size:24pt;">Second at 24pt: &#8377;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        System.assert(
+            wrapped.contains('u20b9.png?sz=11pt'),
+            'Default-size occurrence should carry its own size in the URL: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('u20b9.png?sz=24pt'),
+            '24pt occurrence should carry a distinct URL from the default-size one: ' + wrapped
+        );
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsSameGlyphAtSameSizeSharesUrl() {
+        // The opposite case: two occurrences of the same glyph at the SAME
+        // size should resolve to the identical URL (same cache entry is
+        // correct and desirable here — no collision to avoid).
+        String html = '<p>One: &#8377; and two: &#8377;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        Integer count = 0;
+        Integer idx = wrapped.indexOf('u20b9.png?sz=11pt');
+        while (idx >= 0) {
+            count++;
+            idx = wrapped.indexOf('u20b9.png?sz=11pt', idx + 1);
+        }
+        System.assertEquals(2, count, 'Both same-size occurrences should use the identical sized URL: ' + wrapped);
+    }
+
+    @IsTest
     static void wrapNonLatinGlyphsLowercaseSCommaUsesSmallerImageFallback() {
         // #438 follow-up: the capital S-comma (Ș, cp 536) got an image fallback,
         // but the lowercase (ș, cp 537) was left on the plain 'Arial Unicode MS'
