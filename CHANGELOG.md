@@ -106,6 +106,11 @@ Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 
 
 ### Fixed
 
+- **Canvas setup now names the missing Type picklist field(s) in upgraded orgs (#303).**
+  Older Portwood orgs can be missing the `Canvas` value on one or both restricted Type
+  picklists. The admin page now checks both `Portwood Template > Type` and `Portwood
+Template Version > Type`, tells admins exactly where to activate `Canvas`, and lets
+  them re-check after fixing Setup instead of failing later with a generic save error.
 - **PDF output now preserves additional currency and S-comma glyphs with image fallbacks.**
   Characters that `Blob.toPdf()` could not render reliably, including `₹`, `₽`, `₺`, `₱`,
   `₴`, `₿`, `₾`, `֏`, `₼`, `₸` and `Ș`, now use small static-resource PNG fallbacks during
