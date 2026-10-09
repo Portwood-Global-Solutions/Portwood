@@ -45,6 +45,16 @@ flat and parent-relationship-free to bound per-batch memory.
 
 ### Fixed
 
+- **Canvas Import HTML flattened an exported document to one element, discarding every
+  box, condition and coordinate (#301).** The Canvas designer's **Import HTML** button
+  called `htmlToCanvas()` unconditionally — the converter meant for arbitrary foreign
+  HTML, which deliberately groups consecutive blocks into a single box. Handed a
+  document the Canvas designer itself had just exported, it folded the whole thing into
+  one box and reported "Imported 1 element(s)." **Import HTML** now tries to open the
+  file as a canvas document first (the same rule `loadBody()` already followed when
+  reopening a saved template) and only falls back to the foreign-HTML converter when the
+  file isn't canvas-shaped. Export → Import is a real round trip again; importing
+  genuinely foreign HTML is unaffected.
 - **Designer: a merge tag inserted into a running header or footer without typing
   afterward could be silently dropped on save (#322).** `Header_Html__c`/`Footer_Html__c`
   were only refreshed from the header/footer band's live contenteditable DOM on the

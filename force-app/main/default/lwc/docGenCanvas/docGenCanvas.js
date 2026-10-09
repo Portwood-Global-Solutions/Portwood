@@ -610,18 +610,37 @@ export default class DocGenCanvas extends LightningElement {
                 }
             }
             this.pushHistory('import');
-            const { doc, page, report } = htmlToCanvas(text);
-            if (page) {
-                this.canvasPageSize = page.size;
-                this.canvasOrientation = page.orientation;
-                this.margins = { ...page.margins };
-                if (page.custom) {
-                    this.customPage = normalizeCustom(page.custom);
+            // A canvas document is OPENED, not converted — the same rule loadBody
+            // already follows, and for the same reason: htmlToCanvas() groups
+            // consecutive blocks into single boxes, which is right for foreign HTML
+            // and destroys every box, condition and coordinate in a canvas-exported
+            // one, because a box's `position: absolute` lives in the .dg-pin/.dg-flow
+            // CLASS rule, not on the box's own inline style, so htmlToCanvas never
+            // recognizes it as already positioned.
+            const parsed = deserialize(text);
+            if (parsed) {
+                this.readPageSetup(text);
+                this.doc = parsed;
+                const boxes = parsed.artboards.reduce((n, b) => n + (b.boxes || []).length, 0);
+                this.importReport = {
+                    dropped: [],
+                    notes: ['Opened as a Canvas document — every element came across exactly as it was saved.'],
+                    boxes
+                };
+            } else {
+                const { doc, page, report } = htmlToCanvas(text);
+                if (page) {
+                    this.canvasPageSize = page.size;
+                    this.canvasOrientation = page.orientation;
+                    this.margins = { ...page.margins };
+                    if (page.custom) {
+                        this.customPage = normalizeCustom(page.custom);
+                    }
                 }
+                this.doc = doc;
+                this.importReport = report;
             }
-            this.doc = doc;
             this.selectedId = null;
-            this.importReport = report;
             this.reseedEditor();
             this.statusText = 'Imported ' + file.name;
             // Assets may be referenced by the imported markup.
