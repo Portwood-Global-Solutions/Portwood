@@ -6,6 +6,7 @@ import getTemplateVersions from '@salesforce/apex/DocGenController.getTemplateVe
 import getVersionBody from '@salesforce/apex/DocGenController.getVersionBody';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
+import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
 import { loadScript } from 'lightning/platformResourceLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
@@ -33,6 +34,7 @@ import {
     symbolMarkup,
     newTableBox,
     tablePreviewHtml,
+    substituteSampleTags,
     snapBox,
     suggestTotals,
     buildQueryConfig,
@@ -55,6 +57,7 @@ import {
     signatureBoxSize,
     SIGNATURE_TYPES,
     htmlToCanvas,
+    buildAnchorGroups,
     anchorRoot,
     wouldCycle,
     boxLabel,
@@ -165,6 +168,13 @@ export default class DocGenCanvas extends LightningElement {
     @track _showPageSetup = false;
 
     _loaded = false;
+    // True once loadBody() has actually finished and this.doc reflects the real
+    // template content — not merely once loadBody() has been CALLED. _loaded flips
+    // true synchronously at the top of loadBody(), before the async fetch that
+    // populates this.doc, so it cannot be used as a "the document is ready" signal;
+    // buildQueryConfig(this.doc) run before this is true sees the still-blank
+    // placeholder document and derives a near-empty Query Config.
+    _docLoaded = false;
     _templateId = null;
     _connected = false;
     // The document as STORED, so unsaved-change detection compares like with like.
@@ -337,6 +347,10 @@ export default class DocGenCanvas extends LightningElement {
     async handleSampleRecordChange(event) {
         const id = event.detail ? event.detail.recordId : null;
         this._sampleOverride = id;
+        // The record changed — whatever was resolved for the old one must not linger
+        // and be shown against the new one for even a moment.
+        this.resolvedSampleData = null;
+        this.sampleDataError = null;
         if (!id || !this.templateId) {
             return;
         }
@@ -350,6 +364,82 @@ export default class DocGenCanvas extends LightningElement {
             this.statusText = 'Preview record saved on the template';
         } catch (e) {
             this.statusText = 'Using that record for preview (not saved: ' + this.errText(e) + ')';
+        }
+        if (this.showSampleData) {
+            this.refreshSampleData();
+        }
+    }
+
+    /**
+     * Artboard "Show sample data" toggle — off by default, always an explicit choice.
+     * See refreshSampleData for the fetch this drives and
+     * previewHtmlFor/tablePreviewHtml for where resolvedSampleData is consumed.
+     */
+    @track showSampleData = false;
+    @track resolvedSampleData = null;
+    @track sampleDataLoading = false;
+    @track sampleDataError = null;
+
+    get sampleToggleDisabled() {
+        return !this.effectiveSampleRecordId;
+    }
+
+    get sampleDataStatusLabel() {
+        if (this.sampleDataLoading) {
+            return 'Loading sample data…';
+        }
+        if (this.sampleDataError) {
+            return 'Could not load sample data: ' + this.sampleDataError;
+        }
+        return "Artboard is showing this record's real values.";
+    }
+
+    handleToggleSampleData(event) {
+        this.showSampleData = event.target.checked;
+        if (this.showSampleData && !this.resolvedSampleData) {
+            this.refreshSampleData();
+        }
+    }
+
+    handleRefreshSampleData() {
+        return this.refreshSampleData();
+    }
+
+    /**
+     * The one fetch this feature makes. Called from exactly three places — toggle-on,
+     * a record change (handleSampleRecordChange), and the manual Refresh button —
+     * never per-keystroke and never from renderedCallback. Sends
+     * buildQueryConfig(this.doc), the config derived from tags actually placed right
+     * now, not the saved queryConfig — an author must see a field they just dragged
+     * onto a box before clicking Save or "Update the template's query".
+     *
+     * previewRecordData (DocGenController.cls) is reused as-is: it already resolves
+     * against an ad hoc Query Config string, decoupled from any saved template row,
+     * so this never needs to save anything first.
+     */
+    async refreshSampleData() {
+        if (!this.showSampleData || !this.effectiveSampleRecordId || !this.baseObject) {
+            this.resolvedSampleData = null;
+            return;
+        }
+        const cfg = buildQueryConfig(this.doc);
+        this.sampleDataLoading = true;
+        this.sampleDataError = null;
+        try {
+            const data = await previewRecordData({
+                recordId: this.effectiveSampleRecordId,
+                baseObject: this.baseObject,
+                queryConfig: cfg
+            });
+            this.resolvedSampleData = data || null;
+            if (!data) {
+                this.sampleDataError = 'No data returned for that record';
+            }
+        } catch (e) {
+            this.resolvedSampleData = null;
+            this.sampleDataError = this.errText(e);
+        } finally {
+            this.sampleDataLoading = false;
         }
     }
 
@@ -441,9 +531,18 @@ export default class DocGenCanvas extends LightningElement {
         return b ? b.condition || '' : '';
     }
 
+    get selVariantGroup() {
+        const b = this.selectedBox;
+        return b ? b.variantGroup || '' : '';
+    }
+
     /** A literal example tag cannot live in the markup — LWC compiles {…} as a binding. */
     get conditionPlaceholder() {
         return 'Amount > 200';
+    }
+
+    get variantGroupPlaceholder() {
+        return 'Customer Type';
     }
 
     handleConditionChange(event) {
@@ -456,6 +555,12 @@ export default class DocGenCanvas extends LightningElement {
             .replace(/^\{#IF\s*/i, '')
             .replace(/\}$/, '');
         this.applyToBox(box.id, { condition: raw });
+    }
+
+    handleVariantGroupChange(event) {
+        const box = this.selectedBox;
+        if (!box) return;
+        this.applyToBox(box.id, { variantGroup: (event.target.value || '').trim() });
     }
 
     get selZ() {
@@ -610,18 +715,37 @@ export default class DocGenCanvas extends LightningElement {
                 }
             }
             this.pushHistory('import');
-            const { doc, page, report } = htmlToCanvas(text);
-            if (page) {
-                this.canvasPageSize = page.size;
-                this.canvasOrientation = page.orientation;
-                this.margins = { ...page.margins };
-                if (page.custom) {
-                    this.customPage = normalizeCustom(page.custom);
+            // A canvas document is OPENED, not converted — the same rule loadBody
+            // already follows, and for the same reason: htmlToCanvas() groups
+            // consecutive blocks into single boxes, which is right for foreign HTML
+            // and destroys every box, condition and coordinate in a canvas-exported
+            // one, because a box's `position: absolute` lives in the .dg-pin/.dg-flow
+            // CLASS rule, not on the box's own inline style, so htmlToCanvas never
+            // recognizes it as already positioned.
+            const parsed = deserialize(text);
+            if (parsed) {
+                this.readPageSetup(text);
+                this.doc = parsed;
+                const boxes = parsed.artboards.reduce((n, b) => n + (b.boxes || []).length, 0);
+                this.importReport = {
+                    dropped: [],
+                    notes: ['Opened as a Canvas document — every element came across exactly as it was saved.'],
+                    boxes
+                };
+            } else {
+                const { doc, page, report } = htmlToCanvas(text);
+                if (page) {
+                    this.canvasPageSize = page.size;
+                    this.canvasOrientation = page.orientation;
+                    this.margins = { ...page.margins };
+                    if (page.custom) {
+                        this.customPage = normalizeCustom(page.custom);
+                    }
                 }
+                this.doc = doc;
+                this.importReport = report;
             }
-            this.doc = doc;
             this.selectedId = null;
-            this.importReport = report;
             this.reseedEditor();
             this.statusText = 'Imported ' + file.name;
             // Assets may be referenced by the imported markup.
@@ -856,50 +980,114 @@ export default class DocGenCanvas extends LightningElement {
      */
     get renderedBoards() {
         const canDelete = (this.doc.artboards || []).length > 1;
-        return this.doc.artboards.map((board, idx) => ({
-            id: board.id,
-            index: idx + 1,
-            canDelete,
-            boxes: board.boxes.map((b) => ({
-                ...b,
-                // The on-screen box carries the SAME styling the serializer will emit.
-                // If the canvas showed 11pt sans and the PDF rendered 12pt serif, the
-                // whole premise of this editor would be false — so both read the one
-                // style object rather than each having their own idea of it.
-                style:
-                    'position:absolute;left:' +
-                    inToPx(b.x, this.zoom) +
-                    'px;top:' +
-                    inToPx(b.y, this.zoom) +
-                    'px;width:' +
-                    inToPx(b.w, this.zoom) +
-                    'px;min-height:' +
-                    inToPx(b.h, this.zoom) +
-                    'px;z-index:' +
-                    (b.z || 0) +
-                    ';' +
-                    this.screenStyle(b),
-                cls: b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox',
-                isSelected: b.id === this.selectedId,
-                // NOTHING is edited on the artboard now — text through the panel's
-                // rich-text editor, tables through the column editor. The artboard is a
-                // faithful preview you arrange, which is what makes it trustworthy.
-                // A named block leads with its name — on a busy page that is the only
-                // part of this badge anyone reads.
-                readout:
-                    (b.name ? b.name + ' · ' : '') +
-                    b.x.toFixed(2) +
-                    'in, ' +
-                    b.y.toFixed(2) +
-                    'in · ' +
-                    b.w.toFixed(2) +
-                    'in',
-                // A linked box reported "Pinned" here, which is what its `mode` field
-                // still says — but the link is what actually decides where it lands,
-                // so that was the panel confidently describing the wrong thing.
-                modeLabel: this.boxModeLabel(b, board)
-            }))
-        }));
+        return this.doc.artboards.map((board, idx) => {
+            const layout = this.screenFollowLayout(board);
+            return {
+                id: board.id,
+                index: idx + 1,
+                canDelete,
+                boxes: board.boxes.map((b) => this.renderedBox(b, board, layout))
+            };
+        });
+    }
+
+    renderedBox(b, board, layout) {
+        const pos = layout.get(b.id) || { x: b.x, y: b.y, h: b.h };
+        return {
+            ...b,
+            style:
+                'position:absolute;left:' +
+                inToPx(pos.x, this.zoom) +
+                'px;top:' +
+                inToPx(pos.y, this.zoom) +
+                'px;width:' +
+                inToPx(b.w, this.zoom) +
+                'px;min-height:' +
+                inToPx(pos.h, this.zoom) +
+                'px;z-index:' +
+                (b.z || 0) +
+                ';' +
+                this.screenStyle(b),
+            cls: b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox',
+            isSelected: b.id === this.selectedId,
+            readout:
+                (b.name ? b.name + ' · ' : '') +
+                b.x.toFixed(2) +
+                'in, ' +
+                b.y.toFixed(2) +
+                'in · ' +
+                b.w.toFixed(2) +
+                'in',
+            modeLabel: this.boxModeLabel(b, board)
+        };
+    }
+
+    screenFollowLayout(board) {
+        const layout = new Map();
+        for (const b of board.boxes || []) {
+            layout.set(b.id, { x: b.x, y: b.y, h: this.screenBoxHeightIn(b) });
+        }
+        for (const group of buildAnchorGroups(board.boxes || [])) {
+            if (group.length < 2) {
+                continue;
+            }
+            const head = group[0];
+            let visualBottom = head.y + this.screenBoxHeightIn(head);
+            let authoredBottom = head.y + head.h;
+            group.slice(1).forEach((member) => {
+                const authoredGap = Math.max(0, member.y - authoredBottom);
+                const y = visualBottom + authoredGap;
+                const h = this.screenBoxHeightIn(member);
+                layout.set(member.id, { x: member.x, y, h });
+                visualBottom = y + h;
+                authoredBottom = member.y + member.h;
+            });
+        }
+        return layout;
+    }
+
+    screenBoxHeightIn(box) {
+        if (!box) {
+            return 0;
+        }
+        if (box.kind === 'text') {
+            const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
+            const borderPt = st.borderWidth > 0 ? st.borderWidth * 2 : 0;
+            const contentWidth = Math.max(0.1, (box.w || 0.5) - ((st.padding || 0) * 2 + borderPt) / 72);
+            const charsPerLine = Math.max(1, Math.floor((contentWidth * 72) / Math.max(6, st.size || 11) / 0.55));
+            const source = String(box.html != null && box.html !== '' ? box.html : box.text || '')
+                .replace(/<br\s*\/?\s*>/gi, '\n')
+                .replace(/<[^>]*>/g, '');
+            const lines = source
+                .split(/\r?\n/)
+                .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+            const lineIn = (Math.max(6, st.size || 11) * 1.2 + (st.padding || 0) * 2 + borderPt) / 72;
+            return Math.max(box.h || 0, lines * lineIn);
+        }
+        if (box.kind !== 'table') {
+            return box ? box.h : 0;
+        }
+        const t = box.table || {};
+        const padPt = t.cellPadding == null ? 6 : t.cellPadding;
+        const lineIn = (size) => (Math.max(6, size || 11) * 1.2 + padPt * 2) / 72;
+        let rows = 0;
+        let h = 0;
+        if (t.showHeader) {
+            h += lineIn((t.headerText || {}).size || 10.5);
+        }
+        const sampleRows = t.relationship ? 2 : (t.rows || []).length ? 0 : 1;
+        rows += sampleRows;
+        if (t.relationship) {
+            rows += 1;
+        }
+        rows += (t.rows || []).length;
+        if (t.totals && t.totals.enabled) {
+            rows += 1;
+        }
+        const subRows = (t.subRelationship || '').trim() && (t.subColumns || []).length ? sampleRows : 0;
+        h += rows * lineIn((t.rowText || {}).size || 11);
+        h += subRows * lineIn((t.subText || {}).size || 10);
+        return Math.max(box.h || 0, h);
     }
 
     boxModeLabel(b, board) {
@@ -2043,6 +2231,7 @@ export default class DocGenCanvas extends LightningElement {
      */
     resetForTemplate() {
         this._loaded = false;
+        this._docLoaded = false;
         this._savedHtml = null;
         this.doc = blankDocument();
         this.selectedId = null;
@@ -2058,6 +2247,10 @@ export default class DocGenCanvas extends LightningElement {
         this.showData = false;
         this._showPageSetup = false;
         this._sampleOverride = null;
+        this.showSampleData = false;
+        this.resolvedSampleData = null;
+        this.sampleDataError = null;
+        this.sampleDataLoading = false;
         this._past = [];
         this._future = [];
         this.margins = { ...DEFAULT_MARGINS };
@@ -2232,6 +2425,18 @@ export default class DocGenCanvas extends LightningElement {
             this.doc = blankDocument();
             this.statusText = 'Could not load the saved body: ' + (e.body ? e.body.message : e.message);
         }
+        // this.doc now reflects the real template content (or is genuinely blank for
+        // a brand-new one) on every path above, success or failure — safe to derive
+        // a real Query Config from it from this point on.
+        //
+        // Covers the edge case where the toggle was already checked before this
+        // finished (buildQueryConfig(this.doc) against the still-blank placeholder
+        // document would have derived a near-empty Query Config) — nothing auto-turns
+        // the toggle on here, this only retries a fetch the user already asked for.
+        this._docLoaded = true;
+        if (this.showSampleData && !this.resolvedSampleData) {
+            this.refreshSampleData();
+        }
     }
 
     /**
@@ -2303,7 +2508,42 @@ export default class DocGenCanvas extends LightningElement {
                 el.innerHTML = want;
             }
         }
+        this.syncRenderedTableHeights(byId);
         this.paintChartPreviews();
+    }
+
+    /**
+     * Tables can grow after their model height was chosen: extra rows, totals, nested
+     * rows and wrapping all change the real footprint. Snap guides read `box.h`, so
+     * after the browser has laid out the preview, copy that rendered height back into
+     * the model in inches.
+     */
+    syncRenderedTableHeights(byId) {
+        const patches = new Map();
+        for (const el of this.template.querySelectorAll('.dg-cbox[data-id]')) {
+            const model = byId.get(el.dataset.id);
+            if (!model || model.kind !== 'table') {
+                continue;
+            }
+            const rect = el.getBoundingClientRect();
+            if (!rect || rect.height <= 0) {
+                continue;
+            }
+            const h = pxToIn(rect.height, this.zoom);
+            if (Math.abs(h - (parseFloat(model.h) || 0)) > 0.005) {
+                patches.set(model.id, h);
+            }
+        }
+        if (!patches.size) {
+            return;
+        }
+        this.doc = {
+            ...this.doc,
+            artboards: this.doc.artboards.map((board) => ({
+                ...board,
+                boxes: board.boxes.map((b) => (patches.has(b.id) ? { ...b, h: patches.get(b.id) } : b))
+            }))
+        };
     }
 
     /**
@@ -2901,7 +3141,9 @@ export default class DocGenCanvas extends LightningElement {
             return '<canvas class="dg-chart-canvas" data-chart-for="' + model.id + '"></canvas>';
         }
         if (model.kind === 'table') {
-            return tablePreviewHtml(model);
+            // preview-only — dataMap is never written back into model/this.doc, only
+            // read here to render real rows; serialize() never sees it.
+            return tablePreviewHtml(model, this.showSampleData ? this.resolvedSampleData : null);
         }
         if (model.kind === 'image') {
             const img = model.image || {};
@@ -3012,7 +3254,15 @@ export default class DocGenCanvas extends LightningElement {
                 '"></div>'
             );
         }
-        return model.html != null ? model.html : model.text || '';
+        const raw = model.html != null ? model.html : model.text || '';
+        if (!this.showSampleData || !this.resolvedSampleData) {
+            return raw;
+        }
+        // preview-only — substituteSampleTags returns a new string; raw is never
+        // mutated and model/this.doc are never written to, so serialize() (Save,
+        // getSerializedHtml) always saves the original tag markup regardless of
+        // toggle state.
+        return substituteSampleTags(raw, this.resolvedSampleData);
     }
 
     handleToolSelect(event) {
@@ -3053,6 +3303,10 @@ export default class DocGenCanvas extends LightningElement {
             fresh = newTextBox(x, y, 2.5, 0.4);
         }
         this.pushHistory('place');
+        const followTarget = this.autoFollowTarget(fresh, target.boxes || []);
+        if (followTarget) {
+            Object.assign(fresh, this.followPatch(fresh, followTarget));
+        }
         const box = clampBox(fresh, this.geo);
         target.boxes = [...target.boxes, box];
         this.doc = { ...this.doc };
@@ -3068,10 +3322,39 @@ export default class DocGenCanvas extends LightningElement {
             signature: 'Signature',
             text: 'Text box'
         };
-        this.statusText = (LABELS[tool] || 'Box') + ' placed';
+        this.statusText = followTarget
+            ? (LABELS[tool] || 'Box') + ' placed, following ' + boxLabel(followTarget)
+            : (LABELS[tool] || 'Box') + ' placed';
         if (tool === 'image') {
             this.loadImageLibrary();
         }
+    }
+
+    autoFollowTarget(box, siblings) {
+        if (!box || box.positionMode === 'follows') {
+            return null;
+        }
+        const overlapsX = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w;
+        return (
+            (siblings || [])
+                .filter((candidate) => candidate && candidate.id !== box.id)
+                .filter((candidate) => overlapsX(box, candidate))
+                .filter((candidate) => box.y >= candidate.y + this.screenBoxHeightIn(candidate))
+                .sort((a, b) => {
+                    const aBottom = a.y + this.screenBoxHeightIn(a);
+                    const bBottom = b.y + this.screenBoxHeightIn(b);
+                    return bBottom - aBottom;
+                })[0] || null
+        );
+    }
+
+    followPatch(box, target) {
+        const visualGap = Math.max(0, box.y - (target.y + this.screenBoxHeightIn(target)));
+        return {
+            positionMode: 'follows',
+            anchorTo: target.id,
+            y: Math.round((target.y + target.h + visualGap) * 1000) / 1000
+        };
     }
 
     handleBoxMouseDown(event) {
@@ -3649,8 +3932,11 @@ export default class DocGenCanvas extends LightningElement {
                 .filter((b) => b && b.y <= box.y)
                 .pop();
             const pick = (above && above.id) || (this.anchorOptions[0] || {}).value || '';
-            this.applyToBox(box.id, { positionMode: 'follows', anchorTo: pick });
             const target = this._siblingsById.get(pick);
+            this.applyToBox(
+                box.id,
+                target ? this.followPatch(box, target) : { positionMode: 'follows', anchorTo: pick }
+            );
             this.statusText = target
                 ? 'Now follows ' + boxLabel(target)
                 : 'Set to follow — pick the element it should travel with';
@@ -3682,8 +3968,8 @@ export default class DocGenCanvas extends LightningElement {
             this.statusText = 'That element cannot be followed — it would loop back on itself';
             return;
         }
-        this.applyToBox(box.id, { positionMode: 'follows', anchorTo: id });
         const target = this._siblingsById.get(id);
+        this.applyToBox(box.id, target ? this.followPatch(box, target) : { positionMode: 'follows', anchorTo: id });
         this.statusText = target ? 'Now follows ' + boxLabel(target) : 'Link updated';
     }
 

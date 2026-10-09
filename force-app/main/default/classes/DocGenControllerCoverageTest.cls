@@ -391,6 +391,138 @@ private class DocGenControllerCoverageTest {
     }
 
     @IsTest
+    static void wrapNonLatinGlyphsCoversExtendedCurrencyGlyphs() {
+        String decomposedSComma = 'S' + String.fromCharArray(new List<Integer>{ 806 });
+        String input =
+            '<p>Á É Í Ó Ú Ł Ś Ş Ș ' +
+            decomposedSComma +
+            ' &Scomma; &Scedil; &scedil; &Sacute; ₹ ₽ ₺ ₱ ₴ ₿ ₾ ֏ ₼ ₸ ł ś ş ș č &#8377; &#x0141;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(input);
+        System.assert(wrapped.contains('Arial Unicode MS'), 'Missing PDF glyphs should get the Unicode font span');
+        System.assert(wrapped.contains('Ł'), 'Literal L-stroke should survive the wrapping pass');
+        System.assert(wrapped.contains('Ś'), 'S-acute should survive the wrapping pass');
+        System.assert(wrapped.contains('Ș'), 'S-comma should survive the wrapping pass');
+        System.assert(!wrapped.contains(decomposedSComma), 'Decomposed S-comma should normalize before PDF rendering');
+        System.assert(wrapped.contains('Ș'), 'Decomposed S-comma should normalize to precomposed S-comma');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            'Precomposed S-comma should use PDF glyph image fallback'
+        );
+        System.assert(wrapped.contains('Ş'), 'S-cedilla entity should decode before wrapping');
+        System.assert(!wrapped.contains('&Scedil;'), 'S-cedilla entity should not remain escaped');
+        System.assert(wrapped.contains('₹'), 'Numeric rupee entity should decode before wrapping');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u20b9.png'),
+            'Rupee should use PDF glyph image fallback'
+        );
+        System.assert(
+            wrapped.contains('style="height:11pt;width:11pt;vertical-align:-0.20em;display:inline-block;"'),
+            'PDF glyph image fallback should use the default body font-size when no closer font-size exists'
+        );
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u20bf.png'),
+            'Bitcoin should use PDF glyph image fallback'
+        );
+        System.assert(
+            !wrapped.contains('&#8377;'),
+            'High numeric entities should become literal glyphs inside the span'
+        );
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsSizesPdfGlyphImagesFromContainingText() {
+        String html =
+            '<p style="font-size:18pt;font-weight:bold;">Total: &#8377;</p>' +
+            '<p style="font-size:10pt;">Crypto: &#8383;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        System.assert(
+            wrapped.contains('height:18pt;width:18pt'),
+            'Bold paragraph glyph image should use the paragraph font size'
+        );
+        System.assert(
+            wrapped.contains('vertical-align:-0.20em;width:18pt') &&
+            wrapped.contains('margin-left:-18pt;position:relative;left:0.03em;'),
+            'Bold paragraph glyph image should get the bold overlay treatment'
+        );
+        System.assert(
+            wrapped.contains('height:10pt;width:10pt'),
+            'Separated glyph image should use its own paragraph font size'
+        );
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsSameGlyphAtDifferentSizesGetsDistinctUrls() {
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout,
+        // then reuses that cached size for every OTHER occurrence of the same
+        // URL — regardless of what size each one actually requests. Confirmed
+        // by generating real PDFs: the same rupee glyph used at 11pt then
+        // 24pt in one document rendered the 11pt one as a giant, overflowing
+        // symbol (it inherited the 24pt-sized cache entry). A single
+        // occurrence of any size, or two occurrences of the SAME size, is
+        // unaffected. The fix gives each distinct requested size its own
+        // cache key via an inert query string Salesforce's static resource
+        // server ignores (same file either way) but Flying Saucer treats as
+        // a distinct URL.
+        String html =
+            '<p>First at default size: &#8377;</p>' + '<p style="font-size:24pt;">Second at 24pt: &#8377;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        System.assert(
+            wrapped.contains('u20b9.png?sz=11pt'),
+            'Default-size occurrence should carry its own size in the URL: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('u20b9.png?sz=24pt'),
+            '24pt occurrence should carry a distinct URL from the default-size one: ' + wrapped
+        );
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsSameGlyphAtSameSizeSharesUrl() {
+        // The opposite case: two occurrences of the same glyph at the SAME
+        // size should resolve to the identical URL (same cache entry is
+        // correct and desirable here — no collision to avoid).
+        String html = '<p>One: &#8377; and two: &#8377;</p>';
+        String wrapped = DocGenService.wrapNonLatinGlyphs(html);
+        Integer count = 0;
+        Integer idx = wrapped.indexOf('u20b9.png?sz=11pt');
+        while (idx >= 0) {
+            count++;
+            idx = wrapped.indexOf('u20b9.png?sz=11pt', idx + 1);
+        }
+        System.assertEquals(2, count, 'Both same-size occurrences should use the identical sized URL: ' + wrapped);
+    }
+
+    @IsTest
+    static void wrapNonLatinGlyphsLowercaseSCommaUsesSmallerImageFallback() {
+        // #438 follow-up: the capital S-comma (Ș, cp 536) got an image fallback,
+        // but the lowercase (ș, cp 537) was left on the plain 'Arial Unicode MS'
+        // font-span path — which doesn't actually render this glyph in
+        // Blob.toPdf, so it rendered as nothing. Confirmed by generating a real
+        // PDF: [ș] rendered as [] (invisible) before this fix, [ş]-shaped and
+        // visible after. Must go through the same image-fallback path as the
+        // capital, sized smaller to match the real letterform relationship
+        // (not just the capital's image reused at full size).
+        String wrapped = DocGenService.wrapNonLatinGlyphs('<p>[ș] [Ș]</p>');
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0219.png'),
+            'Lowercase S-comma should use its own PDF glyph image fallback, not the font-span path: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            'Capital S-comma should still use its image fallback: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('height:8.80pt;width:8.80pt'),
+            'Lowercase S-comma image should render at 80% of the default 11pt body size: ' + wrapped
+        );
+        System.assert(
+            wrapped.contains('height:11pt;width:11pt'),
+            'Capital S-comma image should stay at the full default body size: ' + wrapped
+        );
+    }
+
+    @IsTest
     static void getDocGenTemplatesForRecordReturnsList() {
         Account acct = new Account(Name = 'GetForRec ' + Datetime.now().getTime());
         insert acct;

@@ -60,6 +60,22 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         // indexOf is cheap and avoids an extra SOQL for Type__c on every execute.
         this.isHtmlSource = innerXml == null || !innerXml.contains('<w:');
 
+        // #439 scope limit: {~Label} root-anchor tags resolve against the root
+        // data map, but each giant-query chunk renders its row body through
+        // DocGenService.renderLoopBodyForRecords against a flat, field-limited
+        // per-record map with no sibling-relationship data — by design, to keep
+        // per-chunk heap bounded. Threading arbitrary sibling data through this
+        // batch would defeat that. Fail loud and synchronously here, before
+        // Database.executeBatch runs, rather than silently rendering every {~}
+        // blank across a 30,000-row job.
+        if (innerXml != null && innerXml.contains('{~')) {
+            throw new DocGenException(
+                'Root-anchor {~Label} tags are not supported inside giant-query loops ' +
+                    '(child relationships over the 2,000-row threshold). Move this content ' +
+                    'outside the loop, or keep the relationship under the giant-query threshold.'
+            );
+        }
+
         this.relationshipName = (String) childNodeConfig.get('relationshipName');
         // alias (when present) is the merge-tag name in the template — e.g. {#SubscriptionItems} —
         // and may differ from the actual relationship name when a node is a filtered

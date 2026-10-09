@@ -1392,6 +1392,7 @@ public without sharing class DocGenSignatureService {
                 // two paths from diverging again.
                 String fileName = resolveSignedFileName(req, source.Title + ' - Signed');
 
+                Id protectedSignedContentDocumentId;
                 if (String.isNotBlank(req.Related_Record_Id__c)) {
                     ContentVersion pdfCv = new ContentVersion();
                     pdfCv.Title = fileName;
@@ -1420,6 +1421,13 @@ public without sharing class DocGenSignatureService {
                                 cvRes.getErrors()[0].getMessage()
                         );
                     }
+                    protectedSignedContentDocumentId = [
+                        SELECT ContentDocumentId
+                        FROM ContentVersion
+                        WHERE Id = :cvRes.getId()
+                        WITH SYSTEM_MODE
+                    ]
+                    .ContentDocumentId;
                 }
 
                 // Update document hash on existing audit records
@@ -1443,7 +1451,7 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    List<Database.SaveResult> auditResults = Database.update(audits, false, AccessLevel.SYSTEM_MODE);
+                    List<Database.SaveResult> auditResults = DocGenSignatureImmutability.updateFinalAuditHashes(audits);
                     for (Integer i = 0; i < auditResults.size(); i++) {
                         requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
                     }
@@ -1452,8 +1460,12 @@ public without sharing class DocGenSignatureService {
                 // Mark request as signed
                 // CxSAST: FLS enforced by Portwood permission sets; package-internal custom objects
                 req.Status__c = 'Signed';
+                req.Protected_Signed_Content_Document_Id__c = protectedSignedContentDocumentId;
                 // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
-                DocGenFlsGuard.assertUpdateable(req, new Set<String>{ 'Status__c' });
+                DocGenFlsGuard.assertUpdateable(
+                    req,
+                    new Set<String>{ 'Status__c', 'Protected_Signed_Content_Document_Id__c' }
+                );
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 requireDmlSuccess(
                     Database.update(req, false, AccessLevel.SYSTEM_MODE),
@@ -1676,6 +1688,7 @@ public without sharing class DocGenSignatureService {
                     }
                 }
 
+                Id protectedSignedContentDocumentId;
                 if (String.isNotBlank(req.Related_Record_Id__c)) {
                     ContentVersion pdfCv = new ContentVersion();
                     pdfCv.Title = fileName;
@@ -1704,6 +1717,13 @@ public without sharing class DocGenSignatureService {
                                 cvRes.getErrors()[0].getMessage()
                         );
                     }
+                    protectedSignedContentDocumentId = [
+                        SELECT ContentDocumentId
+                        FROM ContentVersion
+                        WHERE Id = :cvRes.getId()
+                        WITH SYSTEM_MODE
+                    ]
+                    .ContentDocumentId;
 
                     // Signer form-field writeback: publish the decoupled event ONLY
                     // after the signed PDF ContentVersion is saved, so writeback fires
@@ -1748,7 +1768,7 @@ public without sharing class DocGenSignatureService {
                     // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                     DocGenFlsGuard.assertUpdateable(audits, new Set<String>{ 'Document_Hash_SHA256__c' });
                     /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                    List<Database.SaveResult> auditResults = Database.update(audits, false, AccessLevel.SYSTEM_MODE);
+                    List<Database.SaveResult> auditResults = DocGenSignatureImmutability.updateFinalAuditHashes(audits);
                     for (Integer i = 0; i < auditResults.size(); i++) {
                         requireDmlSuccess(auditResults[i], 'Update signed-document audit hash', audits[i].Id);
                     }
@@ -1758,6 +1778,7 @@ public without sharing class DocGenSignatureService {
                 // Snapshot_Hash__c stays as the retained tamper-evidence.
                 // CxSAST: FLS enforced by Portwood permission sets; package-internal custom objects
                 req.Status__c = 'Signed';
+                req.Protected_Signed_Content_Document_Id__c = protectedSignedContentDocumentId;
                 // CxSAST: FLS enforced by Portwood permission sets; package-internal custom objects
                 req.Signature_Data__c = null;
                 Id frozenCvToPurge = (Id) req.Frozen_Document_CV_Id__c;
@@ -1765,7 +1786,12 @@ public without sharing class DocGenSignatureService {
                 // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
                 DocGenFlsGuard.assertUpdateable(
                     req,
-                    new Set<String>{ 'Status__c', 'Signature_Data__c', 'Frozen_Document_CV_Id__c' }
+                    new Set<String>{
+                        'Status__c',
+                        'Protected_Signed_Content_Document_Id__c',
+                        'Signature_Data__c',
+                        'Frozen_Document_CV_Id__c'
+                    }
                 );
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 requireDmlSuccess(

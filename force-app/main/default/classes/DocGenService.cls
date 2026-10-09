@@ -42,6 +42,29 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     @TestVisible
     public static Map<String, Object> reservedMergeData;
 
+    // Root-anchor {~Label}...{/Label} tags (#439): a loop body has no reach to a
+    // sibling relationship on the parent record, since rowContext() swaps the data
+    // context to the current row's own map. {~Label} defers its body instead of
+    // evaluating it against the row — the FIRST (outermost) processXml call in a
+    // transaction "owns" this queue (pendingRootTagJobs == null means unowned) and
+    // drains it once, against the ROOT data map it was called with, after its own
+    // output is built. Every recursive processXml call sees the queue already set
+    // and just enqueues into it. Must stay null outside of an active render or it
+    // leaks into the next independent processXml call in the same transaction.
+    private static List<RootTagJob> pendingRootTagJobs;
+    private static Map<String, Object> rootDataContext;
+    private static Integer rootTagMarkerSeq = 0;
+    private static final Integer ROOT_TAG_JOB_LIMIT = 100;
+
+    private class RootTagJob {
+        String marker;
+        String innerXml;
+        RootTagJob(String marker, String innerXml) {
+            this.marker = marker;
+            this.innerXml = innerXml;
+        }
+    }
+
     /**
      * Sets the admin-uploaded watermark override on the renderer (if one exists
      * on the active version of the given template). When set, the renderer uses
@@ -3986,6 +4009,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     private static String processXml(String xml, Map<String, Object> data) {
+        // Root-anchor {~Label} ownership (#439): the FIRST processXml call in a
+        // transaction to see pendingRootTagJobs == null owns the queue — it's
+        // responsible for draining it (below) and clearing it in the finally so it
+        // never leaks into the next independent processXml call (header/footer/body
+        // are each separate top-level calls sharing this transaction). The
+        // try/finally must wrap the WHOLE body, including the chart preprocessing
+        // immediately below, not just the tag-scan loop — those calls can throw
+        // too, and a leaked non-null queue would make every later call in this
+        // transaction think it's nested and never drain its own jobs.
+        Boolean ownsRootTagPass = pendingRootTagJobs == null;
+        if (ownsRootTagPass) {
+            pendingRootTagJobs = new List<RootTagJob>();
+            rootDataContext = data;
+        }
+        try {
+            return processXmlInner(xml, data, ownsRootTagPass);
+        } finally {
+            if (ownsRootTagPass) {
+                pendingRootTagJobs = null;
+                rootDataContext = null;
+            }
+        }
+    }
+
+    private static String processXmlInner(String xml, Map<String, Object> data, Boolean ownsRootTagPass) {
         // Chart tag expansion: rewrites {Chart:rel:field:style:opts} into the
         // corresponding substitution. HTML templates get the CSS-bar snippet
         // (with embedded {#ChartBucket:...} loops, which feed through the
@@ -4584,6 +4632,47 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         output += sectionResult;
                         cursor = (closeTagEnd != -1 ? closeTagEnd + 1 : sectionEnd);
                     }
+                } else if (tagContent.startsWith('~')) {
+                    // Root-anchor tag (#439): {~Label}...{/Label} defers its body
+                    // instead of evaluating it against the current row context —
+                    // the raw inner text is queued and resolved against
+                    // rootDataContext once the owning processXml call finishes
+                    // (see drainRootTagJobs / RootTagJob above). Label is a
+                    // free-form match key, not a relationship or field name — it
+                    // only has to be unique against any other {#Label}/{^Label}/
+                    // {~Label} sharing the same literal text, since
+                    // findBalancedEnd's depth counter tracks by label text alone,
+                    // not by which prefix opened it.
+                    String label = tagContent.substring(1).trim();
+                    Integer sectionEnd = findBalancedEnd(xml, tagClose + 1, label);
+                    if (sectionEnd == -1) {
+                        String snippet = xml.substring(Math.max(0, tagStartPos - 40), Math.min(len, tagStartPos + 40));
+                        String lineInfo = currentTemplateType == 'HTML'
+                            ? ' (line ' + (xml.substring(0, tagStartPos).countMatches('\n') + 1) + ')'
+                            : '';
+                        throw new DocGenException(
+                            'Malformed root-anchor tag: missing closing "{/' +
+                                label +
+                                '}" for "{~' +
+                                label +
+                                '}"' +
+                                lineInfo +
+                                ' opened near "' +
+                                snippet +
+                                '".'
+                        );
+                    }
+                    if (pendingRootTagJobs.size() >= ROOT_TAG_JOB_LIMIT) {
+                        throw new DocGenException(
+                            'Too many {~} root-anchor tags in one document (limit ' + ROOT_TAG_JOB_LIMIT + ').'
+                        );
+                    }
+                    String innerXml = xml.substring(tagClose + 1, sectionEnd);
+                    Integer closeTagEnd = xml.indexOf('}', sectionEnd);
+                    String marker = '{{__ROOTTAG_' + (rootTagMarkerSeq++) + '__}}';
+                    pendingRootTagJobs.add(new RootTagJob(marker, innerXml));
+                    output += marker;
+                    cursor = (closeTagEnd != -1 ? closeTagEnd + 1 : sectionEnd);
                 } else if (tagContent.startsWith('/')) {
                     output += '{' + rawTag + '}';
                     cursor = tagClose + 1;
@@ -4842,6 +4931,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 );
             }
         }
+        if (ownsRootTagPass) {
+            output = drainRootTagJobs(output);
+        }
         return output;
     }
 
@@ -4929,6 +5021,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return null;
     }
 
+    // NOTE on {~Label} (#439): depth tracking below is keyed on the label's literal
+    // text only, not on which prefix (#, ^, ~) opened it. A {~Offices} nested inside
+    // an unrelated {#Offices}...{/Offices} section (same text, different prefix)
+    // will corrupt both sections' depth counts. Root-anchor labels must be unique
+    // across the whole template, not just within their own nesting scope.
     private static Integer findBalancedEnd(String xml, Integer startSearch, String key) {
         Integer depth = 1;
         Integer cursor = startSearch;
@@ -4961,7 +5058,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 isOpener = content.equals('#GroupBy') || content.startsWith('#GroupBy ');
                 isCloser = content.equals('/GroupBy');
             } else {
-                isOpener = content.equals('#' + key) || content.equals('^' + key);
+                isOpener = content.equals('#' + key) || content.equals('^' + key) || content.equals('~' + key);
                 isCloser = content.equals('/' + key);
             }
             if (isOpener) {
@@ -4975,6 +5072,25 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             cursor = nextClose + 1;
         }
         return -1;
+    }
+
+    // Resolves every queued {~Label} job against rootDataContext and splices the
+    // result into `result` in place of its marker (#439). Only the owning
+    // processXml call (the one that initialized pendingRootTagJobs) calls this,
+    // once, after its own output is fully built. Drains with an index cursor over
+    // the LIVE list rather than a snapshot: resolving job N via processXml can
+    // itself enqueue more jobs if job N's content contains a nested {~Label}, and
+    // those need draining too before this returns. ROOT_TAG_JOB_LIMIT (checked at
+    // enqueue time in the dispatch branch above) bounds this loop.
+    private static String drainRootTagJobs(String result) {
+        Integer i = 0;
+        while (i < pendingRootTagJobs.size()) {
+            RootTagJob job = pendingRootTagJobs[i];
+            String rendered = processXml(job.innerXml, rootDataContext);
+            result = result.replace(job.marker, rendered);
+            i++;
+        }
+        return result;
     }
 
     // Find the {:else} that belongs to the *current* section, ignoring any
@@ -6209,7 +6325,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
     /** Backward-compat bare-:currency output: hardcoded $ with US separators. */
     private static String formatCurrencyDollarFallback(Decimal num) {
-        return '$' + formatNumberLocale(num.setScale(2, RoundingMode.HALF_UP), ',', '.');
+        Decimal scaled = num.setScale(2, RoundingMode.HALF_UP);
+        Boolean negative = scaled < 0;
+        String formatted = formatNumberLocale(negative ? scaled.abs() : scaled, ',', '.');
+        return (negative ? '-$' : '$') + formatted;
     }
 
     /** Formats `num` with the symbol for `iso` and the separators/placement for `locale`. */
@@ -6230,6 +6349,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         if (symbolAfter) {
             return formatted + ' ' + symbol.trim();
+        }
+        if (scaled < 0) {
+            return '-' + symbol + formatNumberLocale(scaled.abs(), groupSep, decSep);
         }
         return symbol + formatted;
     }
@@ -10880,14 +11002,138 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += '</head><body>';
         if (String.isNotBlank(header) && !headerHasCounters) {
-            html += '<div class="docgen-running-header">' + clampRunningImages(header) + '</div>';
+            html +=
+                '<div class="docgen-running-header">' +
+                clampRunningImages(wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(header))) +
+                '</div>';
         }
         if (String.isNotBlank(footer) && !footerHasCounters) {
-            html += '<div class="docgen-running-footer">' + clampRunningImages(footer) + '</div>';
+            html +=
+                '<div class="docgen-running-footer">' +
+                clampRunningImages(wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(footer))) +
+                '</div>';
         }
-        html += wrapNonLatinGlyphs(body == null ? '' : body);
+        html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
         return html;
+    }
+
+    private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
+    private static final Integer LONG_HYPERLINK_TEXT_CHUNK = 24;
+
+    @TestVisible
+    private static String addBreaksToLongHyperlinkText(String html) {
+        if (String.isBlank(html) || !html.toLowerCase().contains('<a')) {
+            return html;
+        }
+
+        Matcher m = Pattern.compile('(?is)<a\\b[^>]*>.*?</a>').matcher(html);
+        String out = '';
+        Integer last = 0;
+        while (m.find()) {
+            out += html.substring(last, m.start());
+            out += addBreaksToOneLongHyperlink(m.group(0));
+            last = m.end();
+        }
+        out += html.substring(last);
+        return out;
+    }
+
+    private static String addBreaksToOneLongHyperlink(String anchorHtml) {
+        Integer openEnd = anchorHtml.indexOf('>');
+        Integer closeStart = anchorHtml.toLowerCase().lastIndexOf('</a>');
+        if (openEnd < 0 || closeStart <= openEnd || anchorHtml.toLowerCase().contains('<wbr')) {
+            return anchorHtml;
+        }
+
+        String linkInnerHtml = anchorHtml.substring(openEnd + 1, closeStart);
+        String visible = stripTags(linkInnerHtml).replace('&nbsp;', ' ').trim();
+        String visibleLower = visible.toLowerCase();
+        if (
+            !(visibleLower.startsWith('http://') || visibleLower.startsWith('https://')) ||
+            !hasLongUnbrokenRun(visible, LONG_HYPERLINK_TEXT_THRESHOLD)
+        ) {
+            return anchorHtml;
+        }
+
+        return anchorHtml.substring(0, openEnd + 1) +
+            addWbrToLongTextNodes(linkInnerHtml) +
+            anchorHtml.substring(closeStart);
+    }
+
+    private static Boolean hasLongUnbrokenRun(String text, Integer threshold) {
+        Integer run = 0;
+        for (Integer i = 0; i < text.length(); i++) {
+            Integer cp = text.charAt(i);
+            if (cp <= 32 || cp == 160) {
+                run = 0;
+            } else {
+                run++;
+                if (run >= threshold) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String addWbrToLongTextNodes(String html) {
+        String out = '';
+        Integer run = 0;
+        Integer i = 0;
+        while (i < html.length()) {
+            Integer cp = html.charAt(i);
+            if (cp == 60) {
+                Integer endTag = html.indexOf('>', i);
+                if (endTag < 0) {
+                    out += html.substring(i);
+                    break;
+                }
+                out += html.substring(i, endTag + 1);
+                i = endTag + 1;
+                continue;
+            }
+
+            String token;
+            if (cp == 38) {
+                Integer endEntity = html.indexOf(';', i);
+                if (endEntity > i && endEntity - i <= 12) {
+                    token = html.substring(i, endEntity + 1);
+                    i = endEntity + 1;
+                } else {
+                    token = html.substring(i, i + 1);
+                    i++;
+                }
+            } else {
+                token = html.substring(i, i + 1);
+                i++;
+            }
+
+            if (cp <= 32 || cp == 160) {
+                run = 0;
+                out += token;
+                continue;
+            }
+
+            out += token;
+            run++;
+            if (shouldBreakAfterUrlToken(token) || Math.mod(run, LONG_HYPERLINK_TEXT_CHUNK) == 0) {
+                out += '<wbr/>';
+            }
+        }
+        return out;
+    }
+
+    private static Boolean shouldBreakAfterUrlToken(String token) {
+        return token == '/' ||
+            token == '.' ||
+            token == '?' ||
+            token == '&amp;' ||
+            token == '&' ||
+            token == '=' ||
+            token == '-' ||
+            token == '_' ||
+            token == '#';
     }
 
     /** Height the clamp gives an unsized running image, in inches. */
@@ -11166,6 +11412,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(s))
             return s;
         s = decodeHighCodepointEntities(s);
+        s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();
         Boolean needsWrap = false;
         for (Integer i = 0; i < len; i++) {
@@ -11179,8 +11426,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         String out = '';
         Integer i = 0;
-        Boolean inTag = false;
         Integer runStart = -1;
+        List<PdfGlyphStyle> styleStack = new List<PdfGlyphStyle>{ new PdfGlyphStyle('11pt', false) };
         while (i < len) {
             Integer cp = s.charAt(i);
             if (cp == 60) {
@@ -11192,24 +11439,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         '</span>';
                     runStart = -1;
                 }
-                inTag = true;
-                out += s.substring(i, i + 1);
-                i++;
+                Integer tagEnd = s.indexOf('>', i);
+                if (tagEnd < 0) {
+                    out += s.substring(i, i + 1);
+                    i++;
+                    continue;
+                }
+                String tag = s.substring(i, tagEnd + 1);
+                updatePdfGlyphStyleStack(styleStack, tag);
+                out += tag;
+                i = tagEnd + 1;
                 continue;
             }
-            if (cp == 62) {
-                // '>'
-                inTag = false;
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (inTag) {
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (codepointNeedsUnicodeFont(cp)) {
+            if (codepointNeedsPdfGlyphImage(cp)) {
+                if (runStart >= 0) {
+                    out +=
+                        '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' +
+                        s.substring(runStart, i) +
+                        '</span>';
+                    runStart = -1;
+                }
+                out += pdfGlyphImageHtml(cp, styleStack[styleStack.size() - 1]);
+            } else if (codepointNeedsUnicodeFont(cp)) {
+                if (runStart < 0)
+                    runStart = i;
+            } else if (nextCodepointIsCombiningMark(s, i, len)) {
                 if (runStart < 0)
                     runStart = i;
             } else {
@@ -11233,7 +11487,286 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return out;
     }
 
+    private static Boolean nextCodepointIsCombiningMark(String s, Integer i, Integer len) {
+        return i + 1 < len && codepointIsCombiningMark(s.charAt(i + 1));
+    }
+
+    private static Boolean codepointIsCombiningMark(Integer cp) {
+        return (cp >= 768 && cp <= 879) || (cp >= 6832 && cp <= 6911) || (cp >= 7616 && cp <= 7679);
+    }
+
+    private static String normalizeLatinCombiningMarks(String s) {
+        if (String.isBlank(s)) {
+            return s;
+        }
+        String commaBelow = String.fromCharArray(new List<Integer>{ 806 });
+        return s.replace('S' + commaBelow, String.fromCharArray(new List<Integer>{ 536 }))
+            .replace('s' + commaBelow, String.fromCharArray(new List<Integer>{ 537 }));
+    }
+
+    private static Boolean codepointNeedsPdfGlyphImage(Integer cp) {
+        return cp ==
+            8377 || // ₹ Indian rupee
+            cp == 8381 || // ₽ Russian ruble
+            cp == 8378 || // ₺ Turkish lira
+            cp == 8369 || // ₱ Philippine peso
+            cp == 8372 || // ₴ Ukrainian hryvnia
+            cp == 8383 || // ₿ Bitcoin
+            cp == 8382 || // ₾ Georgian lari
+            cp == 1423 || // ֏ Armenian dram
+            cp == 8380 || // ₼ Azerbaijani manat
+            cp == 536 || // Ș Latin capital S with comma below
+            cp == 537 || // ș Latin small s with comma below
+            cp == 8376; // ₸ Kazakhstani tenge
+    }
+
+    private class PdfGlyphStyle {
+        String fontSize;
+        Boolean bold;
+
+        PdfGlyphStyle(String fontSize, Boolean bold) {
+            this.fontSize = String.isBlank(fontSize) ? '11pt' : fontSize;
+            this.bold = bold == true;
+        }
+    }
+
+    private static void updatePdfGlyphStyleStack(List<PdfGlyphStyle> styleStack, String tag) {
+        String tagName = pdfGlyphTagName(tag);
+        if (String.isBlank(tagName)) {
+            return;
+        }
+        String lower = tag.toLowerCase();
+        if (lower.startsWith('</')) {
+            if (styleStack.size() > 1) {
+                styleStack.remove(styleStack.size() - 1);
+            }
+            return;
+        }
+        if (pdfGlyphIsVoidTag(tagName, lower)) {
+            return;
+        }
+
+        PdfGlyphStyle parent = styleStack[styleStack.size() - 1];
+        String fontSize = parent.fontSize;
+        Boolean bold = parent.bold || tagName == 'b' || tagName == 'strong';
+        if (tagName == 'h1') {
+            fontSize = '20pt';
+            bold = true;
+        } else if (tagName == 'h2') {
+            fontSize = '16pt';
+            bold = true;
+        } else if (tagName == 'h3') {
+            fontSize = '14pt';
+            bold = true;
+        } else if (tagName == 'h4') {
+            fontSize = '12pt';
+            bold = true;
+        } else if (tagName == 'h5') {
+            fontSize = '11pt';
+            bold = true;
+        } else if (tagName == 'h6') {
+            fontSize = '10pt';
+            bold = true;
+        }
+
+        String style = pdfGlyphStyleAttr(tag);
+        String tagFontSize = normalizePdfGlyphFontSize(pdfGlyphCssValue(style, 'font-size'));
+        if (String.isNotBlank(tagFontSize)) {
+            fontSize = tagFontSize;
+        }
+        String weight = pdfGlyphCssValue(style, 'font-weight');
+        if (String.isNotBlank(weight)) {
+            bold = pdfGlyphFontWeightIsBold(weight);
+        }
+        styleStack.add(new PdfGlyphStyle(fontSize, bold));
+    }
+
+    private static String pdfGlyphTagName(String tag) {
+        Matcher m = Pattern.compile('(?i)^<\\s*/?\\s*([a-z0-9]+)').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(1).toLowerCase() : null;
+    }
+
+    private static Boolean pdfGlyphIsVoidTag(String tagName, String lowerTag) {
+        return lowerTag.endsWith('/>') ||
+            tagName == 'br' ||
+            tagName == 'hr' ||
+            tagName == 'img' ||
+            tagName == 'input' ||
+            tagName == 'meta' ||
+            tagName == 'link';
+    }
+
+    private static String pdfGlyphStyleAttr(String tag) {
+        Matcher m = Pattern.compile('(?is)\\sstyle\\s*=\\s*([\'"])(.*?)\\1').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(2) : '';
+    }
+
+    private static String pdfGlyphCssValue(String style, String property) {
+        if (String.isBlank(style)) {
+            return null;
+        }
+        Matcher m = Pattern.compile('(?i)(^|;)\\s*' + property + '\\s*:\\s*([^;]+)').matcher(style);
+        return m.find() ? m.group(2).trim() : null;
+    }
+
+    private static String normalizePdfGlyphFontSize(String fontSize) {
+        if (String.isBlank(fontSize)) {
+            return null;
+        }
+        String value = fontSize.trim().toLowerCase().replaceAll('\\s+', '');
+        return Pattern.matches('^[0-9]+(\\.[0-9]+)?(pt|px)$', value) ? value : null;
+    }
+
+    private static Boolean pdfGlyphFontWeightIsBold(String weight) {
+        String value = weight == null ? '' : weight.trim().toLowerCase();
+        if (value == 'bold' || value == 'bolder') {
+            return true;
+        }
+        if (value == 'normal' || value == 'lighter') {
+            return false;
+        }
+        try {
+            return Integer.valueOf(value) >= 600;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Real lowercase letterforms run smaller than their capital — matched to the
+    // actual Arial glyph proportions measured off-platform (capital ~208px tall,
+    // lowercase ~168px tall, ratio ~0.8), not an arbitrary guess. Every other
+    // glyph here has no case distinction (currency symbols), so this only ever
+    // applies to cp 537.
+    private static Decimal pdfGlyphSizeScaleFactor(Integer cp) {
+        return cp == 537 ? 0.8 : 1.0;
+    }
+
+    private static String scalePdfGlyphSize(String size, Decimal factor) {
+        if (factor == 1.0) {
+            return size;
+        }
+        Matcher m = Pattern.compile('^([0-9]+(?:\\.[0-9]+)?)(pt|px)$').matcher(size);
+        if (!m.matches()) {
+            return size;
+        }
+        Decimal value = Decimal.valueOf(m.group(1)) * factor;
+        return value.setScale(2) + m.group(2);
+    }
+
+    // Cached per-transaction — see DocGenHtmlRenderer.cachedGlyphResourcePrefix.
+    private static String cachedGlyphResourcePrefix = null;
+
+    /**
+     * See DocGenHtmlRenderer.glyphResourcePrefix — same fix, same reason, mirrored
+     * here per CLAUDE.md's note that this glyph-fallback logic is duplicated across
+     * both files and must be kept in step. Queries StaticResource.NamespacePrefix
+     * directly rather than any Apex reflection trick.
+     */
+    private static String glyphResourcePrefix() {
+        if (cachedGlyphResourcePrefix != null) {
+            return cachedGlyphResourcePrefix;
+        }
+        cachedGlyphResourcePrefix = '';
+        for (StaticResource sr : [
+            SELECT NamespacePrefix
+            FROM StaticResource
+            WHERE Name = 'DocGenPdfGlyphs'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]) {
+            if (String.isNotBlank(sr.NamespacePrefix)) {
+                cachedGlyphResourcePrefix = sr.NamespacePrefix + '__';
+            }
+        }
+        return cachedGlyphResourcePrefix;
+    }
+
+    private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
+        String hex = pdfGlyphResourceSuffix(cp);
+        String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
+        String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
+        size = scalePdfGlyphSize(size, pdfGlyphSizeScaleFactor(cp));
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout —
+        // then reuses that same cached size for every OTHER occurrence of the
+        // same URL in the document, regardless of what size each one actually
+        // requests. A template using the same glyph at two different sizes
+        // (e.g. body text and a heading) ends up with one of them badly
+        // mis-sized. Confirmed by direct testing: a single occurrence at any
+        // size renders correctly; two occurrences of the same URL at
+        // different sizes always leaves one broken, and which one breaks
+        // flips with processing order. The query string below is inert for
+        // Salesforce's static resource server (same file either way) but
+        // gives Flying Saucer a distinct cache key per size, so same-size
+        // reuse still shares a cache entry while different sizes don't
+        // collide.
+        String sizedSrc =
+            '/resource/' +
+            glyphResourcePrefix() +
+            'DocGenPdfGlyphs/u' +
+            hex +
+            '.png?sz=' +
+            EncodingUtil.urlEncode(size, 'UTF-8');
+        String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
+        String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
+        if (glyphStyle == null || glyphStyle.bold != true) {
+            return img;
+        }
+        return '<span style="display:inline-block;vertical-align:-0.20em;width:' +
+            size +
+            ';height:' +
+            size +
+            ';white-space:nowrap;">' +
+            img +
+            '<img src="' +
+            sizedSrc +
+            '" alt="" style="' +
+            imgStyle +
+            'margin-left:-' +
+            size +
+            ';position:relative;left:0.03em;"/>' +
+            '</span>';
+    }
+
+    private static String pdfGlyphResourceSuffix(Integer cp) {
+        if (cp == 8377)
+            return '20b9';
+        if (cp == 8381)
+            return '20bd';
+        if (cp == 8378)
+            return '20ba';
+        if (cp == 8369)
+            return '20b1';
+        if (cp == 8372)
+            return '20b4';
+        if (cp == 8383)
+            return '20bf';
+        if (cp == 8382)
+            return '20be';
+        if (cp == 1423)
+            return '058f';
+        if (cp == 8380)
+            return '20bc';
+        if (cp == 536)
+            return '0218';
+        if (cp == 537)
+            return '0219';
+        return '20b8';
+    }
+
     private static Boolean codepointNeedsUnicodeFont(Integer cp) {
+        if (
+            cp == 269 ||
+            cp == 321 ||
+            cp == 322 ||
+            cp == 346 ||
+            cp == 347 ||
+            cp == 350 ||
+            cp == 351 ||
+            cp == 536 ||
+            cp == 537
+        )
+            return true; // Selected Latin Extended letters blank in the PDF base fonts
         if (cp <= 591)
             return false; // Latin-1 + Latin Extended-A/B
         if (cp == 8211 || cp == 8212)
@@ -11262,6 +11795,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (highCodepointEntityMap != null)
             return highCodepointEntityMap;
         highCodepointEntityMap = new Map<String, Integer>{
+            'Sacute' => 346,
+            'sacute' => 347,
+            'Scedil' => 350,
+            'scedil' => 351,
+            'Scomma' => 536,
+            'scomma' => 537,
             'alpha' => 945,
             'beta' => 946,
             'gamma' => 947,
@@ -11388,7 +11927,47 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 s = s.replace(token, String.fromCharArray(new List<Integer>{ entityMap.get(name) }));
             }
         }
+        Matcher numeric = Pattern.compile('&#(x[0-9a-fA-F]+|[0-9]+);').matcher(s);
+        String out = '';
+        Integer last = 0;
+        while (numeric.find()) {
+            Integer cp = parseHtmlEntityCodepoint(numeric.group(1));
+            if (cp != null && codepointNeedsUnicodeFont(cp)) {
+                out += s.substring(last, numeric.start()) + String.fromCharArray(new List<Integer>{ cp });
+                last = numeric.end();
+            }
+        }
+        if (last > 0) {
+            s = out + s.substring(last);
+        }
         return s;
+    }
+
+    private static Integer parseHtmlEntityCodepoint(String raw) {
+        if (String.isBlank(raw)) {
+            return null;
+        }
+        Boolean hex = raw.startsWithIgnoreCase('x');
+        String digits = hex ? raw.substring(1) : raw;
+        if (String.isBlank(digits)) {
+            return null;
+        }
+        Integer value = 0;
+        for (Integer i = 0; i < digits.length(); i++) {
+            Integer c = digits.charAt(i);
+            Integer n;
+            if (c >= 48 && c <= 57) {
+                n = c - 48;
+            } else if (hex && c >= 65 && c <= 70) {
+                n = c - 55;
+            } else if (hex && c >= 97 && c <= 102) {
+                n = c - 87;
+            } else {
+                return null;
+            }
+            value = value * (hex ? 16 : 10) + n;
+        }
+        return value;
     }
 
     private static Boolean hasPageCounterTokens(String html) {

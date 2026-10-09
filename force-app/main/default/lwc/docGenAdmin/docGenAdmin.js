@@ -101,6 +101,9 @@ import DOCGEN_TEMPLATE_OBJECT from '@salesforce/schema/DocGen_Template__c';
 import NAME_FIELD from '@salesforce/schema/DocGen_Template__c.Name';
 import CATEGORY_FIELD from '@salesforce/schema/DocGen_Template__c.Category__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
+// The version object carries its OWN restricted Type picklist — see #303.
+import DOCGEN_VERSION_OBJECT from '@salesforce/schema/DocGen_Template_Version__c';
+import VERSION_TYPE_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Type__c';
 import BASE_OBJECT_FIELD from '@salesforce/schema/DocGen_Template__c.Base_Object_API__c';
 // #369 — which Portwood Brand this template's signature emails use
 import BRAND_FIELD from '@salesforce/schema/DocGen_Template__c.Brand__c';
@@ -173,7 +176,8 @@ const TYPE_VALUE_HISTORY = {
     PowerPoint: '1.0',
     Excel: '1.5x',
     HTML: '1.61.0',
-    PDF: '3.03.0'
+    PDF: '3.03.0',
+    Canvas: '3.54.0'
 };
 
 /**
@@ -4564,6 +4568,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     _typePicklist;
     @track _orgTypeValues = null;
 
+    // The SECOND restricted Type picklist (#303).
+    //
+    // Saving a template writes Type__c on DocGen_Template__c AND on the version
+    // record, and BOTH fields are restricted picklists carrying the same value
+    // set. The check above only ever read the template's, so the warning named
+    // one object — and an admin who followed it exactly still could not save:
+    //
+    //   "I added the 'Canvas' type manually which got me over the initial error
+    //    message ... the save failed ... Type: bad value for restricted
+    //    picklist field: Canvas"
+    //
+    // They fixed the field the message named and hit the one it did not.
+    @wire(getObjectInfo, { objectApiName: DOCGEN_VERSION_OBJECT })
+    versionObjectInfo;
+
+    @wire(getPicklistValues, {
+        recordTypeId: '$versionObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: VERSION_TYPE_FIELD
+    })
+    wiredVersionTypePicklist(result) {
+        this._versionTypePicklist = result;
+        if (result && result.data && Array.isArray(result.data.values)) {
+            this._orgVersionTypeValues = result.data.values.map((v) => v.value);
+        }
+    }
+    _versionTypePicklist;
+    @track _orgVersionTypeValues = null;
+
     get typeOptions() {
         const fallback = Object.keys(TYPE_VALUE_HISTORY);
         // Until the wire resolves (and if it errors) keep the historical hardcoded
@@ -4587,18 +4619,95 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgTypeValues.includes(v));
     }
 
-    get hasMissingTypeValues() {
-        return this.missingTypeValues.length > 0;
+    /** Values missing from the VERSION object's Type picklist (#303). */
+    get missingVersionTypeValues() {
+        if (!this._orgVersionTypeValues || !this._orgVersionTypeValues.length) {
+            return [];
+        }
+        return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgVersionTypeValues.includes(v));
     }
 
+    get hasMissingTypeValues() {
+        return this.missingTypeValues.length > 0 || this.missingVersionTypeValues.length > 0;
+    }
+
+    /**
+     * Names EVERY field that needs the value, not just the first one (#303).
+     *
+     * The old message named only "Portwood Template > Type". Saving also writes
+     * the version record's own restricted Type picklist, so an admin who did
+     * exactly what the message said still hit
+     * "Type: bad value for restricted picklist field: Canvas" on save.
+     */
     get missingTypeValuesMessage() {
-        const missing = this.missingTypeValues.map((v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`).join(', ');
+        const onTemplate = this.missingTypeValues;
+        const onVersion = this.missingVersionTypeValues;
+        const all = Array.from(new Set([...onTemplate, ...onVersion]));
+
+        const fields = [];
+        if (onTemplate.length) {
+            fields.push('Portwood Template > Type');
+        }
+        if (onVersion.length) {
+            fields.push('Portwood Template Version > Type');
+        }
+
         return (
-            `This org's Template Type picklist is missing: ${missing}. ` +
-            'That means the package upgrade did not fully apply its schema. ' +
-            'Re-run the package upgrade, or add the missing values to the ' +
-            'Portwood Template > Type field in Setup. Until then those template types cannot be created.'
+            `Missing Type picklist value: ${all.join(', ')}. ` +
+            `${all.includes('Canvas') ? 'Canvas must be active on ' : 'Add or activate the missing value on '}` +
+            `${fields.join(' and ')}. ` +
+            'Open the field link below, add or activate the value in Picklist Values, then click Re-check.'
         );
+    }
+
+    /**
+     * Direct Setup links for every field that is short a value (#303).
+     *
+     * Apex cannot add a picklist value — the Apex Metadata API exposes only
+     * CustomMetadata and Layout, not CustomField/ValueSet — so this is an admin
+     * task by necessity. The least we can do is take them to the exact field
+     * rather than describing where it lives. Object API names come from the wire,
+     * so these carry the package namespace in a subscriber org.
+     */
+    get missingTypeFieldLinks() {
+        const links = [];
+        const base = '/lightning/setup/ObjectManager/';
+        const tmplApi = this.templateObjectInfo && this.templateObjectInfo.data && this.templateObjectInfo.data.apiName;
+        const versApi = this.versionObjectInfo && this.versionObjectInfo.data && this.versionObjectInfo.data.apiName;
+        if (this.missingTypeValues.length && tmplApi) {
+            links.push({
+                objectApiName: tmplApi,
+                label: 'Portwood Template > Type',
+                url: base + tmplApi + '/FieldsAndRelationships/view'
+            });
+        }
+        if (this.missingVersionTypeValues.length && versApi) {
+            links.push({
+                objectApiName: versApi,
+                label: 'Portwood Template Version > Type',
+                url: base + versApi + '/FieldsAndRelationships/view'
+            });
+        }
+        return links;
+    }
+
+    /** Re-read both picklists after the admin has added the values. */
+    handleRecheckTypeValues() {
+        Promise.all([refreshApex(this._typePicklist), this._refreshVersionTypePicklist()])
+            .then(() => {
+                if (this.hasMissingTypeValues) {
+                    this.showToast('Still missing', this.missingTypeValuesMessage, 'warning');
+                } else {
+                    this.showToast('Schema is complete', 'Every template type is available now.', 'success');
+                }
+            })
+            .catch(() => {
+                this.showToast('Could not re-check', 'Reload the page to check again.', 'warning');
+            });
+    }
+
+    _refreshVersionTypePicklist() {
+        return this._versionTypePicklist ? refreshApex(this._versionTypePicklist) : Promise.resolve();
     }
 
     get outputFormatOptions() {
@@ -4904,17 +5013,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * Returns an error string, or null when the create looks safe to attempt.
      */
     _preflightCreate() {
-        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(this.newTemplateType)) {
+        const missingFields = this._missingTypeFieldsForValue(this.newTemplateType);
+        if (missingFields.length) {
+            const versionSuffix = TYPE_VALUE_HISTORY[this.newTemplateType]
+                ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
+                : '';
+            const fieldText = missingFields.join(missingFields.length > 1 ? ' AND ' : '');
             return (
-                `This org's Template Type picklist does not contain "${this.newTemplateType}"` +
-                (TYPE_VALUE_HISTORY[this.newTemplateType]
-                    ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
-                    : '') +
-                '. The package upgrade did not fully apply its schema. Re-run the upgrade, or pick one of: ' +
-                this._orgTypeValues.join(', ')
+                `This org cannot create "${this.newTemplateType}" templates because ` +
+                `"${this.newTemplateType}"${versionSuffix} is missing from ${fieldText}. ` +
+                'Add or reactivate that picklist value in Setup, then click Re-check.'
             );
         }
         return null;
+    }
+
+    _missingTypeFieldsForValue(value) {
+        const fields = [];
+        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(value)) {
+            fields.push('Portwood Template > Type');
+        }
+        if (
+            this._orgVersionTypeValues &&
+            this._orgVersionTypeValues.length &&
+            !this._orgVersionTypeValues.includes(value)
+        ) {
+            fields.push('Portwood Template Version > Type');
+        }
+        return fields;
     }
 
     /**
@@ -5743,6 +5869,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
         }
 
+        // #322 — a header/footer band only reaches editTemplateHeaderHtml/FooterHtml
+        // through the band's native 'input' listener. A chip click, a drag-drop
+        // insert or a pill retype all mutate the band DOM directly and never fire
+        // that event, so without this the field below could still be what the band
+        // held BEFORE the edit. _liveChrome() re-reads the live bands the same way
+        // Preview already does, so Save can never persist a stale chrome value.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
+            return;
+        }
+
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -5795,6 +5935,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async handleSaveAndClose() {
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
+            return;
+        }
+        // #322 — see the matching comment in handleSaveOnly: a header/footer band
+        // only reaches editTemplateHeaderHtml/FooterHtml through the band's native
+        // 'input' listener, and a chip/drag/pill-retype insert never fires it. Force
+        // a fresh read from the live bands before this handler goes anywhere near
+        // the fields below, or a tag visibly added to the header can be silently
+        // dropped by a save that looked completely successful.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
             return;
         }
         // Designer: unapplied visual/source edits fold into the staged body
@@ -6896,9 +7049,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return html;
         }
         try {
+            // Clean ONLY the body when the document has one (#319). Parsing the
+            // whole document and splicing the result back into <body> copies the
+            // head's <meta>/<title>/<style> into the body while leaving the head
+            // in place — duplicating them, and growing the file on every save.
+            const bodyRe = /(<body\b[^>]*>)([\s\S]*?)(<\/body\s*>)/i;
+            const bodyMatch = html.match(bodyRe);
+            const target = bodyMatch ? bodyMatch[2] : html;
+
             const tpl = document.createElement('template');
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            tpl.innerHTML = html;
+            tpl.innerHTML = target;
             const root = tpl.content;
             for (const marker of root.querySelectorAll('.dg-drop-marker')) {
                 marker.remove();
@@ -6906,34 +7067,62 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
-                // Preview-wrapped payload: keep only the page content, minus
-                // the injected scoped stylesheet.
+                // Preview-wrapped payload: drop the injected scoped stylesheet,
+                // then UNWRAP the preview div in place rather than reading only
+                // pv.innerHTML. Reading the inner HTML discards every sibling of
+                // the preview — which on a flattened document is where the
+                // author's <style>, <title> and <meta> are sitting (#319).
                 for (const styleEl of pv.querySelectorAll(':scope > style')) {
                     styleEl.remove();
                 }
-                // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-                const inner = pv.innerHTML.trim();
-                // Preserve an original shell if one wrapped the preview; else
-                // the content becomes the document body in a minimal shell.
-                const bodyRe = /(<body\b[^>]*>)[\s\S]*?(<\/body\s*>)/i;
-                const outer = html.replace(/[\s\S]*/, ''); // placeholder, replaced below
-                void outer;
-                if (bodyRe.test(html) && !/class="dg-pv"/.test(html.split(/<body\b[^>]*>/i)[0] || '')) {
-                    return html.replace(bodyRe, (m, open, close) => open + '\n' + inner + '\n' + close);
+                // insertBefore/remove, not replaceWith — LWS proxied nodes are
+                // missing ChildNode.replaceWith (the v3.39 lesson).
+                while (pv.firstChild) {
+                    pv.parentNode.insertBefore(pv.firstChild, pv);
                 }
-                return (
-                    '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8" />\n<style>\n@page { size: Letter portrait; margin: 0.75in; }\nbody { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; }\n</style>\n</head>\n<body>\n' +
-                    inner +
-                    '\n</body>\n</html>\n'
-                );
+                pv.remove();
             }
-            // No pv wrapper — serialize the cleaned fragment back out.
             const container = document.createElement('div');
-            container.appendChild(root.cloneNode(true));
+            container.appendChild(root);
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            return container.innerHTML;
+            const cleaned = container.innerHTML.trim();
+
+            // Put the cleaned content back inside the AUTHOR'S OWN shell, and
+            // never fabricate one (#319).
+            //
+            // Two bugs used to live in these few lines, and they chained:
+            //
+            //  1. Parsing a full document into a <template> fragment discards
+            //     <!DOCTYPE>, <html>, <head> and <body> — they are ignored tokens
+            //     in that insertion mode. Serializing the fragment back therefore
+            //     returned a body with no shell. The author's <style> survived, so
+            //     nothing looked wrong yet.
+            //  2. On the NEXT save that shell-less body arrives wrapped in the
+            //     canvas's .dg-pv div, so `bodyRe.test(html)` is false, and the
+            //     old code fell through to a hardcoded
+            //     `<style>@page { size: Letter portrait }...</style>` shell —
+            //     silently replacing the author's entire stylesheet, and resetting
+            //     a Landscape template to Portrait.
+            //
+            // Splicing the cleaned BODY back into the original string, and
+            // otherwise returning the cleaned content untouched, fixes both: the
+            // shell is preserved when there is one, and no shell is invented when
+            // there is not.
+            if (bodyMatch) {
+                return html.replace(bodyRe, (m, open, inner, close) => open + '\n' + cleaned + '\n' + close);
+            }
+            return cleaned;
         } catch (e) {
-            return html;
+            // #322 — this function is the last line of defense against editor
+            // chrome (pills, drop markers, the preview wrapper) reaching a saved
+            // template body. The guard above already established `html` still
+            // carries at least one of those markers, so silently handing it back
+            // unchanged here means a failed sanitize looks IDENTICAL to a
+            // successful one to every caller — "Editor HTML staged" fires and the
+            // dirty markup goes on to save. Fail loud instead: _processAndSaveHtmlBody
+            // already documents itself as "Throws on failure — callers own the
+            // error toast," so this matches its existing contract.
+            throw new Error('Could not clean staged HTML: ' + (e && e.message ? e.message : String(e)));
         }
     }
 
@@ -15233,7 +15422,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.isAutoCreating = false;
         this.showAdvancedOptions = false;
         this.newTemplateLogoChoice = 'none';
-        this.newTemplateType = 'Word';
+        this.newTemplateType = 'HTML';
         this.newTemplateDesc = '';
         this.newTemplateQuery = '';
         this.newTemplateOutputFormat = 'PDF';

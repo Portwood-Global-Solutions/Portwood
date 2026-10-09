@@ -202,9 +202,15 @@ public with sharing class DocGenTemplateLinter {
     private class MergeToken {
         String raw; // full "{...}" text
         String content; // inner text, trimmed
-        Boolean isOpen; // {#X} / {^X}
+        Boolean isOpen; // {#X} / {^X} / {~X}
         Boolean isClose; // {/X}
         String key; // balance key per DocGenService.findBalancedEnd
+        // {~Label} (#439): resolves its body against the root data map, not the
+        // current loop row — it is not a relationship loop and must not be
+        // existence-checked against the base object's child relationships, nor
+        // counted toward loopDepth (which exists to tell "this field belongs to
+        // the child row, don't check it against baseObj"). Set at tokenize time.
+        Boolean isRootAnchor;
     }
 
     /** Extracts well-formed {…} candidates in document order. */
@@ -222,6 +228,10 @@ public with sharing class DocGenTemplateLinter {
             if (content.startsWith('#') || content.startsWith('^')) {
                 t.isOpen = true;
                 t.key = balanceKey(content.substring(1).trim());
+            } else if (content.startsWith('~')) {
+                t.isOpen = true;
+                t.isRootAnchor = true;
+                t.key = content.substring(1).trim(); // free-form label, not a balanceKey keyword
             } else if (content.startsWith('/')) {
                 t.isClose = true;
                 t.key = content.substring(1).trim();
@@ -381,6 +391,11 @@ public with sharing class DocGenTemplateLinter {
         for (MergeToken t : tokens) {
             if (t.isOpen == true) {
                 stack.add(t);
+                if (t.isRootAnchor == true) {
+                    // Not a relationship — don't check existence, don't affect
+                    // loopDepth (see MergeToken.isRootAnchor).
+                    continue;
+                }
                 if (isRelationshipLoop(t.key)) {
                     // Only the OUTERMOST loop resolves against the base object —
                     // a nested {#Rel} belongs to the child and is skipped.
@@ -408,7 +423,7 @@ public with sharing class DocGenTemplateLinter {
             if (t.isClose == true) {
                 if (!stack.isEmpty() && stack[stack.size() - 1].key.equals(t.key)) {
                     MergeToken popped = stack.remove(stack.size() - 1);
-                    if (isRelationshipLoop(popped.key)) {
+                    if (popped.isRootAnchor != true && isRelationshipLoop(popped.key)) {
                         loopDepth--;
                     }
                 }

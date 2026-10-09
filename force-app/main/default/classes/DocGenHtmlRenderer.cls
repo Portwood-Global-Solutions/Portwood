@@ -476,22 +476,37 @@ public with sharing class DocGenHtmlRenderer {
             footerHtml = footerHtml.replace('<p>', '<p style="margin:0;">');
             headerFirstHtml = headerFirstHtml.replace('<p>', '<p style="margin:0;">');
             footerFirstHtml = footerFirstHtml.replace('<p>', '<p style="margin:0;">');
-        }
 
-        // Build dynamic page CSS from document dimensions + styles
-        // (wmPageDims was computed above for watermark sizing; reuse here)
-        Map<String, Decimal> pageDims = wmPageDims;
-        reserveSpaceForHeaderFooter(pageDims, documentXml, headerXml, footerXml, headerFirstXml, footerFirstXml);
-        String cellPadding = resolveDefaultCellPadding();
-        Boolean hasHeader = String.isNotBlank(headerHtml);
-        Boolean hasFooter = String.isNotBlank(footerHtml);
-        Boolean hasHeaderFirst = String.isNotBlank(headerFirstHtml);
-        Boolean hasFooterFirst = String.isNotBlank(footerFirstHtml);
+            headerHtml = trimEmptyChromeParagraphs(headerHtml);
+            footerHtml = trimEmptyChromeParagraphs(footerHtml);
+            headerFirstHtml = trimEmptyChromeParagraphs(headerFirstHtml);
+            footerFirstHtml = trimEmptyChromeParagraphs(footerFirstHtml);
+        }
 
         // Check if document has a title page (Different First Page in Word)
         // <w:titlePg/> in the final <w:sectPr> means page 1 gets a separate
         // header/footer pair (or none, if no first-typed reference exists).
         Boolean hasTitlePage = isOoxmlOnOffElementTrue(documentXml, 'w:titlePg');
+
+        // Build dynamic page CSS from document dimensions + styles
+        // (wmPageDims was computed above for watermark sizing; reuse here)
+        Map<String, Decimal> pageDims = wmPageDims;
+        FirstPageChromeReservation firstPageReservation = reserveSpaceForHeaderFooter(
+            pageDims,
+            documentXml,
+            headerXml,
+            footerXml,
+            headerFirstXml,
+            footerFirstXml,
+            hasTitlePage
+        );
+        String cellPadding = resolveDefaultCellPadding();
+        Boolean hasHeader = String.isNotBlank(headerHtml);
+        Boolean hasFooter = String.isNotBlank(footerHtml);
+        Boolean hasHeaderFirst = String.isNotBlank(headerFirstHtml);
+        Boolean hasFooterFirst = String.isNotBlank(footerFirstHtml);
+        Decimal headerDistance = readPageDistanceInches(documentXml, 'w:header', 0.5);
+        Decimal footerDistance = readPageDistanceInches(documentXml, 'w:footer', 0.5);
 
         // Build @page rule with running header/footer margin boxes (Flying Saucer)
         // CSS @page rule order: properties before nested margin boxes.
@@ -520,10 +535,16 @@ public with sharing class DocGenHtmlRenderer {
             dynamicPageCss += ' ' + watermarkPageBgCss;
         }
         if (hasHeader) {
-            dynamicPageCss += ' @top-center { content: element(docgen-running-header); }';
+            dynamicPageCss +=
+                ' @top-center { content: element(docgen-running-header); vertical-align: top; padding-top: ' +
+                headerDistance +
+                'in; }';
         }
         if (hasFooter) {
-            dynamicPageCss += ' @bottom-center { content: element(docgen-running-footer); }';
+            dynamicPageCss +=
+                ' @bottom-center { content: element(docgen-running-footer); vertical-align: bottom; padding-bottom: ' +
+                footerDistance +
+                'in; }';
         }
         dynamicPageCss += ' }';
 
@@ -534,13 +555,31 @@ public with sharing class DocGenHtmlRenderer {
         //   3. No headers/footers at all → no rule needed.
         if (hasTitlePage) {
             String firstPageCss = '';
+            if (firstPageReservation != null && firstPageReservation.hasOverrides == true) {
+                firstPageCss +=
+                    'margin: ' +
+                    firstPageReservation.marginTop +
+                    'in ' +
+                    pageDims.get('marginRight') +
+                    'in ' +
+                    firstPageReservation.marginBottom +
+                    'in ' +
+                    pageDims.get('marginLeft') +
+                    'in; ';
+            }
             if (hasHeaderFirst) {
-                firstPageCss += '@top-center { content: element(docgen-running-header-first); }';
+                firstPageCss +=
+                    '@top-center { content: element(docgen-running-header-first); vertical-align: top; padding-top: ' +
+                    headerDistance +
+                    'in; }';
             } else if (hasHeader) {
                 firstPageCss += '@top-center { content: normal; }';
             }
             if (hasFooterFirst) {
-                firstPageCss += '@bottom-center { content: element(docgen-running-footer-first); }';
+                firstPageCss +=
+                    '@bottom-center { content: element(docgen-running-footer-first); vertical-align: bottom; padding-bottom: ' +
+                    footerDistance +
+                    'in; }';
             } else if (hasFooter) {
                 firstPageCss += '@bottom-center { content: normal; }';
             }
@@ -996,6 +1035,7 @@ public with sharing class DocGenHtmlRenderer {
         if (String.isBlank(s))
             return s;
         s = decodeHighCodepointEntities(s);
+        s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();
         Boolean needsWrap = false;
         for (Integer i = 0; i < len; i++) {
@@ -1009,8 +1049,8 @@ public with sharing class DocGenHtmlRenderer {
 
         String out = '';
         Integer i = 0;
-        Boolean inTag = false;
         Integer runStart = -1;
+        List<PdfGlyphStyle> styleStack = new List<PdfGlyphStyle>{ new PdfGlyphStyle('11pt', false) };
         while (i < len) {
             Integer cp = s.charAt(i);
             if (cp == 60) {
@@ -1021,23 +1061,31 @@ public with sharing class DocGenHtmlRenderer {
                         '</span>';
                     runStart = -1;
                 }
-                inTag = true;
-                out += s.substring(i, i + 1);
-                i++;
+                Integer tagEnd = s.indexOf('>', i);
+                if (tagEnd < 0) {
+                    out += s.substring(i, i + 1);
+                    i++;
+                    continue;
+                }
+                String tag = s.substring(i, tagEnd + 1);
+                updatePdfGlyphStyleStack(styleStack, tag);
+                out += tag;
+                i = tagEnd + 1;
                 continue;
             }
-            if (cp == 62) {
-                inTag = false;
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (inTag) {
-                out += s.substring(i, i + 1);
-                i++;
-                continue;
-            }
-            if (codepointNeedsUnicodeFont(cp)) {
+            if (codepointNeedsPdfGlyphImage(cp)) {
+                if (runStart >= 0) {
+                    out +=
+                        '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' +
+                        s.substring(runStart, i) +
+                        '</span>';
+                    runStart = -1;
+                }
+                out += pdfGlyphImageHtml(cp, styleStack[styleStack.size() - 1]);
+            } else if (codepointNeedsUnicodeFont(cp)) {
+                if (runStart < 0)
+                    runStart = i;
+            } else if (nextCodepointIsCombiningMark(s, i, len)) {
                 if (runStart < 0)
                     runStart = i;
             } else {
@@ -1061,7 +1109,295 @@ public with sharing class DocGenHtmlRenderer {
         return out;
     }
 
+    private static Boolean nextCodepointIsCombiningMark(String s, Integer i, Integer len) {
+        return i + 1 < len && codepointIsCombiningMark(s.charAt(i + 1));
+    }
+
+    private static Boolean codepointIsCombiningMark(Integer cp) {
+        return (cp >= 768 && cp <= 879) || (cp >= 6832 && cp <= 6911) || (cp >= 7616 && cp <= 7679);
+    }
+
+    private static String normalizeLatinCombiningMarks(String s) {
+        if (String.isBlank(s)) {
+            return s;
+        }
+        String commaBelow = String.fromCharArray(new List<Integer>{ 806 });
+        return s.replace('S' + commaBelow, String.fromCharArray(new List<Integer>{ 536 }))
+            .replace('s' + commaBelow, String.fromCharArray(new List<Integer>{ 537 }));
+    }
+
+    private static Boolean codepointNeedsPdfGlyphImage(Integer cp) {
+        return cp ==
+            8377 || // ₹ Indian rupee
+            cp == 8381 || // ₽ Russian ruble
+            cp == 8378 || // ₺ Turkish lira
+            cp == 8369 || // ₱ Philippine peso
+            cp == 8372 || // ₴ Ukrainian hryvnia
+            cp == 8383 || // ₿ Bitcoin
+            cp == 8382 || // ₾ Georgian lari
+            cp == 1423 || // ֏ Armenian dram
+            cp == 8380 || // ₼ Azerbaijani manat
+            cp == 536 || // Ș Latin capital S with comma below
+            cp == 537 || // ș Latin small s with comma below
+            cp == 8376; // ₸ Kazakhstani tenge
+    }
+
+    private class PdfGlyphStyle {
+        String fontSize;
+        Boolean bold;
+
+        PdfGlyphStyle(String fontSize, Boolean bold) {
+            this.fontSize = String.isBlank(fontSize) ? '11pt' : fontSize;
+            this.bold = bold == true;
+        }
+    }
+
+    private static void updatePdfGlyphStyleStack(List<PdfGlyphStyle> styleStack, String tag) {
+        String tagName = pdfGlyphTagName(tag);
+        if (String.isBlank(tagName)) {
+            return;
+        }
+        String lower = tag.toLowerCase();
+        if (lower.startsWith('</')) {
+            if (styleStack.size() > 1) {
+                styleStack.remove(styleStack.size() - 1);
+            }
+            return;
+        }
+        if (pdfGlyphIsVoidTag(tagName, lower)) {
+            return;
+        }
+
+        PdfGlyphStyle parent = styleStack[styleStack.size() - 1];
+        String fontSize = parent.fontSize;
+        Boolean bold = parent.bold || tagName == 'b' || tagName == 'strong';
+        if (tagName == 'h1') {
+            fontSize = '20pt';
+            bold = true;
+        } else if (tagName == 'h2') {
+            fontSize = '16pt';
+            bold = true;
+        } else if (tagName == 'h3') {
+            fontSize = '14pt';
+            bold = true;
+        } else if (tagName == 'h4') {
+            fontSize = '12pt';
+            bold = true;
+        } else if (tagName == 'h5') {
+            fontSize = '11pt';
+            bold = true;
+        } else if (tagName == 'h6') {
+            fontSize = '10pt';
+            bold = true;
+        }
+
+        String style = pdfGlyphStyleAttr(tag);
+        String tagFontSize = normalizePdfGlyphFontSize(pdfGlyphCssValue(style, 'font-size'));
+        if (String.isNotBlank(tagFontSize)) {
+            fontSize = tagFontSize;
+        }
+        String weight = pdfGlyphCssValue(style, 'font-weight');
+        if (String.isNotBlank(weight)) {
+            bold = pdfGlyphFontWeightIsBold(weight);
+        }
+        styleStack.add(new PdfGlyphStyle(fontSize, bold));
+    }
+
+    private static String pdfGlyphTagName(String tag) {
+        Matcher m = Pattern.compile('(?i)^<\\s*/?\\s*([a-z0-9]+)').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(1).toLowerCase() : null;
+    }
+
+    private static Boolean pdfGlyphIsVoidTag(String tagName, String lowerTag) {
+        return lowerTag.endsWith('/>') ||
+            tagName == 'br' ||
+            tagName == 'hr' ||
+            tagName == 'img' ||
+            tagName == 'input' ||
+            tagName == 'meta' ||
+            tagName == 'link';
+    }
+
+    private static String pdfGlyphStyleAttr(String tag) {
+        Matcher m = Pattern.compile('(?is)\\sstyle\\s*=\\s*([\'"])(.*?)\\1').matcher(tag == null ? '' : tag);
+        return m.find() ? m.group(2) : '';
+    }
+
+    private static String pdfGlyphCssValue(String style, String property) {
+        if (String.isBlank(style)) {
+            return null;
+        }
+        Matcher m = Pattern.compile('(?i)(^|;)\\s*' + property + '\\s*:\\s*([^;]+)').matcher(style);
+        return m.find() ? m.group(2).trim() : null;
+    }
+
+    private static String normalizePdfGlyphFontSize(String fontSize) {
+        if (String.isBlank(fontSize)) {
+            return null;
+        }
+        String value = fontSize.trim().toLowerCase().replaceAll('\\s+', '');
+        return Pattern.matches('^[0-9]+(\\.[0-9]+)?(pt|px)$', value) ? value : null;
+    }
+
+    private static Boolean pdfGlyphFontWeightIsBold(String weight) {
+        String value = weight == null ? '' : weight.trim().toLowerCase();
+        if (value == 'bold' || value == 'bolder') {
+            return true;
+        }
+        if (value == 'normal' || value == 'lighter') {
+            return false;
+        }
+        try {
+            return Integer.valueOf(value) >= 600;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Real lowercase letterforms run smaller than their capital — matched to the
+    // actual Arial glyph proportions measured off-platform (capital ~208px tall,
+    // lowercase ~168px tall, ratio ~0.8), not an arbitrary guess. Every other
+    // glyph here has no case distinction (currency symbols), so this only ever
+    // applies to cp 537.
+    private static Decimal pdfGlyphSizeScaleFactor(Integer cp) {
+        return cp == 537 ? 0.8 : 1.0;
+    }
+
+    private static String scalePdfGlyphSize(String size, Decimal factor) {
+        if (factor == 1.0) {
+            return size;
+        }
+        Matcher m = Pattern.compile('^([0-9]+(?:\\.[0-9]+)?)(pt|px)$').matcher(size);
+        if (!m.matches()) {
+            return size;
+        }
+        Decimal value = Decimal.valueOf(m.group(1)) * factor;
+        return value.setScale(2) + m.group(2);
+    }
+
+    // Cached per-transaction — glyphResourcePrefix() can be called many times when a
+    // document uses several non-Latin characters; the resource's namespace never
+    // changes mid-transaction.
+    private static String cachedGlyphResourcePrefix = null;
+
+    /**
+     * Namespaced static resource URLs need the package namespace prefixed
+     * (`portwoodglobal__DocGenPdfGlyphs`) when this code is running inside an
+     * installed managed package — a bare `/resource/DocGenPdfGlyphs/...` only
+     * resolves in an unnamespaced/unpackaged org. Queries the StaticResource
+     * record's own NamespacePrefix directly rather than relying on any Apex
+     * reflection trick (class.getName() namespace behavior is not something this
+     * codebase had verified), so this is correct regardless of calling context.
+     * Found via a real package-install smoke test: every non-Latin glyph fallback
+     * (Ș/ș, Armenian ֏, the currency symbols) rendered as a broken-image icon baked
+     * into the PDF in a real subscriber-shaped org, despite passing in every
+     * source-deployed, unnamespaced scratch org this was tested in all release.
+     */
+    private static String glyphResourcePrefix() {
+        if (cachedGlyphResourcePrefix != null) {
+            return cachedGlyphResourcePrefix;
+        }
+        cachedGlyphResourcePrefix = '';
+        for (StaticResource sr : [
+            SELECT NamespacePrefix
+            FROM StaticResource
+            WHERE Name = 'DocGenPdfGlyphs'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ]) {
+            if (String.isNotBlank(sr.NamespacePrefix)) {
+                cachedGlyphResourcePrefix = sr.NamespacePrefix + '__';
+            }
+        }
+        return cachedGlyphResourcePrefix;
+    }
+
+    private static String pdfGlyphImageHtml(Integer cp, PdfGlyphStyle glyphStyle) {
+        String hex = pdfGlyphResourceSuffix(cp);
+        String ch = String.fromCharArray(new List<Integer>{ cp }).escapeHtml4();
+        String size = glyphStyle == null || String.isBlank(glyphStyle.fontSize) ? '11pt' : glyphStyle.fontSize;
+        size = scalePdfGlyphSize(size, pdfGlyphSizeScaleFactor(cp));
+        // Flying Saucer caches one rasterized bitmap per image URL, sized by
+        // whichever occurrence of that URL it resolves LAST during layout —
+        // then reuses that same cached size for every OTHER occurrence of the
+        // same URL in the document, regardless of what size each one actually
+        // requests. A template using the same glyph at two different sizes
+        // (e.g. body text and a heading) ends up with one of them badly
+        // mis-sized. Confirmed by direct testing: a single occurrence at any
+        // size renders correctly; two occurrences of the same URL at
+        // different sizes always leaves one broken, and which one breaks
+        // flips with processing order. The query string below is inert for
+        // Salesforce's static resource server (same file either way) but
+        // gives Flying Saucer a distinct cache key per size, so same-size
+        // reuse still shares a cache entry while different sizes don't
+        // collide.
+        String sizedSrc =
+            '/resource/' +
+            glyphResourcePrefix() +
+            'DocGenPdfGlyphs/u' +
+            hex +
+            '.png?sz=' +
+            EncodingUtil.urlEncode(size, 'UTF-8');
+        String imgStyle = 'height:' + size + ';width:' + size + ';vertical-align:-0.20em;display:inline-block;';
+        String img = '<img src="' + sizedSrc + '" alt="' + ch + '" style="' + imgStyle + '"/>';
+        if (glyphStyle == null || glyphStyle.bold != true) {
+            return img;
+        }
+        return '<span style="display:inline-block;vertical-align:-0.20em;width:' +
+            size +
+            ';height:' +
+            size +
+            ';white-space:nowrap;">' +
+            img +
+            '<img src="' +
+            sizedSrc +
+            '" alt="" style="' +
+            imgStyle +
+            'margin-left:-' +
+            size +
+            ';position:relative;left:0.03em;"/>' +
+            '</span>';
+    }
+
+    private static String pdfGlyphResourceSuffix(Integer cp) {
+        if (cp == 8377)
+            return '20b9';
+        if (cp == 8381)
+            return '20bd';
+        if (cp == 8378)
+            return '20ba';
+        if (cp == 8369)
+            return '20b1';
+        if (cp == 8372)
+            return '20b4';
+        if (cp == 8383)
+            return '20bf';
+        if (cp == 8382)
+            return '20be';
+        if (cp == 1423)
+            return '058f';
+        if (cp == 8380)
+            return '20bc';
+        if (cp == 536)
+            return '0218';
+        if (cp == 537)
+            return '0219';
+        return '20b8';
+    }
+
     private static Boolean codepointNeedsUnicodeFont(Integer cp) {
+        if (
+            cp == 269 ||
+            cp == 321 ||
+            cp == 322 ||
+            cp == 346 ||
+            cp == 347 ||
+            cp == 350 ||
+            cp == 351 ||
+            cp == 536 ||
+            cp == 537
+        )
+            return true; // Selected Latin Extended letters blank in the PDF base fonts
         if (cp <= 591)
             return false;
         if (cp == 8211 || cp == 8212)
@@ -1090,6 +1426,12 @@ public with sharing class DocGenHtmlRenderer {
         if (highCodepointEntityMap != null)
             return highCodepointEntityMap;
         highCodepointEntityMap = new Map<String, Integer>{
+            'Sacute' => 346,
+            'sacute' => 347,
+            'Scedil' => 350,
+            'scedil' => 351,
+            'Scomma' => 536,
+            'scomma' => 537,
             // Greek lowercase
             'alpha' => 945,
             'beta' => 946,
@@ -1220,7 +1562,47 @@ public with sharing class DocGenHtmlRenderer {
                 s = s.replace(token, String.fromCharArray(new List<Integer>{ entityMap.get(name) }));
             }
         }
+        Matcher numeric = Pattern.compile('&#(x[0-9a-fA-F]+|[0-9]+);').matcher(s);
+        String out = '';
+        Integer last = 0;
+        while (numeric.find()) {
+            Integer cp = parseHtmlEntityCodepoint(numeric.group(1));
+            if (cp != null && codepointNeedsUnicodeFont(cp)) {
+                out += s.substring(last, numeric.start()) + String.fromCharArray(new List<Integer>{ cp });
+                last = numeric.end();
+            }
+        }
+        if (last > 0) {
+            s = out + s.substring(last);
+        }
         return s;
+    }
+
+    private static Integer parseHtmlEntityCodepoint(String raw) {
+        if (String.isBlank(raw)) {
+            return null;
+        }
+        Boolean hex = raw.startsWithIgnoreCase('x');
+        String digits = hex ? raw.substring(1) : raw;
+        if (String.isBlank(digits)) {
+            return null;
+        }
+        Integer value = 0;
+        for (Integer i = 0; i < digits.length(); i++) {
+            Integer c = digits.charAt(i);
+            Integer n;
+            if (c >= 48 && c <= 57) {
+                n = c - 48;
+            } else if (hex && c >= 65 && c <= 70) {
+                n = c - 55;
+            } else if (hex && c >= 97 && c <= 102) {
+                n = c - 87;
+            } else {
+                return null;
+            }
+            value = value * (hex ? 16 : 10) + n;
+        }
+        return value;
     }
 
     /**
@@ -1537,6 +1919,14 @@ public with sharing class DocGenHtmlRenderer {
             pageBreakBefore = true;
         }
 
+        if (!style.contains('font-size:') && headingLevel == 0 && isTitle == false && String.isNotBlank(content)) {
+            Integer paragraphHalfPoints = resolveParagraphFontHalfPoints(pXml);
+            if (paragraphHalfPoints != null) {
+                Decimal ptSize = paragraphHalfPoints * HALF_POINTS_TO_PT;
+                style += (String.isNotBlank(style) ? ';' : '') + 'font-size:' + ptSize + 'pt';
+            }
+        }
+
         // Empty paragraph with bottom border = horizontal rule
         if (String.isBlank(content) && String.isNotBlank(pPr) && pPr.contains('<w:pBdr')) {
             String bottomBdr = extractElement(pPr, 'w:bottom');
@@ -1588,6 +1978,31 @@ public with sharing class DocGenHtmlRenderer {
             '>' +
             content +
             '</p>';
+    }
+
+    private static Integer resolveParagraphFontHalfPoints(String pXml) {
+        Integer maxHalfPoints = null;
+        Integer cursor = 0;
+        while (cursor < pXml.length()) {
+            Integer szStart = pXml.indexOf('<w:sz', cursor);
+            if (szStart == -1) {
+                break;
+            }
+            Integer szEnd = pXml.indexOf('>', szStart);
+            if (szEnd == -1) {
+                break;
+            }
+            String val = extractAttrFromTag(pXml.substring(szStart, szEnd), 'w:val');
+            if (val != null && val.isNumeric()) {
+                Integer halfPoints = Integer.valueOf(val);
+                maxHalfPoints = maxHalfPoints == null ? halfPoints : Math.max(maxHalfPoints, halfPoints);
+            }
+            cursor = szEnd + 1;
+        }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = resolveReferencedStyleFontHalfPoints(pXml);
+        }
+        return maxHalfPoints;
     }
 
     /**
@@ -2687,6 +3102,9 @@ public with sharing class DocGenHtmlRenderer {
         String headerRows = '';
         String bodyRows = '';
         Integer cursor = 0;
+        Integer rowIndex = 0;
+        Map<String, Integer> verticalMergeRowspans = calculateVerticalMergeRowspans(tblXml);
+        Set<String> verticalMergeContinuationCells = calculateVerticalMergeContinuationCells(tblXml);
         while (cursor < tblXml.length()) {
             Integer trStart = tblXml.indexOf('<w:tr', cursor);
             if (trStart == -1) {
@@ -2699,12 +3117,23 @@ public with sharing class DocGenHtmlRenderer {
             }
 
             String rowXml = tblXml.substring(trStart, trEnd);
-            String rowHtml = processTableRow(rowXml, images, tblPr, cellInsideH, cellInsideV, isBidiVisual);
+            String rowHtml = processTableRow(
+                rowXml,
+                images,
+                tblPr,
+                cellInsideH,
+                cellInsideV,
+                isBidiVisual,
+                verticalMergeRowspans,
+                verticalMergeContinuationCells,
+                rowIndex
+            );
             if (rowIsHeader(rowXml)) {
                 headerRows += rowHtml;
             } else {
                 bodyRows += rowHtml;
             }
+            rowIndex++;
             cursor = trEnd;
         }
         String rows = bodyRows;
@@ -2746,9 +3175,13 @@ public with sharing class DocGenHtmlRenderer {
         String tblPr,
         String cellInsideH,
         String cellInsideV,
-        Boolean isBidiVisual
+        Boolean isBidiVisual,
+        Map<String, Integer> verticalMergeRowspans,
+        Set<String> verticalMergeContinuationCells,
+        Integer rowIndex
     ) {
         Integer cursor = 0;
+        Integer cellIndex = 0;
 
         Boolean isHeader = rowIsHeader(trXml);
 
@@ -2764,9 +3197,22 @@ public with sharing class DocGenHtmlRenderer {
                 break;
             }
 
-            cellList.add(
-                processTableCell(trXml.substring(tcStart, tcEnd), images, tblPr, cellInsideH, cellInsideV, isHeader)
-            );
+            String cellKey = rowIndex + ':' + cellIndex;
+            if (!verticalMergeContinuationCells.contains(cellKey)) {
+                Integer rowspan = verticalMergeRowspans.containsKey(cellKey) ? verticalMergeRowspans.get(cellKey) : 0;
+                cellList.add(
+                    processTableCell(
+                        trXml.substring(tcStart, tcEnd),
+                        images,
+                        tblPr,
+                        cellInsideH,
+                        cellInsideV,
+                        isHeader,
+                        rowspan
+                    )
+                );
+            }
+            cellIndex++;
             cursor = tcEnd;
         }
 
@@ -2780,6 +3226,123 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         return '<tr>' + String.join(cellList, '') + '</tr>';
+    }
+
+    private static Map<String, Integer> calculateVerticalMergeRowspans(String tblXml) {
+        Map<String, Integer> rowspans = new Map<String, Integer>();
+        List<String> rows = extractDirectTableRows(tblXml);
+        for (Integer rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            List<String> cells = extractDirectTableCells(rows[rowIndex]);
+            for (Integer cellIndex = 0; cellIndex < cells.size(); cellIndex++) {
+                String tcPr = extractDirectTableCellProperties(cells[cellIndex]);
+                if (!isVerticalMergeRestart(tcPr)) {
+                    continue;
+                }
+                Integer span = 1;
+                for (Integer nextRowIndex = rowIndex + 1; nextRowIndex < rows.size(); nextRowIndex++) {
+                    List<String> nextCells = extractDirectTableCells(rows[nextRowIndex]);
+                    if (cellIndex >= nextCells.size()) {
+                        break;
+                    }
+                    String nextTcPr = extractDirectTableCellProperties(nextCells[cellIndex]);
+                    if (!isVerticalMergeContinuation(nextTcPr)) {
+                        break;
+                    }
+                    span++;
+                }
+                if (span > 1) {
+                    rowspans.put(rowIndex + ':' + cellIndex, span);
+                }
+            }
+        }
+        return rowspans;
+    }
+
+    private static Set<String> calculateVerticalMergeContinuationCells(String tblXml) {
+        Set<String> cellsToSkip = new Set<String>();
+        List<String> rows = extractDirectTableRows(tblXml);
+        for (Integer rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            List<String> cells = extractDirectTableCells(rows[rowIndex]);
+            for (Integer cellIndex = 0; cellIndex < cells.size(); cellIndex++) {
+                String tcPr = extractDirectTableCellProperties(cells[cellIndex]);
+                if (isVerticalMergeContinuation(tcPr)) {
+                    cellsToSkip.add(rowIndex + ':' + cellIndex);
+                }
+            }
+        }
+        return cellsToSkip;
+    }
+
+    private static List<String> extractDirectTableRows(String tblXml) {
+        List<String> rows = new List<String>();
+        Integer cursor = 0;
+        while (cursor < tblXml.length()) {
+            Integer trStart = tblXml.indexOf('<w:tr', cursor);
+            if (trStart == -1) {
+                break;
+            }
+            Integer trEnd = findClosingTag(tblXml, trStart, 'w:tr');
+            if (trEnd == -1) {
+                break;
+            }
+            rows.add(tblXml.substring(trStart, trEnd));
+            cursor = trEnd;
+        }
+        return rows;
+    }
+
+    private static List<String> extractDirectTableCells(String trXml) {
+        List<String> cells = new List<String>();
+        Integer cursor = 0;
+        while (cursor < trXml.length()) {
+            Integer tcStart = trXml.indexOf('<w:tc', cursor);
+            if (tcStart == -1) {
+                break;
+            }
+            Integer tcEnd = findClosingTag(trXml, tcStart, 'w:tc');
+            if (tcEnd == -1) {
+                break;
+            }
+            cells.add(trXml.substring(tcStart, tcEnd));
+            cursor = tcEnd;
+        }
+        return cells;
+    }
+
+    private static String extractDirectTableCellProperties(String tcXml) {
+        String tcPr = null;
+        Integer tcPrIdx = tcXml.indexOf('<w:tcPr');
+        if (tcPrIdx != -1) {
+            Integer firstChildIdx = -1;
+            Integer pIdx = tcXml.indexOf('<w:p');
+            Integer tblIdx = tcXml.indexOf('<w:tbl');
+            if (pIdx != -1) {
+                firstChildIdx = pIdx;
+            }
+            if (tblIdx != -1 && (firstChildIdx == -1 || tblIdx < firstChildIdx)) {
+                firstChildIdx = tblIdx;
+            }
+            if (firstChildIdx == -1 || tcPrIdx < firstChildIdx) {
+                tcPr = extractElement(tcXml, 'w:tcPr');
+            }
+        }
+        return tcPr;
+    }
+
+    private static Boolean isVerticalMergeRestart(String tcPr) {
+        if (String.isBlank(tcPr) || !tcPr.contains('<w:vMerge')) {
+            return false;
+        }
+        String val = extractAttr(tcPr, 'w:vMerge', 'w:val');
+        return val == 'restart';
+    }
+
+    private static Boolean isVerticalMergeContinuation(String tcPr) {
+        if (String.isBlank(tcPr) || !tcPr.contains('<w:vMerge')) {
+            return false;
+        }
+        String val = extractAttr(tcPr, 'w:vMerge', 'w:val');
+        return String.isBlank(val) || val == 'continue';
     }
 
     /**
@@ -2820,7 +3383,8 @@ public with sharing class DocGenHtmlRenderer {
         String tblPr,
         String cellInsideH,
         String cellInsideV,
-        Boolean isHeader
+        Boolean isHeader,
+        Integer rowspan
     ) {
         List<String> styles = new List<String>();
         Integer colspan = 0;
@@ -2918,6 +3482,9 @@ public with sharing class DocGenHtmlRenderer {
         }
         if (colspan > 1) {
             attrs += ' colspan="' + colspan + '"';
+        }
+        if (rowspan != null && rowspan > 1) {
+            attrs += ' rowspan="' + rowspan + '"';
         }
 
         return '<' + tag + attrs + '>' + content + '</' + tag + '>';
@@ -3080,44 +3647,77 @@ public with sharing class DocGenHtmlRenderer {
      * page margin boxes, so tall Word headers overlap body text unless we expand
      * the PDF margin box to fit the authored header/footer content.
      */
-    private static void reserveSpaceForHeaderFooter(
+    private class FirstPageChromeReservation {
+        Boolean hasOverrides = false;
+        Decimal marginTop;
+        Decimal marginBottom;
+    }
+
+    private static final Decimal CHROME_OVERLAP_TOLERANCE_IN = 0.08;
+    private static final Decimal HEADER_BODY_CLEARANCE_IN = 0.35;
+
+    private static FirstPageChromeReservation reserveSpaceForHeaderFooter(
         Map<String, Decimal> dims,
         String documentXml,
         String headerXml,
         String footerXml,
         String headerFirstXml,
-        String footerFirstXml
+        String footerFirstXml,
+        Boolean hasTitlePage
     ) {
+        FirstPageChromeReservation first = new FirstPageChromeReservation();
         if (dims == null || String.isBlank(documentXml)) {
-            return;
+            return first;
         }
+        Decimal baseTop = dims.containsKey('marginTop') ? dims.get('marginTop') : 1;
+        Decimal baseBottom = dims.containsKey('marginBottom') ? dims.get('marginBottom') : 1;
         Decimal headerDistance = readPageDistanceInches(documentXml, 'w:header', 0.5);
-        Decimal footerDistance = readPageDistanceInches(documentXml, 'w:footer', 0.5);
-        Decimal headerHeight = Math.max(
-            estimateDocxFragmentHeightInches(headerXml),
-            estimateDocxFragmentHeightInches(headerFirstXml)
-        );
-        Decimal footerHeight = Math.max(
-            estimateDocxFragmentHeightInches(footerXml),
-            estimateDocxFragmentHeightInches(footerFirstXml)
-        );
-        Decimal safetyGap = 0.08;
+        Decimal headerHeight = estimateDocxFragmentHeightInches(headerXml);
+        Decimal footerHeight = estimateDocxFragmentHeightInches(footerXml);
 
         if (headerHeight > 0 && dims.containsKey('marginTop')) {
-            Decimal neededTop = headerDistance + headerHeight + safetyGap;
-            if (neededTop > dims.get('marginTop')) {
-                dims.put('marginTop', neededTop);
-            }
+            dims.put('marginTop', headerDistance + headerHeight + HEADER_BODY_CLEARANCE_IN);
         }
         if (footerHeight > 0 && dims.containsKey('marginBottom')) {
-            Decimal neededBottom = footerDistance + footerHeight + safetyGap;
-            if (neededBottom > dims.get('marginBottom')) {
+            Decimal neededBottom = footerHeight;
+            if (neededBottom > baseBottom + CHROME_OVERLAP_TOLERANCE_IN) {
                 dims.put('marginBottom', neededBottom);
             }
+        }
+        first.marginTop = dims.containsKey('marginTop') ? dims.get('marginTop') : baseTop;
+        first.marginBottom = dims.containsKey('marginBottom') ? dims.get('marginBottom') : baseBottom;
+        if (hasTitlePage == true) {
+            Decimal firstTop = baseTop;
+            Decimal firstBottom = baseBottom;
+            Decimal firstHeaderHeight = estimateDocxFragmentHeightInches(headerFirstXml);
+            Decimal firstFooterHeight = estimateDocxFragmentHeightInches(footerFirstXml);
+            if (firstHeaderHeight > 0) {
+                firstTop = headerDistance + firstHeaderHeight + HEADER_BODY_CLEARANCE_IN;
+            }
+            if (firstFooterHeight > 0) {
+                Decimal neededFirstBottom = firstFooterHeight;
+                if (neededFirstBottom > baseBottom + CHROME_OVERLAP_TOLERANCE_IN) {
+                    firstBottom = neededFirstBottom;
+                }
+            }
+            first.marginTop = firstTop;
+            first.marginBottom = firstBottom;
+            first.hasOverrides = firstTop != dims.get('marginTop') || firstBottom != dims.get('marginBottom');
         }
         if (dims.containsKey('pageHeight') && dims.containsKey('marginTop') && dims.containsKey('marginBottom')) {
             dims.put('contentHeight', dims.get('pageHeight') - dims.get('marginTop') - dims.get('marginBottom') - 0.2);
         }
+        return first;
+    }
+
+    private static String trimEmptyChromeParagraphs(String html) {
+        if (String.isBlank(html)) {
+            return html;
+        }
+        String emptyParagraph = '<p[^>]*>\\s*(?:&nbsp;|&#160;|\\u00A0)?\\s*</p>';
+        html = html.replaceAll('(?is)^(?:\\s*' + emptyParagraph + '\\s*)+', '');
+        html = html.replaceAll('(?is)(?:\\s*' + emptyParagraph + '\\s*)+$', '');
+        return html;
     }
 
     private static Decimal readPageDistanceInches(String xml, String attrName, Decimal fallbackInches) {
@@ -3132,12 +3732,29 @@ public with sharing class DocGenHtmlRenderer {
         if (String.isBlank(xml)) {
             return 0;
         }
+        return estimateDocxBlockHeightInches(xml);
+    }
+
+    private static Decimal estimateDocxBlockHeightInches(String xml) {
+        if (String.isBlank(xml)) {
+            return 0;
+        }
         Decimal height = 0;
         Integer cursor = 0;
         while (cursor < xml.length()) {
             Integer pStart = xml.indexOf('<w:p', cursor);
-            if (pStart == -1) {
+            Integer tblStart = xml.indexOf('<w:tbl', cursor);
+            if (pStart == -1 && tblStart == -1) {
                 break;
+            }
+            if (tblStart != -1 && (pStart == -1 || tblStart < pStart)) {
+                Integer tblEnd = findClosingTag(xml, tblStart, 'w:tbl');
+                if (tblEnd == -1) {
+                    break;
+                }
+                height += estimateDocxTableHeightInches(xml.substring(tblStart, tblEnd));
+                cursor = tblEnd;
+                continue;
             }
             Integer pOpenEnd = xml.indexOf('>', pStart);
             Integer pEnd = xml.indexOf('</w:p>', pStart);
@@ -3165,8 +3782,51 @@ public with sharing class DocGenHtmlRenderer {
         return height;
     }
 
+    private static Decimal estimateDocxTableHeightInches(String tblXml) {
+        Decimal height = 0;
+        Integer cursor = 0;
+        while (cursor < tblXml.length()) {
+            Integer trStart = tblXml.indexOf('<w:tr', cursor);
+            if (trStart == -1) {
+                break;
+            }
+            Integer trEnd = findClosingTag(tblXml, trStart, 'w:tr');
+            if (trEnd == -1) {
+                break;
+            }
+            height += estimateDocxTableRowHeightInches(tblXml.substring(trStart, trEnd));
+            cursor = trEnd;
+        }
+        return height;
+    }
+
+    private static Decimal estimateDocxTableRowHeightInches(String trXml) {
+        Decimal rowHeight = 0;
+        Integer cursor = 0;
+        while (cursor < trXml.length()) {
+            Integer tcStart = trXml.indexOf('<w:tc', cursor);
+            if (tcStart == -1) {
+                break;
+            }
+            Integer tcEnd = findClosingTag(trXml, tcStart, 'w:tc');
+            if (tcEnd == -1) {
+                break;
+            }
+            String tcXml = trXml.substring(tcStart, tcEnd);
+            rowHeight = Math.max(
+                rowHeight,
+                estimateDocxBlockHeightInches(tcXml) + readCellVerticalPaddingInches(tcXml)
+            );
+            cursor = tcEnd;
+        }
+        if (rowHeight <= 0 && String.isNotBlank(trXml.replaceAll('(?is)<[^>]+>', '').trim())) {
+            rowHeight = estimateParagraphRunHeightInches(trXml);
+        }
+        return rowHeight;
+    }
+
     private static Decimal estimateParagraphRunHeightInches(String pXml) {
-        Integer maxHalfPoints = 22;
+        Integer maxHalfPoints = null;
         Integer cursor = 0;
         while (cursor < pXml.length()) {
             Integer szStart = pXml.indexOf('<w:sz', cursor);
@@ -3179,12 +3839,57 @@ public with sharing class DocGenHtmlRenderer {
             }
             String val = extractAttrFromTag(pXml.substring(szStart, szEnd), 'w:val');
             if (val != null && val.isNumeric()) {
-                maxHalfPoints = Math.max(maxHalfPoints, Integer.valueOf(val));
+                Integer halfPoints = Integer.valueOf(val);
+                maxHalfPoints = maxHalfPoints == null ? halfPoints : Math.max(maxHalfPoints, halfPoints);
             }
             cursor = szEnd + 1;
         }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = resolveReferencedStyleFontHalfPoints(pXml);
+        }
+        if (maxHalfPoints == null) {
+            maxHalfPoints = 22;
+        }
         Decimal points = maxHalfPoints / 2.0;
         return (points * 1.15) / 72.0;
+    }
+
+    private static Integer resolveReferencedStyleFontHalfPoints(String pXml) {
+        List<String> styleIds = new List<String>();
+        String rStyle = extractAttr(pXml, 'w:rStyle', 'w:val');
+        if (String.isNotBlank(rStyle)) {
+            styleIds.add(rStyle);
+        }
+        String pStyle = extractAttr(pXml, 'w:pStyle', 'w:val');
+        if (String.isNotBlank(pStyle)) {
+            styleIds.add(pStyle);
+        }
+        for (String styleId : styleIds) {
+            Map<String, String> attrs = resolveStyleTextAttributes(styleId);
+            String fontSize = attrs.get('fontSize');
+            if (fontSize != null && fontSize.isNumeric()) {
+                return Integer.valueOf(fontSize);
+            }
+        }
+        return null;
+    }
+
+    private static Decimal readCellVerticalPaddingInches(String tcXml) {
+        String tcPr = extractElement(tcXml, 'w:tcPr');
+        String tcMar = String.isNotBlank(tcPr) && tcPr.contains('<w:tcMar') ? extractElement(tcPr, 'w:tcMar') : null;
+        if (String.isBlank(tcMar)) {
+            return 0;
+        }
+        Decimal padding = 0;
+        String top = extractAttr(tcMar, 'w:top', 'w:w');
+        String bottom = extractAttr(tcMar, 'w:bottom', 'w:w');
+        if (top != null && Pattern.matches('-?\\d+', top)) {
+            padding += Math.abs(Integer.valueOf(top)) / 1440.0;
+        }
+        if (bottom != null && Pattern.matches('-?\\d+', bottom)) {
+            padding += Math.abs(Integer.valueOf(bottom)) / 1440.0;
+        }
+        return padding;
     }
 
     private static Decimal estimateParagraphObjectHeightInches(String pXml) {
