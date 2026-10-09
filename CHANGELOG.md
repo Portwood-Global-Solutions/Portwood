@@ -70,7 +70,10 @@ Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 
   `₴`, `₿`, `₾`, `֏`, `₼`, `₸` and `Ș`, now use small static-resource PNG fallbacks during
   PDF generation. The fallback images were cropped and stroke-tuned so they align more closely
   with surrounding text size and weight.
-
+- **Long visible hyperlinks in generated PDFs wrap instead of clipping (#449).** PDF output now
+  inserts renderer-safe break opportunities into long displayed `http`/`https` link text while
+  preserving the original `href`, so document links and signature completion-certificate verify
+  URLs stay visible within page boundaries.
 - **Accented characters in fillable PDF output (#394).** PDF-to-PDF templates now preserve
   mapped values containing accented Latin characters, including `Poda de Árvore` and
   `Solicitação`: field values use UTF-16BE, visible appearances use PDF-compatible bytes, and XFA
