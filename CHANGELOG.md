@@ -105,7 +105,7 @@ flat and parent-relationship-free to bound per-batch memory.
   edited, while the serializer emits the alternatives into one logical flow slot. The
   next flow block follows the single active alternative instead of preserving space for
   the inactive boxes. Variant group metadata round-trips through saved Canvas HTML, and
-  the serializer regression now covers the shared-slot spacing.
+  the serializer regression now covers the shared-slot spacing. See UserGuide §5.1.3.
 - **Canvas elements now follow growing elements.** Elements placed below another
   overlapping element automatically move with it when its content grows or shrinks.
   The canvas preview and generated PDF preserve the authored spacing, including
