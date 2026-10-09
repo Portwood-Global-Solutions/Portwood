@@ -4,11 +4,11 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
-[![Version](https://img.shields.io/badge/version-3.58.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-3.59.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2144_passing-brightgreen)](#security)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2156_passing-brightgreen)](#security)
 [![Coverage](https://img.shields.io/badge/Coverage-80%25-brightgreen)](#security)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0%2F0%2F0-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwood.dev-blue)](https://portwood.dev)
@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx0000017QurIAE --wait 10 --target-org <your-org>
+sf package install --package 04tVx0000019Ki5IAE --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000017QurIAE) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000017QurIAE)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000019Ki5IAE) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000019Ki5IAE)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -568,7 +568,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.58.0 | **Latest (Released)**                   | `04tVx0000017QurIAE` |
+| v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
+| v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |
 | v3.56.0 | Released                                | `04tVx0000010fnNIAQ` |
 | v3.55.0 | Released                                | `04tVx0000010fXFIAY` |
