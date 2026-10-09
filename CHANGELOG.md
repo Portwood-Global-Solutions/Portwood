@@ -143,6 +143,35 @@ flat and parent-relationship-free to bound per-batch memory.
   Refresh action and the current status live in the Data panel next to the sample-record
   picker. See UserGuide §5.1.3.
 
+### Added — V3 child nodes can join through a lookup on their parent (#452)
+
+- **`parentKeyField` on V3 child nodes.** A node can join on a lookup field of its parent
+  record instead of the parent's Id, which reaches records related to that lookup. For example,
+  a template on a custom object with an Opportunity lookup can now pull that Opportunity's
+  contact roles, a relationship no subquery can express. The field is validated as a lookup on
+  the parent object and added to the parent's query automatically. A blank lookup renders the
+  node's tags blank. Works for single and bulk generation; in bulk, records that share a lookup
+  value share one query. Such nodes always run on the standard path, never the giant-query path.
+  See UserGuide §6.5.1.
+- **`single: true` on V3 child nodes.** Stitches the first matching record as an object instead
+  of a list, so its fields merge like a lookup (`{PrimaryContact.Contact.Name}`) with no loop.
+  No match merges blank. Useful with a `where` and `limit: 1` to pick one record by role, and in
+  Excel, where a loop that is its row's only tag repeats or removes the row. Single nodes, like
+  `parentKeyField` nodes, always run on the standard path.
+- **The visual query builder keeps `parentKeyField` nodes.** The builder rebuilds its tree from
+  the parent object's schema, which does not list a relationship reached through a lookup, so it
+  would skip such a node on load and the next edit would save the config without it. It now keeps
+  these nodes, with their children, exactly as configured, lists them in a note above the tree,
+  and re-emits them on every save. `single` also round-trips on nodes the builder can edit, and
+  forces V3 output since V1 SOQL cannot express it.
+
+### Fixed — a V3 child node that listed its own lookup field rendered empty (#452)
+
+- **A V3 child node that listed its own lookup field came back empty.** The lookup field was
+  always appended to the child's SELECT, so listing it in `fields` too selected it twice; the
+  query failed with "duplicate field selected" and the loop silently rendered no rows. It is now
+  selected once.
+
 ## v3.58.0 — Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms
 
 Released 2026-09-25 · `04tVx0000017QurIAE` (build 3.58.0-1) · ancestor 3.57.0 · 2,144 tests,

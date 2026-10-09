@@ -1423,8 +1423,42 @@ Each V3 child node supports:
 - `where`: optional `WHERE` clause (sanitized for SOQL injection)
 - `orderBy`: optional `ORDER BY` (sanitized)
 - `limit`: optional `LIMIT`
+- `parentKeyField`: optional — join on a lookup of the parent record instead of its Id (see 6.5.1)
+- `single`: optional — `true` merges the first match as one record instead of a loop (see 6.5.1)
 
-Applies to both sync and giant-query paths.
+Applies to both sync and giant-query paths, except `parentKeyField` and `single` nodes, which always run on the sync path.
+
+#### 6.5.1 Joining through a parent's lookup (`parentKeyField`, `single`)
+
+A child node normally fetches the records whose `lookupField` points at its parent record. Sometimes the records you need point at something the parent _looks up to_ instead. A document on a custom `Project__c` with an `Opportunity__c` lookup may need that Opportunity's contact roles: they point at the Opportunity, not the project, and no subquery can reach them.
+
+`parentKeyField` names a lookup field on the parent node's object. The node then matches its `lookupField` against that lookup's value instead of the parent's Id:
+
+```json
+{
+    "id": "n1",
+    "object": "OpportunityContactRole",
+    "parentNode": "n0",
+    "relationshipName": "OpportunityContactRoles",
+    "alias": "Architect",
+    "lookupField": "OpportunityId",
+    "parentKeyField": "Opportunity__c",
+    "single": true,
+    "fields": ["Role"],
+    "parentFields": ["Contact.Name", "Contact.Email"],
+    "where": "Role = 'Architect'",
+    "orderBy": "CreatedDate",
+    "limit": "1"
+}
+```
+
+- `parentKeyField` must be a lookup (reference) field on the parent node's object. Anything else stops generation with a clear error. You don't need to add it to the parent's `fields`; Portwood selects it.
+- When the parent's lookup is blank, the node merges empty: tags render blank and loops render no rows.
+- `single: true` merges the first matching record as one object, so its fields read like a lookup, with no loop: `{Architect.Contact.Name}`. With no match the tags render blank. Pair it with `where` and `limit: 1` to pick one record, such as one contact per role.
+- `single` matters most in Excel, where a loop that is its row's only tag repeats the row per record and removes it when there are none. Single tags never add or remove rows.
+- In bulk generation, records that share one lookup value (two projects on one Opportunity) each get the same related records, from one query.
+- `parentKeyField` and `single` nodes are not counted for the giant-query path; they always run on the sync path.
+- The visual builder can't edit these nodes, because the parent's schema doesn't list the relationship. It keeps them exactly as configured, names them in a note above the tree, and writes them back unchanged when you save. Edit them in **Manual Query** mode.
 
 ### 6.6 Apex Data Provider (V4 — class-backed templates)
 
