@@ -45,6 +45,10 @@ flat and parent-relationship-free to bound per-batch memory.
 
 ### Fixed
 
+- **Canvas table snap guides now follow the rendered table height.** The designer now
+  measures table boxes after preview layout and syncs `box.h` to the actual rendered
+  height, so text and other elements snap to the bottom of expanded tables instead of
+  the original one-row footprint.
 - **Canvas Import HTML flattened an exported document to one element, discarding every
   box, condition and coordinate (#301).** The Canvas designer's **Import HTML** button
   called `htmlToCanvas()` unconditionally — the converter meant for arbitrary foreign

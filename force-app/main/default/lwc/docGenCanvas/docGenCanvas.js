@@ -2322,7 +2322,42 @@ export default class DocGenCanvas extends LightningElement {
                 el.innerHTML = want;
             }
         }
+        this.syncRenderedTableHeights(byId);
         this.paintChartPreviews();
+    }
+
+    /**
+     * Tables can grow after their model height was chosen: extra rows, totals, nested
+     * rows and wrapping all change the real footprint. Snap guides read `box.h`, so
+     * after the browser has laid out the preview, copy that rendered height back into
+     * the model in inches.
+     */
+    syncRenderedTableHeights(byId) {
+        const patches = new Map();
+        for (const el of this.template.querySelectorAll('.dg-cbox[data-id]')) {
+            const model = byId.get(el.dataset.id);
+            if (!model || model.kind !== 'table') {
+                continue;
+            }
+            const rect = el.getBoundingClientRect();
+            if (!rect || rect.height <= 0) {
+                continue;
+            }
+            const h = pxToIn(rect.height, this.zoom);
+            if (Math.abs(h - (parseFloat(model.h) || 0)) > 0.005) {
+                patches.set(model.id, h);
+            }
+        }
+        if (!patches.size) {
+            return;
+        }
+        this.doc = {
+            ...this.doc,
+            artboards: this.doc.artboards.map((board) => ({
+                ...board,
+                boxes: board.boxes.map((b) => (patches.has(b.id) ? { ...b, h: patches.get(b.id) } : b))
+            }))
+        };
     }
 
     /**
