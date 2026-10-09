@@ -261,6 +261,7 @@ export function newTextBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         x: round3(xIn),
         y: round3(yIn),
         w: round3(wIn),
@@ -360,6 +361,7 @@ export function newTableBox(xIn, yIn, wIn) {
         mode: 'flow',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         table: {
             ...DEFAULT_TABLE_STYLE,
@@ -410,6 +412,7 @@ export function newImageBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         image: {
             // A Portwood ASSET KEY, not a file URL. `{%asset:<key>}` resolves at
@@ -469,6 +472,7 @@ export function newShapeBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         shape: { ...DEFAULT_SHAPE },
         x: round3(xIn),
@@ -771,6 +775,7 @@ export function newCodeBox(xIn, yIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         code: { ...DEFAULT_CODE },
         x: round3(xIn),
@@ -909,6 +914,7 @@ export function newChartBox(xIn, yIn, wIn, hIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         chart: { ...DEFAULT_CHART },
         x: round3(xIn),
@@ -926,6 +932,7 @@ export function newSignatureBox(xIn, yIn) {
         mode: 'pinned',
         z: DEFAULT_Z,
         condition: '',
+        variantGroup: '',
         style: { ...DEFAULT_STYLE, padding: 0 },
         signature: { ...DEFAULT_SIGNATURE },
         x: round3(xIn),
@@ -2024,7 +2031,8 @@ function baseAuthoringAttrs(box, withId) {
         (box.name ? ' data-dg-name="' + esc(box.name) + '"' : '') +
         (box.positionMode === 'follows' && box.anchorTo ? ' data-dg-anchor="' + esc(box.anchorTo) + '"' : '') +
         (box.keepTogether ? ' data-dg-keep="1"' : '') +
-        (box.condition ? ' data-dg-if="' + esc(box.condition) + '"' : '')
+        (box.condition ? ' data-dg-if="' + esc(box.condition) + '"' : '') +
+        (box.variantGroup ? ' data-dg-variant-group="' + esc(box.variantGroup) + '"' : '')
     );
 }
 
@@ -2079,6 +2087,10 @@ function wrapCondition(box, inner) {
         return inner;
     }
     return '{#IF ' + esc(cond) + '}' + inner + '{/IF}';
+}
+
+function variantGroupKey(box) {
+    return String((box && box.variantGroup) || '').trim();
 }
 
 /**
@@ -2304,6 +2316,85 @@ function groupToHtml(members, cursor) {
     );
 }
 
+/**
+ * Emits mutually exclusive conditional alternatives as peers in the same flow slot.
+ *
+ * The ordinary flow chain advances the layout cursor after every authored box. That is
+ * right for independent blocks, but wrong for alternatives such as "Customer A",
+ * "Customer B" and "Customer C": false conditions remove their boxes at merge time,
+ * yet their authored heights have already pushed the next flow block down. A variant
+ * group keeps each alternative's own condition and styling, but measures every member
+ * from the same incoming cursor so inactive alternatives do not reserve extra rows.
+ */
+function variantGroupToHtml(members, cursor) {
+    const slotY = variantSlotTop(members);
+    return members
+        .map((m) =>
+            wrapCondition(
+                m,
+                '<div class="dg-flow"' +
+                    authoringAttrs(m) +
+                    ' style="margin: ' +
+                    round3(Math.max(0, slotY - (cursor || 0))) +
+                    'in 0 0 ' +
+                    m.x +
+                    'in; width: ' +
+                    outerToContentWidth(m) +
+                    'in; ' +
+                    styleCss(m) +
+                    '">' +
+                    boxInnerHtml(m) +
+                    '</div>'
+            )
+        )
+        .join('\n  ');
+}
+
+function variantSlotTop(members) {
+    return Math.min(...members.map((m) => m.y));
+}
+
+function variantCollapsedBottom(members) {
+    const sorted = members.slice().sort((p, q) => p.y - q.y || p.x - q.x);
+    const gaps = [];
+    for (let i = 1; i < sorted.length; i += 1) {
+        const gap = round3(sorted[i].y - sorted[i - 1].y);
+        if (gap > 0) {
+            gaps.push(gap);
+        }
+    }
+    if (gaps.length) {
+        gaps.sort((p, q) => p - q);
+        return sorted[sorted.length - 1].y + gaps[Math.floor(gaps.length / 2)];
+    }
+    const top = variantSlotTop(sorted);
+    return top + Math.max(...sorted.map((m) => m.h));
+}
+
+function flowSlotBottom(members) {
+    return Math.max(...members.map((m) => m.y + m.h));
+}
+
+function buildVariantFlowGroups(boxes, excludedIds) {
+    const byKey = new Map();
+    for (const box of boxes || []) {
+        if (!box || box.mode !== 'flow' || (excludedIds && excludedIds.has(box.id))) {
+            continue;
+        }
+        const key = variantGroupKey(box);
+        if (!key) {
+            continue;
+        }
+        if (!byKey.has(key)) {
+            byKey.set(key, []);
+        }
+        byKey.get(key).push(box);
+    }
+    return [...byKey.values()]
+        .filter((members) => members.length > 1)
+        .map((members) => members.slice().sort((p, q) => p.y - q.y || p.x - q.x));
+}
+
 /** The rendered content of a box, without its positioning wrapper. */
 function boxInnerHtml(box) {
     if (box.kind === 'table') {
@@ -2410,16 +2501,24 @@ export function serialize(doc, geo) {
             // group is pushed by a flow box above it and vice versa. Emitting them in
             // separate passes would let the two interleave wrongly on the page.
             const groups = buildAnchorGroups(b.boxes || []).filter((g) => g.length > 1);
+            const variantGroups = buildVariantFlowGroups(b.boxes || [], anchored);
+            const variantGrouped = new Set();
+            variantGroups.forEach((g) => g.forEach((m) => variantGrouped.add(m.id)));
             const flowSingles = (b.boxes || [])
                 .filter((x) => !anchored.has(x.id))
+                .filter((x) => !variantGrouped.has(x.id))
                 .filter((x) => x.mode === 'flow')
                 .map((x) => [x]);
-            const chain = [...groups, ...flowSingles].sort((p, q) => p[0].y - q[0].y);
+            const chain = [...groups, ...variantGroups, ...flowSingles].sort((p, q) => p[0].y - q[0].y);
             let cursor = 0;
             const flowHtml = chain.map((members) => {
-                const out = members.length > 1 ? groupToHtml(members, cursor) : boxToHtml(members[0], cursor);
-                const last = members[members.length - 1];
-                cursor = last.y + last.h;
+                const isVariantGroup = members.length > 1 && !!variantGroupKey(members[0]);
+                const out = isVariantGroup
+                    ? variantGroupToHtml(members, cursor)
+                    : members.length > 1
+                      ? groupToHtml(members, cursor)
+                      : boxToHtml(members[0], cursor);
+                cursor = isVariantGroup ? variantCollapsedBottom(members) : flowSlotBottom(members);
                 return out;
             });
             const inner = [...pinned.map((x) => boxToHtml(x, 0)), ...flowHtml].join('\n  ');
@@ -2664,6 +2763,7 @@ export function deserialize(html) {
                 const az = parseInt(el.getAttribute('data-dg-z'), 10);
                 box.z = isNaN(az) ? 0 : az;
                 box.condition = el.getAttribute('data-dg-if') || '';
+                box.variantGroup = el.getAttribute('data-dg-variant-group') || '';
                 box.name = el.getAttribute('data-dg-name') || '';
                 // Prefer the AUTHORING attributes; fall back to reading the CSS only
                 // for documents saved before they existed.

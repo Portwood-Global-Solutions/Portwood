@@ -442,9 +442,18 @@ export default class DocGenCanvas extends LightningElement {
         return b ? b.condition || '' : '';
     }
 
+    get selVariantGroup() {
+        const b = this.selectedBox;
+        return b ? b.variantGroup || '' : '';
+    }
+
     /** A literal example tag cannot live in the markup — LWC compiles {…} as a binding. */
     get conditionPlaceholder() {
         return 'Amount > 200';
+    }
+
+    get variantGroupPlaceholder() {
+        return 'Customer Type';
     }
 
     handleConditionChange(event) {
@@ -457,6 +466,12 @@ export default class DocGenCanvas extends LightningElement {
             .replace(/^\{#IF\s*/i, '')
             .replace(/\}$/, '');
         this.applyToBox(box.id, { condition: raw });
+    }
+
+    handleVariantGroupChange(event) {
+        const box = this.selectedBox;
+        if (!box) return;
+        this.applyToBox(box.id, { variantGroup: (event.target.value || '').trim() });
     }
 
     get selZ() {
