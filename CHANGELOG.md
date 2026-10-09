@@ -45,6 +45,20 @@ flat and parent-relationship-free to bound per-batch memory.
 
 ### Fixed
 
+- **Designer: a merge tag inserted into a running header or footer without typing
+  afterward could be silently dropped on save (#322).** `Header_Html__c`/`Footer_Html__c`
+  were only refreshed from the header/footer band's live contenteditable DOM on the
+  band's native `input` event. A tag chip click, a drag-and-drop insert, or retyping a
+  pill's tag key all mutate the band directly and never fire that event, so "Save as New
+  Version" reported success while the field it wrote kept its pre-insert value — proven
+  against the actual saved record, not just the on-screen canvas. Save now re-reads the
+  live header and footer immediately before saving, the same way Preview already did, so
+  a save can never persist a stale value. Separately, a failed cleanup pass on staged
+  HTML (the step that strips pill and preview-layer markup before a body is saved) no
+  longer silently hands back the original, unsanitized text as if it had succeeded — it
+  now surfaces as an error instead. This addresses the immediate data-loss/leak trigger
+  #322 reported; the broader architectural ask in that issue — separating the pill
+  decoration layer from the document entirely — remains open.
 - Negative currency values in generated templates now place the minus sign before symbol-before currencies. For example, `{Amount:currency}` renders `-$50.00` instead of `$-50.00`, and `{Amount:currency:GBP}` renders `-£50.00` instead of `£-50.00`. Symbol-after locale output, such as German/French-style `-50,00 €`, is unchanged.
 - **DOCX-to-PDF header/body spacing for compact table-based headers.** The PDF renderer now
   measures DOCX headers using table-aware layout so cells in the same row are treated side by
