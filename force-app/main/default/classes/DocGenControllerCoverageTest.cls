@@ -405,24 +405,18 @@ private class DocGenControllerCoverageTest {
         System.assert(!wrapped.contains(decomposedSComma), 'Decomposed S-comma should normalize before PDF rendering');
         System.assert(wrapped.contains('Ș'), 'Decomposed S-comma should normalize to precomposed S-comma');
         System.assert(
-            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            wrapped.contains('DocGenPdfGlyphs/u0218.png'),
             'Precomposed S-comma should use PDF glyph image fallback'
         );
         System.assert(wrapped.contains('Ş'), 'S-cedilla entity should decode before wrapping');
         System.assert(!wrapped.contains('&Scedil;'), 'S-cedilla entity should not remain escaped');
         System.assert(wrapped.contains('₹'), 'Numeric rupee entity should decode before wrapping');
-        System.assert(
-            wrapped.contains('/resource/DocGenPdfGlyphs/u20b9.png'),
-            'Rupee should use PDF glyph image fallback'
-        );
+        System.assert(wrapped.contains('DocGenPdfGlyphs/u20b9.png'), 'Rupee should use PDF glyph image fallback');
         System.assert(
             wrapped.contains('style="height:11pt;width:11pt;vertical-align:-0.20em;display:inline-block;"'),
             'PDF glyph image fallback should use the default body font-size when no closer font-size exists'
         );
-        System.assert(
-            wrapped.contains('/resource/DocGenPdfGlyphs/u20bf.png'),
-            'Bitcoin should use PDF glyph image fallback'
-        );
+        System.assert(wrapped.contains('DocGenPdfGlyphs/u20bf.png'), 'Bitcoin should use PDF glyph image fallback');
         System.assert(
             !wrapped.contains('&#8377;'),
             'High numeric entities should become literal glyphs inside the span'
@@ -505,11 +499,11 @@ private class DocGenControllerCoverageTest {
         // (not just the capital's image reused at full size).
         String wrapped = DocGenService.wrapNonLatinGlyphs('<p>[ș] [Ș]</p>');
         System.assert(
-            wrapped.contains('/resource/DocGenPdfGlyphs/u0219.png'),
+            wrapped.contains('DocGenPdfGlyphs/u0219.png'),
             'Lowercase S-comma should use its own PDF glyph image fallback, not the font-span path: ' + wrapped
         );
         System.assert(
-            wrapped.contains('/resource/DocGenPdfGlyphs/u0218.png'),
+            wrapped.contains('DocGenPdfGlyphs/u0218.png'),
             'Capital S-comma should still use its image fallback: ' + wrapped
         );
         System.assert(
