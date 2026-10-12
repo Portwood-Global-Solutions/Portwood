@@ -428,6 +428,19 @@ Links chain. A summary can follow the table, a note follow the summary, and a si
 
 A block can only follow something on the same page, and the picker will not offer a target that would create a loop — if A already follows B, B cannot be set to follow A. When the selection is part of a chain, a dashed tether is drawn on the artboard from each anchor to the block that follows it, so you can see the group at a glance. If the block a link points at is deleted, the panel says so rather than leaving it silently stationary.
 
+#### Variant groups — conditional alternatives in one flow slot
+
+The problem: two flowing blocks with mutually exclusive **Show only when** conditions — say, one for `Customer_Type__c = 'Business'` and one for `'Individual'` — each still reserve their own space in the flow. Only one of them is ever true at merge time, but the other's block disappears and leaves an empty gap where it was, and anything below both of them stacks down as if both had printed.
+
+Give them the same **Variant group** name and they share one flow slot instead. Whichever block's condition is true at merge time fills the slot; the others contribute nothing, not even blank space. The Designer still shows every alternative at its own authored position so each one can be selected and edited independently — only the generated output collapses them.
+
+```
+Box A — Show only when: Customer_Type__c = 'Business'   — Variant group: CustType
+Box B — Show only when: Customer_Type__c = 'Individual'  — Variant group: CustType
+```
+
+A block set to **Flows down the page** or **Follows another element** below the group follows the single active alternative, not a stack sized for all of them. The group name is free-form — any boxes sharing it are treated as one set of alternatives, and a block with no Variant group is unaffected.
+
 #### Import and export
 
 **Import HTML** converts an existing HTML document onto the canvas. Each top-level block of the body becomes its own editable block, in document order. Elements that already declare `position: absolute` with inch coordinates keep them and arrive placed; everything else arrives flowing, one below the last. The conversion is structural — nothing is measured in the browser and re-pinned, because the browser and the PDF engine do not agree on layout, and baking the browser's answer in would look right in the editor and drift in the output. The import reports anything it could not carry across.
