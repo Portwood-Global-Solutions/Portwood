@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Template page size now persists across create and version-save flows.** The admin
+  create wizard no longer seeds `Letter` as a hidden/default page size. When an author
+  selects `Legal`, `A4`, or `Letter`, that value is carried into the first Edit Template
+  Configuration / legacy designer save and then inherited by later template versions
+  until the author changes it. The page-size pickers are required where template page
+  setup is editable, and blank saves now show guidance to go to Settings and select
+  Page Size before continuing.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
