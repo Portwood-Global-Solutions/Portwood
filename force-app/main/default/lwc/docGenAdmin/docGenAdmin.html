@@ -613,15 +613,12 @@
                                             field-level-help="Portrait or Landscape — applies to PDF output."
                                         ></lightning-combobox>
                                         <lightning-combobox
-                                            data-id="new-template-page-size"
                                             label="Page Size"
                                             value={newTemplatePageSize}
                                             options={pageSizeOptions}
                                             onchange={handleNewPageSizeChange}
                                             class="slds-var-m-top_medium"
-                                            field-level-help="Select the PDF page size to store on this template."
-                                            message-when-value-missing="Go to Settings, then select a value in Page Size before continuing."
-                                            required={isCreatePageSizeRequired}
+                                            field-level-help="Optional PDF page size. If left blank, Letter is used when the template is saved."
                                         ></lightning-combobox>
                                         <lightning-combobox
                                             label="Page Margins"
@@ -3715,15 +3712,12 @@
                                                 field-level-help="Portrait or Landscape — applies to PDF output."
                                             ></lightning-combobox>
                                             <lightning-combobox
-                                                data-id="edit-template-page-size"
                                                 label="Page Size"
                                                 value={editTemplatePageSize}
                                                 options={pageSizeOptions}
                                                 onchange={handleEditPageSizeChange}
                                                 class="slds-var-m-top_medium"
-                                                field-level-help="Select the PDF page size to store on this template."
-                                                message-when-value-missing="Go to Settings, then select a value in Page Size before saving."
-                                                required={isEditPageSizeRequired}
+                                                field-level-help="Optional PDF page size. If left blank, Letter is used when the template is saved."
                                             ></lightning-combobox>
                                             <lightning-combobox
                                                 label="Page Margins"

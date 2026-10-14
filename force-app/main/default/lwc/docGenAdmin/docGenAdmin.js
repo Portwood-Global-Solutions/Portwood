@@ -2145,9 +2145,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.showToast('Error', 'Please fill in the template name and type.', 'error');
                 return;
             }
-            if (!this._validateCreatePageSize()) {
-                return;
-            }
             // AI path: skip the query builder entirely. Auto-build a sensible
             // query for the prompt, load shared assets it can reference, and
             // land on the prompt + paste screen.
@@ -4813,20 +4810,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.showNewPageLayoutFields && this.newTemplatePageMargins === 'Custom';
     }
 
-    get isCreatePageSizeRequired() {
-        return this.showNewPageLayoutFields;
-    }
-
     get showEditCustomMargins() {
         // Tied to the page-layout block rather than to output format alone: with a
         // Canvas template (or an HTML body that owns its @page) the rest of the block
         // is hidden, and this input was left behind on its own, editing a value
         // nothing reads.
         return this.showEditPageLayoutFields && this.editTemplatePageMargins === 'Custom';
-    }
-
-    get isEditPageSizeRequired() {
-        return this.showEditPageLayoutFields;
     }
 
     /**
@@ -4872,9 +4861,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     // --- Create Logic ---
     async createTemplate() {
-        if (!this._validateCreatePageSize()) {
-            return;
-        }
         // #236 — fail with a cause the admin can act on, rather than letting UI API
         // flatten a restricted-picklist rejection into "An error occurred...".
         const preflight = this._preflightCreate();
@@ -4887,14 +4873,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         fields[CATEGORY_FIELD.fieldApiName] = this.newTemplateCategory;
         fields[TYPE_FIELD.fieldApiName] = this.newTemplateType;
         fields[OUTPUT_FORMAT_FIELD.fieldApiName] = this.newTemplateOutputFormat;
+        const newTemplatePageSize = this.newTemplatePageSize || 'Letter';
         // Page setup only meaningful for PDF output. Do not seed a default page
         // size, but if the author explicitly picked one during create, persist it
         // so the first designer save/new version can inherit that choice.
-        if (this.newTemplateOutputFormat === 'PDF' && (this.newTemplateType !== 'HTML' || this.newTemplatePageSize)) {
+        if (this.newTemplateOutputFormat === 'PDF' && this.newTemplateType !== 'Canvas') {
             fields[PAGE_ORIENTATION_FIELD.fieldApiName] = this.newTemplatePageOrientation;
-            if (this.newTemplatePageSize) {
-                fields[PAGE_SIZE_FIELD.fieldApiName] = this.newTemplatePageSize;
-            }
+            fields[PAGE_SIZE_FIELD.fieldApiName] = newTemplatePageSize;
             fields[PAGE_MARGINS_FIELD.fieldApiName] = this.newTemplatePageMargins;
             if (this.newTemplatePageMargins === 'Custom') {
                 fields[CUSTOM_MARGINS_FIELD.fieldApiName] = this.newTemplateCustomMargins;
@@ -4953,7 +4938,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 [F.Type]: this.newTemplateType,
                 [F.OutputFormat]: this.newTemplateOutputFormat,
                 [F.PageOrientation]: this.newTemplatePageOrientation,
-                [F.PageSize]: this.newTemplatePageSize || null,
+                [F.PageSize]: newTemplatePageSize,
                 [F.PageMargins]: this.newTemplatePageMargins,
                 [F.CustomMargins]: this.newTemplateCustomMargins,
                 [F.BaseObject]: this.newTemplateObject,
@@ -5043,30 +5028,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
         }
         return null;
-    }
-
-    _validateCreatePageSize() {
-        if (!this.isCreatePageSizeRequired || this.newTemplatePageSize) {
-            return true;
-        }
-        this.currentWizardStep = '1';
-        this.showToast(
-            'Page Size required',
-            'Go to Settings, then select a value in Page Size before continuing.',
-            'error',
-            'sticky'
-        );
-        // Let the Step 1 DOM render before asking the combobox to show its native
-        // required-state message.
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
-        setTimeout(() => {
-            const pageSize = this.template.querySelector('[data-id="new-template-page-size"]');
-            if (pageSize) {
-                pageSize.reportValidity();
-                pageSize.focus();
-            }
-        }, 0);
-        return false;
     }
 
     _missingTypeFieldsForValue(value) {
@@ -5928,9 +5889,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.showToast('Error', 'Name and Type are required.', 'error');
             return;
         }
-        if (!this._validateEditPageSize()) {
-            return;
-        }
         // #203 — a details-only save does NOT attach a freshly-uploaded body.
         // Say so, loudly, instead of letting the admin believe the new file is
         // live while generation keeps serving the previous version.
@@ -5956,6 +5914,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -5980,7 +5939,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -5989,12 +5948,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
-        if (!this.editTemplatePageSetupTouched && !this.editTemplatePageSize) {
-            delete fields.Page_Orientation__c;
-            delete fields.Page_Size__c;
-            delete fields.Page_Margins__c;
-            delete fields.Custom_Margins__c;
-        }
         this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
@@ -6015,9 +5968,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async handleSaveAndClose() {
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
-            return;
-        }
-        if (!this._validateEditPageSize()) {
             return;
         }
         // #322 — see the matching comment in handleSaveOnly: a header/footer band
@@ -6059,6 +6009,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -6083,7 +6034,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -6092,12 +6043,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
-        if (!this.editTemplatePageSetupTouched && !this.editTemplatePageSize) {
-            delete fields.Page_Orientation__c;
-            delete fields.Page_Size__c;
-            delete fields.Page_Margins__c;
-            delete fields.Custom_Margins__c;
-        }
         this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
@@ -6195,31 +6140,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
         }
-    }
-
-    _validateEditPageSize() {
-        const requiresVisiblePageSize = this.isEditPageSizeRequired;
-        const requiresDesignerPageSize =
-            this.activeMainTab === 'design' && this.showPageOrientation && !this.isCanvasTemplate;
-        if ((!requiresVisiblePageSize && !requiresDesignerPageSize) || this.editTemplatePageSize) {
-            return true;
-        }
-        const place = this.activeMainTab === 'design' ? 'Legacy Designer' : 'Edit Template Configuration';
-        this.showToast(
-            'Page Size required',
-            place + ': Go to Settings, then select a value in Page Size before saving.',
-            'error',
-            'sticky'
-        );
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
-        setTimeout(() => {
-            const pageSize = this.template.querySelector('[data-id="edit-template-page-size"]');
-            if (pageSize) {
-                pageSize.reportValidity();
-                pageSize.focus();
-            }
-        }, 0);
-        return false;
     }
 
     // --- Document Generation & Test Logic ---
