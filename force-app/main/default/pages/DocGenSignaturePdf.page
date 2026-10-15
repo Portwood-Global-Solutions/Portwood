@@ -905,10 +905,36 @@
                     var MODULE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
                     var WORKER_SRC = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
                     var MAX_SCALE = 1.6;
+                    // #413 — page canvases are backed at device resolution, bounded so a phone
+                    // doesn't run out of canvas memory: at most 3x, at most MAX_CANVAS_PIXELS
+                    // per page (iOS Safari refuses a larger canvas outright), and at most
+                    // DOC_PIXEL_BUDGET across the document (every page canvas stays live).
+                    var MAX_DEVICE_RATIO = 3;
+                    var MAX_CANVAS_PIXELS = 16777216; // 4096 x 4096
+                    var DOC_PIXEL_BUDGET = 48000000; // ~192 MB of RGBA
+                    // #413 — pinch-zoom (visualViewport.scale) and browser zoom (devicePixelRatio)
+                    // re-render only the pages in view at the zoomed resolution, sharing
+                    // ZOOM_PIXEL_BUDGET; a page that leaves the view drops back to its base render.
+                    var ZOOM_PIXEL_BUDGET = 2 * MAX_CANVAS_PIXELS;
+                    var ZOOM_SETTLE_MS = 250; // re-render once the gesture or scroll settles
+                    var ZOOM_MIN_CHANGE = 0.15; // skip re-renders that change resolution < 15%
+                    // While zoomed, also watch the view position directly: a zoomed pan or fling
+                    // on a phone doesn't reliably deliver the events above, and without this a
+                    // page scrolled into view stayed soft until the signer re-zoomed.
+                    var ZOOM_WATCH_MS = 400;
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
-                    var pages = []; // { pageNum, viewport, textContent, wrapEl }
+                    // { pageNum, viewport, textContent, wrapEl, pdfPage, canvas, ratio, task, pendingRatio }
+                    var pages = [];
                     var ready = false;
+                    var docPageCount = 1;
+                    var zoomTimer = null;
+                    var zoomListening = false;
+                    var zoomWatch = null; // interval id while pinch-zoomed
+                    var viewerEl = null;
+                    var lastViewKey = '';
+                    var lastMovedAt = 0;
+                    var refreshedViewKey = ''; // view the last refresh evaluated
 
                     function ensurePdfjs(containerEl) {
                         if (pdfjsLib) {
@@ -960,20 +986,208 @@
                         return Math.min(MAX_SCALE, avail / base.width);
                     }
 
+                    // Backing-store pixels per CSS pixel for one page canvas (#413). Never
+                    // below 1, so a page that hits a cap is no worse than before.
+                    function backingRatio(viewport, numPages) {
+                        var ratio = Math.min(MAX_DEVICE_RATIO, window.devicePixelRatio || 1);
+                        var cssPixels = viewport.width * viewport.height;
+                        var perPage = Math.min(MAX_CANVAS_PIXELS, DOC_PIXEL_BUDGET / Math.max(1, numPages));
+                        if (cssPixels * ratio * ratio > perPage) {
+                            ratio = Math.sqrt(perPage / cssPixels);
+                        }
+                        return Math.max(1, ratio);
+                    }
+
+                    // Resolution for a page in view at the current zoom (#413): the device ratio
+                    // times the pinch-zoom factor, bounded by the pixels this page may use, and
+                    // never below its base render. Pure — scripts/qa/signing-page-dpr-check.mjs
+                    // exercises it directly.
+                    function zoomedRatio(viewport, baseRatio, deviceRatio, zoom, pixelAllowance) {
+                        var want = Math.min(MAX_DEVICE_RATIO, deviceRatio || 1) * Math.max(1, zoom || 1);
+                        var cap = Math.sqrt(pixelAllowance / (viewport.width * viewport.height));
+                        return Math.max(baseRatio, Math.min(want, cap));
+                    }
+
+                    function pinchZoom() {
+                        var vv = window.visualViewport;
+                        return vv && vv.scale > 1 ? vv.scale : 1;
+                    }
+
+                    // Is any of the page inside both the viewer box and what the signer can see
+                    // (the visual viewport, which pinch-zoom shrinks)?
+                    function inView(entry) {
+                        var r = entry.wrapEl.getBoundingClientRect();
+                        var box = entry.wrapEl.parentNode ? entry.wrapEl.parentNode.getBoundingClientRect() : r;
+                        var vv = window.visualViewport;
+                        var left = Math.max(box.left, vv ? vv.offsetLeft : 0);
+                        var top = Math.max(box.top, vv ? vv.offsetTop : 0);
+                        var right = Math.min(box.right, vv ? vv.offsetLeft + vv.width : window.innerWidth);
+                        var bottom = Math.min(box.bottom, vv ? vv.offsetTop + vv.height : window.innerHeight);
+                        return r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+                    }
+
+                    // Re-render one page into a fresh canvas and swap it in when done, so the
+                    // current render stays on screen meanwhile. Sign-spot chips share the wrap and
+                    // are positioned in CSS pixels, so the swap doesn't move them.
+                    function rerenderPage(entry, ratio) {
+                        if (entry.task) {
+                            entry.task.cancel();
+                        }
+                        var vp = entry.pdfPage.getViewport({ scale: entry.viewport.scale * ratio });
+                        var next = document.createElement('canvas');
+                        next.width = Math.floor(vp.width);
+                        next.height = Math.floor(vp.height);
+                        next.style.width = entry.viewport.width + 'px';
+                        next.style.height = entry.viewport.height + 'px';
+                        var task = entry.pdfPage.render({ canvasContext: next.getContext('2d'), viewport: vp });
+                        entry.task = task;
+                        entry.pendingRatio = ratio;
+                        task.promise.then(
+                            function () {
+                                if (entry.task !== task || entry.canvas.parentNode !== entry.wrapEl) {
+                                    next.width = 0;
+                                    next.height = 0;
+                                    return;
+                                }
+                                entry.task = null;
+                                entry.wrapEl.replaceChild(next, entry.canvas);
+                                entry.canvas.width = 0; // release the old backing store
+                                entry.canvas.height = 0;
+                                entry.canvas = next;
+                                entry.ratio = ratio;
+                            },
+                            function () {
+                                // Superseded by a newer zoom, or failed: keep the current render.
+                                if (entry.task === task) {
+                                    entry.task = null;
+                                }
+                                next.width = 0;
+                                next.height = 0;
+                            }
+                        );
+                    }
+
+                    function refreshResolution() {
+                        zoomTimer = null;
+                        if (!ready || !pages.length) {
+                            return;
+                        }
+                        refreshedViewKey = viewKey();
+                        var zoom = pinchZoom();
+                        var dpr = window.devicePixelRatio || 1;
+                        var visible = pages.filter(inView);
+                        var allowance = Math.min(MAX_CANVAS_PIXELS, ZOOM_PIXEL_BUDGET / Math.max(1, visible.length));
+                        for (var i = 0; i < pages.length; i++) {
+                            var entry = pages[i];
+                            var base = backingRatio(entry.viewport, docPageCount);
+                            var target = entry.ratio;
+                            if (visible.indexOf(entry) >= 0) {
+                                target = zoomedRatio(entry.viewport, base, dpr, zoom, allowance);
+                            } else if (entry.ratio > base * (1 + ZOOM_MIN_CHANGE)) {
+                                target = base; // left the view: hand its zoom pixels back
+                            }
+                            var current = entry.task ? entry.pendingRatio : entry.ratio;
+                            if (Math.abs(target - current) <= current * ZOOM_MIN_CHANGE) {
+                                continue; // already there, or already on its way
+                            }
+                            if (entry.task && Math.abs(target - entry.ratio) <= entry.ratio * ZOOM_MIN_CHANGE) {
+                                entry.task.cancel(); // zoomed back to where the current render is
+                                continue;
+                            }
+                            rerenderPage(entry, target);
+                        }
+                    }
+
+                    function scheduleRefresh() {
+                        if (zoomTimer) {
+                            clearTimeout(zoomTimer);
+                        }
+                        zoomTimer = setTimeout(refreshResolution, ZOOM_SETTLE_MS);
+                        watchWhileZoomed();
+                    }
+
+                    // Where the signer is looking: scroll positions plus the pinch viewport.
+                    function viewKey() {
+                        var vv = window.visualViewport;
+                        return [
+                            window.scrollX,
+                            window.scrollY,
+                            viewerEl ? viewerEl.scrollTop : 0,
+                            vv ? vv.offsetLeft : 0,
+                            vv ? vv.offsetTop : 0,
+                            pinchZoom()
+                        ].join(',');
+                    }
+
+                    // While pinch-zoomed, poll the view: once it has stopped moving for
+                    // ZOOM_SETTLE_MS, refresh (a no-op when nothing needs re-rendering). This
+                    // converges whichever events the browser did or didn't send for a zoomed
+                    // pan, fling or scroll. Stops when the signer zooms back out.
+                    function watchWhileZoomed() {
+                        if (zoomWatch || pinchZoom() <= 1) {
+                            return;
+                        }
+                        lastViewKey = viewKey();
+                        lastMovedAt = Date.now();
+                        zoomWatch = setInterval(function () {
+                            if (pinchZoom() <= 1) {
+                                clearInterval(zoomWatch);
+                                zoomWatch = null;
+                                scheduleRefresh(); // hand zoomed pages back to base
+                                return;
+                            }
+                            var key = viewKey();
+                            if (key !== lastViewKey) {
+                                lastViewKey = key;
+                                lastMovedAt = Date.now();
+                            } else if (
+                                !zoomTimer &&
+                                key !== refreshedViewKey &&
+                                Date.now() - lastMovedAt >= ZOOM_SETTLE_MS
+                            ) {
+                                refreshResolution();
+                            }
+                        }, ZOOM_WATCH_MS);
+                    }
+
+                    function listenForZoom(containerEl) {
+                        viewerEl = containerEl;
+                        if (zoomListening) {
+                            return;
+                        }
+                        zoomListening = true;
+                        if (window.visualViewport) {
+                            window.visualViewport.addEventListener('resize', scheduleRefresh);
+                            window.visualViewport.addEventListener('scroll', scheduleRefresh);
+                        }
+                        window.addEventListener('resize', scheduleRefresh); // browser zoom changes devicePixelRatio
+                        // On a phone the viewer isn't height-bound, so the document scrolls; on a
+                        // desktop the viewer box does. Either brings different pages into view.
+                        window.addEventListener('scroll', scheduleRefresh, { passive: true });
+                        containerEl.addEventListener('scroll', scheduleRefresh, { passive: true });
+                    }
+
                     function renderOnePage(pdf, pageNum, containerEl) {
                         return pdf.getPage(pageNum).then(function (page) {
                             var viewport = page.getViewport({ scale: fitScale(page, containerEl) });
+                            // #413 — draw at device resolution, display at CSS size. `viewport`
+                            // stays in CSS pixels: the wrap, anchor lookup and hitToPdfRect all
+                            // use it, so sign-spot placement and stamping are unchanged.
+                            var ratio = backingRatio(viewport, pdf.numPages);
+                            var renderViewport = page.getViewport({ scale: viewport.scale * ratio });
                             var wrap = document.createElement('div');
                             wrap.className = 'dg-page-wrap';
                             wrap.style.width = viewport.width + 'px';
                             wrap.style.height = viewport.height + 'px';
                             var canvas = document.createElement('canvas');
-                            canvas.width = viewport.width;
-                            canvas.height = viewport.height;
+                            canvas.width = Math.floor(renderViewport.width);
+                            canvas.height = Math.floor(renderViewport.height);
+                            canvas.style.width = viewport.width + 'px';
+                            canvas.style.height = viewport.height + 'px';
                             wrap.appendChild(canvas);
                             containerEl.appendChild(wrap);
                             return page
-                                .render({ canvasContext: canvas.getContext('2d'), viewport: viewport })
+                                .render({ canvasContext: canvas.getContext('2d'), viewport: renderViewport })
                                 .promise.then(function () {
                                     return page.getTextContent();
                                 })
@@ -982,7 +1196,12 @@
                                         pageNum: pageNum,
                                         viewport: viewport,
                                         textContent: tc,
-                                        wrapEl: wrap
+                                        wrapEl: wrap,
+                                        pdfPage: page,
+                                        canvas: canvas,
+                                        ratio: ratio,
+                                        task: null,
+                                        pendingRatio: ratio
                                     });
                                 });
                         });
@@ -1059,6 +1278,11 @@
                         // Returns a Promise that resolves when every page is painted.
                         render: function (base64, containerEl) {
                             ready = false;
+                            pages.forEach(function (p) {
+                                if (p.task) {
+                                    p.task.cancel();
+                                }
+                            });
                             pages = [];
                             if (!containerEl) {
                                 return Promise.resolve();
@@ -1092,6 +1316,7 @@
                                     return lib.getDocument({ data: bytes, isEvalSupported: false }).promise;
                                 })
                                 .then(function (pdf) {
+                                    docPageCount = pdf.numPages;
                                     var chain = Promise.resolve();
                                     for (var p = 1; p <= pdf.numPages; p++) {
                                         (function (pageNum) {
@@ -1108,6 +1333,10 @@
                                         return a.pageNum - b.pageNum;
                                     });
                                     ready = true;
+                                    // #413 — sharpen on pinch/browser zoom; also picks up a zoom
+                                    // the signer applied while a long document was still loading.
+                                    listenForZoom(containerEl);
+                                    scheduleRefresh();
                                 })
                                 .catch(function (err) {
                                     showMessage(containerEl, 'Unable to display this document.');
