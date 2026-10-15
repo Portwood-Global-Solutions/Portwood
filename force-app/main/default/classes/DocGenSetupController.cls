@@ -54,6 +54,11 @@ public with sharing class DocGenSetupController {
         // (unchecked = Decline shown), which is exactly the intended default and
         // needs no reliance on a custom-setting defaultValue.
         result.put('Signature_Hide_Decline__c', s != null && s.Signature_Hide_Decline__c == true);
+        // #412 — attached-document limits, as in effect (a blank setting reports its default).
+        Map<String, Integer> attachmentLimits = DocGenSignatureAttachments.limitSettings();
+        result.put('Signature_Attachment_Max_Files__c', attachmentLimits.get('maxFiles'));
+        result.put('Signature_Attachment_Max_File_MB__c', attachmentLimits.get('maxFileMb'));
+        result.put('Signature_Attachment_Max_Total_MB__c', attachmentLimits.get('maxTotalMb'));
         return result;
     }
 
@@ -489,6 +494,67 @@ public with sharing class DocGenSetupController {
         Set<String> declineFields = new Set<String>{ 'Signature_Hide_Decline__c' };
         DocGenFlsGuard.assertCreateable(settings, declineFields);
         DocGenFlsGuard.assertUpdateable(settings, declineFields);
+        /* code-analyzer-suppress ApexFlsViolation */
+        Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+    }
+
+    /**
+     * #412 — org-wide limits on the existing PDFs a signature request can attach. Checked at send,
+     * for the Signature Sender and the Flow action alike. Blank keeps the default (20 MB per
+     * document, 100 documents, 200 MB in total); otherwise each is a whole number from 1 to its
+     * ceiling (DocGenSignatureAttachments.CEILING_*).
+     */
+    @AuraEnabled
+    public static void saveAttachmentLimits(Integer maxFileMb, Integer maxFiles, Integer maxTotalMb) {
+        if (
+            !FeatureManagement.checkPermission('DocGen_Admin_Access') &&
+            !Schema.sObjectType.DocGen_Settings__c.isUpdateable()
+        ) {
+            throw DocGenService.ahe('Insufficient privileges to modify Portwood settings.');
+        }
+        List<String> errors = new List<String>();
+        for (
+            String error : new List<String>{
+                DocGenSignatureAttachments.limitError(
+                    'Max size of one document',
+                    maxFileMb,
+                    DocGenSignatureAttachments.CEILING_MAX_FILE_MB
+                ),
+                DocGenSignatureAttachments.limitError(
+                    'Max number of documents',
+                    maxFiles,
+                    DocGenSignatureAttachments.CEILING_MAX_FILES
+                ),
+                DocGenSignatureAttachments.limitError(
+                    'Max total size',
+                    maxTotalMb,
+                    DocGenSignatureAttachments.CEILING_MAX_TOTAL_MB
+                )
+            }
+        ) {
+            if (error != null) {
+                errors.add(error);
+            }
+        }
+        Integer effectiveFileMb = maxFileMb == null ? DocGenSignatureAttachments.DEFAULT_MAX_FILE_MB : maxFileMb;
+        Integer effectiveTotalMb = maxTotalMb == null ? DocGenSignatureAttachments.DEFAULT_MAX_TOTAL_MB : maxTotalMb;
+        if (errors.isEmpty() && effectiveTotalMb < effectiveFileMb) {
+            errors.add('Max total size must be at least the max size of one document.');
+        }
+        if (!errors.isEmpty()) {
+            throw DocGenService.ahe(String.join(errors, ' '));
+        }
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Attachment_Max_File_MB__c = maxFileMb;
+        settings.Signature_Attachment_Max_Files__c = maxFiles;
+        settings.Signature_Attachment_Max_Total_MB__c = maxTotalMb;
+        Set<String> limitFields = new Set<String>{
+            'Signature_Attachment_Max_File_MB__c',
+            'Signature_Attachment_Max_Files__c',
+            'Signature_Attachment_Max_Total_MB__c'
+        };
+        DocGenFlsGuard.assertCreateable(settings, limitFields);
+        DocGenFlsGuard.assertUpdateable(settings, limitFields);
         /* code-analyzer-suppress ApexFlsViolation */
         Database.upsert(settings, AccessLevel.SYSTEM_MODE);
     }

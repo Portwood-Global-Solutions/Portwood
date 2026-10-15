@@ -605,6 +605,144 @@
                     gap: 0.5rem;
                 }
 
+                /* ===== #412 ATTACHED DOCUMENTS ===== */
+                .doc-nav {
+                    background: #fff;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    padding: 0.5rem 1.5rem;
+                    border-top: 1px solid #e5e5e5;
+                    flex-shrink: 0;
+                }
+                .doc-select {
+                    flex: 1;
+                    min-width: 0;
+                    /* 16px keeps iOS from zooming the page when the list opens. */
+                    font-size: 16px;
+                    padding: 0.4rem 0.5rem;
+                    border: 1px solid #c9c7c5;
+                    border-radius: 4px;
+                    background: #fff;
+                    color: #181818;
+                }
+                .btn-icon {
+                    padding: 0.35rem 0.7rem;
+                    font-size: 1.1rem;
+                    line-height: 1;
+                    min-width: 2.5rem;
+                }
+                .btn-icon:disabled {
+                    color: #c9c7c5;
+                    cursor: not-allowed;
+                }
+                .doc-status {
+                    background: #fff;
+                    padding: 0.4rem 1.5rem 0.6rem;
+                    font-size: 0.8125rem;
+                    flex-shrink: 0;
+                }
+                .doc-status.pending {
+                    color: #8c4b02;
+                }
+                .doc-status.complete {
+                    color: #2e844a;
+                }
+                .doc-status .link {
+                    color: #0176d3;
+                    text-decoration: underline;
+                    cursor: pointer;
+                    background: none;
+                    border: 0;
+                    padding: 0;
+                    font: inherit;
+                }
+                .attachment-pane {
+                    flex: 1;
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .attachment-toolbar {
+                    background: #3b3d3f;
+                    color: #f3f2f2;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 0.4rem 1rem;
+                    font-size: 0.8125rem;
+                    flex-shrink: 0;
+                }
+                .attachment-meta {
+                    flex: 1;
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .attachment-toolbar .btn-icon {
+                    background: #525659;
+                    color: #fff;
+                    border-color: #6b6d70;
+                }
+                .attachment-toolbar .btn-icon:disabled {
+                    color: #8a8c8e;
+                }
+                .zoom-label {
+                    min-width: 3.75rem;
+                    font-size: 0.8125rem;
+                    text-align: center;
+                }
+                .attachment-hint {
+                    color: #c9c7c5;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                }
+                /* DocGenAttachmentViewer: PDF.js's viewer scrolls an absolutely positioned box. */
+                .pdf-viewer.attachment-viewer {
+                    overflow: hidden;
+                }
+                .dg-att-scroller {
+                    position: absolute;
+                    inset: 0;
+                    overflow: auto;
+                    cursor: grab;
+                    /* One finger pans natively; two-finger pinch is handled as drawing zoom. */
+                    touch-action: pan-x pan-y;
+                }
+                .dg-att-scroller.dg-grabbing {
+                    cursor: grabbing;
+                    user-select: none;
+                }
+                .dg-att-scroller .pdfViewer {
+                    padding: 8px 0;
+                }
+                .attachment-viewer .attachment-message {
+                    color: #fff;
+                    text-align: center;
+                    padding: 2rem;
+                    margin: 0 auto;
+                    max-width: 34rem;
+                }
+                .attachment-viewer .attachment-message.error {
+                    color: #ffd1cc;
+                }
+                .attachment-progress {
+                    width: 16rem;
+                    max-width: 80%;
+                    height: 6px;
+                    margin: 0.75rem auto 0;
+                    background: #6b6d70;
+                    border-radius: 3px;
+                    overflow: hidden;
+                }
+                .attachment-progress span {
+                    display: block;
+                    height: 100%;
+                    width: 0;
+                    background: #1b96ff;
+                }
+
                 @media (max-width: 640px) {
                     .page-wrapper {
                         padding: 0;
@@ -620,6 +758,25 @@
                     }
                     .pdf-header {
                         padding: 0.75rem 1rem;
+                    }
+                    .doc-nav,
+                    .doc-status {
+                        padding-left: 1rem;
+                        padding-right: 1rem;
+                    }
+                    /* Height-bound on a phone so a zoomed drawing pans inside its box. */
+                    .attachment-pane {
+                        flex: none;
+                    }
+                    /* flex: none, or the inherited flex-basis wins over the height and the box
+                       sizes to its content — which is nothing: PDF.js's scroller is absolute. */
+                    .pdf-viewer.attachment-viewer {
+                        flex: none;
+                        height: 70vh;
+                        min-height: 0;
+                    }
+                    .attachment-hint {
+                        display: none;
                     }
                     .pdf-action-bar {
                         padding: 0.75rem 1rem;
@@ -699,9 +856,50 @@
                             <span id="pdf-role-badge" class="role-badge" style="display: none"></span>
                         </div>
 
+                        <!-- #412 attached documents: switch between the signing document and each one. -->
+                        <div id="doc-nav" class="doc-nav" style="display: none">
+                            <button id="doc-prev" class="btn btn-icon" type="button" aria-label="Previous document">
+                                &#8249;
+                            </button>
+                            <select id="doc-select" class="doc-select" aria-label="Document to view"></select>
+                            <button id="doc-next" class="btn btn-icon" type="button" aria-label="Next document">
+                                &#8250;
+                            </button>
+                        </div>
+                        <div
+                            id="doc-status"
+                            class="doc-status"
+                            style="display: none"
+                            role="status"
+                            aria-live="polite"
+                        ></div>
+
                         <!-- DocGenPdfViewer.render() renders into this container. -->
                         <div class="pdf-viewer" id="pdf-viewer-container">
                             <div class="spinner-container"><div class="spinner"></div></div>
+                        </div>
+
+                        <!-- #412 DocGenAttachmentViewer.render() shows one attached document here. -->
+                        <div id="attachment-pane" class="attachment-pane" style="display: none">
+                            <div class="attachment-toolbar">
+                                <span id="attachment-meta" class="attachment-meta"></span>
+                                <button id="att-zoom-out" class="btn btn-icon" type="button" aria-label="Zoom out">
+                                    &#8722;
+                                </button>
+                                <span class="attachment-hint">Drag to move · Ctrl + scroll or pinch to zoom</span>
+                                <button
+                                    id="att-zoom-fit"
+                                    class="btn btn-icon zoom-label"
+                                    type="button"
+                                    aria-label="Zoom to fit the width"
+                                >
+                                    Fit
+                                </button>
+                                <button id="att-zoom-in" class="btn btn-icon" type="button" aria-label="Zoom in">
+                                    +
+                                </button>
+                            </div>
+                            <div class="pdf-viewer attachment-viewer" id="attachment-viewer-container"></div>
                         </div>
 
                         <div class="pdf-action-bar">
@@ -832,6 +1030,13 @@
                                 electronically.
                             </label>
                         </div>
+                        <!-- #412 — final step only, on requests with attached documents. -->
+                        <div id="attachments-reviewed-row" class="consent-row" style="margin: 12px 0 0; display: none">
+                            <input id="attachments-reviewed-checkbox" type="checkbox" />
+                            <label id="attachments-reviewed-label" for="attachments-reviewed-checkbox">
+                                I confirm I have reviewed the attached documents.
+                            </label>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button id="modal-cancel" class="btn" type="button">Cancel</button>
@@ -905,10 +1110,36 @@
                     var MODULE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
                     var WORKER_SRC = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
                     var MAX_SCALE = 1.6;
+                    // #413 — page canvases are backed at device resolution, bounded so a phone
+                    // doesn't run out of canvas memory: at most 3x, at most MAX_CANVAS_PIXELS
+                    // per page (iOS Safari refuses a larger canvas outright), and at most
+                    // DOC_PIXEL_BUDGET across the document (every page canvas stays live).
+                    var MAX_DEVICE_RATIO = 3;
+                    var MAX_CANVAS_PIXELS = 16777216; // 4096 x 4096
+                    var DOC_PIXEL_BUDGET = 48000000; // ~192 MB of RGBA
+                    // #413 — pinch-zoom (visualViewport.scale) and browser zoom (devicePixelRatio)
+                    // re-render only the pages in view at the zoomed resolution, sharing
+                    // ZOOM_PIXEL_BUDGET; a page that leaves the view drops back to its base render.
+                    var ZOOM_PIXEL_BUDGET = 2 * MAX_CANVAS_PIXELS;
+                    var ZOOM_SETTLE_MS = 250; // re-render once the gesture or scroll settles
+                    var ZOOM_MIN_CHANGE = 0.15; // skip re-renders that change resolution < 15%
+                    // While zoomed, also watch the view position directly: a zoomed pan or fling
+                    // on a phone doesn't reliably deliver the events above, and without this a
+                    // page scrolled into view stayed soft until the signer re-zoomed.
+                    var ZOOM_WATCH_MS = 400;
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
-                    var pages = []; // { pageNum, viewport, textContent, wrapEl }
+                    // { pageNum, viewport, textContent, wrapEl, pdfPage, canvas, ratio, task, pendingRatio }
+                    var pages = [];
                     var ready = false;
+                    var docPageCount = 1;
+                    var zoomTimer = null;
+                    var zoomListening = false;
+                    var zoomWatch = null; // interval id while pinch-zoomed
+                    var viewerEl = null;
+                    var lastViewKey = '';
+                    var lastMovedAt = 0;
+                    var refreshedViewKey = ''; // view the last refresh evaluated
 
                     function ensurePdfjs(containerEl) {
                         if (pdfjsLib) {
@@ -960,20 +1191,208 @@
                         return Math.min(MAX_SCALE, avail / base.width);
                     }
 
+                    // Backing-store pixels per CSS pixel for one page canvas (#413). Never
+                    // below 1, so a page that hits a cap is no worse than before.
+                    function backingRatio(viewport, numPages) {
+                        var ratio = Math.min(MAX_DEVICE_RATIO, window.devicePixelRatio || 1);
+                        var cssPixels = viewport.width * viewport.height;
+                        var perPage = Math.min(MAX_CANVAS_PIXELS, DOC_PIXEL_BUDGET / Math.max(1, numPages));
+                        if (cssPixels * ratio * ratio > perPage) {
+                            ratio = Math.sqrt(perPage / cssPixels);
+                        }
+                        return Math.max(1, ratio);
+                    }
+
+                    // Resolution for a page in view at the current zoom (#413): the device ratio
+                    // times the pinch-zoom factor, bounded by the pixels this page may use, and
+                    // never below its base render. Pure — scripts/qa/signing-page-dpr-check.mjs
+                    // exercises it directly.
+                    function zoomedRatio(viewport, baseRatio, deviceRatio, zoom, pixelAllowance) {
+                        var want = Math.min(MAX_DEVICE_RATIO, deviceRatio || 1) * Math.max(1, zoom || 1);
+                        var cap = Math.sqrt(pixelAllowance / (viewport.width * viewport.height));
+                        return Math.max(baseRatio, Math.min(want, cap));
+                    }
+
+                    function pinchZoom() {
+                        var vv = window.visualViewport;
+                        return vv && vv.scale > 1 ? vv.scale : 1;
+                    }
+
+                    // Is any of the page inside both the viewer box and what the signer can see
+                    // (the visual viewport, which pinch-zoom shrinks)?
+                    function inView(entry) {
+                        var r = entry.wrapEl.getBoundingClientRect();
+                        var box = entry.wrapEl.parentNode ? entry.wrapEl.parentNode.getBoundingClientRect() : r;
+                        var vv = window.visualViewport;
+                        var left = Math.max(box.left, vv ? vv.offsetLeft : 0);
+                        var top = Math.max(box.top, vv ? vv.offsetTop : 0);
+                        var right = Math.min(box.right, vv ? vv.offsetLeft + vv.width : window.innerWidth);
+                        var bottom = Math.min(box.bottom, vv ? vv.offsetTop + vv.height : window.innerHeight);
+                        return r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+                    }
+
+                    // Re-render one page into a fresh canvas and swap it in when done, so the
+                    // current render stays on screen meanwhile. Sign-spot chips share the wrap and
+                    // are positioned in CSS pixels, so the swap doesn't move them.
+                    function rerenderPage(entry, ratio) {
+                        if (entry.task) {
+                            entry.task.cancel();
+                        }
+                        var vp = entry.pdfPage.getViewport({ scale: entry.viewport.scale * ratio });
+                        var next = document.createElement('canvas');
+                        next.width = Math.floor(vp.width);
+                        next.height = Math.floor(vp.height);
+                        next.style.width = entry.viewport.width + 'px';
+                        next.style.height = entry.viewport.height + 'px';
+                        var task = entry.pdfPage.render({ canvasContext: next.getContext('2d'), viewport: vp });
+                        entry.task = task;
+                        entry.pendingRatio = ratio;
+                        task.promise.then(
+                            function () {
+                                if (entry.task !== task || entry.canvas.parentNode !== entry.wrapEl) {
+                                    next.width = 0;
+                                    next.height = 0;
+                                    return;
+                                }
+                                entry.task = null;
+                                entry.wrapEl.replaceChild(next, entry.canvas);
+                                entry.canvas.width = 0; // release the old backing store
+                                entry.canvas.height = 0;
+                                entry.canvas = next;
+                                entry.ratio = ratio;
+                            },
+                            function () {
+                                // Superseded by a newer zoom, or failed: keep the current render.
+                                if (entry.task === task) {
+                                    entry.task = null;
+                                }
+                                next.width = 0;
+                                next.height = 0;
+                            }
+                        );
+                    }
+
+                    function refreshResolution() {
+                        zoomTimer = null;
+                        if (!ready || !pages.length) {
+                            return;
+                        }
+                        refreshedViewKey = viewKey();
+                        var zoom = pinchZoom();
+                        var dpr = window.devicePixelRatio || 1;
+                        var visible = pages.filter(inView);
+                        var allowance = Math.min(MAX_CANVAS_PIXELS, ZOOM_PIXEL_BUDGET / Math.max(1, visible.length));
+                        for (var i = 0; i < pages.length; i++) {
+                            var entry = pages[i];
+                            var base = backingRatio(entry.viewport, docPageCount);
+                            var target = entry.ratio;
+                            if (visible.indexOf(entry) >= 0) {
+                                target = zoomedRatio(entry.viewport, base, dpr, zoom, allowance);
+                            } else if (entry.ratio > base * (1 + ZOOM_MIN_CHANGE)) {
+                                target = base; // left the view: hand its zoom pixels back
+                            }
+                            var current = entry.task ? entry.pendingRatio : entry.ratio;
+                            if (Math.abs(target - current) <= current * ZOOM_MIN_CHANGE) {
+                                continue; // already there, or already on its way
+                            }
+                            if (entry.task && Math.abs(target - entry.ratio) <= entry.ratio * ZOOM_MIN_CHANGE) {
+                                entry.task.cancel(); // zoomed back to where the current render is
+                                continue;
+                            }
+                            rerenderPage(entry, target);
+                        }
+                    }
+
+                    function scheduleRefresh() {
+                        if (zoomTimer) {
+                            clearTimeout(zoomTimer);
+                        }
+                        zoomTimer = setTimeout(refreshResolution, ZOOM_SETTLE_MS);
+                        watchWhileZoomed();
+                    }
+
+                    // Where the signer is looking: scroll positions plus the pinch viewport.
+                    function viewKey() {
+                        var vv = window.visualViewport;
+                        return [
+                            window.scrollX,
+                            window.scrollY,
+                            viewerEl ? viewerEl.scrollTop : 0,
+                            vv ? vv.offsetLeft : 0,
+                            vv ? vv.offsetTop : 0,
+                            pinchZoom()
+                        ].join(',');
+                    }
+
+                    // While pinch-zoomed, poll the view: once it has stopped moving for
+                    // ZOOM_SETTLE_MS, refresh (a no-op when nothing needs re-rendering). This
+                    // converges whichever events the browser did or didn't send for a zoomed
+                    // pan, fling or scroll. Stops when the signer zooms back out.
+                    function watchWhileZoomed() {
+                        if (zoomWatch || pinchZoom() <= 1) {
+                            return;
+                        }
+                        lastViewKey = viewKey();
+                        lastMovedAt = Date.now();
+                        zoomWatch = setInterval(function () {
+                            if (pinchZoom() <= 1) {
+                                clearInterval(zoomWatch);
+                                zoomWatch = null;
+                                scheduleRefresh(); // hand zoomed pages back to base
+                                return;
+                            }
+                            var key = viewKey();
+                            if (key !== lastViewKey) {
+                                lastViewKey = key;
+                                lastMovedAt = Date.now();
+                            } else if (
+                                !zoomTimer &&
+                                key !== refreshedViewKey &&
+                                Date.now() - lastMovedAt >= ZOOM_SETTLE_MS
+                            ) {
+                                refreshResolution();
+                            }
+                        }, ZOOM_WATCH_MS);
+                    }
+
+                    function listenForZoom(containerEl) {
+                        viewerEl = containerEl;
+                        if (zoomListening) {
+                            return;
+                        }
+                        zoomListening = true;
+                        if (window.visualViewport) {
+                            window.visualViewport.addEventListener('resize', scheduleRefresh);
+                            window.visualViewport.addEventListener('scroll', scheduleRefresh);
+                        }
+                        window.addEventListener('resize', scheduleRefresh); // browser zoom changes devicePixelRatio
+                        // On a phone the viewer isn't height-bound, so the document scrolls; on a
+                        // desktop the viewer box does. Either brings different pages into view.
+                        window.addEventListener('scroll', scheduleRefresh, { passive: true });
+                        containerEl.addEventListener('scroll', scheduleRefresh, { passive: true });
+                    }
+
                     function renderOnePage(pdf, pageNum, containerEl) {
                         return pdf.getPage(pageNum).then(function (page) {
                             var viewport = page.getViewport({ scale: fitScale(page, containerEl) });
+                            // #413 — draw at device resolution, display at CSS size. `viewport`
+                            // stays in CSS pixels: the wrap, anchor lookup and hitToPdfRect all
+                            // use it, so sign-spot placement and stamping are unchanged.
+                            var ratio = backingRatio(viewport, pdf.numPages);
+                            var renderViewport = page.getViewport({ scale: viewport.scale * ratio });
                             var wrap = document.createElement('div');
                             wrap.className = 'dg-page-wrap';
                             wrap.style.width = viewport.width + 'px';
                             wrap.style.height = viewport.height + 'px';
                             var canvas = document.createElement('canvas');
-                            canvas.width = viewport.width;
-                            canvas.height = viewport.height;
+                            canvas.width = Math.floor(renderViewport.width);
+                            canvas.height = Math.floor(renderViewport.height);
+                            canvas.style.width = viewport.width + 'px';
+                            canvas.style.height = viewport.height + 'px';
                             wrap.appendChild(canvas);
                             containerEl.appendChild(wrap);
                             return page
-                                .render({ canvasContext: canvas.getContext('2d'), viewport: viewport })
+                                .render({ canvasContext: canvas.getContext('2d'), viewport: renderViewport })
                                 .promise.then(function () {
                                     return page.getTextContent();
                                 })
@@ -982,7 +1401,12 @@
                                         pageNum: pageNum,
                                         viewport: viewport,
                                         textContent: tc,
-                                        wrapEl: wrap
+                                        wrapEl: wrap,
+                                        pdfPage: page,
+                                        canvas: canvas,
+                                        ratio: ratio,
+                                        task: null,
+                                        pendingRatio: ratio
                                     });
                                 });
                         });
@@ -1059,6 +1483,11 @@
                         // Returns a Promise that resolves when every page is painted.
                         render: function (base64, containerEl) {
                             ready = false;
+                            pages.forEach(function (p) {
+                                if (p.task) {
+                                    p.task.cancel();
+                                }
+                            });
                             pages = [];
                             if (!containerEl) {
                                 return Promise.resolve();
@@ -1092,6 +1521,7 @@
                                     return lib.getDocument({ data: bytes, isEvalSupported: false }).promise;
                                 })
                                 .then(function (pdf) {
+                                    docPageCount = pdf.numPages;
                                     var chain = Promise.resolve();
                                     for (var p = 1; p <= pdf.numPages; p++) {
                                         (function (pageNum) {
@@ -1108,6 +1538,10 @@
                                         return a.pageNum - b.pageNum;
                                     });
                                     ready = true;
+                                    // #413 — sharpen on pinch/browser zoom; also picks up a zoom
+                                    // the signer applied while a long document was still loading.
+                                    listenForZoom(containerEl);
+                                    scheduleRefresh();
                                 })
                                 .catch(function (err) {
                                     showMessage(containerEl, 'Unable to display this document.');
@@ -1220,6 +1654,383 @@
                             }
                             return null;
                         }
+                    };
+                })();
+            </script>
+
+            <script>
+                var DocGenAttachmentViewer = (function () {
+                    // ============================================================
+                    // #412 — viewer for ATTACHED documents (e.g. engineering drawings).
+                    // Built on PDF.js's own viewer component (pdf_viewer.js — the building
+                    // blocks of Firefox's PDF viewer), over the same core build the signing
+                    // document uses. The component renders only the pages in view, keeps a
+                    // bounded cache of page canvases, draws at device resolution, and zooms
+                    // around a point with a quick CSS-scaled preview and a sharp redraw once
+                    // the gesture settles. It is also what M2 markup builds on (its annotation
+                    // editors). This module adds the input PDF.js leaves to the app: mouse
+                    // drag-to-pan, Ctrl/⌘+wheel and trackpad pinch, and two-finger pinch on
+                    // touch screens — all scoped to the drawing box, so the page around it
+                    // (and its action bar) never zooms.
+                    //
+                    // The signing document stays on DocGenPdfViewer: its sign-spot anchors and
+                    // stamping are tied to that renderer's coordinates.
+                    // ============================================================
+                    var CORE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
+                    var WORKER_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
+                    var VIEWER_URL = "{!URLFOR($Resource.pdfjs4, 'pdf_viewer.js')}";
+                    var VIEWER_CSS = "{!URLFOR($Resource.pdfjs4, 'pdf_viewer.css')}";
+                    var MAX_CANVAS_PIXELS = 16777216; // iOS Safari refuses a larger canvas
+                    var ZOOM_DELAY_MS = 400; // CSS-scaled preview while zooming; sharp redraw once still
+                    var BUTTON_FACTOR = 1.5; // one +/− click (drawings span a wide zoom range)
+                    var WHEEL_STEP = 1.25; // one Ctrl+wheel notch
+                    var MIN_FIT_FRACTION = 0.5; // never zoom out past half of fit-to-width
+
+                    var libs = null;
+                    var current = null; // the document on show; see render()
+                    var gen = 0; // bumps on every render/release so a superseded load stops
+                    var resizeWired = false;
+
+                    function loadLibs() {
+                        if (libs) {
+                            return Promise.resolve(libs);
+                        }
+                        if (!document.getElementById('dg-pdfjs-viewer-css')) {
+                            var link = document.createElement('link');
+                            link.id = 'dg-pdfjs-viewer-css';
+                            link.rel = 'stylesheet';
+                            link.href = VIEWER_CSS;
+                            document.head.appendChild(link);
+                        }
+                        return import(CORE_URL).then(function (core) {
+                            core.GlobalWorkerOptions.workerSrc = WORKER_URL;
+                            // The viewer component reads the core library from this global.
+                            globalThis.pdfjsLib = core;
+                            return import(VIEWER_URL).then(function (viewer) {
+                                libs = { core: core, viewer: viewer };
+                                return libs;
+                            });
+                        });
+                    }
+
+                    function clear(el) {
+                        while (el.firstChild) {
+                            el.removeChild(el.firstChild);
+                        }
+                    }
+
+                    function release(containerEl) {
+                        gen++;
+                        if (current) {
+                            try {
+                                current.viewer.setDocument(null);
+                            } catch (e) {
+                                /* already torn down */
+                            }
+                            try {
+                                current.pdf.destroy();
+                            } catch (e) {
+                                /* already gone */
+                            }
+                            current = null;
+                        }
+                        if (containerEl) {
+                            clear(containerEl);
+                        }
+                    }
+
+                    function notify(st) {
+                        if (st === current && st.onChange) {
+                            st.onChange(state());
+                        }
+                    }
+
+                    // Zoom by a factor around a point (client coordinates). PDF.js rounds the
+                    // scale to two decimals, so small trackpad/pinch deltas are accumulated
+                    // until they add up to a visible step (as Firefox's viewer does).
+                    function zoomBy(st, factor, originX, originY) {
+                        if (!st.fitScale) {
+                            return;
+                        }
+                        st.pending *= factor;
+                        var scale = st.viewer.currentScale;
+                        var target = Math.round(scale * st.pending * 100) / 100;
+                        var floor = Math.round(st.fitScale * MIN_FIT_FRACTION * 100) / 100;
+                        if (target < floor) {
+                            st.pending = floor / scale;
+                            target = floor;
+                        }
+                        if (target === Math.round(scale * 100) / 100) {
+                            return; // not a visible step yet: keep accumulating
+                        }
+                        // PDF.js measures the origin from the scroll box's offsetLeft/offsetTop
+                        // (right for Firefox's full-window viewer); our box sits inside a
+                        // positioned pane, so convert client coordinates to that frame.
+                        var box = st.scroller.getBoundingClientRect();
+                        st.viewer.updateScale({
+                            scaleFactor: st.pending,
+                            origin: [
+                                originX - box.left + st.scroller.offsetLeft,
+                                originY - box.top + st.scroller.offsetTop
+                            ],
+                            drawingDelay: ZOOM_DELAY_MS
+                        });
+                        st.pending = 1;
+                    }
+
+                    function boxCentre(st) {
+                        var r = st.scroller.getBoundingClientRect();
+                        return [r.left + r.width / 2, r.top + r.height / 2];
+                    }
+
+                    function wireInput(st) {
+                        var scroller = st.scroller;
+
+                        // Ctrl/⌘ + wheel, and trackpad pinch (browsers report it as ctrl+wheel):
+                        // zoom the drawing around the pointer instead of the whole page. A plain
+                        // wheel still scrolls, so multi-page sets page through as usual.
+                        scroller.addEventListener(
+                            'wheel',
+                            function (e) {
+                                if (!(e.ctrlKey || e.metaKey)) {
+                                    return;
+                                }
+                                e.preventDefault();
+                                // Trackpad pinch arrives as a stream of tiny pixel deltas: zoom
+                                // continuously. A mouse-wheel notch arrives as one big delta (~100px
+                                // in Chrome): zoom one fixed step, as PDF.js's own viewer does.
+                                var pinch = e.deltaMode === 0 && Math.abs(e.deltaY) < 10;
+                                var factor = pinch
+                                    ? Math.exp(-e.deltaY / 100)
+                                    : e.deltaY < 0
+                                      ? WHEEL_STEP
+                                      : 1 / WHEEL_STEP;
+                                zoomBy(st, factor, e.clientX, e.clientY);
+                            },
+                            { passive: false }
+                        );
+
+                        // Two-finger pinch on a touch screen zooms the drawing, not the page
+                        // (touch-action on the box keeps one-finger panning native).
+                        function spread(t) {
+                            return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+                        }
+                        scroller.addEventListener(
+                            'touchstart',
+                            function (e) {
+                                st.pinch = e.touches.length === 2 ? spread(e.touches) : null;
+                            },
+                            { passive: true }
+                        );
+                        scroller.addEventListener(
+                            'touchmove',
+                            function (e) {
+                                if (!st.pinch || e.touches.length !== 2) {
+                                    return;
+                                }
+                                e.preventDefault();
+                                var d = spread(e.touches);
+                                if (d > 0) {
+                                    zoomBy(
+                                        st,
+                                        d / st.pinch,
+                                        (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                                        (e.touches[0].clientY + e.touches[1].clientY) / 2
+                                    );
+                                    st.pinch = d;
+                                }
+                            },
+                            { passive: false }
+                        );
+                        scroller.addEventListener('touchend', function (e) {
+                            if (e.touches.length < 2) {
+                                st.pinch = null;
+                            }
+                        });
+
+                        // Mouse drag-to-pan (the hand tool). Touch already pans natively.
+                        scroller.addEventListener('pointerdown', function (e) {
+                            if (e.pointerType !== 'mouse' || e.button !== 0) {
+                                return;
+                            }
+                            if (e.target.closest && e.target.closest('a, button, input, select, textarea')) {
+                                return;
+                            }
+                            st.drag = {
+                                id: e.pointerId,
+                                x: e.clientX,
+                                y: e.clientY,
+                                left: scroller.scrollLeft,
+                                top: scroller.scrollTop
+                            };
+                            scroller.setPointerCapture(e.pointerId);
+                            scroller.classList.add('dg-grabbing');
+                            e.preventDefault(); // no image drag, no text selection
+                        });
+                        scroller.addEventListener('pointermove', function (e) {
+                            if (!st.drag || e.pointerId !== st.drag.id) {
+                                return;
+                            }
+                            scroller.scrollLeft = st.drag.left - (e.clientX - st.drag.x);
+                            scroller.scrollTop = st.drag.top - (e.clientY - st.drag.y);
+                        });
+                        function endDrag() {
+                            st.drag = null;
+                            scroller.classList.remove('dg-grabbing');
+                        }
+                        scroller.addEventListener('pointerup', endDrag);
+                        scroller.addEventListener('pointercancel', endDrag);
+                        scroller.addEventListener('lostpointercapture', endDrag);
+                    }
+
+                    // Fit-to-width follows the box when the window resizes or rotates.
+                    function wireResize() {
+                        if (resizeWired) {
+                            return;
+                        }
+                        resizeWired = true;
+                        var timer = null;
+                        window.addEventListener('resize', function () {
+                            clearTimeout(timer);
+                            timer = setTimeout(function () {
+                                if (current && current.fitMode) {
+                                    current.viewer.currentScaleValue = 'page-width';
+                                }
+                            }, 200);
+                        });
+                    }
+
+                    function state() {
+                        var st = current;
+                        if (!st || !st.fitScale) {
+                            return { ready: false };
+                        }
+                        var scale = st.viewer.currentScale;
+                        return {
+                            ready: true,
+                            fit: st.fitMode,
+                            percent: Math.round((scale / st.fitScale) * 100),
+                            canZoomIn: scale < 9.99,
+                            canZoomOut: scale > st.fitScale * MIN_FIT_FRACTION + 0.005
+                        };
+                    }
+
+                    return {
+                        // Show raw PDF bytes in containerEl, replacing whatever was on show.
+                        // onFirstPage(pageCount) fires once the first page is on screen;
+                        // onChange(state) fires whenever the zoom changes. Resolves
+                        // { pageCount, completed } — completed=false when superseded.
+                        render: function (bytes, containerEl, onFirstPage, onChange) {
+                            release(containerEl);
+                            var myGen = gen;
+                            // PDF.js transfers the buffer to its worker; hand it a copy so the
+                            // caller's bytes stay usable (re-showing, hashing).
+                            var data = bytes.slice ? bytes.slice(0) : bytes;
+                            return loadLibs().then(function (l) {
+                                return l.core
+                                    .getDocument({ data: data, isEvalSupported: false })
+                                    .promise.then(function (pdf) {
+                                        if (myGen !== gen) {
+                                            pdf.destroy();
+                                            return { pageCount: 0, completed: false };
+                                        }
+                                        clear(containerEl);
+                                        var scroller = document.createElement('div');
+                                        scroller.className = 'dg-att-scroller';
+                                        var inner = document.createElement('div');
+                                        inner.className = 'pdfViewer';
+                                        scroller.appendChild(inner);
+                                        containerEl.appendChild(scroller);
+
+                                        var eventBus = new l.viewer.EventBus();
+                                        var linkService = new l.viewer.PDFLinkService({ eventBus: eventBus });
+                                        // A drawing's links never navigate the signer away.
+                                        linkService.externalLinkEnabled = false;
+                                        var viewer = new l.viewer.PDFViewer({
+                                            container: scroller,
+                                            viewer: inner,
+                                            eventBus: eventBus,
+                                            linkService: linkService,
+                                            textLayerMode: 0, // nothing to select; keeps drag-to-pan unambiguous
+                                            annotationMode: l.core.AnnotationMode.ENABLE, // show existing markups; no forms
+                                            annotationEditorMode: l.core.AnnotationEditorType.DISABLE, // markup is M2
+                                            maxCanvasPixels: MAX_CANVAS_PIXELS
+                                        });
+                                        linkService.setViewer(viewer);
+
+                                        var st = {
+                                            pdf: pdf,
+                                            viewer: viewer,
+                                            scroller: scroller,
+                                            fitScale: null,
+                                            fitMode: true,
+                                            pending: 1,
+                                            pinch: null,
+                                            drag: null,
+                                            onChange: onChange
+                                        };
+                                        current = st;
+                                        wireInput(st);
+                                        wireResize();
+
+                                        return new Promise(function (resolve, reject) {
+                                            var first = true;
+                                            eventBus.on('pagesinit', function () {
+                                                viewer.currentScaleValue = 'page-width';
+                                            });
+                                            eventBus.on('scalechanging', function (e) {
+                                                st.fitMode = e.presetValue === 'page-width';
+                                                if (st.fitMode) {
+                                                    st.fitScale = e.scale;
+                                                }
+                                                notify(st);
+                                            });
+                                            eventBus.on('pagerendered', function (e) {
+                                                if (!first || myGen !== gen) {
+                                                    return;
+                                                }
+                                                first = false;
+                                                if (e.error) {
+                                                    reject(e.error);
+                                                    return;
+                                                }
+                                                if (onFirstPage) {
+                                                    onFirstPage(pdf.numPages);
+                                                }
+                                                resolve({ pageCount: pdf.numPages, completed: true });
+                                            });
+                                            viewer.setDocument(pdf);
+                                            linkService.setDocument(pdf, null);
+                                        });
+                                    });
+                            });
+                        },
+
+                        release: release,
+
+                        zoomIn: function () {
+                            if (current) {
+                                var c = boxCentre(current);
+                                zoomBy(current, BUTTON_FACTOR, c[0], c[1]);
+                            }
+                        },
+
+                        zoomOut: function () {
+                            if (current) {
+                                var c = boxCentre(current);
+                                zoomBy(current, 1 / BUTTON_FACTOR, c[0], c[1]);
+                            }
+                        },
+
+                        fit: function () {
+                            if (current) {
+                                current.pending = 1;
+                                current.viewer.currentScaleValue = 'page-width';
+                            }
+                        },
+
+                        // { ready, fit, percent (of fit-to-width), canZoomIn, canZoomOut }
+                        state: state
                     };
                 })();
             </script>
@@ -1502,6 +2313,9 @@
                         // Wire the modal.
                         wireSignModal();
 
+                        // #412 — attached documents (if any) load alongside the signing document.
+                        initAttachments(data);
+
                         // Load and render the real PDF through the viewer abstraction.
                         loadPdf();
                     }
@@ -1522,6 +2336,7 @@
                                     // placements — the single-modal flow stays in effect).
                                     DocGenPdfViewer.render(result.base64, containerEl)
                                         .then(function () {
+                                            formRendered.resolve();
                                             initGuidedOverlay();
                                         })
                                         .catch(function () {
@@ -1533,6 +2348,539 @@
                             },
                             { escape: false, buffer: false, timeout: 120000 }
                         );
+                    }
+
+                    // ===== #412 ATTACHED DOCUMENTS =====
+                    // Existing PDFs from the record (e.g. engineering drawings), shown alongside the
+                    // signing document one at a time and fetched by index from the guest REST
+                    // endpoint as raw bytes — drawings run past what remoting can carry. The signer
+                    // must open every one before signing; saveCompositedSignedPdf enforces the same
+                    // rule server-side, so this UI gate is a convenience, not the control.
+                    var attachments = null; // [{index,title,version,size,position,sha256,viewedAt}]
+                    var attachmentEndpoint = null;
+                    var docOrder = []; // display order: 'form' and attachment entries
+                    var currentDoc = 'form';
+                    var attachmentLoadGen = 0;
+                    var attachmentCache = []; // [{index, bytes}], most recent last
+                    var ATTACHMENT_CACHE_BYTES = 48 * 1024 * 1024;
+                    var formRendered = (function () {
+                        var done;
+                        var p = new Promise(function (resolve) {
+                            done = resolve;
+                        });
+                        return { promise: p, resolve: done };
+                    })();
+
+                    function hasAttachments() {
+                        return !!(attachments && attachments.length);
+                    }
+
+                    function unopenedAttachments() {
+                        var left = [];
+                        for (var i = 0; attachments && i < attachments.length; i++) {
+                            if (!attachments[i].viewedAt) left.push(attachments[i]);
+                        }
+                        return left;
+                    }
+
+                    function formatBytes(n) {
+                        if (!n) return '';
+                        if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + ' KB';
+                        return (n / (1024 * 1024)).toFixed(1) + ' MB';
+                    }
+
+                    function initAttachments(data) {
+                        if (!data || !data.attachmentCount) return;
+                        var manifest = new Promise(function (resolve, reject) {
+                            Visualforce.remoting.Manager.invokeAction(
+                                '{!$RemoteAction.DocGenSignatureController.getAttachmentManifest}',
+                                token,
+                                function (result, event) {
+                                    if (event.status && result && result.success) {
+                                        resolve(result);
+                                    } else {
+                                        reject(
+                                            new Error(
+                                                (result && result.message) ||
+                                                    'The attached documents could not be loaded.'
+                                            )
+                                        );
+                                    }
+                                },
+                                { escape: false }
+                            );
+                        });
+                        manifest
+                            .then(function (result) {
+                                attachments = result.attachments || [];
+                                attachmentEndpoint = result.endpoint;
+                                if (!attachments.length) return;
+                                var before = [];
+                                var after = [];
+                                attachments.forEach(function (a) {
+                                    (a.position === 'After' ? after : before).push(a);
+                                });
+                                docOrder = before.concat(['form'], after);
+                                buildDocNav();
+                                refreshAttachmentStatus();
+                                refreshGuidedStatus();
+                                // The signing document lays itself out against a visible viewer,
+                                // so only switch away once it has rendered.
+                                if (docOrder[0] !== 'form') {
+                                    formRendered.promise.then(function () {
+                                        if (currentDoc === 'form') showDocument(docOrder[0]);
+                                    });
+                                }
+                            })
+                            .catch(function (err) {
+                                showError(
+                                    (err && err.message ? err.message : 'The attached documents could not be loaded.') +
+                                        ' Please refresh the page, or contact the sender.'
+                                );
+                            });
+                    }
+
+                    function docLabel(entry) {
+                        if (entry === 'form') {
+                            return (
+                                (signerData && signerData.documentTitle ? signerData.documentTitle : 'Document') +
+                                ' (sign here)'
+                            );
+                        }
+                        var pos = attachments.indexOf(entry) + 1;
+                        return (
+                            (entry.viewedAt ? '\u2713 ' : '\u25CB ') +
+                            'Attached ' +
+                            pos +
+                            ' of ' +
+                            attachments.length +
+                            ': ' +
+                            (entry.title || 'Document') +
+                            (entry.version ? ' (v' + entry.version + ')' : '')
+                        );
+                    }
+
+                    function buildDocNav() {
+                        var select = document.getElementById('doc-select');
+                        while (select.firstChild) select.removeChild(select.firstChild);
+                        docOrder.forEach(function (entry, i) {
+                            var opt = document.createElement('option');
+                            opt.value = String(i);
+                            opt.textContent = docLabel(entry);
+                            select.appendChild(opt);
+                        });
+                        select.addEventListener('change', function () {
+                            showDocument(docOrder[Number(select.value)]);
+                        });
+                        document.getElementById('doc-prev').addEventListener('click', function () {
+                            stepDocument(-1);
+                        });
+                        document.getElementById('doc-next').addEventListener('click', function () {
+                            stepDocument(1);
+                        });
+                        document.getElementById('att-zoom-in').addEventListener('click', function () {
+                            stepZoom(1);
+                        });
+                        document.getElementById('att-zoom-out').addEventListener('click', function () {
+                            stepZoom(-1);
+                        });
+                        document.getElementById('att-zoom-fit').addEventListener('click', function () {
+                            DocGenAttachmentViewer.fit();
+                        });
+                        document.getElementById('doc-nav').style.display = '';
+                        document.getElementById('doc-status').style.display = '';
+                        syncDocNav();
+                    }
+
+                    function syncDocNav() {
+                        var select = document.getElementById('doc-select');
+                        var at = docOrder.indexOf(currentDoc);
+                        for (var i = 0; i < select.options.length; i++) {
+                            select.options[i].textContent = docLabel(docOrder[i]);
+                        }
+                        select.value = String(at);
+                        document.getElementById('doc-prev').disabled = at <= 0;
+                        document.getElementById('doc-next').disabled = at >= docOrder.length - 1;
+                    }
+
+                    function stepDocument(delta) {
+                        var at = docOrder.indexOf(currentDoc) + delta;
+                        if (at >= 0 && at < docOrder.length) showDocument(docOrder[at]);
+                    }
+
+                    function refreshAttachmentStatus() {
+                        if (!hasAttachments()) return;
+                        var el = document.getElementById('doc-status');
+                        while (el.firstChild) el.removeChild(el.firstChild);
+                        var left = unopenedAttachments();
+                        var total = attachments.length;
+                        var plural = total === 1 ? '' : 's';
+                        if (!left.length) {
+                            el.className = 'doc-status complete';
+                            el.appendChild(
+                                document.createTextNode(
+                                    '\u2713 ' +
+                                        (total === 1
+                                            ? 'The attached document has'
+                                            : 'All ' + total + ' attached documents have') +
+                                        ' been opened.'
+                                )
+                            );
+                            return;
+                        }
+                        el.className = 'doc-status pending';
+                        el.appendChild(
+                            document.createTextNode(
+                                total -
+                                    left.length +
+                                    ' of ' +
+                                    total +
+                                    ' attached document' +
+                                    plural +
+                                    ' opened. Open each one before you sign. '
+                            )
+                        );
+                        var next = document.createElement('button');
+                        next.type = 'button';
+                        next.className = 'link';
+                        next.textContent = 'Open the next one';
+                        next.addEventListener('click', function () {
+                            var remaining = unopenedAttachments();
+                            if (remaining.length) showDocument(remaining[0]);
+                        });
+                        el.appendChild(next);
+                    }
+
+                    function showDocument(entry) {
+                        if (docOrder.indexOf(entry) < 0) return;
+                        currentDoc = entry;
+                        var formEl = document.getElementById('pdf-viewer-container');
+                        var pane = document.getElementById('attachment-pane');
+                        var attEl = document.getElementById('attachment-viewer-container');
+                        syncDocNav();
+                        if (entry === 'form') {
+                            attachmentLoadGen++;
+                            DocGenAttachmentViewer.release(attEl);
+                            pane.style.display = 'none';
+                            formEl.style.display = '';
+                            return;
+                        }
+                        formEl.style.display = 'none';
+                        pane.style.display = '';
+                        loadAttachment(entry);
+                    }
+
+                    function setAttachmentMeta(a, pageCount) {
+                        var bits = [a.title || 'Document'];
+                        if (a.version) bits.push('v' + a.version);
+                        if (a.size) bits.push(formatBytes(a.size));
+                        if (pageCount) bits.push(pageCount + (pageCount === 1 ? ' page' : ' pages'));
+                        document.getElementById('attachment-meta').textContent = bits.join(' \u00B7 ');
+                    }
+
+                    // Zoom controls mirror the viewer: the label reads the zoom relative to
+                    // fit-to-width and doubles as the "Fit" button.
+                    function syncZoomControls() {
+                        var z = DocGenAttachmentViewer.state();
+                        var label = document.getElementById('att-zoom-fit');
+                        label.textContent = !z.ready || z.fit ? 'Fit' : z.percent + '%';
+                        label.disabled = !z.ready || z.fit;
+                        document.getElementById('att-zoom-out').disabled = !z.ready || !z.canZoomOut;
+                        document.getElementById('att-zoom-in').disabled = !z.ready || !z.canZoomIn;
+                    }
+
+                    function stepZoom(delta) {
+                        if (delta > 0) {
+                            DocGenAttachmentViewer.zoomIn();
+                        } else {
+                            DocGenAttachmentViewer.zoomOut();
+                        }
+                    }
+
+                    function showAttachmentMessage(text, isError, withProgress, retry) {
+                        var el = document.getElementById('attachment-viewer-container');
+                        DocGenAttachmentViewer.release(el);
+                        var box = document.createElement('div');
+                        box.className = 'attachment-message' + (isError ? ' error' : '');
+                        var p = document.createElement('p');
+                        p.textContent = text;
+                        box.appendChild(p);
+                        var bar = null;
+                        if (withProgress) {
+                            var track = document.createElement('div');
+                            track.className = 'attachment-progress';
+                            bar = document.createElement('span');
+                            track.appendChild(bar);
+                            box.appendChild(track);
+                        }
+                        if (retry) {
+                            var btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'btn';
+                            btn.style.marginTop = '1rem';
+                            btn.textContent = 'Try again';
+                            btn.addEventListener('click', retry);
+                            box.appendChild(btn);
+                        }
+                        el.appendChild(box);
+                        return bar;
+                    }
+
+                    function loadAttachment(a) {
+                        var gen = ++attachmentLoadGen;
+                        var el = document.getElementById('attachment-viewer-container');
+                        setAttachmentMeta(a);
+                        DocGenAttachmentViewer.release();
+                        syncZoomControls();
+                        var bar = showAttachmentMessage(
+                            'Loading ' +
+                                (a.title || 'document') +
+                                (a.size ? ' (' + formatBytes(a.size) + ')' : '') +
+                                '\u2026',
+                            false,
+                            true
+                        );
+                        fetchAttachmentBytes(a, function (loaded, total) {
+                            if (bar && total) bar.style.width = Math.min(100, Math.round((loaded / total) * 100)) + '%';
+                        })
+                            .then(function (bytes) {
+                                if (gen !== attachmentLoadGen) return null;
+                                return DocGenAttachmentViewer.render(
+                                    bytes,
+                                    el,
+                                    function (pageCount) {
+                                        if (gen !== attachmentLoadGen) return;
+                                        setAttachmentMeta(a, pageCount);
+                                        recordAttachmentOpened(a, 0);
+                                    },
+                                    syncZoomControls
+                                );
+                            })
+                            .then(function () {
+                                if (gen === attachmentLoadGen) syncZoomControls();
+                            })
+                            .catch(function (err) {
+                                if (gen !== attachmentLoadGen) return;
+                                console.error('Portwood attached document ' + a.index + ' failed', err);
+                                showAttachmentMessage(
+                                    err && err.userMessage
+                                        ? err.userMessage
+                                        : 'This document could not be displayed. Check your connection and try again.',
+                                    true,
+                                    false,
+                                    function () {
+                                        loadAttachment(a);
+                                    }
+                                );
+                            });
+                    }
+
+                    function userError(message) {
+                        var e = new Error(message);
+                        e.userMessage = message;
+                        return e;
+                    }
+
+                    function cachedAttachment(index) {
+                        for (var i = 0; i < attachmentCache.length; i++) {
+                            if (attachmentCache[i].index === index) return attachmentCache[i].bytes;
+                        }
+                        return null;
+                    }
+
+                    function cacheAttachment(index, bytes) {
+                        attachmentCache.push({ index: index, bytes: bytes });
+                        var total = 0;
+                        for (var i = 0; i < attachmentCache.length; i++) total += attachmentCache[i].bytes.length;
+                        while (attachmentCache.length > 1 && total > ATTACHMENT_CACHE_BYTES) {
+                            total -= attachmentCache.shift().bytes.length;
+                        }
+                    }
+
+                    // Raw PDF bytes for one attachment. The token travels in a header (never the
+                    // URL); the response is checked against the server's SHA-256 so what is shown
+                    // is exactly what the approval register records.
+                    function fetchAttachmentBytes(a, onProgress) {
+                        var hit = cachedAttachment(a.index);
+                        if (hit) return Promise.resolve(hit);
+                        if (!window.fetch || !attachmentEndpoint) {
+                            return Promise.reject(userError('This browser cannot open the attached documents.'));
+                        }
+                        return fetch(attachmentEndpoint + '?index=' + encodeURIComponent(a.index), {
+                            method: 'GET',
+                            headers: { 'X-Portwood-Token': token },
+                            cache: 'no-store',
+                            credentials: 'same-origin'
+                        })
+                            .then(function (res) {
+                                if (!res.ok) {
+                                    return res
+                                        .json()
+                                        .catch(function () {
+                                            return {};
+                                        })
+                                        .then(function (body) {
+                                            throw userError(
+                                                (body && body.error) ||
+                                                    'This document could not be loaded (error ' + res.status + ').'
+                                            );
+                                        });
+                                }
+                                var serverSha = res.headers.get('X-Portwood-Sha256');
+                                return readAll(res, a.size, onProgress).then(function (bytes) {
+                                    return verifyAttachment(bytes, serverSha, a);
+                                });
+                            })
+                            .then(function (bytes) {
+                                cacheAttachment(a.index, bytes);
+                                return bytes;
+                            });
+                    }
+
+                    function readAll(res, expected, onProgress) {
+                        if (!res.body || !res.body.getReader) {
+                            return res.arrayBuffer().then(function (buf) {
+                                return new Uint8Array(buf);
+                            });
+                        }
+                        var reader = res.body.getReader();
+                        var chunks = [];
+                        var loaded = 0;
+                        function pump() {
+                            return reader.read().then(function (step) {
+                                if (step.done) {
+                                    var out = new Uint8Array(loaded);
+                                    var at = 0;
+                                    for (var i = 0; i < chunks.length; i++) {
+                                        out.set(chunks[i], at);
+                                        at += chunks[i].length;
+                                    }
+                                    return out;
+                                }
+                                chunks.push(step.value);
+                                loaded += step.value.length;
+                                if (onProgress) onProgress(loaded, expected);
+                                return pump();
+                            });
+                        }
+                        return pump();
+                    }
+
+                    function verifyAttachment(bytes, serverSha, a) {
+                        if (!window.crypto || !window.crypto.subtle) {
+                            return Promise.resolve(bytes); // the server-side hash still stands
+                        }
+                        return window.crypto.subtle.digest('SHA-256', bytes).then(function (digest) {
+                            var hex = Array.prototype.map
+                                .call(new Uint8Array(digest), function (b) {
+                                    return ('0' + b.toString(16)).slice(-2);
+                                })
+                                .join('');
+                            var expect = (serverSha || a.sha256 || '').toLowerCase();
+                            if (expect && expect !== hex) {
+                                throw userError('This document did not arrive intact. Please try again.');
+                            }
+                            a.sha256 = hex;
+                            return bytes;
+                        });
+                    }
+
+                    // Tell the server this attachment was opened (its first page is on screen).
+                    // Retries a few times; until it lands the attachment still counts as unopened.
+                    function recordAttachmentOpened(a, attempt) {
+                        if (a.viewedAt || (a.marking && attempt === 0)) return;
+                        a.marking = true;
+                        Visualforce.remoting.Manager.invokeAction(
+                            '{!$RemoteAction.DocGenSignatureController.markAttachmentViewed}',
+                            token,
+                            a.index,
+                            function (result, event) {
+                                if (event.status && result && result.success) {
+                                    a.marking = false;
+                                    a.viewedAt = result.viewedAt || new Date().toISOString();
+                                    syncDocNav();
+                                    refreshAttachmentStatus();
+                                    refreshGuidedStatus();
+                                    return;
+                                }
+                                if (attempt < 3) {
+                                    setTimeout(
+                                        function () {
+                                            recordAttachmentOpened(a, attempt + 1);
+                                        },
+                                        1500 * (attempt + 1)
+                                    );
+                                    return;
+                                }
+                                a.marking = false;
+                                console.error(
+                                    'Portwood: could not record opening attached document ' + a.index,
+                                    result
+                                );
+                            },
+                            { escape: false }
+                        );
+                    }
+
+                    // Approve gate (UI side): send the signer to the first unopened attachment.
+                    function requireAttachmentsOpened() {
+                        if (signerData && signerData.attachmentCount && !attachments) {
+                            return false; // manifest still loading — nothing to approve against yet
+                        }
+                        var left = unopenedAttachments();
+                        if (!left.length) return true;
+                        closeSignModal();
+                        showDocument(left[0]);
+                        var status = document.getElementById('doc-status');
+                        if (status && status.scrollIntoView) status.scrollIntoView({ block: 'nearest' });
+                        return false;
+                    }
+
+                    // #412 — the signer confirms they reviewed the attached documents, at the final
+                    // step. The server records it (refused until every document was opened) and
+                    // refuses approval without it; it records the confirmation, not that every page
+                    // was read.
+                    function showAttachmentsReviewed(show) {
+                        var row = document.getElementById('attachments-reviewed-row');
+                        row.style.display = show ? '' : 'none';
+                        document.getElementById('attachments-reviewed-checkbox').checked = false;
+                        if (show) {
+                            document.getElementById('attachments-reviewed-label').textContent =
+                                attachments.length === 1
+                                    ? 'I confirm I have reviewed the attached document.'
+                                    : 'I confirm I have reviewed the ' + attachments.length + ' attached documents.';
+                        }
+                    }
+
+                    function attachmentsReviewedOk() {
+                        return (
+                            document.getElementById('attachments-reviewed-row').style.display === 'none' ||
+                            document.getElementById('attachments-reviewed-checkbox').checked
+                        );
+                    }
+
+                    function confirmAttachmentsReviewed() {
+                        if (!hasAttachments()) return Promise.resolve(null);
+                        return new Promise(function (resolve, reject) {
+                            Visualforce.remoting.Manager.invokeAction(
+                                '{!$RemoteAction.DocGenSignatureController.confirmAttachmentsReviewed}',
+                                token,
+                                function (result, event) {
+                                    if (!event.status || !result || result.success === false) {
+                                        reject(
+                                            new Error(
+                                                (result && result.message) ||
+                                                    event.message ||
+                                                    'Your review confirmation could not be recorded. Please try again.'
+                                            )
+                                        );
+                                        return;
+                                    }
+                                    resolve(result);
+                                },
+                                { escape: false }
+                            );
+                        });
                     }
 
                     // ===== GUIDED SIGN-SPOT OVERLAY =====
@@ -1720,7 +3068,12 @@
                         for (var i = 0; i < guided.spots.length; i++) {
                             guided.spots[i].chip.classList.remove('current');
                         }
-                        if (pending < 0) {
+                        var unopened = unopenedAttachments().length;
+                        if (pending < 0 && unopened) {
+                            // #412 — every field is done, but not every attached document is open.
+                            btn.textContent =
+                                'Open attached document' + (unopened === 1 ? '' : 's') + ' (' + unopened + ' left)';
+                        } else if (pending < 0) {
                             btn.textContent = 'Finish & Submit';
                         } else {
                             guided.spots[pending].chip.classList.add('current');
@@ -1738,6 +3091,8 @@
                     //     before acting — deliberate path. They click the chip or "Next Field" next.
                     function advanceGuided(openNext) {
                         if (!guided) return;
+                        // #412 — the walk happens on the signing document.
+                        if (currentDoc !== 'form' && firstPendingIndex() >= 0) showDocument('form');
                         // Form fields first — collect them before the signer signs anything.
                         if (hasPendingFormFields()) {
                             openFormFieldsStep(function () {
@@ -2010,6 +3365,162 @@
                         return y;
                     }
 
+                    // pdf-lib's standard fonts only encode WinAnsi; anything else (CJK, symbols)
+                    // would throw mid-composite, so swap it for '?' on the register page.
+                    function winAnsi(text) {
+                        var extras =
+                            '\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D' +
+                            '\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178';
+                        return String(text == null ? '' : text).replace(/[^\x20-\x7E\xA0-\xFF]/g, function (c) {
+                            return extras.indexOf(c) >= 0 ? c : '?';
+                        });
+                    }
+
+                    // #412 — "Attached Documents" register: one entry per attachment with its
+                    // version, size, SHA-256 and who opened it when. The documents themselves stay
+                    // on the record, unchanged; the hash ties this approval to exact bytes.
+                    function addAttachmentRegister(doc, helv, helvBold, cert) {
+                        var rgb = PDFLib.rgb;
+                        var gray = rgb(0.44, 0.43, 0.42);
+                        var brand = rgb(0.005, 0.27, 0.52);
+                        var list = cert.attachments;
+                        var page;
+                        var y;
+                        function newPage(continued) {
+                            page = doc.addPage([612, 792]);
+                            y = 740;
+                            page.drawText('Attached Documents' + (continued ? ' (continued)' : ''), {
+                                x: CERT_LEFT,
+                                y: y,
+                                size: 18,
+                                font: helvBold,
+                                color: brand
+                            });
+                            y -= 28;
+                        }
+                        newPage(false);
+                        page.drawText(winAnsi('Document: ' + (cert.documentTitle || 'Document')), {
+                            x: CERT_LEFT,
+                            y: y,
+                            size: 10,
+                            font: helv
+                        });
+                        y -= 14;
+                        page.drawText('Request ID: ' + (cert.requestId || ''), {
+                            x: CERT_LEFT,
+                            y: y,
+                            size: 9,
+                            font: helv,
+                            color: gray
+                        });
+                        y -= 20;
+                        y = drawWrappedText(
+                            page,
+                            'These ' +
+                                list.length +
+                                ' document' +
+                                (list.length === 1 ? ' was' : 's were') +
+                                ' attached to this request and opened by the signers below before signing. ' +
+                                'Each is identified by its file version and SHA-256 fingerprint; the documents ' +
+                                'themselves are kept, unchanged, on the originating record.',
+                            { x: CERT_LEFT, y: y, size: 9, font: helv, color: gray, lineHeight: 12 }
+                        );
+                        y -= 14;
+                        for (var i = 0; i < list.length; i++) {
+                            var a = list[i];
+                            var opened = a.openedBy || [];
+                            var need = 52 + Math.max(1, opened.length) * 12;
+                            if (y - need < 60) newPage(true);
+                            y = drawWrappedText(page, winAnsi(i + 1 + '. ' + (a.title || 'Document')), {
+                                x: CERT_LEFT,
+                                y: y,
+                                size: 10,
+                                font: helvBold,
+                                lineHeight: 13
+                            });
+                            var facts = [];
+                            if (a.version) facts.push('Version ' + a.version);
+                            if (a.size) facts.push(formatBytes(a.size));
+                            facts.push(a.position === 'After' ? 'shown after the form' : 'shown before the form');
+                            page.drawText(winAnsi(facts.join('  |  ')), {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 8.5,
+                                font: helv,
+                                color: gray
+                            });
+                            y -= 12;
+                            page.drawText('SHA-256: ' + (a.sha256 || 'not recorded'), {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 7.5,
+                                font: helv,
+                                color: gray
+                            });
+                            y -= 12;
+                            if (!opened.length) {
+                                page.drawText('Opened by: (not recorded)', {
+                                    x: CERT_LEFT + 6,
+                                    y: y,
+                                    size: 8.5,
+                                    font: helv,
+                                    color: gray
+                                });
+                                y -= 12;
+                            }
+                            for (var j = 0; j < opened.length; j++) {
+                                y = drawWrappedText(
+                                    page,
+                                    winAnsi(
+                                        (j === 0 ? 'Opened by: ' : '                  ') +
+                                            opened[j].name +
+                                            ', ' +
+                                            opened[j].at
+                                    ),
+                                    { x: CERT_LEFT + 6, y: y, size: 8.5, font: helv, color: gray, lineHeight: 12 }
+                                );
+                            }
+                            y -= 10;
+                        }
+                        var reviews = cert.attachmentReviews || [];
+                        if (y - (64 + Math.max(1, reviews.length) * 12) < 60) newPage(true);
+                        y -= 4;
+                        page.drawText('Review confirmations', {
+                            x: CERT_LEFT,
+                            y: y,
+                            size: 11,
+                            font: helvBold
+                        });
+                        y -= 15;
+                        y = drawWrappedText(
+                            page,
+                            'Each signer below confirmed that they had reviewed the attached documents before ' +
+                                'signing. This records their confirmation; it does not show that every page was read.',
+                            { x: CERT_LEFT, y: y, size: 9, font: helv, color: gray, lineHeight: 12 }
+                        );
+                        y -= 4;
+                        if (!reviews.length) {
+                            page.drawText('(none recorded)', {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 8.5,
+                                font: helv,
+                                color: gray
+                            });
+                        }
+                        for (var k = 0; k < reviews.length; k++) {
+                            if (y < 72) newPage(true);
+                            y = drawWrappedText(page, winAnsi(reviews[k].name + ', ' + reviews[k].at), {
+                                x: CERT_LEFT + 6,
+                                y: y,
+                                size: 8.5,
+                                font: helv,
+                                color: gray,
+                                lineHeight: 12
+                            });
+                        }
+                    }
+
                     function addCertificatePage(doc, helv, helvBold, cert, meStamp) {
                         var rgb = PDFLib.rgb;
                         var gray = rgb(0.44, 0.43, 0.42);
@@ -2194,8 +3705,26 @@
                                 return '';
                             }
                         })();
-                        return getCertificateData()
+                        return confirmAttachmentsReviewed()
+                            .then(getCertificateData)
                             .then(function (cert) {
+                                // #412 — never finish an attachment request without its register:
+                                // a missing or short register would leave an approval that doesn't
+                                // say which documents were approved.
+                                var expected =
+                                    signerData && signerData.attachmentCount ? signerData.attachmentCount : 0;
+                                if (
+                                    expected &&
+                                    (!cert ||
+                                        (cert.othersAllSigned &&
+                                            (!cert.attachments ||
+                                                cert.attachments.length !== expected ||
+                                                !cert.attachmentReviews)))
+                                ) {
+                                    throw new Error(
+                                        'The attached-documents register could not be loaded. Please try again.'
+                                    );
+                                }
                                 var bytes = b64ToBytes(sourcePdfBase64);
                                 return PDFLib.PDFDocument.load(bytes).then(function (doc) {
                                     return Promise.all([
@@ -2509,6 +4038,11 @@
                                         });
                                         return chain.then(function () {
                                             var iAmCompleting = cert && cert.othersAllSigned;
+                                            if (iAmCompleting && cert.attachments && cert.attachments.length) {
+                                                // #412 — the approval register: which documents were
+                                                // attached, by version and SHA-256, and who opened them.
+                                                addAttachmentRegister(doc, helv, helvBold, cert);
+                                            }
                                             if (iAmCompleting) {
                                                 // Final signer: append the Certificate of Completion
                                                 // page. The authoritative integrity hash is computed
@@ -2595,6 +4129,7 @@
 
                         // Per-spot capture: no consent here (collected once at final submit).
                         consentRow.style.display = 'none';
+                        showAttachmentsReviewed(false);
                         // Form fields are collected once at final submit, not per-spot.
                         hideFormFields();
                         showModalMsg('', 'info');
@@ -2645,6 +4180,8 @@
                     }
 
                     function openFinalSubmit() {
+                        // #412 — every attached document must be opened first (server-enforced too).
+                        if (!requireAttachmentsOpened()) return;
                         modalMode = 'final';
                         activeSpot = null;
                         document.getElementById('modal-draw-group').style.display = 'none';
@@ -2658,10 +4195,14 @@
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
                             (total > 0
                                 ? "You've completed all " + total + ' field' + (total > 1 ? 's' : '') + '. '
-                                : '') + 'Confirm your consent to finalize.';
+                                : '') +
+                            (hasAttachments()
+                                ? 'Confirm your review and consent to finalize.'
+                                : 'Confirm your consent to finalize.');
                         document.getElementById('modal-typed-name').parentNode.style.display = 'none';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').checked = false;
+                        showAttachmentsReviewed(hasAttachments());
                         var finalBtn = document.getElementById('btn-sign-submit');
                         finalBtn.className = 'btn btn-brand';
                         finalBtn.textContent = 'Finish & Submit';
@@ -2887,6 +4428,7 @@
                         document.getElementById('modal-draw-group').style.display = 'none';
                         document.getElementById('modal-typed-name').parentNode.style.display = 'none';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = 'none';
+                        showAttachmentsReviewed(false);
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Your Information';
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
                             'Complete these fields, then sign to finish.';
@@ -2924,6 +4466,9 @@
                         document
                             .getElementById('modal-consent-checkbox')
                             .addEventListener('change', updateSignSubmitState);
+                        document
+                            .getElementById('attachments-reviewed-checkbox')
+                            .addEventListener('change', updateSignSubmitState);
                         document.getElementById('modal-typed-name').addEventListener('input', updateSignSubmitState);
                         // Native date inputs (DatePick) fire 'change' on selection, not always 'input'.
                         document.getElementById('modal-typed-name').addEventListener('change', updateSignSubmitState);
@@ -2946,6 +4491,7 @@
                         // Re-show name + consent (the form-fields step hides them).
                         document.getElementById('modal-typed-name').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
+                        showAttachmentsReviewed(false);
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Sign Document';
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
                             'Confirm your name and consent to sign electronically.';
@@ -2986,8 +4532,9 @@
                         } else if (modalMode === 'final') {
                             // Guided final step: every field was already signed individually, so
                             // only the consent affirmation is required (the name comes from the
-                            // signer record — we don't re-ask for it).
-                            btn.disabled = !consentVal;
+                            // signer record — we don't re-ask for it). #412: plus the review
+                            // confirmation when the request has attached documents.
+                            btn.disabled = !consentVal || !attachmentsReviewedOk();
                         } else {
                             // 'pdf' legacy single-modal flow: name + consent (the typed name IS
                             // the signature). Signer form fields (#161) collected up front.
@@ -3163,7 +4710,7 @@
                     // Guided: all spots done — capture consent + finalize the signature.
                     function handleFinalSubmit() {
                         var consentGiven = document.getElementById('modal-consent-checkbox').checked;
-                        if (!consentGiven) return;
+                        if (!consentGiven || !attachmentsReviewedOk()) return;
                         // Name is no longer re-typed here (#183) — use the name already on the
                         // signer record (what pre-filled each field). Fall back to the input only
                         // if, somehow, the record has no name.

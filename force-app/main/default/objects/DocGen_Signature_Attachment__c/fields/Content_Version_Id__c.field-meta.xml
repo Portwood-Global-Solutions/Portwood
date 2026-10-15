@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Content_Version_Id__c</fullName>
+    <description
+    >The pinned ContentVersion. VersionData is immutable per version, so this identifies the exact bytes the signer was shown.</description>
+    <externalId>false</externalId>
+    <label>Content Version Id</label>
+    <length>18</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

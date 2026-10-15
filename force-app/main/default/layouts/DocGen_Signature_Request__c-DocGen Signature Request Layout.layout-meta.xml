@@ -135,6 +135,17 @@
         <relatedList>DocGen_Signature_Audit__c.Signature_Request__c</relatedList>
     </relatedLists>
     <relatedLists>
+        <fields>NAME</fields>
+        <fields>Sort_Order__c</fields>
+        <fields>Title__c</fields>
+        <fields>Version_Number__c</fields>
+        <fields>Position__c</fields>
+        <fields>Sha256__c</fields>
+        <relatedList>DocGen_Signature_Attachment__c.Signature_Request__c</relatedList>
+        <sortField>Sort_Order__c</sortField>
+        <sortOrder>Asc</sortOrder>
+    </relatedLists>
+    <relatedLists>
         <relatedList>RelatedFileList</relatedList>
     </relatedLists>
     <showEmailCheckbox>false</showEmailCheckbox>

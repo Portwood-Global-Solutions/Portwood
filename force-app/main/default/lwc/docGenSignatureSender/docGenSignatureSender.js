@@ -2,7 +2,8 @@ import { LightningElement, api, wire, track } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getSignerRolePicklistValues from '@salesforce/apex/DocGenSignatureSenderController.getSignerRolePicklistValues';
-import createGuidedPdfSignatureRequest from '@salesforce/apex/DocGenSignatureSenderController.createGuidedPdfSignatureRequest';
+import createGuidedPdfSignatureRequestV2 from '@salesforce/apex/DocGenSignatureSenderController.createGuidedPdfSignatureRequestV2';
+import getAttachableRecordPdfs from '@salesforce/apex/DocGenSignatureSenderController.getAttachableRecordPdfs';
 import markSignerVerifiedInPerson from '@salesforce/apex/DocGenSignatureSenderController.markSignerVerifiedInPerson';
 import createPacketSignerRequest from '@salesforce/apex/DocGenSignatureSenderController.createPacketSignerRequestWithTitle';
 import getContactInfo from '@salesforce/apex/DocGenSignatureSenderController.getContactInfo';
@@ -56,6 +57,12 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
     @track previewLoading = false;
     @track previewStatus = '';
 
+    // #412 — existing PDFs on the record (e.g. engineering drawings) shown to signers
+    // alongside the template. Single-template sends only.
+    @track attachablePdfs = [];
+    @track selectedAttachmentIds = [];
+    @track attachmentPosition = 'Before';
+
     // Previous requests
     @track previousRequests = [];
     @track showPreviousRequests = false;
@@ -80,7 +87,9 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
                 label: t.Name,
                 value: t.Id,
                 // #208 — namespace-aware read: prefixed in subscriber orgs, bare in dev.
-                defaultMessage: t.Default_Email_Message__c || t.portwoodglobal__Default_Email_Message__c || ''
+                defaultMessage: t.Default_Email_Message__c || t.portwoodglobal__Default_Email_Message__c || '',
+                // #412 — Off (default) / Optional / Required; same namespace-aware read.
+                attachedDocuments: t.Attached_Documents__c || t.portwoodglobal__Attached_Documents__c || 'Off'
             }));
         } else if (error) {
             this.docGenTemplateOptions = [];
@@ -96,6 +105,19 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
             if (this.signers.length === 0) {
                 this.handleAddSigner();
             }
+        }
+    }
+
+    connectedCallback() {
+        this.loadAttachablePdfs();
+    }
+
+    async loadAttachablePdfs() {
+        if (!this.recordId) return;
+        try {
+            this.attachablePdfs = (await getAttachableRecordPdfs({ recordId: this.recordId })) || [];
+        } catch (_err) {
+            this.attachablePdfs = []; // the picker simply doesn't show
         }
     }
 
@@ -115,6 +137,7 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
 
     get isGenerateDisabled() {
         if (this.selectedTemplates.length === 0 || this.signers.length === 0) return true;
+        if (this.attachmentsRequired && !this.hasSelectedAttachments) return true; // #412
         return this.signers.some((s) => !s.signerName || !s.signerEmail || !s.roleName);
     }
 
@@ -197,6 +220,131 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
             { label: 'All at once (parallel)', value: 'Parallel' },
             { label: 'One at a time (sequential)', value: 'Sequential' }
         ];
+    }
+
+    // --- #412 attached documents ---
+
+    get attachmentOptions() {
+        return this.attachablePdfs
+            .filter((f) => !f.tooLarge)
+            .map((f) => ({
+                label: [f.title, f.versionNumber ? 'v' + f.versionNumber : null, this._formatBytes(f.size)]
+                    .filter(Boolean)
+                    .join(' · '),
+                value: f.contentDocumentId
+            }));
+    }
+
+    // #412 — the selected template decides: Off hides the picker entirely (current users see
+    // no change); Optional and Required show it; Required also blocks sending with none ticked.
+    get attachedDocumentsMode() {
+        if (!this.isSingleTemplate) return 'Off';
+        const option = this.docGenTemplateOptions.find((o) => o.value === this.selectedTemplates[0].templateId);
+        return (option && option.attachedDocuments) || 'Off';
+    }
+
+    get showAttachmentPicker() {
+        return this.attachedDocumentsMode !== 'Off';
+    }
+
+    get attachmentsRequired() {
+        return this.attachedDocumentsMode === 'Required';
+    }
+
+    get noAttachablePdfs() {
+        return this.attachmentOptions.length === 0;
+    }
+
+    get attachmentPickerHeading() {
+        return this.attachmentsRequired ? 'Attach PDFs from this record' : 'Attach PDFs from this record (optional)';
+    }
+
+    get oversizeAttachmentNote() {
+        const n = this.attachablePdfs.filter((f) => f.tooLarge).length;
+        if (!n) return null;
+        // The per-file limit is set in Signature Settings; the server reports it with each file.
+        const maxBytes = this.attachablePdfs[0].maxBytes;
+        const limit = maxBytes ? 'over ' + Math.round(maxBytes / (1024 * 1024)) + ' MB' : 'over the size limit';
+        return n === 1
+            ? '1 PDF on this record is ' + limit + ' and cannot be attached.'
+            : n + ' PDFs on this record are ' + limit + ' and cannot be attached.';
+    }
+
+    get hasSelectedAttachments() {
+        return this.selectedAttachmentIds.length > 0;
+    }
+
+    get selectAllAttachmentsLabel() {
+        return this.selectedAttachmentIds.length === this.attachmentOptions.length ? 'Clear all' : 'Select all';
+    }
+
+    get attachmentPositionOptions() {
+        return [
+            { label: 'Before the template', value: 'Before' },
+            { label: 'After the template', value: 'After' }
+        ];
+    }
+
+    // The ticked files in picker order: what the preview lists and what the send carries, so
+    // the two always agree.
+    get orderedSelectedAttachments() {
+        if (!this.showAttachmentPicker || !this.hasSelectedAttachments) return [];
+        const selected = new Set(this.selectedAttachmentIds);
+        return this.attachablePdfs.filter((f) => !f.tooLarge && selected.has(f.contentDocumentId));
+    }
+
+    get previewAttachments() {
+        return this.orderedSelectedAttachments.map((f, i) => ({
+            id: f.contentDocumentId,
+            label: i + 1 + '. ' + f.title,
+            meta: [f.versionNumber ? 'v' + f.versionNumber : null, this._formatBytes(f.size)]
+                .filter(Boolean)
+                .join(' · ')
+        }));
+    }
+
+    get hasPreviewAttachments() {
+        return this.previewAttachments.length > 0;
+    }
+
+    get previewAttachmentsHeading() {
+        return 'Attached Documents (' + this.previewAttachments.length + ')';
+    }
+
+    get previewAttachmentsPlacement() {
+        return this.attachmentPosition === 'After'
+            ? 'Shown to signers after the template.'
+            : 'Shown to signers before the template.';
+    }
+
+    // Salesforce's own file viewer pages through every ticked PDF, at any size.
+    handleViewAttachedFiles() {
+        const ids = this.previewAttachments.map((a) => a.id);
+        if (!ids.length) return;
+        this[NavigationMixin.Navigate]({
+            type: 'standard__namedPage',
+            attributes: { pageName: 'filePreview' },
+            state: { recordIds: ids.join(','), selectedRecordId: ids[0] }
+        });
+    }
+
+    handleAttachmentsChange(event) {
+        this.selectedAttachmentIds = [...event.detail.value];
+    }
+
+    handleToggleAllAttachments() {
+        const all = this.attachmentOptions.map((o) => o.value);
+        this.selectedAttachmentIds = this.selectedAttachmentIds.length === all.length ? [] : all;
+    }
+
+    handleAttachmentPositionChange(event) {
+        this.attachmentPosition = event.detail.value;
+    }
+
+    _formatBytes(n) {
+        if (!n) return null;
+        if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + ' KB';
+        return (n / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
     handleSigningOrderChange(event) {
@@ -637,8 +785,7 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
                 // Certificate of Completion. Templates with {@Signature_Role:Order:Type}
                 // tags position chips at those tags; tag-less legacy templates get an
                 // auto-appended "Signatures" block server-side (option b). One path for all.
-                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-                this.signerResults = await createGuidedPdfSignatureRequest({
+                const options = {
                     templateId: single.templateId,
                     relatedRecordId: this.recordId,
                     signersJson,
@@ -649,7 +796,14 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
                     requireVerification: this.requireVerificationValue,
                     prefillSignerEmail: this.prefillValue,
                     expirationDays: parseInt(this.expirationDays, 10) || null
-                });
+                };
+                // #412 — existing record PDFs shown to the signer alongside the template.
+                if (this.orderedSelectedAttachments.length > 0) {
+                    options.attachedDocumentIds = this.orderedSelectedAttachments.map((f) => f.contentDocumentId);
+                    options.attachedDocumentPosition = this.attachmentPosition;
+                }
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
+                this.signerResults = await createGuidedPdfSignatureRequestV2({ options });
             } else {
                 const templateIds = this.selectedTemplates.map((t) => t.templateId);
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework

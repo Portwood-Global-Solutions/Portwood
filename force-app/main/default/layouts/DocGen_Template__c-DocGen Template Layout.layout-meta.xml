@@ -98,6 +98,10 @@
                 <behavior>Edit</behavior>
                 <field>Hide_Signer_Decline__c</field>
             </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Attached_Documents__c</field>
+            </layoutItems>
         </layoutColumns>
         <style>TwoColumnsLeftToRight</style>
     </layoutSections>

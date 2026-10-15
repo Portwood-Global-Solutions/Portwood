@@ -20,6 +20,12 @@
         <apexClass>DocGenSignatureController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <!-- #412: the attachment REST endpoint. No object access to DocGen_Signature_Attachment__c /
+         DocGen_Signer_Attachment__c: every guest read and write is token-keyed SYSTEM_MODE. -->
+    <classAccesses>
+        <apexClass>DocGenSignatureAttachmentRest</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <classAccesses>
         <apexClass>DocGenSignatureFinalizer</apexClass>
         <enabled>true</enabled>

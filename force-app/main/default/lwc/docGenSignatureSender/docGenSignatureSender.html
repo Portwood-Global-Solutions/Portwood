@@ -89,6 +89,55 @@
                 </template>
             </div>
 
+            <!-- #412 Attached documents — existing PDFs on the record, single-template sends only -->
+            <template if:true={showAttachmentPicker}>
+                <div class="slds-var-m-bottom_medium">
+                    <div class="slds-grid slds-grid_vertical-align-center slds-var-m-bottom_xx-small">
+                        <h3 class="slds-col slds-text-heading_small">{attachmentPickerHeading}</h3>
+                        <lightning-button
+                            class="slds-col slds-no-flex"
+                            variant="base"
+                            label={selectAllAttachmentsLabel}
+                            onclick={handleToggleAllAttachments}
+                        ></lightning-button>
+                    </div>
+                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
+                        Signers see each one alongside the template and must open every one before they can sign. The
+                        signed copy lists them by version and fingerprint; the files stay on this record.
+                    </p>
+                    <template if:true={noAttachablePdfs}>
+                        <p class="slds-text-body_small slds-text-color_error slds-var-m-bottom_x-small">
+                            This record has no PDFs that can be attached.
+                        </p>
+                    </template>
+                    <lightning-checkbox-group
+                        name="attachedDocuments"
+                        label="PDFs on this record"
+                        variant="label-hidden"
+                        options={attachmentOptions}
+                        value={selectedAttachmentIds}
+                        onchange={handleAttachmentsChange}
+                    ></lightning-checkbox-group>
+                    <template if:true={oversizeAttachmentNote}>
+                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
+                            {oversizeAttachmentNote}
+                        </p>
+                    </template>
+                    <template if:true={hasSelectedAttachments}>
+                        <div class="slds-var-m-top_small">
+                            <lightning-radio-group
+                                name="attachedDocumentPosition"
+                                label="Show the attached PDFs"
+                                type="button"
+                                options={attachmentPositionOptions}
+                                value={attachmentPosition}
+                                onchange={handleAttachmentPositionChange}
+                            ></lightning-radio-group>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
             <!-- Detected Placements Summary -->
             <template if:true={hasDetectedPlacements}>
                 <div class="slds-box slds-theme_shade slds-var-m-bottom_medium" style="border-radius: 6px">
@@ -611,6 +660,40 @@
                                 </div>
                             </template>
                         </div>
+
+                        <!-- #412 attached documents, in the order signers will see them -->
+                        <template if:true={hasPreviewAttachments}>
+                            <h3 class="slds-text-title_bold slds-var-m-top_medium slds-var-m-bottom_x-small">
+                                {previewAttachmentsHeading}
+                            </h3>
+                            <div
+                                class="slds-box"
+                                style="background: #fff; border: 1px solid #e5e5e5; border-radius: 6px"
+                            >
+                                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
+                                    {previewAttachmentsPlacement} Each must be opened before the signer can sign.
+                                </p>
+                                <template for:each={previewAttachments} for:item="att">
+                                    <div key={att.id} class="slds-var-p-vertical_xx-small">
+                                        <lightning-icon
+                                            icon-name="doctype:pdf"
+                                            size="x-small"
+                                            class="slds-var-m-right_x-small"
+                                        ></lightning-icon>
+                                        <span>{att.label}</span>
+                                        <span class="slds-text-body_small slds-text-color_weak slds-var-m-left_x-small"
+                                            >{att.meta}</span
+                                        >
+                                    </div>
+                                </template>
+                                <lightning-button
+                                    label="View files"
+                                    icon-name="utility:preview"
+                                    onclick={handleViewAttachedFiles}
+                                    class="slds-var-m-top_small"
+                                ></lightning-button>
+                            </div>
+                        </template>
                     </div>
                     <footer class="slds-modal__footer">
                         <lightning-button
@@ -621,6 +704,7 @@
                         <lightning-button
                             label="Send for Signature"
                             variant="brand"
+                            disabled={isGenerateDisabled}
                             onclick={handleSendFromPreview}
                             class="slds-var-m-left_x-small"
                         ></lightning-button>

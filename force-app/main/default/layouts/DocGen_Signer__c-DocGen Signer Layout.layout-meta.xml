@@ -73,6 +73,10 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Readonly</behavior>
+                <field>Attachments_Reviewed_At__c</field>
+            </layoutItems>
+            <layoutItems>
+                <behavior>Readonly</behavior>
                 <field>PIN_Expires_At__c</field>
             </layoutItems>
             <layoutItems>
@@ -114,6 +118,13 @@
         <layoutColumns />
         <style>CustomLinks</style>
     </layoutSections>
+    <relatedLists>
+        <fields>NAME</fields>
+        <fields>Attachment__c</fields>
+        <fields>Fetched_At__c</fields>
+        <fields>Viewed_At__c</fields>
+        <relatedList>DocGen_Signer_Attachment__c.Signer__c</relatedList>
+    </relatedLists>
     <relatedLists>
         <relatedList>RelatedFileList</relatedList>
     </relatedLists>
