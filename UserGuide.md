@@ -3273,12 +3273,13 @@ _New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point
 
 ## 11. Flow automation cookbook
 
-Portwood ships six Flow invocable actions plus three helpers for custom signing UIs. Each one fits a different job-to-be-done. Below: which to pick, plus a worked recipe for each. (One of the six — "Portwood: Send Existing Document for Signature" — is **deprecated**; it still works but new Flows should use "Portwood: Create Signature Request," which covers the same in-browser PDF signing. The sixth, "Portwood: Write Back Signer Form Fields," re-runs signer-input writeback for a completed request — normally automatic, exposed for retry/custom flows.)
+Portwood ships seven Flow invocable actions plus three helpers for custom signing UIs. Each one fits a different job-to-be-done. Below: which to pick, plus a worked recipe for each. (One of the seven — "Portwood: Send Existing Document for Signature" — is **deprecated**; it still works but new Flows should use "Portwood: Create Signature Request," which covers the same in-browser PDF signing. The sixth, "Portwood: Write Back Signer Form Fields," re-runs signer-input writeback for a completed request — normally automatic, exposed for retry/custom flows.)
 
 ### 11.1 Picking the right action
 
 | You want to…                                                                  | Use this action                                     |
 | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| Merge existing uploaded PDFs using an ordered ContentVersion ID collection    | **Portwood: Merge PDFs**                            |
 | Generate a single document for one record (most common)                       | **Portwood — Generate Document**                    |
 | Auto-detect "is this dataset big enough to need async?" and route accordingly | **Portwood — Generate Document (Auto Giant Query)** |
 | Run a template against many records in one batch                              | **Portwood — Generate Bulk Documents**              |
@@ -3571,6 +3572,72 @@ Bulk and Giant Query actions return a `jobId`. Screen Flows have **no Wait eleme
 
 In an **autolaunched or record-triggered** Flow you can instead use a real **Pause/Wait** element between iterations. Or call `DocGenBulkController.getJobStatus(jobId)` directly from Apex — see [§12.3](#123-docgenbulkcontroller--bulk-generation).
 
+### 11.10.1 Merge existing PDFs entirely in Flow
+
+Use **Portwood: Merge PDFs** to combine uploaded PDFs without a screen, browser,
+external service, or Salesforce Document Generation add-on.
+
+1. Supply either a **Text collection** of ContentVersion IDs (`068…`) or a single
+   **Text** value containing IDs separated by commas, semicolons, spaces, or
+   newlines, in the exact order the documents should appear. Supply at least two
+   IDs. A repeated ID repeats that document; an older version ID uses that exact
+   version, even when a newer version exists. ContentDocument IDs (`069…`) are
+   not accepted.
+2. Add **Action → Portwood: Merge PDFs**. Map **Content Version IDs** to the
+   Text collection, or **Content Version IDs (Text)** to the single Text value.
+   Set only one of these inputs. Optionally set **Document Title** and **Related Record ID** to
+   attach the output to a record. Leave the record ID blank for a standalone File.
+3. Optionally enable **Pad Odd Documents** for duplex printing. Each source with
+   an odd page count gets one blank page, including the final source.
+4. Branch on **Success**. On success, use **Content Version ID** or **Content
+   Document ID** for email or downstream automation. Otherwise inspect **Error
+   Message**. Connect the action's fault path for platform/transaction failures.
+
+The action creates a new File and retains every source. File reads and writes
+run in user mode, so Flow cannot use it to access another user's private files.
+The running user needs **Portwood User** or **Portwood Admin** Apex action access,
+read access to the source files, and permission to create/link the result.
+
+**Try the Screen Flow demo:** create the one-page welcome letter and two-page project brief:
+
+```bash
+sf apex run --target-org YOUR_ORG --file scripts/demo/pdf-merge/seed-demo.apex
+```
+
+Activate **Portwood: PDF Merge Demo** in Flow Builder
+(the packaged example starts as Draft), then launch `/flow/DocGen_Merge_PDFs_Demo`.
+Choose Text or Text Collection, click **Merge PDFs**, and open the new File from
+the success screen. The seeded sample packet has three pages with padding off.
+
+**Supported PDFs:** classic cross-reference tables, PDF 1.5+ cross-reference and
+compressed object streams using FlateDecode, incremental revisions, nonzero object
+generations, inherited page resources/rotation/sizes, images, fonts, and ordinary
+AcroForms. Binary page/image streams are copied without re-rendering. AcroForm
+field names are grouped under `Document_1`, `Document_2`, etc. to keep identically
+named fields independent. Existing field values and widget appearances survive.
+Document-level bookmarks, attachments, scripts, and accessibility structure trees
+are not combined into the page packet.
+
+**Limits:** up to 100 source versions per packet. The combined input budget for
+one invocation (including repeated IDs and multiple Flow interviews) is **384 KiB
+synchronous** or **768 KiB in an asynchronous Apex transaction**. Available heap
+can reduce that budget. The action itself runs synchronously and does not enqueue
+a job; splitting work into smaller packets is necessary for large files. Decoded
+object streams are limited to 512 KiB per source. Object count, nesting, CPU, SOQL,
+and heap governor limits also apply; highly complex or unusually compressed PDFs
+can still fault at a platform limit.
+
+The [October 2026 stress results](scripts/qa/pdf-merge-stress/RESULTS-2026-10-16.md)
+verified 100 distinct source versions and the exact byte limits in both contexts.
+They also show why size alone is insufficient: a 93 KiB packet containing 10,000
+blank pages exceeded synchronous CPU but passed in Queueable. Connect the action's
+fault path to handle platform-limit failures as well as its normal error outputs.
+
+Encrypted PDFs, signed/certified PDFs, XFA forms, calculation/scripted forms, and
+unsupported object-stream filters return errors. Export an appropriate standard,
+unsigned PDF copy before merging those files. The original signature or
+certification cannot remain valid after combining documents.
+
 ### 11.11 Error handling
 
 Every action returns:
@@ -3688,6 +3755,7 @@ Usable from Flow Builder and from Apex via `Invocable.Action.createCustomAction(
 
 | Action                                                                               | Class                          | Input                                                                                                                                                                                                                                                                                                                                                | Output                                                                                                            |
 | ------------------------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Merge PDFs                                                                           | `DocGenPdfMergeFlowAction`     | `contentVersionIds` (ordered List<String>) or `contentVersionIdsText` (delimited String), `documentTitle`, `relatedRecordId`, `padOddDocuments`                                                                                                                                                                                                      | `contentDocumentId`, `contentVersionId`, `success`, `errorMessage`                                                |
 | Generate Document                                                                    | `DocGenFlowAction`             | `templateId` or `templateApiName`, `recordId`, `saveToRecord`, `documentTitle`, `outputFormatOverride`, `jsonData`                                                                                                                                                                                                                                   | `contentDocumentId`, `contentVersionId`, `success`, `errorMessage`                                                |
 | Generate Bulk Documents                                                              | `DocGenBulkFlowAction`         | `templateId`, `queryCondition`, `recordIds`, `jobLabel`, `combinedPdfOnly`, `keepIndividualFiles`, `batchSize`                                                                                                                                                                                                                                       | `jobId`, `success`, `errorMessage`                                                                                |
 | Generate Document (Auto Giant Query)                                                 | `DocGenGiantQueryFlowAction`   | `templateId`, `recordId`, `saveToRecord`                                                                                                                                                                                                                                                                                                             | `contentDocumentId` + `contentVersionId` (small) OR `jobId` (giant), `isGiantQuery`, `success`, `errorMessage`    |
