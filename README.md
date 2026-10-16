@@ -222,15 +222,18 @@ Amount:   {Amount:currency}
 
 ### PDF Merger
 
-Five ways to combine PDFs:
+Six ways to combine PDFs:
 
-| Mode                  | What It Does                                                               |
-| --------------------- | -------------------------------------------------------------------------- |
-| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                  |
-| **Document Packets**  | Generate from multiple templates, merge into one PDF                       |
-| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering            |
-| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account) |
-| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download          |
+| Mode                  | What It Does                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                             |
+| **Document Packets**  | Generate from multiple templates, merge into one PDF                                  |
+| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering                       |
+| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account)            |
+| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download                     |
+| **Flow Action**       | Merge uploaded PDFs server-side using ContentVersion IDs as Text or a Text collection |
+
+**Portwood: Merge PDFs** runs entirely in Apex and returns the new File IDs. It supports modern compressed PDFs and ordinary forms, with optional record attachment and duplex padding. Apex file-size limits and PDF restrictions apply; see [the Flow recipe](UserGuide.md#11101-merge-existing-pdfs-entirely-in-flow).
 
 ### Giant Query Engine
 

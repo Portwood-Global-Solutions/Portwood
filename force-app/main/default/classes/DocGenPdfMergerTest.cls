@@ -125,10 +125,7 @@ private class DocGenPdfMergerTest {
             System.assert(e.getMessage().containsIgnoreCase('not a pdf'), e.getMessage());
         }
         try {
-            DocGenPdfMerger.mergePdfs(
-                new List<Blob>{ Blob.valueOf('%PDF-1.4\n<< /Encrypt 9 0 R >>'), fx(FX2_B64) },
-                false
-            );
+            DocGenPdfMerger.mergePdfs(new List<Blob>{ DocGenPdfMergeFixtures.encrypted(), fx(FX2_B64) }, false);
             System.assert(false, 'encrypted PDF should throw');
         } catch (DocGenPdfMerger.DocGenPdfMergeException e) {
             System.assert(e.getMessage().containsIgnoreCase('encrypt'), e.getMessage());

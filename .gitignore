@@ -74,6 +74,8 @@ docs/appexchange/
 !scripts/build-word-chart-template.py
 # Licensed-font fixture builders and repeatable native-PDF QA tooling
 !scripts/fonts/*.py
+# Reproducible native PDF merger capacity probe
+!scripts/qa/pdf-merge-stress/stress.py
 
 # Python Salesforce Functions
 **/__pycache__/
