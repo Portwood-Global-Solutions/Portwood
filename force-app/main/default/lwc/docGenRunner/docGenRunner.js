@@ -714,9 +714,9 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
 
     get emptyStateMessage() {
         return (
-            'No templates available for this record. Ask an admin to verify that an active template exists for ' +
+            'No templates are ready for ' +
             (this.objectApiName || 'this object') +
-            ", that the template's Specific Record Ids and Required Permission Sets match this record and user, and that the template record is shared with you. If Portwood Template sharing is Private, use standard Salesforce sharing or set Default Internal Access to Public Read."
+            ' yet. Ask your Portwood admin to create or activate a template for this object and share it with you. Admins can open Portwood → Get started for a working Account or Opportunity example, then check the template’s visibility settings.'
         );
     }
 

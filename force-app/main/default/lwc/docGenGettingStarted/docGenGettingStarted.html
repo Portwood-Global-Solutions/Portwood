@@ -1,0 +1,230 @@
+<template>
+    <div class="journey">
+        <ol class="steps" aria-label="Your first document">
+            <template for:each={steps} for:item="step"
+                ><li key={step.number} class={step.className} aria-current={step.ariaCurrent}>
+                    <span>{step.number}</span>{step.label}
+                </li></template
+            >
+        </ol>
+        <template lwc:if={error}><div class="error" role="alert">{error}</div></template>
+        <template lwc:if={showAccessHelp}>
+            <div class="access-help">
+                <h3>One setup step with your Salesforce admin</h3>
+                <p>
+                    Ask your admin to assign <strong>Portwood Admin</strong> to the person creating templates, and
+                    <strong>Portwood User</strong> to people generating documents. Then refresh this page.
+                </p>
+                <p>
+                    In Setup: Permission Sets → Portwood Admin → Manage Assignments. You can still browse existing
+                    templates.
+                </p>
+                <lightning-button label="Browse templates" onclick={showTemplates}></lightning-button>
+            </div>
+        </template>
+        <template lwc:if={choosing}>
+            <div class="intro">
+                <h1>Your first document starts here.</h1>
+                <p>Choose a ready-to-use example. See it as a real PDF, then make it yours.</p>
+                <p class="subtle">No query building, design work, or font upload needed to start.</p>
+            </div>
+            <div class="examples">
+                <article class="example">
+                    <div class="paper" aria-hidden="true">
+                        <div class="paper-brand">Portwood</div>
+                        <strong>{salesExample.title}</strong>
+                        <p>Northstar Manufacturing</p>
+                        <div class="paper-total">
+                            {salesExample.previewTotal}<span>{salesExample.previewLabel}</span>
+                        </div>
+                        <div class="paper-line"><span>Launch workshop</span><span>$4,500</span></div>
+                        <div class="paper-line">
+                            <span>Implementation</span><span>{salesExample.previewLineTotal}</span>
+                        </div>
+                        <div class="paper-line"><span>Success support</span><span>$6,000</span></div>
+                    </div>
+                    <div class="example-copy">
+                        <lightning-icon icon-name={salesExample.icon} size="small"></lightning-icon>
+                        <h2>{salesExample.title}</h2>
+                        <p>{salesExample.description}</p>
+                        <button class="primary" data-key={salesExampleKey} onclick={choose} disabled={loading}>
+                            {salesExample.action}
+                        </button>
+                    </div>
+                </article>
+                <article class="example">
+                    <div class="paper" aria-hidden="true">
+                        <div class="paper-brand">Portwood</div>
+                        <strong>Account summary</strong>
+                        <p>Northstar Manufacturing</p>
+                        <div class="paper-metrics">
+                            <span><b>$72,500</b>Open pipeline</span><span><b>2</b>Open cases</span>
+                        </div>
+                        <div class="paper-line"><span>Customer Success Launch</span><span>Proposal</span></div>
+                        <div class="paper-line"><span>Operations Expansion</span><span>Qualifying</span></div>
+                        <div class="paper-line"><span>Support and key contacts</span></div>
+                    </div>
+                    <div class="example-copy">
+                        <lightning-icon icon-name="standard:account" size="small"></lightning-icon>
+                        <h2>Account summary</h2>
+                        <p>
+                            One customer briefing with open opportunities, open cases, pipeline totals, and key
+                            contacts.
+                        </p>
+                        <button class="primary" data-key="account" onclick={choose}>Start with an account</button>
+                    </div>
+                </article>
+            </div>
+            <div class="journey-foot">
+                <span>Already have a template?</span
+                ><lightning-button
+                    variant="base"
+                    label="Open the template library"
+                    onclick={showTemplates}
+                ></lightning-button>
+            </div>
+        </template>
+        <template lwc:if={configuring}>
+            <button class="back" onclick={back} disabled={busy}>Back to examples</button>
+            <div class="intro">
+                <h1>{example.title}</h1>
+                <p>{example.includes}</p>
+            </div>
+            <div class="record-layout">
+                <section class="record-panel" aria-label="Choose your data">
+                    <h2>What data should we use?</h2>
+                    <div class="data-options" role="group" aria-label="Data source">
+                        <button
+                            class={sampleClass}
+                            data-mode="sample"
+                            onclick={setDataMode}
+                            aria-pressed={usingSample}
+                            disabled={busy}
+                        >
+                            <strong>Try sample data</strong><span>See a complete example right away.</span></button
+                        ><button
+                            class={recordClass}
+                            data-mode="record"
+                            onclick={setDataMode}
+                            aria-pressed={usingRecord}
+                            disabled={busy}
+                        >
+                            <strong>Use a Salesforce record</strong><span>Render with data you can access.</span>
+                        </button>
+                    </div>
+                    <template lwc:if={usingSample}
+                        ><p class="data-help">
+                            We use fictional Northstar data for this PDF. We do not create sample CRM records in your
+                            org.
+                        </p></template
+                    >
+                    <template lwc:else
+                        ><lightning-record-picker
+                            label="Choose a record"
+                            object-api-name={example.object}
+                            value={recordId}
+                            onchange={selectRecord}
+                            disabled={busy}
+                        ></lightning-record-picker>
+                        <p class="data-help">{example.dataHint}</p></template
+                    >
+                    <div class="render-action">
+                        <button class="primary" onclick={generate} disabled={renderDisabled}>Render my PDF</button>
+                        <p>Creates a reusable template in My templates and a PDF in your private Files.</p>
+                    </div>
+                </section>
+                <aside class="next-panel">
+                    <h2>What happens next</h2>
+                    <ol>
+                        <li>Your PDF opens in Salesforce.</li>
+                        <li>Try a real record or customize the template.</li>
+                        <li>Add Portwood Runner to a record page so your team can generate it.</li>
+                    </ol>
+                    <p>
+                        Use the built-in fonts first. Add your logo and compatible custom fonts whenever you are ready.
+                    </p>
+                </aside>
+            </div>
+        </template>
+        <template lwc:if={finished}>
+            <div class="result-header">
+                <lightning-icon icon-name="utility:success" variant="success" size="medium"></lightning-icon>
+                <div>
+                    <h1>Your PDF is ready.</h1>
+                    <p>{resultDescription}</p>
+                </div>
+            </div>
+            <section class="result-file" aria-label="Generated document">
+                <lightning-icon icon-name="doctype:pdf" size="large"></lightning-icon>
+                <div>
+                    <h2>{result.title}</h2>
+                    <p>Saved in your private Salesforce Files.</p>
+                </div>
+                <button class="primary" onclick={viewPdf}>View PDF</button
+                ><a class="download" href={downloadUrl}>Download PDF</a>
+            </section>
+            <section class="next-actions">
+                <h2>Make this part of your day</h2>
+                <div class="next-row">
+                    <div>
+                        <h3>Use your own data</h3>
+                        <p>Choose another record and render the same template.</p>
+                    </div>
+                    <lightning-button label="Choose a record" onclick={anotherRecord}></lightning-button>
+                </div>
+                <div class="next-row">
+                    <div>
+                        <h3>Make the template yours</h3>
+                        <p>Edit the wording and layout in the designer.</p>
+                    </div>
+                    <lightning-button label="Customize template" onclick={customize}></lightning-button>
+                </div>
+                <div class="next-row">
+                    <div>
+                        <h3>Add your brand</h3>
+                        <p>
+                            Upload a logo. For custom fonts, check compatibility and approve a native PDF specimen
+                            first.
+                        </p>
+                    </div>
+                    <lightning-button label="Open assets" onclick={showAssets}></lightning-button>
+                </div>
+            </section>
+            <details class="record-page-help">
+                <summary>Put this template on a record page</summary>
+                <ol>
+                    <li>
+                        Open a record of the same type as this template. In Setup, choose <strong>Edit Page</strong>.
+                    </li>
+                    <li>
+                        Drag <strong>Portwood Runner</strong> onto the page, then save and activate the page for your
+                        team.
+                    </li>
+                    <li>Assign <strong>Portwood User</strong> to the people who will generate documents.</li>
+                    <li>
+                        Open a record, choose this template in Portwood Runner, and select <strong>Generate</strong>.
+                    </li>
+                </ol>
+                <p>
+                    Signature requests start on record pages through <strong>Portwood Signature Sender</strong>.
+                    Signature settings in this hub configure the signing experience.
+                </p>
+                <template lwc:if={recordId}><a href={recordUrl}>Open the source record</a></template>
+            </details>
+            <div class="journey-foot">
+                <button class="back" onclick={back}>Try the other example</button
+                ><lightning-button
+                    variant="base"
+                    label="Open the template library"
+                    onclick={showTemplates}
+                ></lightning-button>
+            </div>
+        </template>
+        <template lwc:if={busy}
+            ><div class="working" role="status">
+                <lightning-spinner alternative-text={busyLabel} size="small"></lightning-spinner>
+                <p>{busyLabel}</p>
+            </div></template
+        >
+    </div>
+</template>

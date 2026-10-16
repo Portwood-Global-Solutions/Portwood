@@ -58,6 +58,59 @@ public with sharing class DocGenAiTemplateController {
         }
     }
 
+    @AuraEnabled
+    public static Map<String, Object> getAiCapabilities() {
+        Map<String, Object> result = new Map<String, Object>{
+            'available' => false,
+            'fileReferences' => false,
+            'queryPlanning' => false
+        };
+        try {
+            DocGenAiProvider provider = DocGenAiProviderFactory.get();
+            result.put('available', provider.isAvailable());
+            result.put('providerName', provider.getName());
+            if (provider instanceof Callable) {
+                Map<String, Object> capabilities = (Map<String, Object>) ((Callable) provider)
+                    .call('capabilities', new Map<String, Object>());
+                result.put('fileReferences', capabilities.get('fileReferences') == true);
+                result.put('queryPlanning', capabilities.get('queryPlanning') == true);
+            }
+        } catch (Exception e) {
+            /* An older optional extension remains usable for text-only authoring. */
+        }
+        return result;
+    }
+
+    @AuraEnabled
+    public static GenerationResult generateReferencePreview(String prompt, Id documentId) {
+        try {
+            if (String.isBlank(prompt) || prompt.length() > 120000)
+                throw new DocGenException(
+                    'Describe the document, and keep the complete authoring prompt under 120,000 characters.'
+                );
+            ContentVersion file = DocGenAiReferenceController.readableFile(documentId);
+            if (file.FileExtension != 'pdf')
+                throw new DocGenException('Prepare the DOCX example before generating.');
+            DocGenAiProvider provider = DocGenAiProviderFactory.get();
+            if (!(provider instanceof Callable))
+                throw new DocGenException(
+                    'Update the Portwood Agentforce extension to use PDF examples. You can still generate from a description.'
+                );
+            String raw = (String) ((Callable) provider)
+                .call(
+                    'generateWithReference',
+                    new Map<String, Object>{ 'prompt' => prompt, 'documentId' => documentId }
+                );
+            assertLooksLikeDocument(raw, null);
+            GenerationResult result = validateOnly(raw);
+            result.providerName = provider.getName();
+            result.wasEdit = false;
+            return result;
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Agentforce could not use this example.');
+        }
+    }
+
     /**
      * @param templateId   HTML-type DocGen_Template__c to write the body onto.
      * @param prompt       Fully assembled authoring prompt from buildAiPrompt().
@@ -189,6 +242,10 @@ public with sharing class DocGenAiTemplateController {
         if (String.isBlank(prompt)) {
             throw new AuraHandledException('Describe the document you want before generating.');
         }
+        if (prompt.length() > 120000)
+            throw DocGenService.ahe(
+                'The complete authoring prompt exceeds 120,000 characters. Use fewer fields or a shorter example.'
+            );
         try {
             DocGenAiProvider provider = DocGenAiProviderFactory.get();
             String raw = provider.generateHtml(prompt);
@@ -249,6 +306,17 @@ public with sharing class DocGenAiTemplateController {
             probe.containsIgnoreCase('<table') ||
             probe.containsIgnoreCase('<div');
         if (looksLikeMarkup) {
+            assertFontPlacement(probe);
+            // A positive .records section changes list context; nesting the same
+            // relationship's row loop inside it produces headers with no data.
+            Matcher arrays = Pattern.compile('(?s)\\{#([A-Za-z_][A-Za-z0-9_]*)\\.records\\}(.*?)\\{/\\1\\.records\\}')
+                .matcher(probe);
+            while (arrays.find()) {
+                if (arrays.group(2).contains('{#' + arrays.group(1) + '}'))
+                    throw new AiGenerationException(
+                        'The draft nested the same related-list loop twice, which would hide its data rows. Generate again: keep one table and put the loop only inside its data row.'
+                    );
+            }
             return;
         }
         String quoted = probe.length() > 200 ? probe.substring(0, 200) + '…' : probe;
@@ -260,6 +328,30 @@ public with sharing class DocGenAiTemplateController {
                 quoted +
                 '". This happens intermittently even with a good instruction — try again, and if it repeats, make the instruction more specific.'
         );
+    }
+
+    /** Catch unusable AI font placement before staging, without resolving asset revisions. */
+    @TestVisible
+    private static void assertFontPlacement(String html) {
+        if (!html.containsIgnoreCase('%font:'))
+            return;
+        String outsideStyles = DocGenService.decodeBraceEntities(html).replaceAll('(?is)<!--.*?-->', '');
+        Matcher elements = Pattern.compile('(?is)<[^>]+>').matcher(outsideStyles);
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (elements.find()) {
+            String element = elements.group(0);
+            Matcher styles = Pattern.compile('(?is)\\sstyle\\s*=\\s*(["\'])(.*?)\\1').matcher(element);
+            if (styles.find())
+                element = element.substring(0, styles.start()) + element.substring(styles.end());
+            parts.add(outsideStyles.substring(cursor, elements.start()) + element);
+            cursor = elements.end();
+        }
+        parts.add(outsideStyles.substring(cursor));
+        if (String.join(parts, '').containsIgnoreCase('{%font:'))
+            throw new AiGenerationException(
+                'Agentforce placed a font tag outside an inline style. Generate again: put each approved font tag in an element\'s quoted style attribute, never in a stylesheet or CSS class rule. Nothing was saved.'
+            );
     }
 
     /** Raw model output onto the staging field. Never fatal — this is an audit trail. */

@@ -1,237 +1,254 @@
 <template>
-    <div class="slds-var-p-around_small">
-        <!-- Toolbar -->
-        <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_x-small">
-            <div class="slds-text-body_small slds-text-color_weak slds-align-middle">
-                Upload a logo or footer once, then reference it in any template with its merge tag.
-            </div>
-            <lightning-button
-                label="New Asset"
-                variant="brand"
-                icon-name="utility:add"
-                onclick={handleOpenCreate}
-            ></lightning-button>
-        </div>
-        <template if:true={hasAssets}>
-            <div class="slds-grid slds-gutters_x-small slds-var-m-bottom_small">
-                <div class="slds-col slds-grow">
-                    <lightning-input
-                        type="search"
-                        label="Search"
-                        variant="label-hidden"
-                        placeholder="Search by name, tag, or category…"
-                        value={searchTerm}
-                        onchange={handleSearchChange}
-                    ></lightning-input>
+    <lightning-tabset
+        ><lightning-tab label="Images" value="images">
+            <div class="slds-var-p-around_small">
+                <!-- Toolbar -->
+                <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_x-small">
+                    <div class="slds-text-body_small slds-text-color_weak slds-align-middle">
+                        Upload a logo or footer once, then reference it in any template with its merge tag.
+                    </div>
+                    <template lwc:if={canCreateAssets}
+                        ><lightning-button
+                            label="New image"
+                            variant="brand"
+                            icon-name="utility:add"
+                            onclick={handleOpenCreate}
+                        ></lightning-button
+                    ></template>
                 </div>
-                <template if:true={showCategoryFilter}>
-                    <div class="slds-col slds-grow-none category-filter">
-                        <lightning-combobox
-                            label="Category"
-                            variant="label-hidden"
-                            value={categoryFilter}
-                            options={categoryOptions}
-                            onchange={handleCategoryFilterChange}
-                        ></lightning-combobox>
+                <template if:true={hasAssets}>
+                    <div class="slds-grid slds-gutters_x-small slds-var-m-bottom_small">
+                        <div class="slds-col slds-grow">
+                            <lightning-input
+                                type="search"
+                                label="Search"
+                                variant="label-hidden"
+                                placeholder="Search by name, tag, or category…"
+                                value={searchTerm}
+                                onchange={handleSearchChange}
+                            ></lightning-input>
+                        </div>
+                        <template if:true={showCategoryFilter}>
+                            <div class="slds-col slds-grow-none category-filter">
+                                <lightning-combobox
+                                    label="Category"
+                                    variant="label-hidden"
+                                    value={categoryFilter}
+                                    options={categoryOptions}
+                                    onchange={handleCategoryFilterChange}
+                                ></lightning-combobox>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Empty state -->
+                <template if:false={hasAssets}>
+                    <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_large">
+                        <lightning-icon
+                            icon-name="utility:image"
+                            size="small"
+                            class="slds-var-m-bottom_x-small"
+                        ></lightning-icon>
+                        <p class="slds-text-body_regular">No shared assets yet.</p>
+                        <p class="slds-text-body_small slds-text-color_weak">{emptyHint}</p>
+                    </div>
+                </template>
+
+                <!-- Asset list. The wrapper caps height (long lists scroll inside the
+             card) and scrolls horizontally when the tab is narrow. -->
+                <template if:true={hasVisibleAssets}>
+                    <div class="asset-table-container">
+                        <c-doc-gen-image-datatable
+                            key-field="id"
+                            data={visibleAssets}
+                            columns={columns}
+                            onrowaction={handleRowAction}
+                            hide-checkbox-column
+                        >
+                        </c-doc-gen-image-datatable>
+                    </div>
+                </template>
+                <template if:true={showNoMatches}>
+                    <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_medium">
+                        <p class="slds-text-body_regular">No assets match your search.</p>
                     </div>
                 </template>
             </div>
-        </template>
 
-        <!-- Empty state -->
-        <template if:false={hasAssets}>
-            <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_large">
-                <lightning-icon
-                    icon-name="utility:image"
-                    size="small"
-                    class="slds-var-m-bottom_x-small"
-                ></lightning-icon>
-                <p class="slds-text-body_regular">No shared assets yet.</p>
-                <p class="slds-text-body_small slds-text-color_weak">
-                    Create one to share a logo or footer across all your templates.
-                </p>
-            </div>
-        </template>
+            <!-- Create Asset Modal -->
+            <template if:true={isCreateModalOpen}>
+                <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                    <div class="slds-modal__container">
+                        <header class="slds-modal__header">
+                            <lightning-button-icon
+                                icon-name="utility:close"
+                                alternative-text="Close"
+                                class="slds-button slds-button_icon slds-modal__close"
+                                onclick={handleCloseCreate}
+                            ></lightning-button-icon>
+                            <h2 class="slds-text-heading_medium">New Shared Asset</h2>
+                        </header>
+                        <div class="slds-modal__content slds-var-p-around_medium">
+                            <lightning-input
+                                label="Asset Name"
+                                value={createName}
+                                onchange={handleCreateNameChange}
+                                placeholder="e.g. Primary Footer"
+                                required
+                            ></lightning-input>
+                            <lightning-input
+                                class="slds-var-m-top_x-small"
+                                label="Category"
+                                value={createCategory}
+                                onchange={handleCreateCategoryChange}
+                                placeholder="e.g. Logos"
+                                field-level-help="Optional grouping label used to filter the asset list. Type anything — categories are free text."
+                            ></lightning-input>
 
-        <!-- Asset list. The wrapper caps height (long lists scroll inside the
-             card) and scrolls horizontally when the tab is narrow. -->
-        <template if:true={hasVisibleAssets}>
-            <div class="asset-table-container">
-                <c-doc-gen-image-datatable
-                    key-field="id"
-                    data={visibleAssets}
-                    columns={columns}
-                    onrowaction={handleRowAction}
-                    hide-checkbox-column
-                >
-                </c-doc-gen-image-datatable>
-            </div>
-        </template>
-        <template if:true={showNoMatches}>
-            <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_medium">
-                <p class="slds-text-body_regular">No assets match your search.</p>
-            </div>
-        </template>
-    </div>
+                            <template if:false={createdAssetId}>
+                                <lightning-input
+                                    class="slds-var-m-top_x-small"
+                                    label="Tag Key"
+                                    value={createKey}
+                                    onchange={handleCreateKeyChange}
+                                    field-level-help="The short, permanent key used in your template tag. Letters, numbers and hyphens only. It can't be changed after the asset is created, so renaming the asset later won't break templates."
+                                    placeholder="e.g. footer"
+                                    required
+                                ></lightning-input>
+                                <p class={keyHintClass}>{keyMessage}</p>
+                                <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
+                                    Template tag: <code>{createTagPreview}</code>
+                                </p>
+                                <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_small">
+                                    Step 1: name the asset, confirm its tag key, and create it. You can then upload an
+                                    image.
+                                </p>
+                            </template>
 
-    <!-- Create Asset Modal -->
-    <template if:true={isCreateModalOpen}>
-        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-            <div class="slds-modal__container">
-                <header class="slds-modal__header">
-                    <lightning-button-icon
-                        icon-name="utility:close"
-                        alternative-text="Close"
-                        class="slds-button slds-button_icon slds-modal__close"
-                        onclick={handleCloseCreate}
-                    ></lightning-button-icon>
-                    <h2 class="slds-text-heading_medium">New Shared Asset</h2>
-                </header>
-                <div class="slds-modal__content slds-var-p-around_medium">
-                    <lightning-input
-                        label="Asset Name"
-                        value={createName}
-                        onchange={handleCreateNameChange}
-                        placeholder="e.g. Primary Footer"
-                        required
-                    ></lightning-input>
-                    <lightning-input
-                        class="slds-var-m-top_x-small"
-                        label="Category"
-                        value={createCategory}
-                        onchange={handleCreateCategoryChange}
-                        placeholder="e.g. Logos"
-                        field-level-help="Optional grouping label used to filter the asset list. Type anything — categories are free text."
-                    ></lightning-input>
+                            <template if:true={createdAssetId}>
+                                <div class="slds-var-m-top_medium">
+                                    <lightning-file-upload
+                                        label="Upload Image"
+                                        name="assetCreateUploader"
+                                        accept={acceptedFormats}
+                                        record-id={createdAssetId}
+                                        onuploadfinished={handleCreateUploadFinished}
+                                    >
+                                    </lightning-file-upload>
+                                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
+                                        Step 2: upload the image (PNG, JPG, GIF, SVG, or WebP).
+                                    </p>
+                                </div>
+                            </template>
+                        </div>
+                        <footer class="slds-modal__footer">
+                            <lightning-button
+                                label="Cancel"
+                                variant="neutral"
+                                onclick={handleCloseCreate}
+                            ></lightning-button>
+                            <template if:false={createdAssetId}>
+                                <lightning-button
+                                    label="Create"
+                                    variant="brand"
+                                    onclick={handleCreateAsset}
+                                    disabled={isCreateDisabled}
+                                    class="slds-var-m-left_x-small"
+                                ></lightning-button>
+                            </template>
+                        </footer>
+                    </div>
+                </section>
+                <div class="slds-backdrop slds-backdrop_open"></div>
+            </template>
 
-                    <template if:false={createdAssetId}>
-                        <lightning-input
-                            class="slds-var-m-top_x-small"
-                            label="Tag Key"
-                            value={createKey}
-                            onchange={handleCreateKeyChange}
-                            field-level-help="The short, permanent key used in your template tag. Letters, numbers and hyphens only. It can't be changed after the asset is created, so renaming the asset later won't break templates."
-                            placeholder="e.g. footer"
-                            required
-                        ></lightning-input>
-                        <p class={keyHintClass}>{keyMessage}</p>
-                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
-                            Template tag: <code>{createTagPreview}</code>
-                        </p>
-                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_small">
-                            Step 1: name the asset, confirm its tag key, and create it. You can then upload an image.
-                        </p>
-                    </template>
-
-                    <template if:true={createdAssetId}>
-                        <div class="slds-var-m-top_medium">
+            <!-- Upload New Version Modal -->
+            <template if:true={isVersionModalOpen}>
+                <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                    <div class="slds-modal__container">
+                        <header class="slds-modal__header">
+                            <lightning-button-icon
+                                icon-name="utility:close"
+                                alternative-text="Close"
+                                class="slds-button slds-button_icon slds-modal__close"
+                                onclick={handleCloseVersion}
+                            ></lightning-button-icon>
+                            <h2 class="slds-text-heading_medium">Upload New Version</h2>
+                            <p class="slds-text-body_small slds-text-color_weak">{versionAssetName}</p>
+                        </header>
+                        <div class="slds-modal__content slds-var-p-around_medium">
                             <lightning-file-upload
                                 label="Upload Image"
-                                name="assetCreateUploader"
+                                name="assetVersionUploader"
                                 accept={acceptedFormats}
-                                record-id={createdAssetId}
-                                onuploadfinished={handleCreateUploadFinished}
+                                record-id={versionAssetId}
+                                onuploadfinished={handleVersionUploadFinished}
                             >
                             </lightning-file-upload>
                             <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
-                                Step 2: upload the image (PNG, JPG, GIF, SVG, or WebP).
+                                Every template using this asset's tag will pick up the new image automatically.
                             </p>
                         </div>
-                    </template>
-                </div>
-                <footer class="slds-modal__footer">
-                    <lightning-button label="Cancel" variant="neutral" onclick={handleCloseCreate}></lightning-button>
-                    <template if:false={createdAssetId}>
-                        <lightning-button
-                            label="Create"
-                            variant="brand"
-                            onclick={handleCreateAsset}
-                            disabled={isCreateDisabled}
-                            class="slds-var-m-left_x-small"
-                        ></lightning-button>
-                    </template>
-                </footer>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open"></div>
-    </template>
+                        <footer class="slds-modal__footer">
+                            <lightning-button
+                                label="Close"
+                                variant="neutral"
+                                onclick={handleCloseVersion}
+                            ></lightning-button>
+                        </footer>
+                    </div>
+                </section>
+                <div class="slds-backdrop slds-backdrop_open"></div>
+            </template>
 
-    <!-- Upload New Version Modal -->
-    <template if:true={isVersionModalOpen}>
-        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-            <div class="slds-modal__container">
-                <header class="slds-modal__header">
-                    <lightning-button-icon
-                        icon-name="utility:close"
-                        alternative-text="Close"
-                        class="slds-button slds-button_icon slds-modal__close"
-                        onclick={handleCloseVersion}
-                    ></lightning-button-icon>
-                    <h2 class="slds-text-heading_medium">Upload New Version</h2>
-                    <p class="slds-text-body_small slds-text-color_weak">{versionAssetName}</p>
-                </header>
-                <div class="slds-modal__content slds-var-p-around_medium">
-                    <lightning-file-upload
-                        label="Upload Image"
-                        name="assetVersionUploader"
-                        accept={acceptedFormats}
-                        record-id={versionAssetId}
-                        onuploadfinished={handleVersionUploadFinished}
-                    >
-                    </lightning-file-upload>
-                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">
-                        Every template using this asset's tag will pick up the new image automatically.
-                    </p>
-                </div>
-                <footer class="slds-modal__footer">
-                    <lightning-button label="Close" variant="neutral" onclick={handleCloseVersion}></lightning-button>
-                </footer>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open"></div>
-    </template>
-
-    <!-- Rename Modal -->
-    <template if:true={isRenameModalOpen}>
-        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-            <div class="slds-modal__container">
-                <header class="slds-modal__header">
-                    <lightning-button-icon
-                        icon-name="utility:close"
-                        alternative-text="Close"
-                        class="slds-button slds-button_icon slds-modal__close"
-                        onclick={handleCloseRename}
-                    ></lightning-button-icon>
-                    <h2 class="slds-text-heading_medium">Edit Asset</h2>
-                </header>
-                <div class="slds-modal__content slds-var-p-around_medium">
-                    <lightning-input
-                        label="Asset Name"
-                        value={renameValue}
-                        onchange={handleRenameChange}
-                        required
-                    ></lightning-input>
-                    <lightning-input
-                        class="slds-var-m-top_x-small"
-                        label="Category"
-                        value={renameCategory}
-                        onchange={handleRenameCategoryChange}
-                        placeholder="e.g. Logos"
-                        field-level-help="Optional grouping label used to filter the asset list. Leave blank to remove the category."
-                    ></lightning-input>
-                </div>
-                <footer class="slds-modal__footer">
-                    <lightning-button label="Cancel" variant="neutral" onclick={handleCloseRename}></lightning-button>
-                    <lightning-button
-                        label="Save"
-                        variant="brand"
-                        onclick={handleRenameSave}
-                        disabled={isRenameDisabled}
-                        class="slds-var-m-left_x-small"
-                    ></lightning-button>
-                </footer>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open"></div>
-    </template>
+            <!-- Rename Modal -->
+            <template if:true={isRenameModalOpen}>
+                <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+                    <div class="slds-modal__container">
+                        <header class="slds-modal__header">
+                            <lightning-button-icon
+                                icon-name="utility:close"
+                                alternative-text="Close"
+                                class="slds-button slds-button_icon slds-modal__close"
+                                onclick={handleCloseRename}
+                            ></lightning-button-icon>
+                            <h2 class="slds-text-heading_medium">Edit Asset</h2>
+                        </header>
+                        <div class="slds-modal__content slds-var-p-around_medium">
+                            <lightning-input
+                                label="Asset Name"
+                                value={renameValue}
+                                onchange={handleRenameChange}
+                                required
+                            ></lightning-input>
+                            <lightning-input
+                                class="slds-var-m-top_x-small"
+                                label="Category"
+                                value={renameCategory}
+                                onchange={handleRenameCategoryChange}
+                                placeholder="e.g. Logos"
+                                field-level-help="Optional grouping label used to filter the asset list. Leave blank to remove the category."
+                            ></lightning-input>
+                        </div>
+                        <footer class="slds-modal__footer">
+                            <lightning-button
+                                label="Cancel"
+                                variant="neutral"
+                                onclick={handleCloseRename}
+                            ></lightning-button>
+                            <lightning-button
+                                label="Save"
+                                variant="brand"
+                                onclick={handleRenameSave}
+                                disabled={isRenameDisabled}
+                                class="slds-var-m-left_x-small"
+                            ></lightning-button>
+                        </footer>
+                    </div>
+                </section>
+                <div class="slds-backdrop slds-backdrop_open"></div>
+            </template> </lightning-tab
+        ><lightning-tab label="Fonts" value="fonts"><c-doc-gen-font-assets></c-doc-gen-font-assets></lightning-tab
+    ></lightning-tabset>
 </template>

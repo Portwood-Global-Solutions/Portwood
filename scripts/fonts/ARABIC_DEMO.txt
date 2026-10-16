@@ -1,0 +1,48 @@
+Arabic + English - Services Proposal
+
+Scratch template: a0CRu0000536ePtMAI
+Sample Account: Al Noor Trading - Demo (001Ru000028hVm5IAE)
+
+Demo flow:
+Open Portwood > My Templates > Your Templates.
+Open Arabic + English - Services Proposal in Edit Template Configuration and click Generate Sample.
+The sample Account is configured on the template. Its Name is a normal live merge value.
+The generated PDF is also saved in the Account's Files.
+
+What the demo shows:
+Noto Sans Arabic Black, uploaded and approved through Assets > Fonts, loads from the exact
+Salesforce File version. Its revision-pinned font tag is used by the HTML template. English
+uses the approved Barlow faces. All four faces are embedded as subset CID TrueType / Identity-H.
+Arabic headings, introduction, service labels and closing use joined Arabic glyphs, aligned right.
+
+Important scope:
+Salesforce's native renderer embedded the Arabic font but did not join letters or apply RTL
+ordering to ordinary Arabic source text. This demo's fixed Arabic copy is shaped at authoring
+time. It does not add automatic shaping for dynamically merged Arabic, arbitrary RTL paragraphs,
+or Arabic search/copy normalization in every PDF viewer. The English Account Name stays live.
+Do not present this as complete dynamic Arabic/RTL support.
+
+Source: docs/examples/ArabicServicesProposal.html
+The original logical Arabic copy is retained in each span's data-arabic-source attribute.
+Edit COPY in scripts/fonts/build-arabic-demo.py, regenerate, and republish if changing Arabic.
+Authoring-only dependencies (not runtime/package dependencies):
+  arabic-reshaper==3.0.1
+  python-bidi==0.6.11
+  https://github.com/mpcabd/python-arabic-reshaper
+  https://github.com/MeirKriheli/python-bidi
+Each prepared line deliberately fits on one line; changing font/size or adding long text requires
+rechecking the native PDF because ordinary wrapping is not a bidi-aware layout operation.
+
+Verified: one Letter page, 35,386 bytes, actual Arabic spans use NotoSansArabic-Black, no fallback
+font, live Account name, correct joined words and visual ordering, and no /resource/ font URLs.
+Every page was rendered and visually inspected. The full native DocGenService generation path
+was used, not a local PDF substitute. No Apex or LWC runtime changes were made for this sample.
+
+Lightning generation regression fixed:
+An absolute org-domain font File URL worked from API Apex but silently fell back to Times
+when Generate Sample was invoked from Lightning. DocGenFontService now emits a relative
+/sfc/servlet.shepherd/version/download/<version>?font.ttf URL so native PDF resolution uses
+the caller's Salesforce context. No new public links or font bytes in Apex heap are needed.
+Verified using the actual Generate Sample button: one page, 35,386 bytes, all ten Arabic
+runs in NotoSansArabic-Black and all four custom faces embedded; live customer Name retained.
+Scoped regression validation: 81/81 DocGenFontTest + DocGenHtmlTemplateTest tests passed.

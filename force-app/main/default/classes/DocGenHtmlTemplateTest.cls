@@ -1346,4 +1346,25 @@ private class DocGenHtmlTemplateTest {
         System.assertEquals(src, DocGenService.stripStyleAndScriptBlocks(src), 'unchanged');
         System.assertEquals(null, DocGenService.stripStyleAndScriptBlocks(null), 'null in, null out');
     }
+
+    @IsTest
+    static void scalarConditionInsideRepeatingHtmlRowKeepsEveryCellAndBalancedMarkup() {
+        String html = '<table><thead><tr><th>Product</th><th>Qty</th></tr></thead><tbody><tr><td>{#Lines}{Name}{#Description}<br/>{Description}{/Description}</td><td>{Quantity}{/Lines}</td></tr></tbody></table>';
+        Map<String, Object> data = new Map<String, Object>{
+            'Lines' => new Map<String, Object>{
+                'records' => new List<Object>{
+                    new Map<String, Object>{ 'Name' => 'Workshop', 'Description' => 'Plan together', 'Quantity' => 1 },
+                    new Map<String, Object>{ 'Name' => 'Support', 'Description' => '', 'Quantity' => 3 }
+                }
+            }
+        };
+        String rendered = DocGenService.processXmlForTest(html, data, 'HTML');
+        System.assertEquals(3, rendered.countMatches('<tr>'), rendered);
+        System.assertEquals(3, rendered.countMatches('</tr>'), rendered);
+        System.assertEquals(1, rendered.countMatches('<tbody>'), rendered);
+        System.assertEquals(1, rendered.countMatches('</tbody>'), rendered);
+        System.assert(rendered.contains('Workshop<br/>Plan together</td><td>1</td>'), rendered);
+        System.assert(rendered.contains('Support</td><td>3</td>'), rendered);
+        System.assert(!rendered.contains('{#'), rendered);
+    }
 }

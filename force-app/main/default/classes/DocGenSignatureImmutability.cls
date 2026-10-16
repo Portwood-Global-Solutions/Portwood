@@ -50,6 +50,22 @@ public without sharing class DocGenSignatureImmutability {
             if (oldReq == null) {
                 continue;
             }
+            if (
+                String.isNotBlank(oldReq.Original_Document_CV_Id__c) &&
+                oldReq.Status__c != 'Draft' &&
+                (req.Original_Document_CV_Id__c != oldReq.Original_Document_CV_Id__c ||
+                req.Original_Content_Document_Id__c != oldReq.Original_Content_Document_Id__c ||
+                req.Preparation_Config_CV_Id__c != oldReq.Preparation_Config_CV_Id__c ||
+                req.Related_Record_Id__c != oldReq.Related_Record_Id__c ||
+                req.Snapshot_Hash__c != oldReq.Snapshot_Hash__c ||
+                req.PDF_Internal_Preview__c != oldReq.PDF_Internal_Preview__c ||
+                req.Signing_Order__c != oldReq.Signing_Order__c ||
+                req.Status__c == 'Draft')
+            ) {
+                req.addError(
+                    'A sent PDF request cannot change its original document or prepared fields. Create a new request.'
+                );
+            }
             Boolean finalized = isFinalized(req) || isFinalized(oldReq);
             if (req.Snapshot_Hash__c != oldReq.Snapshot_Hash__c && finalized) {
                 req.addError(SNAPSHOT_LOCK_MESSAGE);
@@ -166,12 +182,18 @@ public without sharing class DocGenSignatureImmutability {
             docIdStrings.add(String.valueOf(docId));
         }
         for (DocGen_Signature_Request__c req : [
-            SELECT Protected_Signed_Content_Document_Id__c
+            SELECT Protected_Signed_Content_Document_Id__c, Original_Content_Document_Id__c
             FROM DocGen_Signature_Request__c
-            WHERE Protected_Signed_Content_Document_Id__c IN :docIdStrings
+            WHERE
+                Protected_Signed_Content_Document_Id__c IN :docIdStrings
+                OR (Original_Content_Document_Id__c IN :docIdStrings
+                AND Status__c != 'Draft')
             WITH SYSTEM_MODE
         ]) {
-            protectedDocIds.add((Id) req.Protected_Signed_Content_Document_Id__c);
+            if (String.isNotBlank(req.Protected_Signed_Content_Document_Id__c))
+                protectedDocIds.add((Id) req.Protected_Signed_Content_Document_Id__c);
+            if (String.isNotBlank(req.Original_Content_Document_Id__c))
+                protectedDocIds.add((Id) req.Original_Content_Document_Id__c);
         }
         return protectedDocIds;
     }

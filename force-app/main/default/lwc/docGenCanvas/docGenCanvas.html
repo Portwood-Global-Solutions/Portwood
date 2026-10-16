@@ -65,6 +65,80 @@
                         </button>
                     </div>
                 </template>
+                <template lwc:if={showBoxTypography}>
+                    <lightning-combobox
+                        label="Document font"
+                        variant="label-stacked"
+                        value={selFont}
+                        options={fontOptions}
+                        onchange={handleFontChange}
+                        field-level-help="Built-in fonts are ready to use. Custom faces must be approved in Assets. Language coverage, complex script shaping, color, and emoji support vary; review a native PDF. Each weight or italic style needs its own face."
+                    ></lightning-combobox>
+
+                    <div class="dg-prop-row">
+                        <label class="dg-prop-label">Size (pt)</label>
+                        <input
+                            type="number"
+                            class="dg-prop-num"
+                            min="5"
+                            max="96"
+                            step="0.5"
+                            value={selSize}
+                            data-key="size"
+                            onchange={handleNumChange}
+                        />
+                    </div>
+
+                    <div class="dg-prop-row">
+                        <button
+                            class={boldClass}
+                            data-key="bold"
+                            onclick={handleStyleToggle}
+                            disabled={boxBoldDisabled}
+                            title={boldTitle}
+                        >
+                            <b>B</b>
+                        </button>
+                        <button
+                            class={italicClass}
+                            data-key="italic"
+                            onclick={handleStyleToggle}
+                            disabled={boxItalicDisabled}
+                            title="Choose an italic face for custom fonts"
+                        >
+                            <i>I</i>
+                        </button>
+                        <button
+                            class={underlineClass}
+                            data-key="underline"
+                            onclick={handleStyleToggle}
+                            title="Underline"
+                        >
+                            <u>U</u>
+                        </button>
+                        <span class="dg-prop-gap"></span>
+                        <button class={alignLeftClass} data-align="left" onclick={handleAlign} title="Align left">
+                            &#8676;
+                        </button>
+                        <button class={alignCenterClass} data-align="center" onclick={handleAlign} title="Centre">
+                            &#8596;
+                        </button>
+                        <button class={alignRightClass} data-align="right" onclick={handleAlign} title="Align right">
+                            &#8677;
+                        </button>
+                    </div>
+
+                    <div class="dg-prop-row">
+                        <label class="dg-prop-label">Text</label>
+                        <input
+                            type="color"
+                            class="dg-prop-color"
+                            value={selColor}
+                            data-key="color"
+                            onchange={handleColorChange}
+                        />
+                    </div>
+                </template>
                 <template lwc:if={showSourceEditor}>
                     <!-- No value= binding: a textarea's content is its text child, so the
                          attribute renders an empty box. Populated in renderedCallback. -->
@@ -98,8 +172,8 @@
                         title="Drag to make the editor taller"
                     ></div>
                     <p class="dg-panel-note">
-                        Formatting applies to whatever you select, and the box on the page shows exactly what will
-                        print.
+                        Use Document font below for the whole box. Custom bold and italic styles are separate verified
+                        faces.
                     </p>
                 </template>
 
@@ -146,10 +220,9 @@
                         </template>
                     </div>
                     <p class="dg-panel-note">
-                        Inserted with the font that draws them, so they print whatever this box is set to. Typing
-                        &#10003; straight into the text does <b>not</b> work — the standard PDF fonts have no glyph for
-                        it and it comes out blank. Pick <b>Arial Unicode</b> as the box font for symbols, CJK, Greek or
-                        Cyrillic throughout.
+                        Custom fonts must contain each symbol. Most emoji cannot print as custom-font text; use images.
+                        Language shaping and color may differ from this preview. Review the native PDF. Choose Arial
+                        Unicode for broad built-in character coverage.
                     </p>
 
                     <h4 class="dg-panel-sub">Link</h4>
@@ -193,75 +266,6 @@
                                 {f.label}
                             </button>
                         </template>
-                    </div>
-                </template>
-
-                <template lwc:if={showBoxTypography}>
-                    <lightning-combobox
-                        label="Font"
-                        variant="label-stacked"
-                        value={selFont}
-                        options={fontOptions}
-                        onchange={handleFontChange}
-                        field-level-help="Only these three resolve in the PDF engine. Named families like Arial or Georgia silently render as serif, so they are not offered."
-                    ></lightning-combobox>
-
-                    <div class="dg-prop-row">
-                        <label class="dg-prop-label">Size (pt)</label>
-                        <input
-                            type="number"
-                            class="dg-prop-num"
-                            min="5"
-                            max="96"
-                            step="0.5"
-                            value={selSize}
-                            data-key="size"
-                            onchange={handleNumChange}
-                        />
-                    </div>
-
-                    <div class="dg-prop-row">
-                        <button
-                            class={boldClass}
-                            data-key="bold"
-                            onclick={handleStyleToggle}
-                            disabled={boxBoldDisabled}
-                            title={boldTitle}
-                        >
-                            <b>B</b>
-                        </button>
-                        <button class={italicClass} data-key="italic" onclick={handleStyleToggle} title="Italic">
-                            <i>I</i>
-                        </button>
-                        <button
-                            class={underlineClass}
-                            data-key="underline"
-                            onclick={handleStyleToggle}
-                            title="Underline"
-                        >
-                            <u>U</u>
-                        </button>
-                        <span class="dg-prop-gap"></span>
-                        <button class={alignLeftClass} data-align="left" onclick={handleAlign} title="Align left">
-                            &#8676;
-                        </button>
-                        <button class={alignCenterClass} data-align="center" onclick={handleAlign} title="Centre">
-                            &#8596;
-                        </button>
-                        <button class={alignRightClass} data-align="right" onclick={handleAlign} title="Align right">
-                            &#8677;
-                        </button>
-                    </div>
-
-                    <div class="dg-prop-row">
-                        <label class="dg-prop-label">Text</label>
-                        <input
-                            type="color"
-                            class="dg-prop-color"
-                            value={selColor}
-                            data-key="color"
-                            onchange={handleColorChange}
-                        />
                     </div>
                 </template>
 

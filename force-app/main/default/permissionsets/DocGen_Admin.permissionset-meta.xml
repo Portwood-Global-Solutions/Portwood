@@ -5,7 +5,23 @@
         <visible>true</visible>
     </applicationVisibilities>
     <classAccesses>
+        <apexClass>DocGenGettingStartedController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenSignaturePreparationController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>BarcodeGenerator</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenAiQueryPlanner</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenAiReferenceController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
@@ -176,17 +192,82 @@
         <apexClass>DocGenAuthenticatorController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <classAccesses><apexClass>DocGenFontOperation</apexClass><enabled>true</enabled></classAccesses>
+    <classAccesses>
+        <apexClass>DocGenFontController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <customMetadataTypeAccesses>
         <name>DocGen_Button__mdt</name>
         <enabled>true</enabled>
     </customMetadataTypeAccesses>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Manage_DocGen_Fonts</name>
+    </customPermissions>
     <description>Full access to all Document Generation features and administration.</description>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Source_Checksum__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Original_Content_Document_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.PDF_Revision__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Page__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Y__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Height__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Original_Document_CV_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Preparation_Config_CV_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.PDF_Internal_Preview__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_X__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Width__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Rotation__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Product2.Product_Image__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Email Template fields (#193) (Admin: full edit; Type__c is required so FLS is auto-granted). -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Email_Template__c.Layout_Mode__c</field>
@@ -252,7 +333,6 @@
         <field>DocGen_Email_Template__c.Brand__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Portwood Brand fields (#369) (Admin: full access). -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Brand__c.OWA_Id__c</field>
@@ -298,10 +378,6 @@
         <field>DocGen_Brand__c.Is_Active__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Shared Asset fields (#185) (Admin: full access; Name is standard).
-         DocGen_Asset__c.Asset_Key__c is <required>true</required> (the immutable
-         unique system key); Salesforce blocks explicit fieldPermissions on required
-         fields and auto-grants FLS, so it is intentionally NOT declared here. -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Asset__c.Asset_Type__c</field>
@@ -382,7 +458,6 @@
         <field>DocGen_Job__c.Success_Count__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Job__c.Template__c is a required master-detail; FLS auto-granted, cannot declare here -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Job__c.Total_Records__c</field>
@@ -393,14 +468,11 @@
         <field>DocGen_Saved_Query__c.Description__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Saved_Query__c.DocGen_Template__c is a required master-detail; FLS auto-granted -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Saved_Query__c.Query_Condition__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen Settings (hierarchy custom setting) fields -->
-    <!-- AI authoring: which provider class and prompt template to use -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Settings__c.AI_Prompt_Template__c</field>
@@ -536,7 +608,6 @@
         <field>DocGen_Template_Version__c.Query_Config__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Template_Version__c.Template__c is a required master-detail; FLS auto-granted -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template_Version__c.Type__c</field>
@@ -562,11 +633,6 @@
         <field>DocGen_Template_Version__c.Document_Title_Format__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Template__c.Base_Object_API__c, Output_Format__c, Type__c are <required>true</required>;
-         FLS is auto-granted for insert/update but NOT for `WITH USER_MODE` SOQL — that's why
-         DocGenController and DocGenChartImageController use `WITH SYSTEM_MODE` for those queries.
-         Salesforce blocks explicit fieldPermissions entries on required fields, so this is the
-         documented workaround. -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.API_Name__c</field>
@@ -592,13 +658,11 @@
         <field>DocGen_Template__c.Document_Title_Format__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- AI authoring: raw model output, staged before the validator runs -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.Draft_Body__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Signer verification template defaults (#verification) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
@@ -699,7 +763,6 @@
         <field>DocGen_Template__c.Test_Record_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Signature Request fields (Admin: full access) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Request__c.Related_Record_Id__c</field>
@@ -785,7 +848,6 @@
         <field>DocGen_Signature_Request__c.Signing_Order__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Resolved signer-verification flags (#verification) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Request__c.Require_Email_Verification__c</field>
@@ -806,7 +868,6 @@
         <field>DocGen_Signature_Request__c.Document_Title_Format__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Signer fields (Admin: full access) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signer__c.Consent_Captured__c</field>
@@ -892,7 +953,6 @@
         <field>DocGen_Signer__c.Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Audit fields (Admin: full access) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Audit__c.Consent_Captured__c</field>
@@ -928,7 +988,6 @@
         <field>DocGen_Signature_Audit__c.PIN_Verified_At__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Signature_Audit__c.Signature_Request__c is a required master-detail; FLS auto-granted -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Audit__c.Signed_Date__c</field>
@@ -954,7 +1013,6 @@
         <field>DocGen_Signature_Audit__c.User_Agent__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- Signature Placement fields (Admin: full access) -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Placement__c.Document_Index__c</field>
@@ -995,7 +1053,6 @@
         <field>DocGen_Signature_Placement__c.Signed_Value__c</field>
         <readable>true</readable>
     </fieldPermissions>
-    <!-- DocGen_Signature_Placement__c.Signer__c is a required master-detail; FLS auto-granted -->
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Placement__c.Status__c</field>
@@ -1066,16 +1123,48 @@
         <field>DocGen_Error_Log__c.User_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Verified_By__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.License_Text__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Proof_CV_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Source_CV_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Metadata_JSON__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Verified_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.Revision_Key__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Portwood Admin</label>
-    <pageAccesses>
-        <apexPage>DocGenGuide</apexPage>
-        <enabled>true</enabled>
-    </pageAccesses>
-    <pageAccesses>
-        <apexPage>DocGenVerify</apexPage>
-        <enabled>true</enabled>
-    </pageAccesses>
     <objectPermissions>
         <allowCreate>true</allowCreate>
         <allowDelete>true</allowDelete>
@@ -1196,6 +1285,27 @@
         <viewAllFields>false</viewAllFields>
         <viewAllRecords>true</viewAllRecords>
     </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>DocGen_Font_Face__c</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+    <pageAccesses>
+        <apexPage>DocGenSignaturePrepare</apexPage>
+        <enabled>true</enabled>
+    </pageAccesses>
+    <pageAccesses>
+        <apexPage>DocGenGuide</apexPage>
+        <enabled>true</enabled>
+    </pageAccesses>
+    <pageAccesses>
+        <apexPage>DocGenVerify</apexPage>
+        <enabled>true</enabled>
+    </pageAccesses>
     <tabSettings>
         <tab>DocGen_Admin_Guide</tab>
         <visibility>Visible</visibility>

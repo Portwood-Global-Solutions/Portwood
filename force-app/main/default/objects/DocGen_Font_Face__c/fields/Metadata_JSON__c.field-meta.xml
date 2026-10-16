@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata"><fullName>Metadata_JSON__c</fullName><description
+    >Server-derived legacy family, style, PostScript identity, source digest, filename and nonzero cmap coverage. Never supplied by the browser.</description><label
+    >Parsed font metadata</label><length>131072</length><type>LongTextArea</type><visibleLines
+    >8</visibleLines></CustomField>

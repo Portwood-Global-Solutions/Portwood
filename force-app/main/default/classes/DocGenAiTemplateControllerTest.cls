@@ -383,6 +383,28 @@ private class DocGenAiTemplateControllerTest {
     }
 
     @isTest
+    static void fontTagsMustBeInElementStylesBeforeStaging() {
+        DocGenAiTemplateController.assertFontPlacement(
+            '<html><body><p style="{%font:brand:0123456789abcdef};font-size:11pt">Text</p></body></html>'
+        );
+        for (
+            String invalid : new List<String>{
+                '<style>.title { {%font:brand:0123456789abcdef};font-size:20pt; }</style>',
+                '<div>{%font:brand:0123456789abcdef}</div>',
+                '<div class="{%font:brand:0123456789abcdef}">Text</div>'
+            }
+        ) {
+            Boolean rejected = false;
+            try {
+                DocGenAiTemplateController.assertFontPlacement(invalid);
+            } catch (Exception e) {
+                rejected = e.getMessage().contains('inline style');
+            }
+            System.assert(rejected, 'Reject unusable font placement before the author can save: ' + invalid);
+        }
+    }
+
+    @isTest
     static void availabilityIsReportedNotThrown() {
         Test.startTest();
         Boolean available = DocGenAiTemplateController.isAiAvailable();

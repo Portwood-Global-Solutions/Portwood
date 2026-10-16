@@ -1,0 +1,72 @@
+Portwood font stress validation - October 15, 2026
+Branch: feat/byod-signature-sender. Scratch: portwood-proposal.
+
+208 cases: 133 Google Fonts files from 109 families, three Adobe Source Serif format probes,
+60 static variable-font derivatives, and 12 synthetic malformed/boundary fixtures. Sources and
+licenses are pinned in the sibling font-stress folder. Derivatives have distinct PWStress names.
+Google commit: 1d0e46c7933245c8180fe83e47917961c913bbdb
+Adobe commit: 80d3f8894c09c937bebfa9011247d2e1c79fd6f4
+
+Final result: 131 accepted cases, 77 rejected. The accepted cases represent 130 distinct pinned
+font revisions; the filename-with-spaces probe deliberately deduplicates to an existing face.
+All accepted cases had matching embedded CID TrueType / Identity-H fonts and visible specimen
+text. Actual native specimen sheets were reviewed before approval. Seventeen full DocGenService
+merged templates used all 131 cases with a live Account name. Representative Lightning downloads,
+including the final 16-face mixed-script demo, were inspected for their actual embedded faces.
+
+Verified bounds and exceptions:
+- Exactly 9,437,184 bytes succeeds; above 9 MiB fails. Full CJK files can also hit 20,000 glyphs.
+- 16 distinct faces succeeds (93 SOQL queries); 17 returns the intended limit error.
+- 250 paragraphs render eight pages. Missing merged glyphs fail clearly.
+- Variable originals, CFF OpenType, WOFF/WOFF2 and collections are rejected.
+- Restricted / no-subsetting / bitmap-only flags, missing Unicode cmap and malformed tables fail.
+- Color fonts tested here print monochrome outlines; embedded palettes do not survive native PDF.
+- Ordinary filenames with spaces / parentheses / Unicode now work; path/control characters fail.
+- Font coverage is not shaping. Raw Arabic/RTL and other complex scripts need layout preparation.
+- Covered supplementary Unicode (Noto Music U+1D11E; Noto Emoji U+1F600) disappeared from native
+  PDFs with both literal text and numeric entities. The custom-font generation path now rejects
+  these clearly; Assets warns when browser test text contains surrogate pairs. BMP symbols work.
+
+Fixes from this run:
+DocGenFontInspector now requires hhea/hmtx and validates horizontal metric counts/table length;
+missing metric tables previously produced silent Times fallback. Filename restrictions left over
+from ZIP publication were removed. Color metadata drives an explicit Assets preview warning.
+Catalog projection streams past coverage/license payloads instead of fully deserializing them.
+Legacy immutable revisions keep their cedilla-coverage hint without a data migration. At 139
+faces, catalog CPU dropped from ~8.7 seconds to 250-275 ms with identical response size.
+DocGenFontService parses immutable metadata once per revision per request. The 16-face mixed
+multilingual + 9 MiB demo dropped from 8.4 seconds to 2.15-2.20 seconds of Apex CPU.
+
+Final validation: 84/84 scoped DocGenFontTest + DocGenHtmlTemplateTest passed after final changes.
+Canvas custom-font serialization and HTML font tags passed. Repository Prettier and diff checks
+passed. Offline QA baseline: 516/577, the same 61 existing metadata-audit failures.
+The run uses the current Winter '27 scratch org, not a managed subscriber install. Catalog reads
+currently return at most 200 revisions; this run exercised 139. End-of-call heap values are not
+peak heap measurements. No production release or email sending was performed.
+
+Demo: Font Stress - 16 Faces + Unicode
+Template a0CRu00005373JRMAY; sample Account 001Ru000028hxgqIAA.
+The actual Lightning download is two pages, 198,206 bytes, with all 16 custom faces. Default
+labels use built-in Arial Unicode MS; the multilingual sample runs use the selected custom faces.
+Fixed Arabic/Hebrew are prepared for visual order. This does not add dynamic script shaping.
+Source: docs/examples/FontStressDemo.html.
+
+Reviewable outputs in the workspace's output directory:
+font-stress-report.html / font-stress-results.csv / pdf/portwood-font-stress-catalog.pdf
+The 20-page catalog combines a results cover, the two-page demo and 17 native batch pages.
+Every appended native page renders pixel-identically after assembly; the final pages were reviewed.
+
+Repeat tooling (scratch only; the worker checks the explicitly supplied development org Id):
+1. download-stress-corpus.py downloads commit-pinned OFL font binaries/licenses and prepares static
+   derivatives using fontTools. build-stress-edge-cases.py adds the negative and boundary probes.
+2. Set PORTWOOD_QA_ORG_ID to your explicitly authorized development org Id. Run
+   stress-native.py --target-org YOUR_SCRATCH_ALIAS --phase import, then --phase proof.
+3. inspect-stress-proofs.py checks actual embedding / visible ink and produces review sheets.
+   Review every sheet before writing reviewed.json; --phase verify approves only those reviewed
+   QA cases. This is a test-data workflow, not automated customer font approval.
+4. render-stress-templates.py exercises full merge/generation; inspect-stress-documents.py checks
+   actual fonts and renders pages. stress-document-limits.py probes bounds and merged glyphs.
+   Both mutating scripts require --target-org YOUR_SCRATCH_ALIAS and PORTWOOD_QA_ORG_ID.
+The local worker resolves the installed Salesforce CLI SDK (or SF_CLI_PACKAGE_JSON).
+It requires the expected org Id and a development org, and keeps authentication in memory. Font binaries and large result artifacts stay outside
+managed-package source. Existing fonts/templates and user retirements were preserved.

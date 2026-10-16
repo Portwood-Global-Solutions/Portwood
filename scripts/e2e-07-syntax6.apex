@@ -224,6 +224,27 @@ try {
     System.debug('ROOTANCHOR GIANT-QUERY UNCHANGED WITHOUT TAG: FAIL — ' + e.getMessage());
 }
 
+// Font directives travel through row-level and giant-query HTML wrapping independently of field resolution.
+// No font registry fixture is needed to prove the parser leaves a pinned directive intact.
+try {
+    String fontTag = '{%font:barlow:179138cb809b03a1}';
+    String tagged = '<p style="' + fontTag + '">{Name}</p>';
+    String merged = DocGenService.processXmlForTest(tagged, new Map<String, Object>{ 'Name' => 'Font tag parser' });
+    System.assert(merged.contains(fontTag) && merged.contains('Font tag parser'));
+    // Giant parent resolution excludes %-prefixed tags; its HTML extractor must preserve a
+    // previously pinned binding on <body> when it drops the outer document wrapper.
+    String pinnedStyle = '-pw-font-face:' + 'a'.repeat(64) + ';font-family:TestFace;font-weight:400;font-style:normal;';
+    String giantBody = DocGenService.extractHtmlBodyContent(
+        '<html><body style="' + pinnedStyle + '"><p>Giant parent content</p></body></html>'
+    );
+    System.assert(giantBody.contains(pinnedStyle) && giantBody.contains('Giant parent content'));
+    pass++;
+    System.debug('FONT TAG ROW PARSER AND GIANT HTML EXTRACTION: PASS');
+} catch (Exception e) {
+    fail++;
+    System.debug('FONT TAG ROW PARSER AND GIANT HTML EXTRACTION: FAIL — ' + e.getMessage());
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX6 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')

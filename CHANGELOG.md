@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- A document-first Designer workspace with contextual inserts, field selection, table editing, page settings, precise placement and native PDF preview. Advanced users can switch directly between Visual and HTML, format source, and preview unsaved changes.
+- Salesforce Files font assets shared by Designer, Canvas and HTML font tags. Fonts retain their licensed source revision, require native PDF review and expose format, glyph and script limitations before use.
+- Record-page preparation of uploaded or existing PDFs for signatures, including recipients, positioned fields, resumable drafts, sequential signing and protection of sent originals.
+- Guided Quote, Opportunity and Account document starters, plus three authoring routes: existing templates, Designer/Canvas and Agentforce generation. AI authoring can use PDF/DOCX references and discover a validated, record-scoped data plan conversationally.
+
+### Fixed
+
+- Registered-font PDF previews accept ordinary `!important` colour and layout rules while preserving the exact approved font face.
+- Signature source changes remain inside the request composer, and the font library scrolls within its list rather than extending the entire workspace.
+
+Validation and remaining release checks are recorded in `docs/FEATURE_REVIEW.md`. These changes are under review; no new package version is published.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,

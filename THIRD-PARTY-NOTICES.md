@@ -22,6 +22,11 @@ when versions change, and disclose it in AppExchange security materials.
   ships in the package (verified by `sf code-analyzer` retire-js: 0 High).
 - The v4 build is ESM-only; the files are stored with a `.js` extension so Salesforce
   serves them with a JavaScript MIME type, and the viewer dynamic-imports the module.
+- The Designer also ships a classic-script adapter of these same pinned bytes in
+  `DocGenPdfPreview`. It removes the final ESM export and wraps the webpack locals
+  for Lightning's `loadScript`; license comments remain intact. Its local worker
+  handler supports main-thread rendering under Lightning Web Security. Rebuild or
+  verify it with `node scripts/build-designer-pdf-viewer.mjs [--check]`.
 - These libraries make **no network requests** and have **no external runtime
   dependency** — they operate only on PDF bytes already in the browser.
 
@@ -31,3 +36,16 @@ when versions change, and disclose it in AppExchange security materials.
 - **MIT License** (pdf-lib): https://opensource.org/licenses/MIT
 
 Full upstream license text is retained in each project's repository linked above.
+
+## Developer font fixtures
+
+The optional demo tooling in `scripts/fonts/fixtures/` contains unmodified static TrueType
+faces from Amiri, Barlow, Barlow Condensed, Crimson Text, DM Mono, DM Serif Display,
+Lato, Parisienne and Poppins. Each face retains its original copyright and SIL Open Font
+License text in the adjacent `LICENSE.txt`. Immutable source revisions and file paths for
+the additional collection are recorded in `scripts/fonts/designer-manifest.json`.
+
+These full font files are developer fixtures outside managed-package source. The setup
+tool uploads them to Salesforce Files only in an explicitly selected development org.
+`DocGenFontTestData` contains renamed, reduced Parisienne and Barlow test fixtures with
+their original notices retained in the Apex source.

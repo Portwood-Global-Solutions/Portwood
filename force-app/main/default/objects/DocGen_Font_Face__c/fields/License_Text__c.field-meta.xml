@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata"><fullName>License_Text__c</fullName><description
+    >License supplied with the exact original bytes. Use requires rights to public font previews through Salesforce Files and PDF embedding.</description><label
+    >Font license</label><length>65536</length><type>LongTextArea</type><visibleLines>5</visibleLines></CustomField>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>PDF_Internal_Preview__c</fullName>
+    <description
+    >Internal preview requests use authenticated org signing links and do not send invitations.</description>
+    <label>Internal Signing Preview</label>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

@@ -338,21 +338,21 @@ Bulk generation runs the same templates across thousands of records: enter a fil
 
 ## What Works in PDF vs DOCX
 
-| Feature                                        | PDF                          | DOCX                           |
-| ---------------------------------------------- | ---------------------------- | ------------------------------ |
-| All merge tags and formatting                  | Yes                          | Yes                            |
-| Bold, italic, underline, colors, font sizes    | Yes                          | Yes                            |
-| Tables with borders, shading, column widths    | Yes                          | Yes                            |
-| Template-embedded images                       | Yes                          | Yes                            |
-| Dynamic images from record fields (`{%Field}`) | Yes                          | Yes                            |
-| Rich text field formatting                     | Yes                          | Yes                            |
-| Rich text images                               | Yes                          | No — use `{%Field}` image tags |
-| Barcodes and QR codes                          | Yes                          | Yes                            |
-| Charts (`{Chart:…}`)                           | Yes                          | Yes                            |
-| Clickable hyperlinks                           | Yes (v1.1.3+)                | Yes                            |
-| Page numbers in headers/footers                | Yes                          | N/A (Word handles natively)    |
-| Cover page (no header on page 1)               | Yes                          | N/A (Word handles natively)    |
-| Custom fonts (Calibri, branded, etc.)          | No — falls back to Helvetica | Yes — preserves original fonts |
+| Feature                                        | PDF                                                                         | DOCX                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------- |
+| All merge tags and formatting                  | Yes                                                                         | Yes                                 |
+| Bold, italic, underline, colors, font sizes    | Yes                                                                         | Yes                                 |
+| Tables with borders, shading, column widths    | Yes                                                                         | Yes                                 |
+| Template-embedded images                       | Yes                                                                         | Yes                                 |
+| Dynamic images from record fields (`{%Field}`) | Yes                                                                         | Yes                                 |
+| Rich text field formatting                     | Yes                                                                         | Yes                                 |
+| Rich text images                               | Yes                                                                         | No — use `{%Field}` image tags      |
+| Barcodes and QR codes                          | Yes                                                                         | Yes                                 |
+| Charts (`{Chart:…}`)                           | Yes                                                                         | Yes                                 |
+| Clickable hyperlinks                           | Yes (v1.1.3+)                                                               | Yes                                 |
+| Page numbers in headers/footers                | Yes                                                                         | N/A (Word handles natively)         |
+| Cover page (no header on page 1)               | Yes                                                                         | N/A (Word handles natively)         |
+| Custom fonts                                   | HTML/Canvas: verified font assets in this branch; Word font names fall back | Yes — preserves original font names |
 
 ---
 
@@ -369,7 +369,9 @@ Salesforce's PDF engine supports these fonts:
 
 Custom fonts from your Word template (Calibri, Cambria, branded typefaces) **fall back to Helvetica** in PDF output. If custom fonts matter, generate as DOCX — Word preserves the original fonts.
 
-### Symbols and non-Latin text need Arial Unicode MS — by name
+**Unreleased on this review branch:** HTML and Canvas PDFs can use custom static TrueType fonts through **Assets → Fonts**. Upload the licensed original to Salesforce Files, review its native PDF specimen, then select the verified face in Designer/Canvas or copy its HTML font tag. Registered fonts can include multibyte characters when the face contains the required glyphs. Weight/style availability, supplementary Unicode, complex-script shaping and colour palettes have explicit limits; see [UserGuide §14.2](UserGuide.md#142-pdf-font-limitations). This does not change automatic font handling for Word-source templates or embed fonts in DOCX.
+
+### Built-in fonts: symbols and non-Latin text use Arial Unicode MS
 
 This one is worth knowing before it costs you an afternoon. Characters like ✓ ✔ ☑ ☐ ✗ ● ★ → √ ≤ ≥, and any Chinese, Japanese, Korean, Greek, Cyrillic or Hebrew text, render as **nothing at all** under the default fonts — no glyph, no empty box, no warning. The paragraph simply comes out short.
 
@@ -387,20 +389,20 @@ The Canvas designer's **Symbols** control inserts them with the font already att
 
 These are Salesforce platform limitations, not Portwood bugs:
 
-| Not Supported            | Why                                                                                                  | Workaround                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Custom fonts             | `Blob.toPdf()` only has 4 built-in fonts                                                             | Generate as DOCX                                                            |
-| `@font-face` CSS         | Not supported by the PDF renderer                                                                    | Generate as DOCX                                                            |
-| Text boxes and shapes    | Word drawing objects aren't converted to HTML                                                        | Use tables for layout                                                       |
-| SmartArt, Word charts    | Word's own graphics aren't rendered in the HTML conversion                                           | Use Portwood's `{Chart:…}` tag, or insert as an image                       |
-| Wingdings / symbol fonts | Not among the engine's fonts — glyphs render as empty boxes                                          | Checkbox glyphs auto-translate; use Unicode symbols in `'Arial Unicode MS'` |
-| CSS Grid / Flexbox       | The PDF renderer supports CSS 2.1 only                                                               | Use tables                                                                  |
-| JavaScript               | Ignored by the renderer                                                                              | N/A                                                                         |
-| Even/odd page headers    | Not currently supported                                                                              | Same header on all pages                                                    |
-| Multiple section headers | One header/footer set per document                                                                   | Use page breaks, not section-specific headers                               |
-| Multi-column layouts     | CSS columns not supported by the PDF engine                                                          | Use tables for column layouts                                               |
-| PowerPoint → PDF         | The platform can't convert `.pptx` to PDF                                                            | Render PPTX natively, or author the deck in Word/HTML                       |
-| E-signatures (QES)       | SES signatures are built-in; Qualified Electronic Signatures (EU eIDAS) require a certified provider | Use built-in SES for most use cases                                         |
+| Not Supported                               | Why                                                                                                  | Workaround                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Variable/CFF/WOFF font uploads              | The new Assets pipeline accepts static TrueType outlines                                             | Use a licensed static TTF and review its native specimen                    |
+| Authored `@font-face` with registered fonts | Registered templates pin reviewed font revisions                                                     | Use Assets font tags in inline styles                                       |
+| Text boxes and shapes                       | Word drawing objects aren't converted to HTML                                                        | Use tables for layout                                                       |
+| SmartArt, Word charts                       | Word's own graphics aren't rendered in the HTML conversion                                           | Use Portwood's `{Chart:…}` tag, or insert as an image                       |
+| Wingdings / symbol fonts                    | Not among the engine's fonts — glyphs render as empty boxes                                          | Checkbox glyphs auto-translate; use Unicode symbols in `'Arial Unicode MS'` |
+| CSS Grid / Flexbox                          | The PDF renderer supports CSS 2.1 only                                                               | Use tables                                                                  |
+| JavaScript                                  | Ignored by the renderer                                                                              | N/A                                                                         |
+| Even/odd page headers                       | Not currently supported                                                                              | Same header on all pages                                                    |
+| Multiple section headers                    | One header/footer set per document                                                                   | Use page breaks, not section-specific headers                               |
+| Multi-column layouts                        | CSS columns not supported by the PDF engine                                                          | Use tables for column layouts                                               |
+| PowerPoint → PDF                            | The platform can't convert `.pptx` to PDF                                                            | Render PPTX natively, or author the deck in Word/HTML                       |
+| E-signatures (QES)                          | SES signatures are built-in; Qualified Electronic Signatures (EU eIDAS) require a certified provider | Use built-in SES for most use cases                                         |
 
 ---
 

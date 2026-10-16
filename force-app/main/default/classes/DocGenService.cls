@@ -4162,7 +4162,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // wrap layer via @page CSS counter() rules. Flying Saucer can only
                 // resolve counter(page)/counter(pages) inside @page context, so the
                 // tokens have to survive processXml intact for wrapHtmlForPdf to see.
-                if ('PageNumber'.equalsIgnoreCase(tagContent) || 'TotalPages'.equalsIgnoreCase(tagContent)) {
+                if (
+                    'PageNumber'.equalsIgnoreCase(tagContent) ||
+                    'TotalPages'.equalsIgnoreCase(tagContent) ||
+                    tagContent.startsWithIgnoreCase('%font:')
+                ) {
                     output += '{' + rawTag + '}';
                     cursor = tagClose + 1;
                     continue;
@@ -4297,7 +4301,17 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         // HTML template type (v1.61+): mirror the DOCX auto-expand behavior
                         // for <tr> rows and <li> list items. Only considered when the merge
                         // engine is running in HTML context — leaves DOCX paths untouched.
-                        if (currentTemplateType == 'HTML' && !skipContainerExpand) {
+                        Object htmlSectionValue = currentTemplateType == 'HTML' && !skipContainerExpand
+                            ? resolveValue(data, key)
+                            : null;
+                        Boolean htmlRepeatsRecords =
+                            htmlSectionValue instanceof List<Object> ||
+                            (htmlSectionValue instanceof Map<String, Object> &&
+                            ((Map<String, Object>) htmlSectionValue).get('records') instanceof List<Object>);
+                        // Scalar truthy sections (e.g. {#Description}) remain inline.
+                        // Expanding one to its parent row inside an outer list loop
+                        // consumes sibling cells and can leave unmatched tbody tags.
+                        if (currentTemplateType == 'HTML' && !skipContainerExpand && htmlRepeatsRecords) {
                             // Candidate: HTML <tr> row
                             Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', cursor);
                             if (htmlTrStart != -1) {
@@ -8848,7 +8862,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             assetCvCache.put(key, null);
         }
 
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c', 'Is_Active__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Asset__c.sObjectType,
+            new Set<String>{ 'Asset_Key__c', 'Is_Active__c', 'Asset_Type__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Asset__c> assets = [
             SELECT
@@ -8860,7 +8877,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE
+            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE AND Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
         ];
 
@@ -10785,6 +10802,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
+        html = DocGenFontService.expandTags(html);
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
         if (bodyOpen == -1) {
@@ -10803,9 +10821,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         Integer bodyClose = lower.lastIndexOf('</body>');
         if (bodyClose == -1 || bodyClose <= openEnd) {
-            return html.substring(openEnd + 1);
+            return DocGenFontService.retainBodyFont(html.substring(bodyOpen, openEnd + 1), html.substring(openEnd + 1));
         }
-        return html.substring(openEnd + 1, bodyClose);
+        return DocGenFontService.retainBodyFont(
+            html.substring(bodyOpen, openEnd + 1),
+            html.substring(openEnd + 1, bodyClose)
+        );
     }
 
     /**
@@ -10853,8 +10874,19 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * which preserves arbitrary HTML.
      */
     public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        body = DocGenFontService.expandTags(body);
+        header = DocGenFontService.expandTags(header);
+        footer = DocGenFontService.expandTags(footer);
+        sourceStyles = DocGenFontService.expandTags(sourceStyles);
         Boolean headerHasCounters = hasPageCounterTokens(header);
         Boolean footerHasCounters = hasPageCounterTokens(footer);
+        if (
+            headerHasCounters && header.contains('-pw-font-face') ||
+            footerHasCounters && footer.contains('-pw-font-face')
+        )
+            throw new DocGenException(
+                'Custom fonts in HTML headers or footers cannot share that section with page-counter tags. Use custom fonts in a section without counters.'
+            );
         // v1.90 — when the source HTML already declares @page, suppress the engine's
         // size/margin so author CSS wins cleanly. Header/footer margin-box rules are
         // still emitted because the source @page can't supply them on its own.
@@ -11015,7 +11047,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
-        return html;
+        return DocGenFontService.prepare(html);
     }
 
     private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
@@ -11411,6 +11443,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private static String wrapNonLatinGlyphs(String s) {
         if (String.isBlank(s))
             return s;
+        if (s.contains('-pw-font-face')) {
+            DocGenFontService.ProtectedRuns protectedRuns = DocGenFontService.protect(s);
+            String result = wrapNonLatinGlyphs(protectedRuns.masked);
+            for (String token : protectedRuns.runs.keySet())
+                result = result.replace(token, protectedRuns.runs.get(token));
+            return result;
+        }
         s = decodeHighCodepointEntities(s);
         s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();

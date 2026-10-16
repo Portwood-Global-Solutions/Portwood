@@ -1,1 +1,7 @@
 /* Email preview moved to the Email Templates tab (docGenEmailTemplates). */
+
+.embedded-card {
+    --slds-c-card-shadow: none;
+    --slds-c-card-color-border: transparent;
+    --slds-c-card-radius-border: 0;
+}

@@ -1,0 +1,3 @@
+# Preserve upstream font/license bytes: the registry revision hashes include the license.
+scripts/fonts/fixtures/**/*.ttf -text
+scripts/fonts/fixtures/**/LICENSE.txt -text -whitespace

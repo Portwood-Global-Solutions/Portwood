@@ -108,6 +108,68 @@ private class DocGenEinsteinProviderTest {
     }
 
     @isTest
+    static void fileCapabilitiesPreserveTheExistingProviderContract() {
+        Callable provider = new DocGenEinsteinProvider();
+        Map<String, Object> capabilities = (Map<String, Object>) provider.call(
+            'capabilities',
+            new Map<String, Object>()
+        );
+        System.assertEquals(true, capabilities.get('fileReferences'));
+        try {
+            provider.call('unknownAction', new Map<String, Object>());
+            System.assert(false, 'Unknown actions must fail before generation.');
+        } catch (DocGenEinsteinProvider.DocGenAiException e) {
+            System.assert(e.getMessage().contains('Unsupported'));
+        }
+    }
+
+    @isTest
+    static void nonPdfFilesAreRejectedBeforeGeneration() {
+        ContentVersion file = new ContentVersion(
+            Title = 'Example',
+            PathOnClient = 'example.docx',
+            VersionData = Blob.valueOf('not a PDF')
+        );
+        insert file;
+        Id documentId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :file.Id].ContentDocumentId;
+        Callable provider = new DocGenEinsteinProvider();
+        try {
+            provider.call(
+                'generateWithReference',
+                new Map<String, Object>{ 'prompt' => 'Recreate this example', 'documentId' => documentId }
+            );
+            System.assert(false, 'Raw Word files must use preparation, never native PDF grounding.');
+        } catch (DocGenEinsteinProvider.DocGenAiException e) {
+            System.assert(e.getMessage().contains('accessible PDF'));
+        }
+        try {
+            provider.call(
+                'generateWithReference',
+                new Map<String, Object>{ 'prompt' => '', 'documentId' => documentId }
+            );
+            System.assert(false, 'Blank prompts must fail before generation.');
+        } catch (DocGenEinsteinProvider.DocGenAiException e) {
+            System.assert(e.getMessage().contains('describe'));
+        }
+    }
+
+    @IsTest
+    static void planningIsAdvertisedAndRejectsEmptyRequestsBeforeTheModel() {
+        Callable provider = new DocGenEinsteinProvider();
+        Map<String, Object> capabilities = (Map<String, Object>) provider.call(
+            'capabilities',
+            new Map<String, Object>()
+        );
+        System.assertEquals(true, capabilities.get('queryPlanning'));
+        try {
+            provider.call('planQuery', new Map<String, Object>{ 'prompt' => '   ' });
+            System.assert(false);
+        } catch (DocGenEinsteinProvider.DocGenAiException expected) {
+            System.assert(expected.getMessage().contains('empty'));
+        }
+    }
+
+    @isTest
     static void factoryResolvesTheProviderByName() {
         // Type.forName is what keeps the rest of the feature deployable in an
         // org without Einstein — prove the name still resolves where it exists.

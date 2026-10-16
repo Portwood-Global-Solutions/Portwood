@@ -1,4 +1,4 @@
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getBrands from '@salesforce/apex/DocGenBrandController.getBrands';
 import saveBrand from '@salesforce/apex/DocGenBrandController.saveBrand';
@@ -29,6 +29,16 @@ const BLANK_FORM = {
 };
 
 export default class DocGenBrands extends LightningElement {
+    @api embedded = false;
+    get cardTitle() {
+        return this.embedded ? null : 'Brands';
+    }
+    get cardIcon() {
+        return this.embedded ? null : 'utility:apps';
+    }
+    get cardClass() {
+        return this.embedded ? 'embedded-card' : '';
+    }
     @track brands = [];
     @track isLoading = true;
     @track isSaving = false;

@@ -1,0 +1,87 @@
+<template>
+    <section class="conversation" aria-label="Plan your document with Agentforce">
+        <div class="conversation-heading">
+            <h3>Tell Agentforce what you need</h3>
+            <template if:true={turns.length}
+                ><button type="button" class="text-button" onclick={handleStartOver} disabled={inputDisabled}>
+                    Start a new conversation
+                </button></template
+            >
+        </div>
+        <p class="intro">
+            Describe the document. Agentforce finds your Salesforce fields, builds the query and asks if anything needs
+            clarifying. You can reply naturally to change the plan.
+        </p>
+        <div
+            class="messages"
+            role="log"
+            aria-label="Document planning conversation"
+            aria-live="polite"
+            aria-relevant="additions text"
+        >
+            <template for:each={turns} for:item="turn"
+                ><article key={turn.id} class={turn.styleClass}>
+                    <strong>{turn.role}</strong>
+                    <p>{turn.content}</p>
+                </article></template
+            >
+        </div>
+        <template if:true={busy}
+            ><div class="progress" role="status">
+                <lightning-icon icon-name="utility:einstein" size="x-small"></lightning-icon><span>{progress}</span>
+            </div></template
+        >
+        <template if:true={notice}><p class="notice" role="status">{notice}</p></template>
+        <template if:true={error}><p class="error" role="alert">{error}</p></template>
+        <label class="input-label" for="request">What should this document include?</label>
+        <textarea
+            id="request"
+            aria-label="Message to Agentforce"
+            value={draft}
+            oninput={handleInput}
+            onkeydown={handleKeydown}
+            disabled={inputDisabled}
+            placeholder="e.g. An account briefing with open opportunities, open cases and total pipeline. Use our logo and keep each table row on one page."
+        ></textarea>
+        <template if:true={hasUnsentChanges}
+            ><p class="notice" role="status">Send your message to apply these changes before generating.</p></template
+        >
+        <div class="send-row">
+            <lightning-button
+                label={sendLabel}
+                variant="brand"
+                icon-name="utility:einstein"
+                onclick={handleSend}
+                disabled={sendDisabled}
+            ></lightning-button
+            ><span>Ctrl / ⌘ + Enter to send</span>
+        </div>
+        <template if:true={plan}>
+            <section class="plan" aria-label="Document data plan">
+                <h3>Ready to design</h3>
+                <p>
+                    Generated from a <strong>{plan.objectLabel}</strong> record. Reply above to adjust the data or
+                    layout, or generate your document below.
+                </p>
+                <ul>
+                    <template for:each={sections} for:item="section"
+                        ><li key={section.id}>
+                            <strong>{section.label}</strong>
+                            <p>{section.fields}</p>
+                            <template if:true={section.filter}
+                                ><p class="plan-detail">Include: {section.filter}</p></template
+                            ><template if:true={section.sort}><p class="plan-detail">Order: {section.sort}</p></template
+                            ><template if:true={section.limit}
+                                ><p class="plan-detail">Requested limit: {section.limit}</p></template
+                            >
+                        </li></template
+                    >
+                </ul>
+                <details>
+                    <summary>Advanced: generated query configuration</summary>
+                    <pre>{generatedQuery}</pre>
+                </details>
+            </section>
+        </template>
+    </section>
+</template>

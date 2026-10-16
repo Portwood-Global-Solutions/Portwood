@@ -1,0 +1,76 @@
+Customer journey validation - 2026-10-15
+========================================
+Branch: feat/byod-signature-sender (existing uncommitted BYOD/font work preserved).
+Scratch org: portwood-proposal / 00DRu00000aiv7VMAQ.
+Entry: https://page-dream-755-dev-ed.scratch.lightning.force.com/lightning/n/DocGen_Command_Hub
+
+Implemented path
+Get started > choose Opportunity proposal or Account summary > fictional data or record picker > Render my PDF > native Salesforce viewer > choose a record / customize / assets / record-page rollout guidance.
+Returning from the designer or assets preserves the completed result for the current hub session.
+The designer supports Preview with sample data on the creator's starter when no real sample record is selected. A selected real record follows the handoff into the designer. Draft previews do not publish edits.
+
+Working templates in scratch
+Opportunity proposal: a0CRu00005377byMAA.
+Account summary: a0CRu0000534W3hMAE.
+Each is a reusable HTML/PDF template with its query and active body version. Re-selecting an example does not overwrite edits or create another template. Initial development-body corrections were applied only after checksum comparison against the exact untouched seed body.
+
+Native PDF verification
+Final exported sample opportunity: 1 page, 3 product rows, $24,500 total.
+Final exported sample account: 1 page, 2 open opportunities, $72,500 pipeline, 2 open cases, 2 contacts.
+Every final exported page rendered and visually reviewed; no clipping, overflow-only page, missing data, or unresolved merge tokens.
+Sample PDFs use the actual DocGenService merge and native PDF renderer with fixed fictional data. Product onboarding inserts no CRM sample records. PDFs are private Files; no public ContentDistribution is created for documents.
+
+Live-record browser runs
+Separate developer-only fixture: Account 001Ru000028jUI6IAM; Opportunity 006Ru00000XyLLBIA3.
+Account selected through the UI record picker: CV 068Ru00000HpOGHIA3, 1 page. Downloaded the exact browser-generated File and verified both open deals, both open cases, contacts and $72,500 pipeline. Closed QA deal/case excluded.
+Opportunity selected through the UI record picker: CV 068Ru00000HpPkDIAV, 1 page. Downloaded the exact browser-generated File and verified all 3 products, quantities, unit prices and $24,500 total.
+Native viewer opened both PDFs. Customize template opened the correct designer; the account picker retained the selected account. Clearing it changed the action to Preview with sample data, which produced the complete one-page fictional account PDF.
+
+Observed first-use timing
+Opportunity: 11 seconds from choosing the example to a visible native PDF.
+Account: 15 seconds from choosing the example to a visible native PDF.
+These are source-deployed scratch measurements, with Lightning debug enabled, not a fresh subscriber install benchmark. Package-install duration and first-time permission assignment remain unmeasured.
+
+Font UX
+139 registered faces tested in the live UI. 24 rows per page, 6 pages.
+Verified Page 2 selects the first page-2 face; search for Barlow returns 3 matches across the loaded catalog and resets paging.
+List and detail have independent bounded scroll containers. Search/status and pagination are outside the list scroller. Keyboard End moved the font list to later faces; focusing a partially visible container can first bring it into the workspace viewport.
+Verified compatibility disclosure, unsupported-font upload guidance, disabled Inspect without required inputs, and Back to fonts retaining the library rather than closing Assets.
+Catalog retains its existing 200-face server cap, now explicitly disclosed at that boundary.
+
+Other UX checks
+Reviewed template library/designer, bulk generation, document buttons, email actions, signature settings, email templates, brands, image assets and help.
+Removed duplicate hub/component headings where embedded. Made signature settings and email branding explicitly optional after the first PDF. Removed contradictory no-Setup-required button claims. Added the in-app first-five-minutes guide and corrected email-token help that had rendered with missing token names.
+No emails or signature requests sent; no signing/security settings changed.
+
+Automated checks
+12/12 scoped Apex results passed, run 707Ru00002H9aeD (DocGenGettingStartedTest).
+Covers sample data, no CRM insertion, private Files, starter reuse preserving edits, invalid key/type/template rejection, live OLI merge/totals, open-only account filters, empty related lists and unsaved draft preview without publishing.
+Node onboarding check: PASS (browser parsing/tag order, loops staying inside one row, PDF CSS, filters, totals, 139-face paging/search, review-confirmation reset).
+Canvas custom-font binding and HTML font-tag checks: PASS.
+Full Prettier check: PASS; later changed files checked separately: PASS.
+git diff --check: PASS.
+Offline QA: 516/577 passed, same 61 pre-existing metadata findings. Baseline and final suites and tallies match exactly. Generated tracked QA reports restored to their original contents.
+
+Final responsive and copy review
+At 480 x 900, the onboarding component measured 433 px content width / 433 px client width; the font library measured 407 / 407. Both reflowed without horizontal overflow inside the component. Narrow font view stacks the browser and specimen. The temporary viewport override was reset.
+Verified the deployed email-template help now displays literal {SignerName}, {ActionButton}, {DocumentInfo}, {SecurityNote}, and {VerificationCode} names.
+Final browser tabs left open: Get started and Assets > Fonts, at normal viewport size.
+
+Quote-first starter extension - 2026-10-15
+========================================
+Standard Salesforce Quotes were initially disabled in this scratch org. Enabled QuoteSettings only in portwood-proposal for development validation. No Quote setting, typed Quote dependency or mandatory feature was added to the package.
+Readiness checks dynamic Quote and QuoteLineItem describe availability, queryability and object read access. The primary sales card is Quote PDF when available, otherwise Opportunity proposal. Account summary stays available. The server also rejects a stale/direct Quote request when Quotes are unavailable. Product onboarding never grants Quote access or creates CRM sample records.
+
+Quote demo template: a0CRu00005391Y6MAI.
+Developer-only real quote: 0Q0Ru000005Mb2sKAC, number 00000001, linked to the existing Northstar demo opportunity. Three line items, $24,500 subtotal, implementation discounted 10%, $23,100 after discounts, $600 saved tax, $150 saved shipping, $23,850 native GrandTotal. IsSyncing remains false.
+The seed-quote-demo.apex fixture is scratch-scoped and idempotent, separate from the product journey. Existing template content received development-only layout corrections after matching its exact prior SHA-256; normal starter creation continues to preserve all customized templates.
+
+Browser verification: Quote-first landing, fictional sample render, real Quote record-picker search and selection, real native PDF, Customize template preserving the selected quote, clearing the picker and Preview with sample data, and returning to Get started preserving the result. Final tab left at the example chooser with sample mode ready.
+Final sample PDF: ContentVersion 068Ru00000HpeckIAB, one page, exported to output/pdf/portwood-starter-quote.pdf outside the repository. All final-page content visually reviewed. Real-record browser PDF: 068Ru00000HpagDIAR, one page; exact generated bytes inspected, all amounts matched the quote, creator-only document link and no ContentDistribution. That real-record file predates the later pagination-only layout adjustment.
+Pagination QA used the current source HTML in the native renderer with 30 rows, fractional quantity 1.50 and discount 12.50%. Four pages; every row retained, headers repeated on every page, no blank overflow page, and $4,187.50 grand total retained. All four pages visually reviewed. The three-row final sample fits one page with the same pagination CSS. QA-only pagination PDFs did not create Salesforce Files or CRM records.
+
+Scoped Apex: 17/17 results passed, no skips, run 707Ru00002H9zZ4. Includes live Quote totals with a fractional discount, sample/private file/no Quote DML, empty line items, draft preview without publishing, unavailable-Quote server guard, and Opportunity fallback.
+Node check: Quote availability/fallback, sample arithmetic, browser parsing/loop retention, native PDF CSS, existing account filters and font library checks PASS.
+Full Prettier check PASS; subsequent modified files formatted/checked separately. git diff --check PASS.
+Offline baseline/final: identical suites and tally, 516/577 passed with the same 61 pre-existing metadata findings. Tracked generated reports restored. Final Quote changes remain on feat/byod-signature-sender; no production deployment or release.

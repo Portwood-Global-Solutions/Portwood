@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata"><fullName>Verified_By__c</fullName><description
+    >Administrator who reviewed this font revision native PDF specimen.</description><label
+    >Verified by</label><referenceTo>User</referenceTo><relationshipName
+    >Verified_Font_Faces</relationshipName><deleteConstraint>SetNull</deleteConstraint><type>Lookup</type></CustomField>

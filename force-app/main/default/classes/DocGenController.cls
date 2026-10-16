@@ -8485,6 +8485,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
+            WHERE Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
             ORDER BY Name ASC
         ];

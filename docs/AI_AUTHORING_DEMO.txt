@@ -1,0 +1,101 @@
+Portwood Agentforce authoring demo — feat/byod-signature-sender
+
+Open the live AI scratch org:
+https://dream-java-5387-dev-ed.scratch.lightning.force.com/lightning/n/DocGen_Command_Hub
+CLI alias: portwood-ai-journey (separate from portwood-proposal).
+
+Ready-to-show templates under My templates:
+- AI - Quote from PDF example
+- AI - DOCX quote with Lato
+The two quote demos select the fictional Northstar - AI authoring demo Quote. Open the row's Design
+menu action, then PDF Preview or Download Sample. The Word example includes a
+Portwood logo and verified Lato regular/bold font revisions. Native output has one
+Letter page, three line items, $23,100 after discounts, $600 tax, $150 shipping and
+a $23,850 grand total. Customer, quote number, date, line items and totals are live
+Salesforce bindings.
+
+Conversational account demo:
+- AI - Conversational account briefing
+Select Northstar Manufacturing - AI Demo as Sample Record. The conversation asked
+which opportunities/cases to include. The reply requested open only, no date window
+and no row limit; a follow-up changed cases to high-priority open cases only. No
+object or field mapping was supplied. Agentforce discovered Account, Opportunities
+and Cases, compiled real relationships and filters, and preserved the layout brief.
+Expected data: two open opportunities, $71,100 total pipeline, one high-priority
+open case. The $99,999 closed opportunity, Medium open case and closed case are
+excluded. The saved query is the Agentforce plan, checked against actual schema.
+
+To create another:
+1. My templates > Create template > Generate with AI.
+2. Name it; Next: Describe your document. No base-object or field picker is required.
+3. Upload one PDF or DOCX. Wait for Ready. Choose Lato / Regular under Document font.
+4. Send a message to Agentforce. Example:
+   Closely recreate this Project Quote, preserving its wording, Portwood logo,
+   four product columns and closing statement. Use the selected Lato regular and
+   bold faces, bind customer and pricing to Salesforce Quote data, and fit the
+   sample on one Letter page.
+5. Reply to any business questions. Review Ready to design; refine it naturally
+   (e.g. "Include all quote lines; no row limit"). Generate document with Agentforce.
+   Choose the Northstar Quote, then Open in Designer.
+6. Review field meanings, native PDF, page breaks and fonts. Save as New Version.
+
+Planning uses native Agentforce and actual readable Salesforce schema. It does
+not retrieve customer record values. Portwood validates structured filters, sorting
+and relationships in USER_MODE before handing the query shape to HTML generation.
+Custom providers need the optional Callable queryPlanning / planQuery capability.
+Activate DocGen_Query_Plan, DocGen_Query_Reference, DocGen_HTML_Body and
+DocGen_HTML_Reference in the updated extension (currently scratch-only).
+
+The full HTML prompt ends with the accumulated customer requests. Earlier sections contain the rendering
+contract, canonical repeating tables, allowed data shape, image assets, exact
+approved font tags, language caveats and reference handling. Examples are untrusted
+reference content, not instructions. The default is close recreation; the brief
+can request a redesign. Designer and Canvas remain separate products under the
+Designer / Canvas choice; Existing template is the third authoring route.
+
+The tested default is GPT 5.4 through native Agentforce ConnectApi / Prompt Builder.
+The scratch trial has zero Advanced-model allowance; GPT 5.5 returned a quota
+error. Model choice remains configurable by the admin. The original proposal
+scratch has the updated base UI/code but lacks the Agentforce entitlement.
+
+PDFs use private ContentDocument grounding. DOCX uses async native Word-to-HTML
+preparation, including main-body PNG/JPEG images. The UI uses the 15 MB Agentforce
+file budget; expanded Word content can hit processing/prompt limits. Complex
+layouts, Word drawings and header/footer images can need a PDF export or manual
+adjustments. Salesforce sends inputs to its configured model; private Files storage
+does not prevent model processing.
+
+Advanced print guidance covers page-break-inside:avoid for normal rows, nowrap
+for short amounts/codes only, repeating thead, explicit widths, headings and
+compact totals staying together, and deliberate page breaks. Oversized rows can
+still split. Long descriptions should wrap. Native PDF review remains required.
+
+The first account draft misplaced font tags in CSS classes. An Agentforce edit
+moved them to quoted inline styles and shortened the date format. No manual query
+mapping or HTML rewriting was used. The shared prompt's conflicting CSS output
+instruction was fixed, and the server now rejects misplaced font tags before
+staging. This is an AI draft-and-review workflow, not a guarantee of first-pass
+layout correctness.
+
+Earlier quote review caught one AI-chosen subtotal binding. TotalPrice is after discounts;
+Subtotal is before discounts. The prompt now explains the distinction. Live QA
+also found and fixed example-image link visibility, duplicate array loops, and
+HTML scalar conditionals consuming cells inside repeating rows. Native PDF and
+business-data review still matter.
+
+Validation (earlier branch checks plus current conversation coverage):
+- 61 core AI/controller/validator/edit-guard tests passed in the non-AI scratch.
+- Native Query Plan and Query Reference prompts exercised successfully; the PDF
+  reference inferred Quote and quote lines without a preselected source object.
+- 136 distinct scoped Apex tests passed across planner, references, controller,
+  provider, HTML rendering, validation and edit guards, including font placement.
+- Native long-table proof: 32 opportunities and 18 cases over five pages; all
+  rows present, headings repeated, no split rows, blank pages or clipping.
+- 85 HTML/font tests passed, including nested descriptions in repeating rows.
+- Pure Node conversation, authoring, Quote starter and font-library checks passed.
+- Full Prettier check and git diff --check passed.
+- Offline findings unchanged: 516/577 passed; 61 pre-existing findings.
+No fresh-install-to-PDF timing benchmark has been claimed.
+
+Deployment is scratch-only. No package release, push or production deployment.
+See UserGuide section 5.7.11 and docs/AGENTFORCE_SETUP.md for setup details.

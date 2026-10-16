@@ -1,0 +1,32 @@
+[
+    {
+        "file": "BarlowCondensed-ExtraBold.ttf",
+        "key": "127b06330968f16bb49727e885416416c8693b619e26cdfd36dc00d5f751e1e7",
+        "fontKey": "barlowcondensed",
+        "fixture": "fixtures/barlowcondensed/BarlowCondensed-ExtraBold"
+    },
+    {
+        "file": "DMSerifDisplay-Regular.ttf",
+        "key": "e9aebbe084a2e03622e5198fe0b87c0d525bce7d90e7679e024109b5acf5f379",
+        "fontKey": "dmserifdisplay",
+        "fixture": "fixtures/dmserifdisplay/DMSerifDisplay-Regular"
+    },
+    {
+        "file": "Barlow-Regular.ttf",
+        "key": "179138cb809b03a18595b705659a3b5796dc0197fa0def84f8cebf8564de141c",
+        "fontKey": "barlow",
+        "fixture": "fixtures/barlow/Barlow-Regular"
+    },
+    {
+        "file": "Barlow-Bold.ttf",
+        "key": "fcb466c546218b4622acac5bae6e633ed0ad3be0cd907a5e8122ca6bd0340a59",
+        "fontKey": "barlow",
+        "fixture": "fixtures/barlow/Barlow-Bold"
+    },
+    {
+        "file": "Parisienne-Regular.ttf",
+        "key": "9fff65b95e9ec9fadd6c78b2a1622da90ec6cfeff021e47b968c41f417a77cab",
+        "fontKey": "parisienne",
+        "fixture": "fixtures/parisienne/Parisienne-Regular"
+    }
+]

@@ -1,0 +1,615 @@
+<template>
+    <div class="frame" onkeydown={handleKeydown}>
+        <header class="masthead">
+            <button
+                class="brand"
+                data-action="back"
+                onclick={handleAction}
+                title="Back to templates"
+                aria-label="Back to templates"
+            >
+                <img src={logoUrl} alt="Portwood" />
+            </button>
+            <h1>{templateName}</h1>
+            <lightning-button-menu alternative-text="Document actions" menu-alignment="auto" onselect={handleMenu}>
+                <lightning-menu-item value="settings" label="Template settings"></lightning-menu-item>
+                <lightning-menu-item value="versions" label="Version history"></lightning-menu-item>
+                <lightning-menu-item value="source" label={modeLabel}></lightning-menu-item>
+                <lightning-menu-item value="prompt" label="Copy authoring prompt"></lightning-menu-item>
+                <template if:true={agentforceAvailable}
+                    ><lightning-menu-item value="agentforce" label="Refine with Agentforce"></lightning-menu-item
+                ></template>
+                <lightning-menu-item value="classic" label="Open classic Designer"></lightning-menu-item>
+                <lightning-menu-item value="back" label="Back to templates"></lightning-menu-item>
+            </lightning-button-menu>
+            <div class="mode-switch" role="group" aria-label="Editing mode">
+                <button
+                    aria-label="Visual editor"
+                    aria-pressed={visualSelected}
+                    data-mode="visual"
+                    onclick={handleMode}
+                    disabled={modeDisabled}
+                >
+                    Visual
+                </button>
+                <button
+                    aria-label="HTML source"
+                    aria-pressed={sourceMode}
+                    data-mode="source"
+                    onclick={handleMode}
+                    disabled={modeDisabled}
+                    title="Edit the full template HTML and CSS"
+                >
+                    HTML
+                </button>
+            </div>
+            <span class="status" role="status" aria-live="polite">{status}</span>
+            <template if:true={isEditing}
+                ><button class="preview-button" data-action="stage" data-value="preview" onclick={handleAction}>
+                    Preview
+                </button></template
+            >
+            <template if:true={isPreview}
+                ><button class="preview-button" data-action="stage" data-value="document" onclick={handleAction}>
+                    {backToEditingLabel}
+                </button></template
+            >
+            <button
+                class="save"
+                data-action="save"
+                onclick={handleAction}
+                disabled={saveDisabled}
+                title="Save changes as a new template version"
+            >
+                Save
+            </button>
+        </header>
+        <div class={toolbarClass} role="toolbar" aria-label="Document tools">
+            <template if:true={pdfDisplayed}><span class="preview-hint">PDF preview</span></template>
+            <button
+                title="Undo"
+                aria-label="Undo last edit"
+                data-action="undo"
+                onclick={handleAction}
+                onmousedown={keepSelection}
+                disabled={undoBlocked}
+            >
+                ↶
+            </button>
+            <button
+                title="Redo"
+                aria-label="Redo last edit"
+                data-action="redo"
+                onclick={handleAction}
+                onmousedown={keepSelection}
+                disabled={redoBlocked}
+            >
+                ↷
+            </button>
+            <span class="divider"></span>
+            <button
+                class="named"
+                data-action="panel"
+                data-value="insert"
+                onclick={handleAction}
+                onmousedown={keepSelection}
+            >
+                ＋ Insert
+            </button>
+            <button
+                class="named"
+                data-action="panel"
+                data-value="tags"
+                onclick={handleAction}
+                onmousedown={keepSelection}
+            >
+                Fields
+            </button>
+            <button
+                class="named"
+                data-action="panel"
+                data-value="page"
+                onclick={handleAction}
+                onmousedown={keepSelection}
+            >
+                Page
+            </button>
+            <span class="divider"></span>
+            <template if:false={sourceMode}>
+                <label class="font"
+                    ><span class="sr-only">Font family</span
+                    ><select
+                        aria-label="Font family"
+                        disabled={formattingDisabled}
+                        onmousedown={captureSelection}
+                        onchange={handleFont}
+                    >
+                        <template for:each={fontOptions} for:item="opt"
+                            ><option key={opt.value} value={opt.value} selected={opt.selected}>
+                                {opt.label}
+                            </option></template
+                        >
+                    </select></label
+                >
+                <input
+                    class="size"
+                    type="number"
+                    min="6"
+                    max="96"
+                    step="0.5"
+                    value={fontSize}
+                    aria-label="Font size in points"
+                    disabled={formattingDisabled}
+                    onfocus={captureSelection}
+                    onchange={handleSize}
+                />
+                <button
+                    title="Bold"
+                    aria-label="Bold"
+                    disabled={formattingDisabled}
+                    aria-pressed={boldPressed}
+                    data-action="format"
+                    data-value="bold"
+                    onclick={handleAction}
+                    onmousedown={keepSelection}
+                >
+                    <b>B</b>
+                </button>
+                <button
+                    title="Italic"
+                    aria-label="Italic"
+                    disabled={formattingDisabled}
+                    aria-pressed={italicPressed}
+                    data-action="format"
+                    data-value="italic"
+                    onclick={handleAction}
+                    onmousedown={keepSelection}
+                >
+                    <em>I</em>
+                </button>
+                <button
+                    title="Underline"
+                    aria-label="Underline"
+                    disabled={formattingDisabled}
+                    aria-pressed={underlinePressed}
+                    data-action="format"
+                    data-value="underline"
+                    onclick={handleAction}
+                    onmousedown={keepSelection}
+                >
+                    <u>U</u>
+                </button>
+                <details class="more">
+                    <summary title="Alignment, lists and more formatting">More</summary>
+                    <div class="more-menu" role="group" aria-label="More formatting">
+                        <button
+                            data-action="format"
+                            data-value="justifyLeft"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Align left</button
+                        ><button
+                            data-action="format"
+                            data-value="justifyCenter"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Align centre</button
+                        ><button
+                            data-action="format"
+                            data-value="justifyRight"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Align right
+                        </button>
+                        <button
+                            data-action="format"
+                            data-value="insertUnorderedList"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Bulleted list</button
+                        ><button
+                            data-action="format"
+                            data-value="insertOrderedList"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Numbered list
+                        </button>
+                        <button
+                            data-action="format"
+                            data-value="strikeThrough"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Strikethrough</button
+                        ><button
+                            data-action="format"
+                            data-value="superscript"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Superscript</button
+                        ><button
+                            data-action="format"
+                            data-value="subscript"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Subscript</button
+                        ><button
+                            data-action="format"
+                            data-value="removeFormat"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            Clear formatting
+                        </button>
+                        <div class="text-swatches" role="group" aria-label="Text colours">
+                            <button
+                                aria-label="Black text"
+                                data-action="format"
+                                data-command="foreColor"
+                                data-value="#111111"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Black</button
+                            ><button
+                                aria-label="Navy text"
+                                data-action="format"
+                                data-command="foreColor"
+                                data-value="#183452"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Navy</button
+                            ><button
+                                aria-label="Blue text"
+                                data-action="format"
+                                data-command="foreColor"
+                                data-value="#235fa4"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Blue</button
+                            ><button
+                                aria-label="Green text"
+                                data-action="format"
+                                data-command="foreColor"
+                                data-value="#236b4a"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Green
+                            </button>
+                        </div>
+                        <label
+                            >Text colour<input
+                                type="color"
+                                aria-label="Text colour"
+                                data-command="foreColor"
+                                value="#183452"
+                                onmousedown={captureSelection}
+                                onchange={handleColor} /></label
+                        ><label
+                            >Highlight<input
+                                type="color"
+                                aria-label="Text highlight"
+                                data-command="hiliteColor"
+                                value="#fff2b2"
+                                onmousedown={captureSelection}
+                                onchange={handleColor}
+                        /></label>
+                    </div>
+                </details>
+            </template>
+            <template if:true={sourceMode}>
+                <button class="named" data-action="format-source" onclick={handleAction} disabled={modeDisabled}>
+                    Format HTML
+                </button>
+                <button class="named" data-action="wrap-source" onclick={handleAction} aria-pressed={sourceWrap}>
+                    Wrap lines
+                </button>
+            </template>
+            <template if:false={sourceMode}>
+                <label class="zoom"
+                    ><span class="sr-only">Document zoom</span
+                    ><select aria-label="Document zoom" onchange={handleZoom}>
+                        <template for:each={zoomOptions} for:item="opt"
+                            ><option key={opt.value} value={opt.value} selected={opt.selected}>
+                                {opt.label}
+                            </option></template
+                        >
+                    </select></label
+                >
+            </template>
+        </div>
+        <aside class="guide" hidden={noGuide} aria-label="Document inspector">
+            <div class="guide-body">
+                <template if:true={isVisualEditing}>
+                    <template if:true={hasSelection}>
+                        <h2>{selection.label}</h2>
+                        <p class="selection-summary">{selection.summary}</p>
+                        <div class="arrange" role="group" aria-label="Arrange selected block">
+                            <button
+                                data-action="move"
+                                data-value="up"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                                disabled={cannotMoveUp}
+                            >
+                                ↑ Move up</button
+                            ><button
+                                data-action="move"
+                                data-value="down"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                                disabled={cannotMoveDown}
+                            >
+                                ↓ Move down</button
+                            ><button data-action="duplicate" onclick={handleAction} onmousedown={keepSelection}>
+                                Duplicate</button
+                            ><button
+                                class="remove"
+                                data-action="remove"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Remove
+                            </button>
+                        </div>
+                        <button
+                            class="text-button"
+                            data-action="after"
+                            onclick={handleAction}
+                            onmousedown={keepSelection}
+                        >
+                            ＋ Add text below
+                        </button>
+                        <template if:true={imageSelected}
+                            ><label class="stacked"
+                                >Image width (in)<input
+                                    type="number"
+                                    min="0.1"
+                                    step="any"
+                                    value={imageWidth}
+                                    aria-label="Image width in inches"
+                                    onchange={handleImageWidth} /></label
+                        ></template>
+                        <template if:true={tableSelected}>
+                            <h3>Rows and columns</h3>
+                            <div class="arrange" role="group" aria-label="Table editing">
+                                <button
+                                    data-action="table"
+                                    data-value="rowBefore"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Row above</button
+                                ><button
+                                    data-action="table"
+                                    data-value="rowAfter"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Row below</button
+                                ><button
+                                    data-action="table"
+                                    data-value="colBefore"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Column left</button
+                                ><button
+                                    data-action="table"
+                                    data-value="colAfter"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Column right
+                                </button>
+                            </div>
+                            <details class="inspector-details">
+                                <summary>Cell and table options</summary>
+                                <div class="arrange">
+                                    <button
+                                        data-action="table"
+                                        data-value="mergeCells"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Merge cells</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="splitCell"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Split cell</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="headerRow"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Style header row</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="repeatHeader"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Repeat header</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="distributeCols"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Equal columns</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="tableWidth"
+                                        data-option="100%"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Full width</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="rowDel"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Remove row</button
+                                    ><button
+                                        data-action="table"
+                                        data-value="colDel"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Remove column
+                                    </button>
+                                </div>
+                                <p class="hint">
+                                    Click a cell to choose its row or column. Shift-click another cell to select a
+                                    range.
+                                </p>
+                                <button class="text-button" data-action="advanced-table" onclick={handleAction}>
+                                    Borders, fill and spacing
+                                </button>
+                            </details>
+                        </template>
+                        <details class="inspector-details">
+                            <summary>Placement</summary>
+                            <label class="stacked"
+                                >Layout<select aria-label="Block placement" onchange={handlePositionMode}>
+                                    <option value="flow" selected={flowSelected}>Flow with text</option>
+                                    <option value="absolute" selected={fixedSelected}>Place at coordinates</option>
+                                </select></label
+                            ><template if:true={fixedSelected}
+                                ><div class="position-grid">
+                                    <label
+                                        >Left (in)<input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            value={positionX}
+                                            data-property="positionX"
+                                            oninput={handlePositionInput} /></label
+                                    ><label
+                                        >Top (in)<input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            value={positionY}
+                                            data-property="positionY"
+                                            oninput={handlePositionInput} /></label
+                                    ><label
+                                        >Width (in)<input
+                                            type="number"
+                                            step="any"
+                                            min="0.1"
+                                            value={positionWidth}
+                                            data-property="positionWidth"
+                                            oninput={handlePositionInput}
+                                    /></label>
+                                </div>
+                                <button class="secondary" onclick={handlePositionApply}>Apply position</button>
+                                <p class="hint">
+                                    Coordinates start at the printable page area. Check the PDF after placing content.
+                                </p></template
+                            >
+                        </details>
+                    </template>
+                    <template if:false={hasSelection}
+                        ><h2>Make it yours</h2>
+                        <p>Click text to edit it. Click a table or image to arrange it.</p>
+                        <button class="text-button" data-action="panel" data-value="insert" onclick={handleAction}>
+                            Add text, a table or an image</button
+                        ><button class="text-button" data-action="panel" data-value="tags" onclick={handleAction}>
+                            Insert a Salesforce field
+                        </button></template
+                    >
+                    <details class="inspector-details">
+                        <summary>Document layout</summary>
+                        <button class="text-button" data-action="panel" data-value="page" onclick={handleAction}>
+                            Page size and margins</button
+                        ><button class="text-button" data-action="panel" data-value="hf" onclick={handleAction}>
+                            Header, footer and page numbers</button
+                        ><button class="text-button" data-action="panel" data-value="watermark" onclick={handleAction}>
+                            Background and watermark
+                        </button>
+                    </details>
+                </template>
+                <template if:true={isSourceEditing}>
+                    <h2>Edit HTML and CSS</h2>
+                    <p>Edit the complete document, including styles, merge tags and running header/footer regions.</p>
+                    <p>Preview uses your current code. Save creates a new version.</p>
+                    <button
+                        class="primary"
+                        data-action="source-preview"
+                        onclick={handleAction}
+                        disabled={previewDisabled}
+                    >
+                        Preview current HTML
+                    </button>
+                    <details class="inspector-details">
+                        <summary>Source tips</summary>
+                        <p>
+                            Use Fields to insert merge tags at your cursor. Keep the header/footer region markers to
+                            preserve running content.
+                        </p>
+                        <p>
+                            Use tables, absolute lengths and positioned blocks for PDF layouts. Review pagination in the
+                            native PDF.
+                        </p>
+                        <p>Ctrl/⌘ + Enter previews. Ctrl/⌘ + S saves. Undo typing with Ctrl/⌘ + Z.</p>
+                    </details>
+                </template>
+                <template if:true={isPreview}
+                    ><h2>Preview your document</h2>
+                    <p>Choose a record to see your latest edits with real data.</p>
+                    <template if:true={realObject}
+                        ><lightning-record-picker
+                            label="Preview record"
+                            object-api-name={objectApiName}
+                            value={recordId}
+                            onchange={handleRecord}
+                            placeholder="Choose a Salesforce record"
+                        ></lightning-record-picker
+                    ></template>
+                    <p class="hint">Your edits stay here when you return to editing.</p>
+                    <button class="primary" data-action="pdf" onclick={handleAction} disabled={previewDisabled}>
+                        {pdfLabel}
+                    </button></template
+                >
+                <template if:true={hasReview}
+                    ><button class="review" data-action="panel" data-value="review" onclick={handleAction}>
+                        {reviewLabel}
+                    </button></template
+                >
+            </div>
+            <footer>Save keeps a new version. Undo restores recent edits.</footer>
+        </aside>
+        <template if:true={notice}
+            ><div class={noticeClass} role={noticeRole}>
+                <strong>{notice.title}</strong>
+                <p>{notice.message}</p>
+                <template if:true={notice.detail}
+                    ><details>
+                        <summary>Technical details</summary>
+                        <p>{notice.detail}</p>
+                    </details></template
+                >
+                <button data-action="dismiss-notice" onclick={handleAction} aria-label="Dismiss message">
+                    Dismiss
+                </button>
+            </div></template
+        >
+    </div>
+</template>

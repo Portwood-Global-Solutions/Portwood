@@ -1,0 +1,290 @@
+<template>
+    <div class="library">
+        <div class="toolbar">
+            <div>
+                <h2>Fonts</h2>
+                <p>Find a face, check its PDF specimen, and use the approved version in your templates.</p>
+            </div>
+            <template lwc:if={canManage}
+                ><lightning-button
+                    label="Upload font"
+                    icon-name="utility:upload"
+                    variant="brand"
+                    onclick={openUpload}
+                    disabled={busy}
+                ></lightning-button
+            ></template>
+        </div>
+        <template lwc:if={working}
+            ><lightning-spinner alternative-text="Working with font" size="small"></lightning-spinner
+        ></template>
+        <template lwc:if={error}><p class="error" role="alert">{error}</p></template>
+        <template lwc:if={message}><p class="message" role="status">{message}</p></template>
+        <details class="compatibility">
+            <summary>Which fonts work in PDFs?</summary>
+            <div class="support-grid">
+                <div>
+                    <h3>Start with a static .ttf</h3>
+                    <p>
+                        Up to 9 MB per face and 20,000 glyphs, with a license that allows public font previews and PDF
+                        embedding. Upload each weight or italic face separately.
+                    </p>
+                </div>
+                <div>
+                    <h3>Some fonts need a different file</h3>
+                    <p>
+                        Variable fonts, OpenType CFF (.otf), WOFF / WOFF2, and font collections (.ttc) are not
+                        supported. For a variable font, obtain a static TrueType version from its publisher.
+                    </p>
+                </div>
+                <div>
+                    <h3>Language and color have limits</h3>
+                    <p>
+                        A font must contain every character you use. Arabic and other complex scripts may need shaping
+                        beyond font embedding. Most emoji and other characters above U+FFFF cannot print as custom-font
+                        text; use images. Color fonts print in a single color.
+                    </p>
+                </div>
+            </div>
+            <p class="hint">
+                A browser preview can look different from a PDF. Generate and inspect the native PDF specimen before
+                approving a font. Built-in fonts need no upload.
+            </p>
+        </details>
+        <template lwc:if={showUpload}>
+            <section class="upload" aria-label="Upload font">
+                <h3>Upload and inspect a font</h3>
+                <p class="upload-steps">Upload → Inspect → Generate PDF specimen → Review and approve</p>
+                <p>
+                    One face per upload. Include its license and confirm it permits storage in Salesforce Files and PDF
+                    embedding. TTF files can be up to 9 MB per face. Browser previews use a public Salesforce File link.
+                </p>
+                <p class="upload-support">
+                    Use a static .ttf. Variable fonts and .otf / .woff / .ttc files will not work. Each face needs its
+                    own upload and PDF review.
+                </p>
+                <lightning-file-upload
+                    label="TrueType font (up to 9 MB)"
+                    name="portwoodFontUpload"
+                    accept={acceptedFormats}
+                    onuploadfinished={handleUploadFinished}
+                    disabled={busy}
+                ></lightning-file-upload>
+                <template lwc:if={uploadedFilename}><p role="status">Uploaded: {uploadedFilename}</p></template>
+                <lightning-input
+                    label="Font asset key"
+                    required
+                    value={fontKey}
+                    placeholder="company-typeface"
+                    onchange={setKey}
+                    maxlength="40"
+                    disabled={busy}
+                ></lightning-input>
+                <lightning-textarea
+                    label="Font license text"
+                    required
+                    maxlength="65536"
+                    value={licenseText}
+                    onchange={setLicense}
+                    disabled={busy}
+                ></lightning-textarea>
+                <lightning-input
+                    type="checkbox"
+                    label="The license allows public font previews and PDF embedding"
+                    checked={rights}
+                    onchange={setRights}
+                    disabled={busy}
+                ></lightning-input>
+                <div class="actions">
+                    <lightning-button label="Back to fonts" onclick={closeUpload} disabled={busy}></lightning-button
+                    ><lightning-button
+                        label="Inspect font"
+                        variant="brand"
+                        onclick={upload}
+                        disabled={uploadDisabled}
+                    ></lightning-button>
+                </div>
+            </section>
+        </template>
+        <template lwc:if={showLibrary}>
+            <div class="workspace">
+                <div class="font-browser">
+                    <div class="font-filters">
+                        <lightning-input
+                            type="search"
+                            label="Find a font"
+                            variant="label-hidden"
+                            placeholder="Search fonts by name or file"
+                            value={searchTerm}
+                            onchange={search}
+                        ></lightning-input
+                        ><lightning-combobox
+                            label="Status"
+                            variant="label-hidden"
+                            value={statusFilter}
+                            options={statusOptions}
+                            onchange={filterStatus}
+                        ></lightning-combobox>
+                        <p class="hint" role="status">{resultCount}</p>
+                    </div>
+                    <nav class="faces" aria-label="Font faces" tabindex="0">
+                        <template for:each={rows} for:item="face"
+                            ><button
+                                key={face.key}
+                                class={face.className}
+                                data-key={face.key}
+                                onclick={select}
+                                aria-pressed={face.selected}
+                                disabled={busy}
+                            >
+                                <span>{face.label}</span><small>{face.detail}</small
+                                ><span class="status">{face.statusLabel}</span>
+                            </button></template
+                        >
+                        <template lwc:if={showNoMatches}
+                            ><p class="no-matches">No fonts match. Try another name or status.</p></template
+                        >
+                    </nav>
+                    <div class="pagination">
+                        <lightning-button-icon
+                            icon-name="utility:chevronleft"
+                            alternative-text="Previous font page"
+                            onclick={previousPage}
+                            disabled={previousDisabled}
+                        ></lightning-button-icon
+                        ><span>{pageLabel}</span
+                        ><lightning-button-icon
+                            icon-name="utility:chevronright"
+                            alternative-text="Next font page"
+                            onclick={nextPage}
+                            disabled={nextDisabled}
+                        ></lightning-button-icon>
+                    </div>
+                </div>
+                <template lwc:if={selected}>
+                    <section class="detail" aria-label="Font specimen" tabindex="0">
+                        <div class="detail-heading">
+                            <h3>{selected.label}</h3>
+                            <span class="status">{selectedStatus}</span>
+                        </div>
+                        <p class="hint">{fontDetail}</p>
+                        <p class="next-step">{nextStep}</p>
+                        <template lwc:if={colorFontWarning}>
+                            <p class="hint">
+                                This is a color font. PDFs use its single-color outline; the font's color palette is not
+                                preserved. Review the native PDF before approving it.
+                            </p>
+                        </template>
+                        <template lwc:if={canPreview}
+                            ><div class="specimen" style={specimenStyle}>{sample}</div></template
+                        ><template lwc:else
+                            ><p class="specimen">
+                                Browser preview is unavailable. Generate a PDF specimen to prepare this font.
+                            </p></template
+                        >
+                        <lightning-textarea
+                            label="Try your text in the browser"
+                            value={sample}
+                            onchange={setSample}
+                        ></lightning-textarea>
+                        <template lwc:if={supplementaryTextWarning}>
+                            <p class="hint">
+                                This text contains supplementary Unicode characters, such as most emoji. Custom-font
+                                PDFs cannot print those characters. Use images for them.
+                            </p>
+                        </template>
+                        <p class="hint">The browser is a preview. The native PDF specimen is the approval reference.</p>
+                        <div class="actions">
+                            <template lwc:if={hasProof}
+                                ><a href={selected.proofUrl} target="_blank" rel="noopener"
+                                    >Open native PDF specimen</a
+                                ></template
+                            >
+                            <template lwc:if={canManage}>
+                                <template lwc:if={canProof}
+                                    ><lightning-button
+                                        label="Generate PDF specimen"
+                                        onclick={proof}
+                                        disabled={busy}
+                                    ></lightning-button
+                                ></template>
+                                <template lwc:if={canRetire}
+                                    ><lightning-button
+                                        label="Retire face"
+                                        onclick={retire}
+                                        disabled={busy}
+                                    ></lightning-button
+                                ></template>
+                            </template>
+                        </div>
+                        <template lwc:if={canCopyFontTag}>
+                            <section class="publication" aria-label="Use font in HTML">
+                                <h3>Use in an HTML template</h3>
+                                <p>
+                                    Paste this tag inside a style attribute. It applies this exact face to the element
+                                    and its children.
+                                </p>
+                                <lightning-input
+                                    label="HTML font merge tag"
+                                    value={selected.mergeTag}
+                                    read-only
+                                ></lightning-input>
+                                <lightning-button
+                                    label="Copy font tag"
+                                    icon-name="utility:copy_to_clipboard"
+                                    onclick={copyFontTag}
+                                    disabled={busy}
+                                ></lightning-button>
+                                <pre class="font-example">{htmlFontExample}</pre>
+                                <p class="hint">
+                                    Use HTML source mode. Choose a separate verified face for bold or italic text. This
+                                    tag keeps the current font revision.
+                                </p>
+                            </section>
+                        </template>
+                        <template lwc:if={canManage}>
+                            <template lwc:if={isStaged}>
+                                <section class="publication">
+                                    <h3>Review this font</h3>
+                                    <p>
+                                        Your original font is saved in Salesforce Files. Generate a native PDF specimen,
+                                        review it, then approve the face for templates.
+                                    </p>
+                                </section>
+                            </template>
+                            <template lwc:if={canReview}
+                                ><section class="publication">
+                                    <h3>Approve for authors</h3>
+                                    <p>{reviewHint}</p>
+                                    <lightning-input
+                                        type="checkbox"
+                                        label="I reviewed the current native PDF and confirmed this face and its glyphs"
+                                        checked={reviewed}
+                                        onchange={setReviewed}
+                                        disabled={busy}
+                                    ></lightning-input
+                                    ><lightning-button
+                                        label="Approve font"
+                                        variant="brand"
+                                        onclick={approve}
+                                        disabled={approveDisabled}
+                                    ></lightning-button></section
+                            ></template>
+                        </template>
+                    </section>
+                </template>
+            </div>
+            <template lwc:if={catalogLimitReached}
+                ><p class="hint">
+                    Showing the first 200 registered faces. Search and status filters apply to these loaded faces.
+                </p></template
+            >
+        </template>
+        <template lwc:if={showEmpty}
+            ><div class="empty">
+                <h3>Add a font when you are ready to brand your documents</h3>
+                <p>Built-in fonts already work. {emptyHint}</p>
+            </div></template
+        >
+    </div>
+</template>

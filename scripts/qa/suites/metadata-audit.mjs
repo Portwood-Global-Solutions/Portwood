@@ -81,9 +81,9 @@ const CUSTOM_SETTINGS = new Set();
 
 function xmlValues(xml, tag) {
     const out = [];
-    const re = new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g');
+    const re = new RegExp(`<${tag}\\s*>([^<]*)</${tag}\\s*>`, 'g');
     let m;
-    while ((m = re.exec(xml)) !== null) out.push(m[1]);
+    while ((m = re.exec(xml)) !== null) out.push(m[1].trim());
     return out;
 }
 
@@ -205,7 +205,7 @@ export async function run() {
             }
 
             // --- described? ---
-            const described = /<description>/.test(fieldXml) || /<inlineHelpText>/.test(fieldXml);
+            const described = /<description\s*>/.test(fieldXml) || /<inlineHelpText\s*>/.test(fieldXml);
             checks.push(
                 check(
                     `${obj}.${field} has a description or help text`,

@@ -1,4 +1,4 @@
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getTemplates from '@salesforce/apex/DocGenEmailTemplateController.getTemplates';
 import saveTemplate from '@salesforce/apex/DocGenEmailTemplateController.saveTemplate';
@@ -13,6 +13,16 @@ import saveBrand from '@salesforce/apex/DocGenBrandController.saveBrand';
 import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.getOrgWideEmailAddresses';
 
 export default class DocGenEmailTemplates extends LightningElement {
+    @api embedded = false;
+    get cardTitle() {
+        return this.embedded ? null : 'Email Templates';
+    }
+    get cardIcon() {
+        return this.embedded ? null : 'utility:email';
+    }
+    get cardClass() {
+        return this.embedded ? 'embedded-card' : '';
+    }
     @track rows = [];
     @track selectedType;
     @track isLoading = true;
@@ -28,6 +38,10 @@ export default class DocGenEmailTemplates extends LightningElement {
     @track footerText = '';
     @track layoutMode = 'Managed';
     @track isActive = true;
+    tokenHelp =
+        'Type a token, such as {SignerName}, into the subject or body. {ActionButton}, {DocumentInfo}, {SecurityNote}, and {VerificationCode} render as branded blocks.';
+    fullHtmlHelp =
+        'Full HTML mode uses your markup as the entire email. Portwood adds no header or footer. Use {CompanyName} and {BrandColor} to include your org values.';
     @track tokens = [];
 
     @track testEmail = '';
