@@ -4,6 +4,7 @@
 
 ### Added
 
+- Reusable terms and HTML snippet assets with stable `{%snippet:key}` tags, private Salesforce File revision history, visual/source editing and Designer insertion. Normal and giant-query HTML/Canvas PDFs expand shared content before record merging.
 - A document-first Designer workspace with contextual inserts, field selection, table editing, page settings, precise placement and native PDF preview. Advanced users can switch directly between Visual and HTML, format source, and preview unsaved changes.
 - Salesforce Files font assets shared by Designer, Canvas and HTML font tags. Fonts retain their licensed source revision, require native PDF review and expose format, glyph and script limitations before use.
 - Record-page preparation of uploaded or existing PDFs for signatures, including recipients, positioned fields, resumable drafts, sequential signing and protection of sent originals.

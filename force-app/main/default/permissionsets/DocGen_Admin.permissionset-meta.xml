@@ -197,6 +197,7 @@
         <apexClass>DocGenFontController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <classAccesses><apexClass>DocGenSnippetController</apexClass><enabled>true</enabled></classAccesses>
     <customMetadataTypeAccesses>
         <name>DocGen_Button__mdt</name>
         <enabled>true</enabled>

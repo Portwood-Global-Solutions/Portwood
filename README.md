@@ -369,6 +369,8 @@ Salesforce's PDF engine supports these fonts:
 
 Custom fonts from your Word template (Calibri, Cambria, branded typefaces) **fall back to Helvetica** in PDF output. If custom fonts matter, generate as DOCX — Word preserves the original fonts.
 
+**Reusable terms and sections on this branch:** Assets now includes **Terms & snippets**. A tag such as `{%snippet:standard-terms}` brings the entire latest active HTML section into an HTML/Canvas document, including its formatting and record merge fields. Designer offers **Insert → Shared content**; private Salesforce File revisions support history and restoration. See the [working sample and customer journey](docs/SHARED_CONTENT_ASSETS.md).
+
 **Unreleased on this review branch:** HTML and Canvas PDFs can use custom static TrueType fonts through **Assets → Fonts**. Upload the licensed original to Salesforce Files, review its native PDF specimen, then select the verified face in Designer/Canvas or copy its HTML font tag. Registered fonts can include multibyte characters when the face contains the required glyphs. Weight/style availability, supplementary Unicode, complex-script shaping and colour palettes have explicit limits; see [UserGuide §14.2](UserGuide.md#142-pdf-font-limitations). This does not change automatic font handling for Word-source templates or embed fonts in DOCX.
 
 ### Built-in fonts: symbols and non-Latin text use Arial Unicode MS

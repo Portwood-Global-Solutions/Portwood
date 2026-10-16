@@ -3949,6 +3949,34 @@
                                                 </template>
                                             </template></template
                                         >
+                                        <template if:true={isPanelSnippets}>
+                                            <p class="dg-float-panel-tip">
+                                                Insert a shared section as a tag. Its full content appears in PDF
+                                                preview. Edit the shared section in Assets → Terms &amp; snippets.
+                                            </p>
+                                            <template if:true={snippetLoadError}
+                                                ><p role="alert">{snippetLoadError}</p></template
+                                            >
+                                            <div class="pw-insert-list">
+                                                <template for:each={filteredSnippets} for:item="item"
+                                                    ><button
+                                                        key={item.id}
+                                                        data-id={item.id}
+                                                        onmousedown={handleFmtMouseDown}
+                                                        onclick={handleInsertSharedContent}
+                                                    >
+                                                        <strong>{item.name}</strong><span>{item.category}</span
+                                                        ><code>{item.mergeTag}</code>
+                                                    </button></template
+                                                >
+                                            </div>
+                                            <template if:false={hasSnippets}
+                                                ><p class="dg-float-panel-tip">
+                                                    No matching active sections. Create shared content in Assets, then
+                                                    reopen this panel.
+                                                </p></template
+                                            >
+                                        </template>
                                         <template if:true={isPanelImages}>
                                             <div class="dg-image-panel">
                                                 <p class="slds-text-body_small slds-var-m-bottom_x-small">

@@ -2658,6 +2658,8 @@ Comments: {Comments}
 
 ### 7.16 Custom font tags
 
+**Reusable terms and HTML sections (this review branch):** Open **Assets → Terms & snippets**, write or paste an HTML fragment, save it and copy its `{%snippet:key}` tag. In Designer, **Insert → Shared content** inserts the reference. PDF generation includes the latest active revision, with formatting and record tags resolved against the current record or loop row. Add those fields to the template query. Revision history supports restoring older wording as a new revision; existing generated files stay unchanged. HTML/Canvas templates and their running headers/footers are supported. See the [shared-content guide](docs/SHARED_CONTENT_ASSETS.md) for examples, permissions and scope.
+
 Verified **Assets → Fonts** faces can be used in HTML/PDF templates and both design tools. Copy a font tag from Assets and place it in a quoted inline style, for example `<p style="{%font:asset-key:revision-prefix};font-size:12pt">{Name}</p>`. The tag pins the exact reviewed font revision, weight and style. Use a container for inheritance and another verified face for bold or italic. Font tags are style declarations, not image URLs. See [§14.2](#142-pdf-font-limitations) for supported files and script limitations.
 
 ---
@@ -3742,7 +3744,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **My Templates** — create, edit, version, clone, export/import.
 - **Bulk Generation** — mass-generate against a SOQL filter or saved query.
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
-- **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
+- **Assets** — shared images, registered fonts, and reusable terms / HTML snippets. Use `{%asset:<key>}` for images (§7.7.1), or `{%snippet:<key>}` for a full formatted section in HTML/Canvas templates ([shared-content guide](docs/SHARED_CONTENT_ASSETS.md)).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
 - **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.

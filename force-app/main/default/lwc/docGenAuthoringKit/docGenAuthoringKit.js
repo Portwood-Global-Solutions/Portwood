@@ -663,6 +663,16 @@ export function buildAiPrompt(shape, options) {
         );
     }
     lines.push('');
+    lines.push('REUSABLE SHARED CONTENT:');
+    lines.push(
+        '- HTML and Canvas templates can include {%snippet:key} on its own line. It expands to the latest active private HTML asset BEFORE field/loop merging. Preserve the reference; do not copy, invent, rewrite or paraphrase legal terms. The shared section uses the current record or loop context; its fields must be included in the query. Snippets use inline styles and can contain image assets, registered fonts and nested snippet references.'
+    );
+    for (const snippet of opts.snippets || []) {
+        lines.push(
+            '  ' + snippet.mergeTag + ' — ' + snippet.name + (snippet.category ? ' (' + snippet.category + ')' : '')
+        );
+    }
+    lines.push('');
     lines.push('DOCUMENT DESIGN AND DATA INTEGRITY:');
     lines.push(
         '- The DATA SHAPE describes the results returned by the template query. Record inclusion filters, sorting and row limits belong in that query and run before HTML merging. Do not reimplement them in HTML. A field used only by a query filter need not be selected for display; do not report it as a missing binding. Keep implementation notes about the query, fonts or renderer out of the customer-facing document.'

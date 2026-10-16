@@ -791,4 +791,33 @@ await asyncTest('changing editing mode cancels an in-flight native preview befor
     assert.equal(harness.workspacePreviewId, undefined);
     assert.equal(harness.workspaceStage, 'document');
 });
+// Shared content must remain an atomic reference while arranging and saving a template.
+test('shared content insertion keeps the reference and leaves shared wording out of the editable document', () => {
+    const d = documentFor('<p>Before</p>'),
+        calls = [];
+    const harness = {
+        sharedSnippets: [{ id: 'terms', name: 'Standard terms', mergeTag: '{%snippet:standard-terms}' }],
+        _insertIntoVisualPage: (markup) => calls.push(markup),
+        handlePanelClose: () => calls.push('closed')
+    };
+    productionMethod('handleInsertSharedContent', 'event', d).call(harness, {
+        currentTarget: { dataset: { id: 'terms' } }
+    });
+    assert.equal(calls[0], '<div>{%snippet:standard-terms}</div><p><br></p>');
+    assert.equal(calls[1], 'closed');
+    const t = d.createElement('template');
+    t.innerHTML = '<div><span data-dg-tag="true">{%snippet:standard-terms}</span></div>';
+    const cleanup = { _safeReplace: (old, node) => old.parentNode.replaceChild(node, old) };
+    productionMethod('_unpillifyTags', 'root', d).call(cleanup, t.content);
+    assert.equal(t.content.firstChild.outerHTML, '<div>{%snippet:standard-terms}</div>');
+});
+test('clicking a shared reference opens shared content rather than record-field formatting', () => {
+    const d = documentFor('<div><span data-dg-tag="true">{%snippet:terms}</span></div>');
+    let loads = 0;
+    const harness = { useModernDesigner: true, _loadSharedSnippets: () => loads++ };
+    productionMethod('_openPillMenu', 'pill', d).call(harness, d.querySelector('span'));
+    assert.equal(harness.activePanel, 'snippets');
+    assert.equal(loads, 1);
+});
+
 console.log(passed + ' document-editing scenarios passed.');

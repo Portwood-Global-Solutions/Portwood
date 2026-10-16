@@ -4024,6 +4024,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             rootDataContext = data;
         }
         try {
+            if (ownsRootTagPass && xml != null && xml.toLowerCase().contains('{%snippet:')) {
+                if (!isHtmlBacked(currentTemplateType))
+                    throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
+                xml = DocGenSnippetService.expand(xml);
+            }
             return processXmlInner(xml, data, ownsRootTagPass);
         } finally {
             if (ownsRootTagPass) {
@@ -9855,6 +9860,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Merge runs first so we find complete tags
         String xml = mergeRunsInTags(templateXml);
+        if (xml != null && xml.toLowerCase().contains('{%snippet:')) {
+            if (xml.contains('<w:'))
+                throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
+            xml = DocGenSnippetService.expand(xml);
+        }
 
         // Find the opening tag {#relationshipName}
         String openTag = '{#' + relationshipName + '}';
@@ -10013,6 +10023,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         List<String> fieldNames
     ) {
         return renderLoopBodyForRecords(innerXml, relationshipName, records, fieldNames, 0);
+    }
+
+    /** Preserve the source/output context in fresh giant-query batch transactions. */
+    public static String renderLoopBodyForRecords(
+        String innerXml,
+        String relationshipName,
+        List<SObject> records,
+        List<String> fields,
+        Integer rowOffset,
+        String templateType,
+        String outputFormat
+    ) {
+        String previousType = currentTemplateType;
+        String previousOutput = currentOutputFormat;
+        currentTemplateType = templateType;
+        currentOutputFormat = outputFormat;
+        try {
+            return renderLoopBodyForRecords(innerXml, relationshipName, records, fields, rowOffset);
+        } finally {
+            currentTemplateType = previousType;
+            currentOutputFormat = previousOutput;
+        }
     }
 
     /**
@@ -10481,8 +10513,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // stray text by silently discarding the author's CSS.
         bodyContent = stripStyleAndScriptBlocks(bodyContent);
 
-        String headerSrc = String.isBlank(headerHtml) ? null : decodeBraceEntities(headerHtml);
-        String footerSrc = String.isBlank(footerHtml) ? null : decodeBraceEntities(footerHtml);
+        String headerSrc = String.isBlank(headerHtml)
+            ? null
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(headerHtml)));
+        String footerSrc = String.isBlank(footerHtml)
+            ? null
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(footerHtml)));
         if (String.isNotBlank(headerSrc)) {
             sourceStyles += '\n' + extractHtmlStyleBlocks(headerSrc);
             headerSrc = stripStyleAndScriptBlocks(headerSrc);
@@ -10802,6 +10838,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
+        html = DocGenSnippetService.expand(decodeBraceEntities(html));
         html = DocGenFontService.expandTags(html);
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
@@ -10874,6 +10911,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * which preserves arbitrary HTML.
      */
     public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        return wrapHtmlForPdf(body, sourceStyles, header, footer, true);
+    }
+    /** Giant-query rows must be inserted before validating glyphs and pinning their font faces. */
+    public static String wrapHtmlForPdf(
+        String body,
+        String sourceStyles,
+        String header,
+        String footer,
+        Boolean prepareFonts
+    ) {
         body = DocGenFontService.expandTags(body);
         header = DocGenFontService.expandTags(header);
         footer = DocGenFontService.expandTags(footer);
@@ -11047,7 +11094,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
-        return DocGenFontService.prepare(html);
+        return prepareFonts ? DocGenFontService.prepare(html) : html;
     }
 
     private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;

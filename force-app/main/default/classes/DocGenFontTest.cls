@@ -662,6 +662,24 @@ private class DocGenFontTest {
     }
 
     @IsTest
+    static void giantRowsArePresentBeforeFontsAndGlyphsArePrepared() {
+        String key = verified();
+        String tag = DocGenFontService.mergeTag('parisienne', key);
+        String shell = DocGenService.wrapHtmlForPdf('<table><tbody>{ROWS}</tbody></table>', '', null, null, false);
+        System.assert(!shell.contains('@font-face'));
+        String row = '<tr><td style="' + tag + '">Hello customer</td></tr>';
+        String prepared = DocGenFontService.prepare(shell.replace('{ROWS}', row));
+        System.assert(prepared.contains('@font-face') && prepared.contains(key));
+        System.assert(!prepared.contains('{%font:'));
+        try {
+            DocGenFontService.prepare(shell.replace('{ROWS}', row.replace('Hello customer', '漢')));
+            System.assert(false, 'Glyphs from injected batch rows must be validated.');
+        } catch (DocGenException e) {
+            System.assert(e.getMessage().contains('U+6F22'));
+        }
+    }
+
+    @IsTest
     static void fontTagsSurviveGiantParentResolution() {
         String key = verified(), tag = fontTag(key);
         Account a = new Account(Name = 'Giant Şahin');

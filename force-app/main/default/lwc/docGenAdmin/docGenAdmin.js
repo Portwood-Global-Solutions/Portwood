@@ -116,6 +116,7 @@ import searchDataProviders from '@salesforce/apex/DocGenController.searchDataPro
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
 import getConvertedHtmlSnapshot from '@salesforce/apex/DocGenController.getConvertedHtmlSnapshot';
 import listHtmlTemplateImages from '@salesforce/apex/DocGenController.listHtmlTemplateImages';
+import getSnippets from '@salesforce/apex/DocGenSnippetController.getSnippets';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import createAsset from '@salesforce/apex/DocGenController.createAsset';
 import addAssetVersion from '@salesforce/apex/DocGenController.addAssetVersion';
@@ -486,6 +487,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track showAdvancedOptions = false;
     // AI wizard step: assets the prompt can reference + the paste-back box.
     @track wizardAssets = [];
+    @track sharedSnippets = [];
+    snippetLoadError = '';
     _aiPastedHtml = null;
     // Logo control: 'none' | asset id | 'upload'.
     @track newTemplateLogoChoice = 'none';
@@ -2306,9 +2309,40 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             this._imagifyAssetPills();
             await this._loadWizardFonts();
+            await this._loadSharedSnippets();
         } catch (e) {
             this.wizardAssets = [];
         }
+    }
+
+    async _loadSharedSnippets() {
+        this.snippetLoadError = '';
+        try {
+            this.sharedSnippets = ((await getSnippets()) || []).filter((a) => a.isActive);
+        } catch (e) {
+            this.sharedSnippets = [];
+            this.snippetLoadError =
+                e?.body?.message || 'Could not load shared content. Reopen this panel to try again.';
+        }
+    }
+    get isPanelSnippets() {
+        return this.activePanel === 'snippets';
+    }
+    get filteredSnippets() {
+        const q = (this.panelSearch || '').toLowerCase().trim();
+        return this.sharedSnippets.filter(
+            (a) => !q || `${a.name} ${a.category || ''} ${a.assetKey}`.toLowerCase().includes(q)
+        );
+    }
+    get hasSnippets() {
+        return this.filteredSnippets.length > 0;
+    }
+    handleInsertSharedContent(event) {
+        const item = this.sharedSnippets.find((a) => a.id === event.currentTarget.dataset.id);
+        if (!item) return;
+        this._insertIntoVisualPage('<div>' + item.mergeTag + '</div><p><br></p>');
+        this.workspaceStatus = item.name + ' added as shared content';
+        this.handlePanelClose();
     }
 
     async _loadWizardFonts() {
@@ -3013,6 +3047,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             dataSourceMode: this.dataSourceMode,
             providerFields: (this.providerFields || []).map((f) => f.name || f),
             assets,
+            snippets: this.sharedSnippets,
             docDescription:
                 this.aiDocDescription ||
                 (this.aiReference ? 'Closely recreate the uploaded example as a reusable Salesforce document.' : ''),
@@ -3032,7 +3067,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             providerFields: (this.providerFields || []).map((f) => f.name || f),
             fieldTypes: this._buildFieldTypeMap(this.designerQueryMeta),
             fonts: this.wizardFonts,
-            assets: this.wizardAssets
+            assets: this.wizardAssets,
+            snippets: this.sharedSnippets
         });
     }
 
@@ -3435,7 +3471,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 mode: editing ? 'edit' : 'create',
                 currentBody,
                 fonts: this.wizardFonts,
-                assets: this.wizardAssets
+                assets: this.wizardAssets,
+                snippets: this.sharedSnippets
             });
 
             const res = await generateTemplateBody({
@@ -8966,6 +9003,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             { key: 'table', label: 'Table', hint: 'Organise rows and columns', action: 'table' },
             { key: 'image', label: 'Image', hint: 'Choose from your assets', action: 'image' },
             {
+                key: 'shared',
+                label: 'Shared content',
+                hint: 'Terms, conditions and reusable sections',
+                action: 'snippets'
+            },
+            {
                 key: 'divider',
                 label: 'Divider',
                 hint: 'Separate sections',
@@ -9011,6 +9054,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     handleWorkspaceInsert(event) {
         const choice = this.workspaceInsertChoices.find((item) => item.key === event.currentTarget.dataset.key);
         if (!choice) return;
+        if (choice.action === 'snippets') {
+            this.activePanel = 'snippets';
+            this.panelSearch = '';
+            this._loadSharedSnippets();
+            return;
+        }
         if (choice.action === 'image') {
             this.activePanel = 'images';
             this._loadWizardAssets();
@@ -12580,10 +12629,16 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         //   display:inline-block + vertical-align:baseline
         //                    — max-width only applies to a block-ish box, and
         //                      baseline keeps it sitting on the text line.
+        const isShared = /^\{%snippet:/i.test(tagText || '');
         const isStructural = /^[#/:%@*]/.test((tagText || '').charAt(1));
         const containment =
             'display:inline-block;max-width:100%;white-space:normal;overflow-wrap:anywhere;' +
             'vertical-align:baseline;box-sizing:border-box;';
+        if (isShared)
+            return (
+                'background:#e5f2f0;border:1px solid #83b8b2;border-radius:4px;padding:6px 10px;cursor:pointer;' +
+                containment
+            );
         return isStructural
             ? 'background:#e3f5e9;border:1px solid #9fd6b1;border-radius:9px;padding:0 6px;cursor:pointer;' +
                   containment
@@ -12721,6 +12776,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             /* best effort */
         }
         const raw = (pill.textContent || '').trim();
+        if (/^\{%snippet:/i.test(raw)) {
+            this.activePanel = 'snippets';
+            this.panelSearch = '';
+            this.workspaceStatus = 'Shared content is edited in Assets. Its full content appears in PDF preview.';
+            this._loadSharedSnippets();
+            return;
+        }
         const inner = raw.replace(/^\{|\}$/g, '');
         const first = inner.charAt(0);
         let field = null;
@@ -14932,6 +14994,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             insert: this.useModernDesigner ? 'Insert' : 'Insert blocks',
             tags: this.useModernDesigner ? 'Fields' : 'Merge tags',
             images: 'Image assets',
+            snippets: 'Shared content',
             watermark: 'Watermark',
             hf: 'Header & Footer',
             versions: 'Version history',
@@ -15137,6 +15200,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             for (const it of sec.items) {
                 add(it.label, sec.label, { snippet: it.snippet, keywords: (it.title || '') + ' merge tag field' });
             }
+        }
+        for (const a of this.sharedSnippets || []) {
+            add(a.name, 'Shared content', {
+                snippet: '<div>' + a.mergeTag + '</div>',
+                keywords: 'terms conditions disclaimer snippet reusable shared content'
+            });
         }
         for (const a of this.wizardAssets || []) {
             add(a.name, 'Image assets', { snippet: a.mergeTag, keywords: 'image picture logo asset photo' });

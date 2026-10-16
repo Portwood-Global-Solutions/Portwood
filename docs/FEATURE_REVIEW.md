@@ -12,6 +12,14 @@ Branch: `feat/byod-signature-sender`, based on current `main`. This is a review 
 | First document | `docGenGettingStarted`, `DocGenGettingStartedController`, `DocGenStarterExamples`                               | Quote when available, Opportunity proposal and Account summary with optional fictional demo seed scripts.       |
 | Agentforce     | `docGenAiConversation`, `DocGenAiQueryPlanner`, `DocGenAiReferenceController`, `agentforce-ext`                 | Business conversation, schema-grounded query plans and PDF/DOCX reference-based editable HTML.                  |
 
+## Reusable terms and HTML snippets
+
+Assets now has **Terms & snippets** with Write / HTML source / Preview, a permanent copyable `{%snippet:key}` tag, active status and native File revision history. Designer supports **Insert → Shared content** and reference chips. Normal and giant-query HTML/Canvas documents expand sections before merging record fields/loops; headers and footers use the same path. Source files remain private, and image/public-logo endpoints reject snippet assets.
+
+Try **Shared Content - Quote Demo**, using the existing fictional Northstar Quote. Its terms merge customer/quote details, and a second shared closing uses verified Poppins Italic. Live UI tests covered create, edit, copy tag, preview, history and restore. Native PDF proofs confirmed 30-day → 45-day updates from the same template while the original file stayed unchanged. See [SHARED_CONTENT_ASSETS.md](SHARED_CONTENT_ASSETS.md) for the journey, scope, heap safeguards and implementation details.
+
+Shared-content validation: **212/212 Apex tests** across Snippet, Asset, Font, EmailTemplate, HtmlTemplate and GiantQuery; **180/180 merge-tag checks** (four existing scope skips); syntax6 **9/9** and syntax7 **3/3**; **50 Designer** and **five Assets authoring** Node scenarios. The new snippet controller/service have 95%/96% scoped coverage. Standard and explicitly launched batch native PDFs were downloaded, text-checked and visually reviewed, including embedded Unicode Poppins Italic. Batch table groups remain balanced at chunk boundaries, and font/glyph preparation now runs after row injection. The live batch proof uses the demo’s three quote lines; it is not a new volume benchmark. Targeted snippet Security/AppExchange analysis reports zero violations with the missing-dependency graph warning; the broader graph/release limits below still apply. Offline QA retains the exact existing 61-failure baseline.
+
 ## Try the fonts
 
 The `portwood-ai-journey` scratch org now has **nine families and 16 verified faces**. Fourteen faces were added to the existing Lato Regular/Bold pair. Every current specimen was downloaded, checked for matching embedded Unicode CID TrueType fonts and live glyph text, and visually reviewed before the new faces were approved.

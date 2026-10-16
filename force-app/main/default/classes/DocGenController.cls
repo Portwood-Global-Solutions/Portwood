@@ -8681,6 +8681,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (assetId.getSObjectType() != DocGen_Asset__c.sObjectType) {
             throw DocGenService.ahe('Expected a Portwood Asset Id.');
         }
+        assertImageAsset(assetId);
+        DocGenFlsGuard.assertUpdateable(new DocGen_Asset__c(Id = assetId), new Set<String>());
         try {
             // Confirm the RUNNING USER can see this ContentVersion under their own
             // sharing BEFORE the SYSTEM_MODE plumbing publishes it AllUsers. Without
@@ -8900,6 +8902,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Image uploads/public delivery and deletion must never consume font or private snippet sources. */
+    private static void assertImageAsset(Id assetId) {
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Type__c' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Asset__c> assets = [
+            SELECT Id
+            FROM DocGen_Asset__c
+            WHERE Id = :assetId AND Asset_Type__c = 'Image'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (assets.isEmpty())
+            throw DocGenService.ahe('Choose an image asset. Edit fonts and shared content in their own Assets tabs.');
+    }
+
     /**
      * Permanently deletes a shared asset AND its linked image files. Any
      * template still referencing {%asset:<key>} renders the missing-asset
@@ -8913,6 +8930,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (!Schema.sObjectType.DocGen_Asset__c.isDeletable()) {
             throw DocGenService.ahe('Insufficient access to delete assets.');
         }
+        assertImageAsset(assetId);
         try {
             Set<Id> docIds = new Set<Id>();
             /* code-analyzer-suppress ApexFlsViolation */
