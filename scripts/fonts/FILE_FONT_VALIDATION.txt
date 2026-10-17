@@ -1,0 +1,45 @@
+Salesforce Files font workflow validation - 2026-10-15
+Branch: feat/byod-signature-sender. Scratch: portwood-proposal.
+
+ZIP error: AsyncApexJob registration failures originated in the old ZipReader path. Font upload
+and TTF inspection had succeeded. That publication path and its schema/UI were removed.
+
+Native URL probe: plain private shepherd font URL silently fell back to Times. Adding ?font.ttf
+embedded Parisienne as subset CID TrueType / Identity-H, including live U+015E/U+015F. Both
+relative and absolute File URLs worked in API Apex. Lightning Generate Sample later exposed
+that absolute org-domain URLs silently fall back to Times. Native CSS now uses only relative
+File URLs; the Arabic demo was regenerated through the actual Lightning button and all four
+custom faces, including Noto Sans Arabic Black, embedded correctly (35,386 bytes).
+
+All five original demo faces, both Noto Arabic revisions, the 5.5 MiB Japanese font and the
+9 MiB probe were regenerated from Files. Downloaded PDFs were checked with pdffonts, actual
+PyMuPDF text spans and rendered pages before their current proofs were approved. Later user
+retirement and new uploads were preserved.
+
+An independent 9,437,184-byte native File upload completed asynchronous inspection, File linking,
+checksum pinning and public preview delivery. Its subsequent native proof embedded the correct
+PortwoodSizeProbe font with live Japanese text. Temporary duplicate registry/source/proof Files
+were removed afterward; the original approved 9 MiB demo remains available.
+
+Removed the five demo font Static Resources and the 9 MiB probe resource from the scratch org,
+plus the four obsolete publication fields. The branch contains no font Static Resources.
+Full licensed demo TTFs now live under scripts/fonts/fixtures; setup-demo.mjs imports Files.
+Apex tests use small renamed OFL subsets with full license notices, no resource dependency.
+Regenerate the test subsets with build-test-fixtures.py, then run Prettier and scoped tests.
+
+After resource removal, HTML Fonts - Merge Tag Showcase generated successfully through the real
+DocGenService pipeline. The result is one Letter page, 43,147 bytes, with all five fonts embedded
+as CID TrueType / Identity-H and no fallback font. Actual glyph spans, live Turkish text and the
+full rendered page were checked. The rendered HTML contains File URLs and no /resource/ URLs.
+
+Browser preview: private shepherd download redirects fail font fetches across domains. A
+version-pinned ContentDistribution URL served via the same-origin /sfc/dist/version/download
+route works. Public font preview rights remain an explicit upload confirmation. Document PDFs
+and record data are never published through this path. Canvas and Assets share the File loader.
+
+116 scoped Apex tests passed (Font, HTML Template, Canvas Save and Asset suites). The final
+24-test Font suite also passed after checksum/preview assertions. Syntax6 e2e: 9 passed, 0 failed.
+Canvas font serializer and HTML font-tag Node checks passed. Repository Prettier and diff checks
+passed. Offline QA: 516/577 passed; the same 61 existing failures remain. Nine obsolete metadata
+checks disappeared when publication fields were removed. Code Analyzer reported zero violations,
+but Graph Engine internal errors on guarded paths mean the scan is not complete coverage.

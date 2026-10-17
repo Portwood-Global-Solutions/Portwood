@@ -91,21 +91,14 @@ If the release update page looks like it might already be enabled but the button
 
 ### Step 4 — Make your first template
 
-1. **App Launcher → Portwood** (search "Portwood" if it's not pinned). You land on the **Template Library**.
-2. On the **Create New** tab, choose how you want to build. **Start from a Design** is the recommended path — pick a professional starter layout and your template renders on the very first click, no file authoring needed:
-
-    ![The Create New wizard with the starter gallery — Record Report, Invoice, Business Letter, Agreement, and Certificate designs](docs/images/userguide/wizard-starters.png)
-    - **Start from a Design** — a starter gallery (Record Report, Invoice / Line Items, Business Letter, signature-ready Agreement, landscape Certificate / Award). Your object's real merge fields are dropped in automatically.
-    - **Generate with AI** — Portwood assembles a ready-to-paste prompt (your fields + the full tag syntax + PDF rendering constraints). Paste it into Claude, ChatGPT, or Copilot, then paste the HTML it returns back into the wizard.
-    - **Start From Scratch** — a blank page in the visual designer. Click anywhere and type; hit `` ` `` for the insert menu.
-    - **I Have an Existing File** — upload a Word, PowerPoint, Excel, fillable PDF, or HTML file you already maintain.
-
-3. Give it a **Template Name** (e.g. "My First Account Brief"), pick a **Starter Design**, optionally choose a company logo from your Asset Library and a **Sample Record** for live previews, then click **Create & Open Designer**.
-4. The **visual designer** opens on your document — a WYSIWYG page where merge fields appear as purple pills, tables resize by dragging cell edges, and the toolbar covers text formatting, tables, borders, images, and page setup. Edit anything (or nothing), then click **Save as New Version** to activate it:
-
-    ![The visual designer editing a template — format toolbar, merge-tag pills, WYSIWYG page canvas](docs/images/userguide/designer-certificate.png)
-
-5. Click **Download Sample** in the designer toolbar to see the rendered PDF with your sample record's real data — before you ever leave the page.
+1. **App Launcher → Portwood**. **Get started** offers a Quote PDF (when Quotes are enabled) or an Account summary. Choose an example, then use fictional sample data or select one of your records to see a rendered PDF.
+2. To build your own, open **My templates → Create template**. Choose one of three paths:
+    - **Existing template** — upload a Word, Excel, PowerPoint, fillable PDF or HTML template with merge tags.
+    - **Designer / Canvas** — choose **Designer** for flowing HTML documents and tables, or **Canvas** for positioned page elements. These are separate editors.
+    - **Generate with AI** — describe the document or upload a PDF/DOCX example. Your org's Agentforce model creates editable HTML. See [§5.7.11](#5711-generate-the-template-with-agentforce-v346) for setup and usage.
+3. Give the template a name and choose its Salesforce base object. AI selects useful fields automatically; you can refine them before generation.
+4. Review the design, choose a sample record and generate a **native PDF preview**. Check page breaks, totals, images and language coverage before sharing.
+5. **Save as New Version** when the template is ready.
 
 ### Step 5 — Generate
 
@@ -256,19 +249,13 @@ Update all three permission sets in the same change. Missed FLS grants silently 
 
 ### 5.1 Creating a template
 
-Open the Portwood app → **My Templates** → the **Create New** tab. The wizard offers two authoring paths:
+Open the Portwood app → **My templates → Create template**. The wizard offers three authoring paths:
 
-- **Bring an Existing Template** — upload **Word** (`.docx`), **HTML** (`.html` / `.htm` / `.zip`), fillable **PDF** (_testing_), **PowerPoint** (`.pptx`, _alpha_), or **Excel** (`.xlsx` / `.xlsm`, _alpha_) containing `{FieldName}` merge tags. Each keeps its own format — Word generates `.docx`, Excel `.xlsx`, PowerPoint `.pptx`. An HTML file can also be imported onto a canvas later, from the editor.
-- **Start from a Blank Canvas** (Beta) — an empty artboard. Drop text, tables, images, charts, shapes, barcodes and signature blocks exactly where you want them and they land there in the PDF, to the inch, while lists still flow onto as many pages as the data needs. See [§5.1.3](#513-canvas-templates-beta).
+- **Existing template** — upload **Word** (`.docx`), **HTML** (`.html` / `.htm` / `.zip`), fillable **PDF** (_testing_), **PowerPoint** (`.pptx`, _alpha_), or **Excel** (`.xlsx` / `.xlsm`, _alpha_) containing `{FieldName}` merge tags. Each keeps its native format. An HTML file can also be imported onto a canvas later, from the editor.
+- **Designer / Canvas** — choose the flowing HTML **Designer**, or the positioned **Canvas** artboard (Beta). Canvas supports text, tables, images, charts and signature blocks, with flowing lists across pages. See [§5.1.3](#513-canvas-templates-beta).
+- **Generate with AI** — describe your document or upload a PDF/DOCX example. Agentforce creates an editable HTML draft that opens in Designer. Uploaded examples are closely recreated by default; your design brief can request changes. See [§5.7.11](#5711-generate-the-template-with-agentforce-v346).
 
-> **Starters and the AI path were retired from the wizard (v3.54).** Every starter
-> was a layout someone still had to understand and then edit, and asking which of
-> five designs you want _before_ you have seen the editor is asking too early. A
-> blank canvas is a shorter path to the same place. Templates already created from
-> a starter, from **Start From Scratch**, or with **Generate with AI** still open
-> and edit normally — the wizard simply no longer sends anyone down those routes.
-> AI authoring remains available inside the HTML designer (see
-> [§5.7.11](#5711-generate-the-template-with-agentforce-v346)).
+Existing templates continue to open in their original editor. **Get started** provides ready-to-render Quote and Account examples separately from this authoring choice.
 
 Every path also asks for:
 
@@ -331,37 +318,33 @@ Every template has an optional **API Name** — a unique developer key like `Opp
 
 ### 5.1.2 The Visual Designer (Beta)
 
-HTML templates open in a full WYSIWYG designer — the page you see is the page that renders. Merge tags appear as purple pills (loop and section markers in green) that move and delete as single objects, so tag syntax can't be half-mangled while editing.
+HTML templates open in a visual editing workspace. Click text to edit it; merge fields remain atomic pills so their syntax stays intact. Purple and green pill tints mark merge tags while editing; typing beside a tag continues as ordinary text. The sheet approximates HTML layout. **Preview → Generate PDF** is the authority for printed pagination and native font rendering.
 
-![The visual designer on a landscape certificate — page pickers, format toolbar, merge-tag pills](docs/images/userguide/designer-landscape-certificate.png)
+**Start with the page:**
 
-**Around the canvas:**
+- **＋ Insert** adds text, a heading, table, image, divider or page break. Additional elements are under **More elements**. Image choices come from the shared Asset Library and insert as independent blocks.
+- **Fields** shows the connected record fields and related lists first. Click a field to insert it at your caret, or choose a related list's repeating table. Detailed query tools and advanced tags remain available through disclosures in the panel.
+- **Page** controls paper size, orientation and margins. Existing named page rules, running regions and authored CSS are preserved.
+- **Preview** uses your current draft and selected sample record. **Back to editing** returns to that draft. **Save** creates a version; save before refreshing or leaving.
+- **Document actions** holds template settings, version history, HTML source, authoring prompt, Agentforce refinement where configured, and classic Designer. **Settings → Done** returns to the same draft; save in the Designer to persist it.
 
-- **Toolbar** — Download Sample (rendered PDF with your sample record), Copy AI Prompt, PDF Preview, Format Code, Reload, **Save as New Version** (the one way to activate your edits), and Edit Template (jumps to the settings modal).
-- **Page setup** — size, orientation, and margins pickers write a clean `@page` rule into your document. If your HTML declares its own `@page`, the engine defers to it.
-- **Panels** — `+ Insert` (blocks, tables, charts, barcodes, special characters — or press `` ` `` anywhere on the page), `{} Tags` (your query's merge fields as clickable chips), Images (the shared Asset Library), Query (edit fields without leaving the designer), Versions, Header/Footer, and Watermark.
+**Advanced source editing:** the **Visual / HTML** switch is always visible in the Designer header. **HTML** edits the complete document and CSS directly. Use **Format HTML**, **Wrap lines**, and the line/column indicator. **Preview current HTML** or **Ctrl/⌘+Enter** renders the unsaved source; **Back to HTML** returns to the same code. **Ctrl/⌘+S** saves a version. Fields insert at the source caret, and native undo covers typing, tag insertion and formatting. The source remains read-only briefly while a save is in progress. Keep the running-region markers when editing headers and footers. Normal CSS specificity applies: a class rule does not override an explicit inline style unless it has higher priority. Colour, sizing and layout rules may use `!important`, including in templates with registered fonts. Registered font bindings keep their exact approved family, weight and style in PDF; choose another approved face to change those. Use Assets font tags instead of authored `@font-face` rules.
 
-**Text formatting:** bold/italic/underline/strike (the buttons read as _pressed_ when your cursor sits on formatted text — click again to unformat), super/subscript, lists, alignment, a **numeric point-size box** with −/+ steppers (any exact 6–96pt value; it reads the size at your cursor), text and highlight colors, font families, Unicode-safe special characters, undo/redo.
+**Text formatting:** use the steady toolbar for font, exact point size, bold, italic and underline. **More** contains alignment, lists, strike/super/subscript, text/highlight colour and clear formatting. Select the wording, open **More**, then choose a custom text or highlight colour (or enter its hex value) and click **Apply**. Preset text colours apply in one click. Toolbar buttons show pressed state. Undo/redo also covers block, table and page changes. **Font family** opens one menu with built-in fonts and approved custom faces, each name previewed in its own typeface. The full list appears immediately, with optional search. Font previews load as you browse; unavailable custom-font variants explain how to choose or approve a matching face.
 
-**Merge tags style like the text around them (v3.36+).** A `{Name}` pill inside a 24pt serif heading renders in 24pt serif — what you see is what the merged value prints. You can also style a tag directly: click the pill and use the toolbar (bold, italic, underline, strike, color, font, size). The styling serializes as a styled span around the tag and survives save/reopen, so the engine merges the value _inside_ your formatting.
+**Fields:** click a field pill to change its display format or remove it. Common number, currency, percentage and date formats appear first; regional and raw-tag options are disclosed. Formatting a pill keeps the styling around the merged value after save/reopen.
 
-**Tables — Excel-level editing:**
+**Arrange:** click a paragraph, table or image to show its inspector. **Move up/down**, **Duplicate**, **Remove** and **Add text below** stay in a stable place. Whole-table moves keep the cells and tags together. Paired repeat/condition boundaries move as a group.
 
-- **Drag any cell edge** to resize columns (the neighbor gives way, so the table keeps its footprint); drag a bottom edge to change row heights. This works on _any_ table — pasted, Word-converted, or hand-written — not just designer-inserted ones.
-- **Drag across cells** to select a rectangle (purple outline). Fill colors every selected cell; Merge combines them (and leaves the merged cell selected so Split is one click away).
-- Add/remove rows and columns, header rows, repeat-header for multi-page tables.
-- **Borders** — All / Outline / Rows / None styles, plus a thickness picker (Hairline to Heavy) and a border color; changing either restyles the table under your cursor live.
-- Rows carry `page-break-inside: avoid` automatically, so a PDF page never splits mid-row.
+**Tables:** click a cell for row/column controls. Shift-click another cell to select a rectangle, including existing merged regions. **Cell and table options** contains merge/split, header styles, repeating headers, equal columns, width and removal controls. **Borders, fill and spacing** edits appearance. Drag cell edges for column widths/row heights. Tab moves between cells and adds a body row at the end. Check the PDF after structural changes to repeating tables.
 
-**Images:** assets render as real images on the canvas. Drag the image body to move it anywhere in the text flow (a drop marker tracks your pointer); drag the bottom-right corner to resize (the size is written back into the merge tag); click it and use Left / Center / Right to align it; double-click it to edit the underlying tag (`{%asset:logo:120x}`) by hand. In header/footer HTML you can write `<img src="{%asset:logo}">` and Portwood substitutes the image URL; unsized header/footer images are automatically clamped to fit the margin box.
+**Images:** choose an asset through Insert, then click it for a physical width in inches. Display zoom does not change its saved size. Images can also be moved in the text flow or resized at their corner. Asset tags preserve dimensions through save/reopen. Header/footer images are automatically constrained to the margin box when unsized.
 
-**Query panel:** the designer's Query button opens the full visual query builder (see [§6.4](#64-using-the-visual-builder)) in a wide flyout — walk from the base object into fields, parent lookups, and related lists without leaving the designer. Changes flow straight into the tag palettes.
+**Precise placement:** open **Placement → Place at coordinates** for left/top/width in inches, relative to the printable area. Moving a placed block up/down nudges it vertically. **Flow with text** restores normal flow. Coordinates allow deliberate overlap, so review the native PDF after placing content.
 
-**The canvas owns the scroll** — the toolbar stays fixed above the page while the document scrolls, Google-Docs style.
+**Running content and backgrounds:** edit header/footer bands on the sheet. **Document layout** in the inspector provides header/footer, page-number and background/watermark controls.
 
-**Watermark:** upload a background image on the Watermark panel and pick a **strength** (Light 15% / Medium 30% / Strong 50% / Original). The opacity is baked into the image at upload, so the PDF and the canvas preview match exactly. Requires a saved version first (the file attaches to the version record).
-
-**Right-click** anywhere on the page for a searchable menu of every insert and table action.
+The document owns its scroll; the toolbar stays above it. At narrower widths, the inspector moves below the sheet. Escape dismisses open formatting/field panels. Routine edits and saves update quiet status; PDF advisories stay under **PDF notes**. A failed action leaves one inline explanation with technical details available.
 
 Where you'll see it (v3.29+):
 
@@ -1111,22 +1094,14 @@ HTML templates work with every generation path: single-record, bulk (individual 
 
 ### 5.7.11 Generate the template with Agentforce (v3.46+)
 
-Portwood can write and revise HTML templates by prompting Salesforce AI **inside
-your own org**, instead of copying the Designer's prompt out to ChatGPT and
-pasting the HTML back. It sends exactly the same prompt as **Copy AI Prompt** —
-your fields, the merge-tag syntax, the PDF engine's layout rules — through
-`ConnectApi`, not an HTTP callout, so nothing leaves the Salesforce platform.
+Portwood writes and revises HTML templates through your org's **Agentforce / Prompt Builder** configuration. Portwood sends the authoring prompt through Salesforce `ConnectApi`; Salesforce routes it to the configured model. Portwood does not require a separate AI API key or a Portwood-hosted conversion service.
 
-**This is optional.** It arrives with the separate **Portwood Agentforce
-Extension** package; without that installed, the Designer simply hides the
-Agentforce button and everything else works exactly as before.
+**AI is optional.** The separate **Portwood Agentforce Extension** supplies the provider and prompt templates. The three authoring choices remain visible without AI; the AI workspace explains the setup needed to generate. Existing templates and both manual editors remain available.
 
 #### Setup — install the extension
 
 The quickest route is one package install. **Portwood Agentforce
-Extension** carries everything: the Apex provider that talks to Einstein, and a
-ready-made prompt template already set to a capable model. Nothing to write,
-nothing to configure.
+Extension** carries the Apex provider and prompt templates. This feature branch adds conversational planning: activate **DocGen Query Plan**, **DocGen Query Reference**, **DocGen HTML Body** and **DocGen HTML Reference**, and select models your org can use. Both Reference templates require a PDF-capable model. These additions are currently available in the demo scratch org; they require an updated extension when released.
 
 **Prerequisites**
 
@@ -1146,7 +1121,7 @@ System.debug('Einstein Apex types are visible');
 Portwood itself. (v1.0.0 was key-protected. If you were given a key, you are on
 the old build — install v1.1.0 or later instead.) Then open any HTML
 template in the Designer — **Generate with Agentforce** appears next to Copy AI
-Prompt. No permission set beyond **Portwood Admin**, and no settings to change.
+Prompt. Authors need **Portwood Admin** and Salesforce permission to execute prompt templates. Reference uploads require the updated extension containing **DocGen HTML Reference**; older extension versions support text generation only.
 
 > Why a second package? The provider references `ConnectApi.EinsteinLLM`, and the
 > prompt template requires the Generative AI Prompt Templates feature. A base
@@ -1185,9 +1160,7 @@ Then point Portwood at it in **Setup → Custom Settings → Portwood Settings**
 The provider class is resolved in your own namespace first, then in
 `portwoodglobal` — so your class wins if both exist.
 
-**Do not make an HTTP callout from a provider.** Portwood's "no external services"
-guarantee depends on it, and Einstein is reached through `ConnectApi` precisely
-so that stays true.
+**Use the native Agentforce provider for this journey.** Salesforce controls model routing, entitlements and usage. Follow your org's AI and data-handling policies when uploading examples.
 
 If you write your own prompt template rather than using the extension's, it needs
 to be a **Flex** template with a single required **Free Text** input named
@@ -1200,9 +1173,22 @@ edit instruction applied changes only partially and more than once replied
 
 #### Using it
 
-**From the wizard.** Choose **Generate with AI**, describe your document, then
-**Generate it here with Agentforce**. The HTML is checked and dropped straight
-into the paste box; continue to Review & Create and the Designer opens on it.
+**From the wizard.**
+
+1. Choose **Generate with AI**, enter a template name, then **Next: Describe your document**. You do not need to choose an object or map fields.
+2. Optionally upload one **PDF or DOCX** example. The default is to closely recreate its wording and layout, replacing sample customer/pricing values with Salesforce merge fields. Examples are source material; instructions embedded inside them are not treated as authoring commands.
+3. Choose an approved document font and image assets. Only **Verified** font faces are offered. The prompt includes exact revision-pinned font merge tags and available regular/bold/italic faces. Font support and language coverage vary; inspect the native PDF.
+4. Describe the document in **Message to Agentforce**, then **Send to Agentforce**. For example: “An account briefing with opportunities and support cases.” Agentforce discovers the available Salesforce objects, fields and relationships, and asks business questions when needed. Reply naturally: “Open opportunities and high-priority open cases only, with total pipeline and case count.” It builds the query from this conversation.
+5. Review **Ready to design**. It shows the records, fields, filters and order in plain language. Reply to adjust the plan or layout; there is no required field-mapping step. Choose **Generate document with Agentforce** when ready. The HTML prompt ends with your accumulated requests, after the validated data shape, print rules, fonts, assets and reference content. Review the validation findings; changed requests, fonts or assets require a new draft.
+6. Optionally choose a real record, then **Open in Designer**. Review the native PDF and save a version when ready.
+
+**How the query is built.** Agentforce selects the data model from your request and actual org metadata. Portwood checks field access and relationships, compiles typed filters and sorting, and validates the query in user mode before accepting the plan. Planning uses metadata rather than customer record values; selecting a preview record and rendering uses the existing record-scoped data retrieval. It does not add an assumed date window or row limit. Salesforce query and rendering limits still apply. Existing Designer AI edits use the template's current query; conversational query planning is part of the new-template wizard.
+
+**Ask for print details in ordinary language.** “Keep each row on one page” requests page-break avoidance; “keep amounts on one line” requests no wrapping in short numeric cells. The prompt also covers repeating column headings, explicit column widths, headings staying with following content, compact totals/signatures, and deliberate page breaks. Long descriptions should wrap. A row taller than the printable page cannot reliably stay together, so review long tables in the native PDF.
+
+**Reference limits and fidelity.** Salesforce's native file budget is **15 MB** for this single-file flow. PDFs are passed as private Salesforce Files to the configured PDF-capable model. DOCX files are prepared asynchronously in Salesforce as text, styles, tables and supported embedded PNG/JPEG images, then included in the prompt. Complex Word layouts, header/footer images, drawings and unsupported features can need adjustment; use a PDF export when visual fidelity is critical. A large expanded Word document can exceed Salesforce processing or prompt limits even if its compressed file fits. Errors explain when to use a shorter example or PDF export. Private storage does not mean the file is withheld from the configured AI model; Salesforce documents separate handling for binary file inputs.
+
+**Model choice.** The demo uses **GPT 5.4**, tested successfully for conversational query planning, text, PDF examples and prepared DOCX. The trial org has no Advanced-model allowance; a GPT 5.5 request returned a quota error. Administrators can select a more capable entitled model in Prompt Builder. Keep PDF support enabled on both Reference templates, and review model availability, consumption and file-input handling in [Salesforce's model documentation](https://help.salesforce.com/s/articleView?id=ai.generative_ai_llm_multimodal_support.htm&language=en_US&type=5).
 
 **From the Designer.** **Generate with Agentforce** offers two modes:
 
@@ -2670,9 +2656,11 @@ Comments: {Comments}
 
 **Cost.** One extra SOQL query per generation when the token is present. Templates that don't reference `Approvals` in Query_Config\_\_c skip the query entirely — no overhead.
 
-### 7.16 Not implemented
+### 7.16 Custom font tags
 
-- **Custom fonts in PDF** — the Salesforce PDF engine only supports Helvetica, Times, Courier, and Arial Unicode MS. `@font-face` is not supported. See [§14.2](#142-pdf-font-limitations). For custom fonts, generate as DOCX and open in Word — DOCX preserves template fonts.
+**Reusable terms and HTML sections (this review branch):** Open **Assets → Terms & snippets**, write or paste an HTML fragment, save it and copy its `{%snippet:key}` tag. In Designer, **Insert → Shared content** inserts the reference. PDF generation includes the latest active revision, with formatting and record tags resolved against the current record or loop row. Add those fields to the template query. Revision history supports restoring older wording as a new revision; existing generated files stay unchanged. HTML/Canvas templates and their running headers/footers are supported. See the [shared-content guide](docs/SHARED_CONTENT_ASSETS.md) for examples, permissions and scope.
+
+Verified **Assets → Fonts** faces can be used in HTML/PDF templates and both design tools. Copy a font tag from Assets and place it in a quoted inline style, for example `<p style="{%font:asset-key:revision-prefix};font-size:12pt">{Name}</p>`. The tag pins the exact reviewed font revision, weight and style. Use a container for inheritance and another verified face for bold or italic. Font tags are style declarations, not image URLs. See [§14.2](#142-pdf-font-limitations) for supported files and script limitations.
 
 ---
 
@@ -3756,7 +3744,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **My Templates** — create, edit, version, clone, export/import.
 - **Bulk Generation** — mass-generate against a SOQL filter or saved query.
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
-- **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
+- **Assets** — shared images, registered fonts, and reusable terms / HTML snippets. Use `{%asset:<key>}` for images (§7.7.1), or `{%snippet:<key>}` for a full formatted section in HTML/Canvas templates ([shared-content guide](docs/SHARED_CONTENT_ASSETS.md)).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
 - **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.
@@ -3837,9 +3825,17 @@ Salesforce's `Blob.toPdf()` uses Flying Saucer with only four built-in fonts:
 - **Courier** (monospace)
 - **Arial Unicode MS** — for CJK / multibyte character scripts
 
-**Custom fonts cannot be loaded into the PDF engine.** CSS `@font-face` is not supported — not via data URIs, static resource URLs, or ContentVersion URLs. Exhaustively tested, confirmed impossible on the Salesforce platform.
+**This branch adds custom fonts through Assets → Fonts.** Upload a licensed static TrueType (`.ttf`) file up to 9 MiB, generate its native PDF specimen, review the embedded face and glyphs, then approve it. The Designer and Canvas font pickers and HTML font tags use that approved revision. The original font stays in Salesforce Files; no font Static Resource or ZIP publication is needed. Only licensed font bytes receive the version-pinned browser preview link. Generated documents and record data remain private.
 
-Workaround: if you need custom fonts (branded typefaces, barcode fonts, decorative scripts), generate as **DOCX**. DOCX preserves whatever fonts are in the template — they render correctly in Word or any compatible viewer.
+Support depends on the font and the native PDF engine:
+
+- Static TrueType outlines are supported; variable fonts, CFF/OpenType, WOFF and collections are rejected. Embedding restrictions, malformed tables and missing glyphs fail clearly.
+- Use an approved face for each weight/style. Registered bindings keep their exact family, weight and style; ordinary colour, sizing and layout declarations may use `!important`.
+- Glyph coverage does not guarantee script shaping. Arabic/RTL and other complex scripts need layout preparation; the fixed bilingual Arabic example demonstrates prepared copy, not automatic shaping of merge values.
+- Supplementary Unicode characters above U+FFFF are rejected on the custom-font PDF path because the renderer can drop them. Use supported BMP characters or images. Colour font palettes are not preserved in the PDF.
+- A document may use up to 16 distinct registered faces. Keep authored `@font-face` rules out of registered-font templates; use Assets font tags instead.
+
+This does not add DOCX font embedding. Word-based templates continue to use the fonts available to their viewer.
 
 ### 14.3 PowerPoint → PDF not supported
 

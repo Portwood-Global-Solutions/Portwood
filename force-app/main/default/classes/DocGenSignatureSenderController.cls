@@ -2197,6 +2197,14 @@ public with sharing class DocGenSignatureSenderController {
      */
     @AuraEnabled
     public static List<Map<String, Object>> getPendingSignatureRequests(String relatedRecordId) {
+        if (String.isNotBlank(relatedRecordId)) {
+            try {
+                DocGenSignaturePreparationController.assertSenderRecordAccess((Id) relatedRecordId);
+            } catch (DocGenSignaturePreparationController.PreparationException ex) {
+                // An unavailable record has no visible requests, including after deletion.
+                return new List<Map<String, Object>>();
+            }
+        }
         String siteUrl = getSiteBaseUrl();
         List<Map<String, Object>> results = new List<Map<String, Object>>();
 
@@ -2212,6 +2220,9 @@ public with sharing class DocGenSignatureSenderController {
                 Status__c,
                 Source_Document_Id__c,
                 CreatedDate,
+                Original_Document_CV_Id__c,
+                PDF_Internal_Preview__c,
+                Document_Title_Format__c,
                 (
                     SELECT Id, Signer_Name__c, Signer_Email__c, Role_Name__c, Status__c, Secure_Token__c, Sort_Order__c
                     FROM Signers__r
@@ -2244,9 +2255,11 @@ public with sharing class DocGenSignatureSenderController {
             reqMap.put('name', req.Name);
             reqMap.put('status', req.Status__c);
             reqMap.put('createdDate', req.CreatedDate);
+            if (String.isNotBlank(req.Original_Document_CV_Id__c))
+                reqMap.put('documentTitle', req.Document_Title_Format__c);
 
             // Get document title from pre-fetched map
-            if (req.Source_Document_Id__c != null) {
+            if (req.Source_Document_Id__c != null && String.isBlank(req.Original_Document_CV_Id__c)) {
                 reqMap.put(
                     'documentTitle',
                     docTitleMap.containsKey(req.Source_Document_Id__c)
@@ -2274,7 +2287,10 @@ public with sharing class DocGenSignatureSenderController {
                 // #170 consolidation: requests from this LWC are guided — surface the
                 // flat-PDF guided page in the "previous requests" copy-links, matching
                 // the freshly-created results above (getSigningPdfPagePath at creation).
-                signerMap.put('signerUrl', siteUrl + getSigningPdfPagePath() + '?token=' + signer.Secure_Token__c);
+                String signingBase = req.PDF_Internal_Preview__c == true
+                    ? URL.getOrgDomainUrl().toExternalForm()
+                    : siteUrl;
+                signerMap.put('signerUrl', signingBase + getSigningPdfPagePath() + '?token=' + signer.Secure_Token__c);
                 signerList.add(signerMap);
             }
             reqMap.put('signers', signerList);
@@ -2466,6 +2482,27 @@ public with sharing class DocGenSignatureSenderController {
                 'Portwood: failed to share viewing document with guest signer: ' + e.getMessage()
             );
         }
+    }
+
+    public static List<SignerResult> createPreparedPdfSigners(
+        Id requestId,
+        String documentTitle,
+        List<Map<String, Object>> signerInputs,
+        Boolean requireVerification,
+        Boolean prefillSignerEmail
+    ) {
+        return createSignersAndNotify(
+            requestId,
+            null,
+            documentTitle,
+            signerInputs,
+            false,
+            getSigningPdfPagePath(),
+            null,
+            null,
+            requireVerification,
+            prefillSignerEmail
+        );
     }
 
     private static List<SignerResult> createSignersAndNotify(

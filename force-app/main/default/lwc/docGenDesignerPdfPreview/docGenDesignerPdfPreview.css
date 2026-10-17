@@ -1,0 +1,77 @@
+:host {
+    display: block;
+    height: 100%;
+    min-height: 0;
+}
+.preview {
+    height: 100%;
+    overflow: auto;
+    background: #e9eef2;
+    color: #223548;
+}
+.preview-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: 44px;
+    padding: 9px 20px;
+    border-bottom: 1px solid #d4dde5;
+    background: #f8fafb;
+    font-size: 12px;
+}
+button {
+    font: inherit;
+    color: #285e63;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+a {
+    color: #285e63;
+    text-decoration: underline;
+}
+.pages {
+    width: 100%;
+    padding: 24px;
+    box-sizing: border-box;
+}
+.status,
+.error {
+    margin: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.error {
+    border-left: 3px solid #a35727;
+    padding: 15px;
+    background: white;
+}
+.pages .pdf-page {
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto 26px;
+}
+.pages canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    background: white;
+    box-shadow: 0 1px 5px #18345230;
+}
+.pages .pdf-page-label {
+    color: #617181;
+    padding: 9px 0;
+    text-align: center;
+    font-size: 11px;
+}
+.pages .pdf-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}

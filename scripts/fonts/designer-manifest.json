@@ -1,0 +1,120 @@
+[
+    {
+        "file": "BarlowCondensed-ExtraBold.ttf",
+        "key": "127b06330968f16bb49727e885416416c8693b619e26cdfd36dc00d5f751e1e7",
+        "fontKey": "barlowcondensed",
+        "fixture": "fixtures/barlowcondensed/BarlowCondensed-ExtraBold"
+    },
+    {
+        "file": "DMSerifDisplay-Regular.ttf",
+        "key": "e9aebbe084a2e03622e5198fe0b87c0d525bce7d90e7679e024109b5acf5f379",
+        "fontKey": "dmserifdisplay",
+        "fixture": "fixtures/dmserifdisplay/DMSerifDisplay-Regular"
+    },
+    {
+        "file": "Barlow-Regular.ttf",
+        "key": "179138cb809b03a18595b705659a3b5796dc0197fa0def84f8cebf8564de141c",
+        "fontKey": "barlow",
+        "fixture": "fixtures/barlow/Barlow-Regular"
+    },
+    {
+        "file": "Barlow-Bold.ttf",
+        "key": "fcb466c546218b4622acac5bae6e633ed0ad3be0cd907a5e8122ca6bd0340a59",
+        "fontKey": "barlow",
+        "fixture": "fixtures/barlow/Barlow-Bold"
+    },
+    {
+        "file": "Parisienne-Regular.ttf",
+        "key": "9fff65b95e9ec9fadd6c78b2a1622da90ec6cfeff021e47b968c41f417a77cab",
+        "fontKey": "parisienne",
+        "fixture": "fixtures/parisienne/Parisienne-Regular"
+    },
+    {
+        "file": "Lato-Italic.ttf",
+        "key": "2ba284cd58adb0b7fc89744d269f2bf3d1bd425bab37c52dd8687908f71ee4d8",
+        "fontKey": "demo-lato",
+        "fixture": "fixtures/lato/Lato-Italic",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/lato/Lato-Italic.ttf"
+    },
+    {
+        "file": "Poppins-Regular.ttf",
+        "key": "a21a4389282505b5ad7a1e2d5e0a47f10b38c4b251c0b4f101412c18ae087fc2",
+        "fontKey": "poppins",
+        "fixture": "fixtures/poppins/Poppins-Regular",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/poppins/Poppins-Regular.ttf"
+    },
+    {
+        "file": "Poppins-Bold.ttf",
+        "key": "21a2e1a4d824274941e6ef15b4e0600dede14f1d204c89c2af1008963401afd4",
+        "fontKey": "poppins",
+        "fixture": "fixtures/poppins/Poppins-Bold",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/poppins/Poppins-Bold.ttf"
+    },
+    {
+        "file": "Poppins-Italic.ttf",
+        "key": "a33614109321bdf0a132053aa54c4e8d67a7f4e23e2f7cc1a1b9dea04c46fd4c",
+        "fontKey": "poppins",
+        "fixture": "fixtures/poppins/Poppins-Italic",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/poppins/Poppins-Italic.ttf"
+    },
+    {
+        "file": "CrimsonText-Regular.ttf",
+        "key": "467df24229c8bb4e5a1fa3f178f51b0a13dfe3efe39051cc89bf88626ea98afc",
+        "fontKey": "crimsontext",
+        "fixture": "fixtures/crimsontext/CrimsonText-Regular",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/crimsontext/CrimsonText-Regular.ttf"
+    },
+    {
+        "file": "CrimsonText-Bold.ttf",
+        "key": "d4742622f051dd3d0e8923bcf02390ba70f81404563c4793ee3831a61178e999",
+        "fontKey": "crimsontext",
+        "fixture": "fixtures/crimsontext/CrimsonText-Bold",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/crimsontext/CrimsonText-Bold.ttf"
+    },
+    {
+        "file": "CrimsonText-Italic.ttf",
+        "key": "cb4eb3f2ec78e11da07de1336b90e3ce4d930b47b91959e0cb8b2b1aa14d9a97",
+        "fontKey": "crimsontext",
+        "fixture": "fixtures/crimsontext/CrimsonText-Italic",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/crimsontext/CrimsonText-Italic.ttf"
+    },
+    {
+        "file": "DMMono-Regular.ttf",
+        "key": "6ed7ea4c4895cd8aa49aa4d5571af83609d82ef636c76bae81ecd7a8be647b7f",
+        "fontKey": "dmmono",
+        "fixture": "fixtures/dmmono/DMMono-Regular",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/dmmono/DMMono-Regular.ttf"
+    },
+    {
+        "file": "Amiri-Regular.ttf",
+        "key": "7622653899ccc4e4124eb200d62d4a3e7591e1425db07b67a37bcfaa6d8c01c6",
+        "fontKey": "amiri",
+        "fixture": "fixtures/amiri/Amiri-Regular",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/amiri/Amiri-Regular.ttf"
+    },
+    {
+        "file": "Lato-Regular.ttf",
+        "key": "27c19dab1725b852c40738912a7d3bbd618b9b6a4ca9fe176cc41436cf5086aa",
+        "fontKey": "demo-lato",
+        "fixture": "fixtures/lato/Lato-Regular",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/lato/Lato-Regular.ttf"
+    },
+    {
+        "file": "Lato-Bold.ttf",
+        "key": "926b86635da9ffc22965aa0cb9f12e8f062061a7e4df82aef201d12bc01d975f",
+        "fontKey": "demo-lato",
+        "fixture": "fixtures/lato/Lato-Bold",
+        "sourceCommit": "1d0e46c7933245c8180fe83e47917961c913bbdb",
+        "sourcePath": "ofl/lato/Lato-Bold.ttf"
+    }
+]

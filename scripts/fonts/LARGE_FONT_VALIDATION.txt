@@ -1,0 +1,40 @@
+Historical Static Resource validation. Superseded by the Salesforce Files workflow; see FILE_FONT_VALIDATION.txt.
+
+Scratch validation - 15 October 2026
+
+Native Files upload -> asynchronous inspection -> publication ZIP -> metadata deployment ->
+asynchronous registration -> native PDF specimen -> approval -> runtime preflight: passed.
+The file chooser could not be driven by browser automation because of Chrome extension file
+access settings. Native REST uploaded the same ContentVersion consumed by the LWC's new Files
+import endpoint. Publication, registration and approval were exercised through Assets in Chrome.
+
+9 MiB boundary fixture: PortwoodSizeProbe.ttf, exactly 9,437,184 bytes.
+Based on the SIL OFL Noto Sans JP font from the official google/fonts repository, instantiated
+at weight 400 with fontTools, renamed, and padded with a valid ignored private SFNT table.
+17,936 glyphs / 16,732 Unicode mappings; the non-padded static instance is 5,766,844 bytes.
+This tests file size and substantial real outlines/coverage, without claiming every large font
+or character set works. The separate 20,000 glyph/cmap budget remains in place.
+Source: https://github.com/google/fonts/tree/main/ofl/notosansjp
+
+Actual exported resource ZIP: 3,567,438 bytes. Original TTF and license bytes matched.
+License text now survives Salesforce Long Text Area trailing-newline normalization through
+an exact copy inside the immutable JSON metadata. The human-readable license field remains.
+
+Native PDF: embedded, subset CID TrueType / Identity-H PortwoodSizeProbe-Regular.
+Live Tokyo / kanji characters and Latin text were extracted from that same font's actual PDF
+text runs, and the page was rendered and visually inspected. The font does not contain
+U+015E/U+015F; specimen text adapts to coverage, and runtime rejects those missing glyphs.
+
+Runtime resource lookup asserted Body was absent from the queried fields. Generation reads
+only resource identity, modification timestamp, archive length and cache policy for pinned
+resources. The five original demo resources were hash-validated and pinned too.
+
+DocGenFontTest: 16 passed, 0 failed (707Ru00002H8Scw).
+Canvas custom-font serializer checks passed. Prettier and git diff --check passed.
+Offline QA: 525/586 passed, same 61 existing failures (0 new).
+Code Analyzer reported 0 violations; Graph Engine reported internal limitations on some
+custom FLS-guard / native URL paths. Those guarded paths were also reviewed and exercised by
+permission-isolation tests. Do not treat that analyzer result as complete path coverage.
+
+Validated in the portwood-proposal scratch org using Winter '27's 25 MB asynchronous heap.
+No production deployment or release was performed.

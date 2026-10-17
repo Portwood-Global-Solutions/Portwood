@@ -1,5 +1,5 @@
 <template>
-    <lightning-card title="Signature Settings" icon-name="standard:signature_request">
+    <lightning-card title={cardTitle} icon-name={cardIcon} class={cardClass}>
         <div slot="actions">
             <lightning-button variant="brand" label={saveLabel} onclick={handleSave} disabled={isSaving}>
             </lightning-button>

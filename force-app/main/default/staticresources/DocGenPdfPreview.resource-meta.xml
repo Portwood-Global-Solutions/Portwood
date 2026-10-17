@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StaticResource xmlns="http://soap.sforce.com/2006/04/metadata"><cacheControl>Public</cacheControl><contentType>application/zip</contentType><description>Classic-script adapter of existing PDF.js 4.7.76 for native generated PDF previews in Lightning. Apache-2.0; license comments retained. No external services.</description></StaticResource>

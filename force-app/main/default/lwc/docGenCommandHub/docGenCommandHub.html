@@ -1,7 +1,7 @@
 <template>
     <div class="app-container">
         <!-- Refined Professional Sidebar -->
-        <nav class="sidebar">
+        <nav class="sidebar" aria-label="Portwood workspace">
             <div class="sidebar-header">
                 <img src={logoUrl} alt="Portwood" class="logo-icon" />
                 <div class="logo-text">
@@ -11,17 +11,21 @@
             </div>
 
             <div class="nav-links">
+                <button class={startTabClass} onclick={handleShowStart}>
+                    <lightning-icon icon-name="utility:trail" size="x-small" class="nav-icon"></lightning-icon>
+                    <span>Get started</span>
+                </button>
                 <button class={templatesTabClass} onclick={handleShowTemplates}>
                     <lightning-icon icon-name="utility:file" size="x-small" class="nav-icon"></lightning-icon>
-                    <span>My Templates</span>
+                    <span>My templates</span>
                 </button>
                 <button class={bulkTabClass} onclick={handleShowBulk}>
                     <lightning-icon icon-name="utility:layers" size="x-small" class="nav-icon"></lightning-icon>
-                    <span>Bulk Generation</span>
+                    <span>Bulk generation</span>
                 </button>
                 <button class={signaturesTabClass} onclick={handleShowSignatures}>
                     <lightning-icon icon-name="utility:edit_form" size="x-small" class="nav-icon"></lightning-icon>
-                    <span>Signatures</span>
+                    <span>Signature settings</span>
                 </button>
                 <button class={assetsTabClass} onclick={handleShowAssets}>
                     <lightning-icon icon-name="utility:image" size="x-small" class="nav-icon"></lightning-icon>
@@ -34,16 +38,16 @@
                             size="x-small"
                             class="nav-icon"
                         ></lightning-icon>
-                        <span>Buttons</span>
+                        <span>Document buttons</span>
                     </button>
                     <button class={sendEmailTabClass} onclick={handleShowSendEmail}>
                         <lightning-icon icon-name="utility:send" size="x-small" class="nav-icon"></lightning-icon>
-                        <span>Send Email</span>
+                        <span>Email actions</span>
                     </button>
                 </template>
                 <button class={emailTabClass} onclick={handleShowEmail}>
                     <lightning-icon icon-name="utility:email" size="x-small" class="nav-icon"></lightning-icon>
-                    <span>Email Templates</span>
+                    <span>Email templates</span>
                 </button>
                 <button class={brandsTabClass} onclick={handleShowBrands}>
                     <lightning-icon icon-name="utility:apps" size="x-small" class="nav-icon"></lightning-icon>
@@ -51,7 +55,7 @@
                 </button>
                 <button class={helpTabClass} onclick={handleShowHelp}>
                     <lightning-icon icon-name="utility:knowledge_base" size="x-small" class="nav-icon"></lightning-icon>
-                    <span>Learning Center</span>
+                    <span>Help &amp; guides</span>
                 </button>
             </div>
 
@@ -85,7 +89,7 @@
                     <lightning-icon icon-name="utility:comments" size="xx-small" class="nav-icon"></lightning-icon>
                     Join the Community
                 </a>
-                <div class="footer-note">Made with <span class="heart">&#10084;&#65039;</span> for you</div>
+                <div class="footer-note">Documents stay in Salesforce</div>
             </div>
         </nav>
 
@@ -94,23 +98,33 @@
             <!-- Dynamic Content Area -->
             <div class="content-panel">
                 <template if:true={isLoaded}>
+                    <div hidden={hideStart}>
+                        <c-doc-gen-getting-started
+                            active={isStart}
+                            onjourneynavigate={handleJourneyNavigate}
+                            oncustomizestarter={handleCustomizeStarter}
+                            onstartercreated={handleStarterCreated}
+                        ></c-doc-gen-getting-started>
+                    </div>
                     <!-- TEMPLATES -->
                     <template if:true={isTemplates}>
                         <div class="panel-header">
-                            <h2>Template Library</h2>
-                            <p>Manage your document designs and create new ones.</p>
+                            <h2>My templates</h2>
+                            <p>
+                                Open a template to edit its design or generate a sample. Create a template when you are
+                                ready to build your own.
+                            </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-admin onmanagebrands={handleShowBrands}></c-doc-gen-admin>
+                            <c-doc-gen-admin
+                                onmanagebrands={handleShowBrands}
+                                ongetstarted={handleShowStart}
+                            ></c-doc-gen-admin>
                         </div>
                     </template>
 
                     <!-- BULK -->
                     <template if:true={isBulk}>
-                        <div class="panel-header">
-                            <h2>Bulk Generation</h2>
-                            <p>Create documents for hundreds of records at the same time.</p>
-                        </div>
                         <div class="panel-body">
                             <c-doc-gen-bulk-runner></c-doc-gen-bulk-runner>
                         </div>
@@ -120,18 +134,24 @@
                     <template if:true={isSignatures}>
                         <div class="panel-header">
                             <h2>Signature Settings</h2>
-                            <p>Configure email branding, site URL, and signature behavior.</p>
+                            <p>
+                                Set up the signing experience here. Start signature requests from an Account,
+                                Opportunity, or other record page.
+                            </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-signature-settings></c-doc-gen-signature-settings>
+                            <c-doc-gen-signature-settings embedded></c-doc-gen-signature-settings>
                         </div>
                     </template>
 
                     <!-- ASSETS -->
                     <template if:true={isAssets}>
                         <div class="panel-header">
-                            <h2>Shared Assets</h2>
-                            <p>Manage reusable images like logos and footers that update everywhere at once.</p>
+                            <h2>Assets</h2>
+                            <p>
+                                Add reusable images, terms and HTML snippets, and approved fonts. Built-in fonts are
+                                ready without uploads.
+                            </p>
                         </div>
                         <div class="panel-body">
                             <c-doc-gen-assets></c-doc-gen-assets>
@@ -140,13 +160,6 @@
 
                     <!-- BUTTONS -->
                     <template if:true={showButtonsSection}>
-                        <div class="panel-header">
-                            <h2>Document Buttons</h2>
-                            <p>
-                                Create one-click document buttons for record pages — choose the object, template, and
-                                record types, no Setup needed.
-                            </p>
-                        </div>
                         <div class="panel-body">
                             <c-doc-gen-button-builder></c-doc-gen-button-builder>
                         </div>
@@ -154,15 +167,6 @@
 
                     <!-- SEND EMAIL BUTTONS -->
                     <template if:true={showSendEmailSection}>
-                        <div class="panel-header">
-                            <div>
-                                <h2>Send Email Buttons</h2>
-                                <p>
-                                    Create record-page Send Email actions that generate a document, attach it to the
-                                    source record, and email it to selected or manually entered recipients.
-                                </p>
-                            </div>
-                        </div>
                         <div class="panel-body">
                             <c-doc-gen-button-builder action-type="Email"></c-doc-gen-button-builder>
                         </div>
@@ -171,13 +175,16 @@
                     <!-- EMAIL TEMPLATES -->
                     <template if:true={isEmail}>
                         <div class="panel-header">
-                            <h2>Email Templates</h2>
+                            <h2>Email templates</h2>
                             <p>
                                 Brand and edit every signature email — request, reminder, verification, and completion.
                             </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-email-templates onmanagebrands={handleShowBrands}></c-doc-gen-email-templates>
+                            <c-doc-gen-email-templates
+                                embedded
+                                onmanagebrands={handleShowBrands}
+                            ></c-doc-gen-email-templates>
                         </div>
                     </template>
 
@@ -186,27 +193,68 @@
                         <div class="panel-header">
                             <h2>Brands</h2>
                             <p>
-                                Set up a reusable sender identity — address, logo, and color — for each business unit,
-                                then choose it on any Portwood Template.
+                                Optional: save the sender address, logo, and colors for signature emails. Add document
+                                images and fonts in Assets.
                             </p>
                         </div>
                         <div class="panel-body">
-                            <c-doc-gen-brands></c-doc-gen-brands>
+                            <c-doc-gen-brands embedded></c-doc-gen-brands>
                         </div>
                     </template>
 
                     <!-- HELP / LEARNING CENTER — moved to portwood.dev/guide -->
                     <template if:true={isHelp}>
                         <div class="panel-header">
-                            <h2>User Guide</h2>
-                            <p>
-                                The full Portwood User Guide lives on the web — always up to date with the latest
-                                release.
-                            </p>
+                            <h2>Help &amp; guides</h2>
+                            <p>Start with a PDF, then add your branding and bring document generation to your team.</p>
                         </div>
                         <div class="panel-body">
                             <div class="guide-redirect-card">
-                                <h3>Open the Portwood User Guide</h3>
+                                <h3>Your first five minutes</h3>
+                                <ol class="quick-start-list">
+                                    <li>
+                                        <strong>Get access.</strong> Your admin assigns Portwood Admin to template
+                                        authors and Portwood User to people generating documents.
+                                    </li>
+                                    <li>
+                                        <strong>See a finished document.</strong> Open Get started, choose an available
+                                        sales example or account summary, then select Render my PDF. Quotes are offered
+                                        when enabled and accessible; otherwise, start with an opportunity. Sample data
+                                        works even in an empty org.
+                                    </li>
+                                    <li>
+                                        <strong>Make it yours.</strong> Customize the starter and use Preview with
+                                        sample data, or choose a Salesforce record for a live preview.
+                                    </li>
+                                    <li>
+                                        <strong>Bring it to your team.</strong> Add Portwood Runner to the matching
+                                        record page in Lightning App Builder. Save and activate the page.
+                                    </li>
+                                </ol>
+                                <div class="guide-actions">
+                                    <lightning-button
+                                        variant="brand"
+                                        label="Start with an example"
+                                        onclick={handleShowStart}
+                                    ></lightning-button
+                                    ><lightning-button
+                                        label="Open assets"
+                                        onclick={handleShowAssets}
+                                    ></lightning-button>
+                                </div>
+                                <h3 class="guide-secondary">Add your brand after the first PDF</h3>
+                                <p>
+                                    Images are reusable across templates. Custom fonts need a supported static TTF and
+                                    an approved native PDF specimen. Variable fonts, CFF fonts, most emoji, and some
+                                    language shaping are not supported by the native PDF renderer. Check Assets → Fonts
+                                    before uploading.
+                                </p>
+                                <h3 class="guide-secondary">Keep signatures on record pages</h3>
+                                <p>
+                                    Use Portwood Signature Sender on a record page to prepare a PDF and choose
+                                    recipients. Signature settings in this hub configure the signing experience.
+                                </p>
+                                <h3 class="guide-secondary">Need more detail?</h3>
                                 <p>
                                     Setup walkthroughs, merge-tag syntax, e-signature configuration, PDF features, Flow
                                     integration, troubleshooting — everything is on the portwood.dev guide site,

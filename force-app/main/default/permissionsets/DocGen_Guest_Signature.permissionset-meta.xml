@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version='1.0' encoding='UTF-8' ?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <classAccesses>
         <apexClass>DocGenController</apexClass>
@@ -8,7 +8,7 @@
         <apexClass>DocGenHtmlRenderer</apexClass>
         <enabled>true</enabled>
     </classAccesses>
-<classAccesses>
+    <classAccesses>
         <apexClass>DocGenService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -41,6 +41,46 @@
     <!-- Email Template fields (#193) — the guest-context PIN (T3) and completion
          (T5/T7) emails render from these templates. Read-only; Type__c is required
          so its FLS is auto-granted and intentionally not declared here. -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Request__c.PDF_Internal_Preview__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Page__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Y__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Height__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Request__c.PDF_Revision__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_X__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Width__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Signature_Placement__c.PDF_Rotation__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Email_Template__c.Layout_Mode__c</field>
@@ -336,7 +376,8 @@
          Read-only for guest (editable=false). -->
     <fieldPermissions>
         <editable>false</editable>
-        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>        <readable>true</readable>
+        <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
+        <readable>true</readable>
     </fieldPermissions>
     <!-- Portwood Brand (#369): completion/PIN/all-signed emails can finish inside the
          guest signer's own session (see DocGenSignatureEmailService's without-sharing
@@ -389,7 +430,8 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
-        <field>DocGen_Brand__c.Is_Active__c</field>        <readable>true</readable>
+        <field>DocGen_Brand__c.Is_Active__c</field>
+        <readable>true</readable>
     </fieldPermissions>
     <!-- New audit fields for guest -->
     <fieldPermissions>

@@ -128,3 +128,9 @@
     font-weight: 700;
     transition: background-color 0.15s ease;
 }
+
+.embedded-card {
+    --slds-c-card-shadow: none;
+    --slds-c-card-color-border: transparent;
+    --slds-c-card-radius-border: 0;
+}

@@ -107,7 +107,7 @@ export default class DocGenButtonBuilder extends LightningElement {
     get helpText() {
         return this.isEmailMode
             ? 'Create Send Email actions for a record page. Users choose the email button, preview the generated document, enter recipients, and send it as an attachment.'
-            : 'Create one-click "generate document" buttons for a record page - no Setup required. Choose the object, template, and (optionally) which record types the button appears for.';
+            : 'Choose the object, template, and optional record types here. Then add the action to your record page in Salesforce Setup using the two steps below.';
     }
     get setupComponentName() {
         return this.isEmailMode ? 'c:docGenSendEmailButton' : 'c:docGenButton';

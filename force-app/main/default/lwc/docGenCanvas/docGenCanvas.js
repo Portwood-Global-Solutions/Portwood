@@ -4,11 +4,13 @@ import saveAndPublishHtmlBody from '@salesforce/apex/DocGenController.saveAndPub
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
 import getTemplateVersions from '@salesforce/apex/DocGenController.getTemplateVersions';
 import getVersionBody from '@salesforce/apex/DocGenController.getVersionBody';
+import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
 import { loadScript } from 'lightning/platformResourceLoader';
+import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
 import { renderChartToCanvas, SAMPLE_CHART_BUCKETS, prepareChartsClientSide } from 'c/docGenChartJs';
 import { updateRecord } from 'lightning/uiRecordApi';
@@ -62,7 +64,8 @@ import {
     wouldCycle,
     boxLabel,
     normalizeCustomPage as normalizeCustom,
-    canRenderBold
+    canRenderBold,
+    applyFontFaceToInline
 } from './canvasModel';
 
 /**
@@ -96,6 +99,34 @@ function isUnicodeFont(font) {
  * box at 2.4in x 3.1in on screen is at 2.4in x 3.1in in the PDF.
  */
 export default class DocGenCanvas extends LightningElement {
+    fontFaces = [];
+    fontValue(st) {
+        return st.fontFaceKey ? 'face:' + st.fontFaceKey : st.font;
+    }
+    fontPatch(value) {
+        const face = this.fontFaces.find((f) => 'face:' + f.key === value);
+        return face
+            ? {
+                  font: "'" + face.family + "'",
+                  fontFaceKey: face.key,
+                  fontWeight: face.weight,
+                  fontStyle: face.style,
+                  bold: false,
+                  italic: false
+              }
+            : { font: value, fontFaceKey: null, fontWeight: null, fontStyle: null };
+    }
+    async loadFonts() {
+        try {
+            this.fontFaces = await getFontFaces();
+            await Promise.all(this.fontFaces.filter((f) => f.selectable).map((f) => loadFontFace(f)));
+        } catch (e) {
+            this.statusText = 'Font library could not load: ' + (e.body?.message || e.message);
+        }
+    }
+    previewFont(st) {
+        return st.fontFaceKey ? "'PW_" + st.fontFaceKey + "'" : st.font;
+    }
     @api recordId;
 
     /**
@@ -1158,7 +1189,7 @@ export default class DocGenCanvas extends LightningElement {
         const z = this.zoom || 1;
         let css =
             'font-family:' +
-            st.font +
+            this.previewFont(st) +
             ';font-size:' +
             (st.size * z).toFixed(2) +
             'pt;color:' +
@@ -1168,8 +1199,9 @@ export default class DocGenCanvas extends LightningElement {
             ';padding:' +
             (st.padding * z).toFixed(2) +
             'pt;';
-        if (st.bold) css += 'font-weight:bold;';
-        if (st.italic) css += 'font-style:italic;';
+        if (st.fontFaceKey) css += 'font-weight:' + st.fontWeight + ';font-style:' + st.fontStyle + ';';
+        if (!st.fontFaceKey && st.bold) css += 'font-weight:bold;';
+        if (!st.fontFaceKey && st.italic) css += 'font-style:italic;';
         if (st.underline) css += 'text-decoration:underline;';
         if (st.fill) css += 'background:' + st.fill + ';';
         if (st.borderWidth > 0) css += 'border:' + (st.borderWidth * z).toFixed(2) + 'pt solid ' + st.borderColor + ';';
@@ -1609,13 +1641,13 @@ export default class DocGenCanvas extends LightningElement {
         return this.selTotalsText.bold && !this.totalsBoldDisabled ? 'dg-sbtn dg-sbtn_on' : 'dg-sbtn';
     }
     get totalsBoldDisabled() {
-        return isUnicodeFont(this.selTotalsFont);
+        return !!this.selTotalsText.fontFaceKey || isUnicodeFont(this.selTotalsFont);
     }
     get totalsBoldTitle() {
-        return this.totalsBoldDisabled ? 'Bold not available for Arial Unicode' : 'Bold';
+        return this.totalsBoldDisabled ? 'Choose a verified bold face from the font list' : 'Bold';
     }
     get subBoldDisabled() {
-        return isUnicodeFont(this.selSubFont);
+        return !!this.selSubText.fontFaceKey || isUnicodeFont(this.selSubFont);
     }
 
     /** Align is a button, not a field, so it carries its value in data-align. */
@@ -1636,37 +1668,37 @@ export default class DocGenCanvas extends LightningElement {
         return this.selHeaderText.bold && !this.headerBoldDisabled ? 'dg-sbtn dg-sbtn_on' : 'dg-sbtn';
     }
     get headerBoldDisabled() {
-        return isUnicodeFont(this.selHeaderFont);
+        return !!this.selHeaderText.fontFaceKey || isUnicodeFont(this.selHeaderFont);
     }
     get headerBoldTitle() {
-        return this.headerBoldDisabled ? 'Bold not available for Arial Unicode' : 'Bold';
+        return this.headerBoldDisabled ? 'Choose a verified bold face from the font list' : 'Bold';
     }
 
     get rowBoldClass() {
         return this.selRowText.bold && !this.rowBoldDisabled ? 'dg-sbtn dg-sbtn_on' : 'dg-sbtn';
     }
     get rowBoldDisabled() {
-        return isUnicodeFont(this.selRowFont);
+        return !!this.selRowText.fontFaceKey || isUnicodeFont(this.selRowFont);
     }
     get rowBoldTitle() {
-        return this.rowBoldDisabled ? 'Bold not available for Arial Unicode' : 'Bold';
+        return this.rowBoldDisabled ? 'Choose a verified bold face from the font list' : 'Bold';
     }
 
     /** Header and body rows are styled separately — see DEFAULT_HEADER_TEXT. */
     get selHeaderFont() {
-        return this.selHeaderText.font || this.selFont;
+        return this.selHeaderText.font ? this.fontValue(this.selHeaderText) : this.selFont;
     }
 
     get selRowFont() {
-        return this.selRowText.font || this.selFont;
+        return this.selRowText.font ? this.fontValue(this.selRowText) : this.selFont;
     }
 
     get selTotalsFont() {
-        return this.selTotalsText.font || this.selFont;
+        return this.selTotalsText.font ? this.fontValue(this.selTotalsText) : this.selFont;
     }
 
     get selSubFont() {
-        return this.selSubText.font || this.selFont;
+        return this.selSubText.font ? this.fontValue(this.selSubText) : this.selFont;
     }
 
     handleRowTextChange(event) {
@@ -1701,7 +1733,7 @@ export default class DocGenCanvas extends LightningElement {
             value = parseFloat(event.target.value);
             if (isNaN(value)) return;
         } else {
-            value = event.target.value;
+            value = key === 'font' ? event.detail.value : event.target.value;
         }
         const field =
             which === 'header'
@@ -1711,7 +1743,7 @@ export default class DocGenCanvas extends LightningElement {
                   : which === 'sub'
                     ? 'subText'
                     : 'rowText';
-        const patch = { [key]: value };
+        const patch = key === 'font' ? this.fontPatch(value) : { [key]: value };
         if (key === 'font' && isUnicodeFont(value) && current.bold) {
             patch.bold = false;
         }
@@ -2038,7 +2070,7 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get fontOptions() {
-        return FONT_CHOICES;
+        return fontPickerOptions(FONT_CHOICES, this.fontFaces);
     }
 
     get selectedStyle() {
@@ -2046,7 +2078,7 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get selFont() {
-        return this.selectedStyle.font;
+        return this.fontValue(this.selectedStyle);
     }
     get selSize() {
         return this.selectedStyle.size;
@@ -2071,12 +2103,13 @@ export default class DocGenCanvas extends LightningElement {
     }
     /** Arial Unicode MS has no bold face in the PDF — the Bold toggle is a no-op for it. */
     get boxBoldDisabled() {
-        return isUnicodeFont(this.selFont);
+        return !!this.selectedStyle.fontFaceKey || isUnicodeFont(this.selFont);
+    }
+    get boxItalicDisabled() {
+        return !!this.selectedStyle.fontFaceKey;
     }
     get boldTitle() {
-        return this.boxBoldDisabled
-            ? 'Bold is not available for Arial Unicode — it has no bold face in the PDF'
-            : 'Bold';
+        return this.boxBoldDisabled ? 'Choose a verified bold face from the font list' : 'Bold';
     }
     get italicClass() {
         return this.selectedStyle.italic ? 'dg-sbtn dg-sbtn_on' : 'dg-sbtn';
@@ -2105,7 +2138,7 @@ export default class DocGenCanvas extends LightningElement {
         const key = event.currentTarget.dataset.key;
         // Arial Unicode MS has no bold face — a bold this box carries would silently
         // print regular in the PDF. Refuse the toggle so the canvas can't promise it.
-        if (key === 'bold' && this.boxBoldDisabled) {
+        if ((key === 'bold' && this.boxBoldDisabled) || (key === 'italic' && this.boxItalicDisabled)) {
             return;
         }
         this._patchStyle({ [key]: !this.selectedStyle[key] });
@@ -2119,11 +2152,21 @@ export default class DocGenCanvas extends LightningElement {
         const font = event.detail.value;
         // Switching to Arial Unicode MS clears an active bold: it has no bold face, so
         // keeping bold on would show a weight the PDF cannot print (see canRenderBold).
-        const patch = { font };
+        const patch = this.fontPatch(font);
         if (isUnicodeFont(font) && this.selectedStyle.bold) {
             patch.bold = false;
         }
-        this._patchStyle(patch);
+        if (this.selectedBox?.kind === 'table') {
+            const table = { ...this.selectedBox.table };
+            for (const band of ['headerText', 'rowText', 'subText', 'totalsText'])
+                table[band] = { ...table[band], ...patch };
+            this.applyToBox(this.selectedBox.id, { style: { ...this.selectedStyle, ...patch }, table });
+        } else if (patch.fontFaceKey && this.selectedBox?.kind === 'text' && this.selectedBox.html != null) {
+            this.applyToBox(this.selectedBox.id, {
+                style: { ...this.selectedStyle, ...patch },
+                html: applyFontFaceToInline(this.selectedBox.html)
+            });
+        } else this._patchStyle(patch);
     }
 
     handleNumChange(event) {
@@ -2200,6 +2243,7 @@ export default class DocGenCanvas extends LightningElement {
         this._connected = true;
         this._onKey = (e) => this.handleKeyDown(e);
         window.addEventListener('keydown', this._onKey);
+        await this.loadFonts();
         await this.loadBody();
         await this.loadVersions();
     }
@@ -3143,7 +3187,13 @@ export default class DocGenCanvas extends LightningElement {
         if (model.kind === 'table') {
             // preview-only — dataMap is never written back into model/this.doc, only
             // read here to render real rows; serialize() never sees it.
-            return tablePreviewHtml(model, this.showSampleData ? this.resolvedSampleData : null);
+            const preview = JSON.parse(JSON.stringify(model));
+            if (preview.style?.fontFaceKey) preview.style.font = this.previewFont(preview.style);
+            for (const field of ['headerText', 'rowText', 'totalsText', 'subText']) {
+                const st = preview.table?.[field];
+                if (st?.fontFaceKey) st.font = this.previewFont(st);
+            }
+            return tablePreviewHtml(preview, this.showSampleData ? this.resolvedSampleData : null);
         }
         if (model.kind === 'image') {
             const img = model.image || {};
@@ -3478,7 +3528,7 @@ export default class DocGenCanvas extends LightningElement {
      * stay for tables and go for text.
      */
     get showBoxTypography() {
-        return this.selectedIsTable;
+        return this.selectedIsTable || this.canEditRichText;
     }
 
     /**
@@ -3501,7 +3551,7 @@ export default class DocGenCanvas extends LightningElement {
      * own box where they can be positioned.
      */
     get richTextFormats() {
-        return [
+        const formats = [
             'font',
             'size',
             'bold',
@@ -3526,6 +3576,9 @@ export default class DocGenCanvas extends LightningElement {
             // panel control below cannot be clipped because it is ordinary content, so
             // it works regardless of where an overlay would have opened.
         ];
+        return this.selectedStyle.fontFaceKey
+            ? formats.filter((f) => !['font', 'bold', 'italic', 'header'].includes(f))
+            : formats;
     }
 
     /**
@@ -3722,7 +3775,7 @@ export default class DocGenCanvas extends LightningElement {
         // symbolMarkup wraps the ones the base fonts cannot draw in the Unicode face,
         // so a checkmark renders whatever the box's own font is set to.
         const current = box.html != null ? box.html : box.text || '';
-        this.applyToBox(box.id, { html: sanitizeInline(current + symbolMarkup(sym)) });
+        this.applyToBox(box.id, { html: sanitizeInline(current + symbolMarkup(sym, !!box.style?.fontFaceKey)) });
         this.reseedEditor();
         this.statusText = 'Inserted ' + sym.name;
     }

@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Opportunity proposal</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.55in;
+                @bottom-right {
+                    content: 'Page ' counter(page);
+                    font: 8pt Helvetica;
+                    color: #526475;
+                }
+            }
+            body {
+                font:
+                    10pt Helvetica,
+                    Arial,
+                    sans-serif;
+                color: #183452;
+                line-height: 1.45;
+            }
+            h1 {
+                font-size: 27pt;
+                line-height: 1.15;
+                margin: 16pt 0 8pt;
+            }
+            h2 {
+                font-size: 14pt;
+                margin: 24pt 0 8pt;
+                color: #206b72;
+            }
+            p {
+                margin: 5pt 0;
+            }
+            .mast {
+                border-bottom: 3pt solid #206b72;
+                padding-bottom: 10pt;
+                font-size: 11pt;
+            }
+            .mast span {
+                color: #526475;
+            }
+            .intro {
+                color: #526475;
+                margin-bottom: 16pt;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th {
+                background: #183452;
+                color: white;
+                font-size: 9pt;
+                padding: 8pt;
+                text-align: left;
+            }
+            td {
+                padding: 8pt;
+                border-bottom: 0.6pt solid #d8e1ea;
+                vertical-align: top;
+            }
+            .num {
+                text-align: right;
+            }
+            .summary {
+                margin: 16pt 0;
+                background: #edf5f5;
+            }
+            .summary td {
+                padding: 14pt;
+                border: 0;
+            }
+            .summary strong {
+                display: block;
+                font-size: 19pt;
+                color: #206b72;
+            }
+            .label {
+                font-size: 9pt;
+                color: #526475;
+            }
+            .note {
+                padding: 10pt;
+                background: #f3f6f9;
+                color: #526475;
+                margin-top: 14pt;
+                font-size: 9pt;
+            }
+            .total td {
+                background: #edf5f5;
+                font-weight: bold;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+            thead {
+                display: table-header-group;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="mast"><b>Portwood</b><span> / Opportunity proposal</span></div>
+        <h1>{Name}</h1>
+        <p class="intro">Prepared for {Account.Name} / Opportunity owner: {Owner.Name}</p>
+        <table class="summary">
+            <tr>
+                <td>
+                    <span class="label">Proposal value</span
+                    ><strong>{SUM:OpportunityLineItems.TotalPrice:currency}</strong>
+                </td>
+                <td><span class="label">Expected close</span><strong>{CloseDate:MMM dd, yyyy}</strong></td>
+            </tr>
+        </table>
+        <table>
+            <tr>
+                <td>
+                    <b>Customer</b>
+                    <p>{Account.Name}</p>
+                    <p>{Account.BillingCity}, {Account.BillingState}</p>
+                </td>
+                <td>
+                    <b>Sales status</b>
+                    <p>{StageName}</p>
+                    <p>{COUNT:OpportunityLineItems} products or services</p>
+                </td>
+            </tr>
+        </table>
+        <h2>Products and services</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 46%">Product or service</th>
+                    <th class="num">Quantity</th>
+                    <th class="num">Unit price</th>
+                    <th class="num">Line total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        {#OpportunityLineItems}<b>{Product2.Name}</b>
+                        <p>{Description}</p>
+                    </td>
+                    <td class="num">{Quantity:number}</td>
+                    <td class="num">{UnitPrice:currency}</td>
+                    <td class="num">{TotalPrice:currency}{/OpportunityLineItems}</td>
+                </tr>
+                <tr class="total">
+                    <td colspan="3">Products and services total</td>
+                    <td class="num">{SUM:OpportunityLineItems.TotalPrice:currency}</td>
+                </tr>
+            </tbody>
+        </table>
+        {^OpportunityLineItems.records}
+        <p class="note">
+            No products have been added to this opportunity. Add products to the opportunity, then generate this
+            document again.
+        </p>
+        {/OpportunityLineItems.records}
+        <h2>Next steps</h2>
+        <p>
+            Review the products and pricing with your account team. Confirm the scope and target close date before
+            sending a final proposal.
+        </p>
+        <p class="note">
+            This proposal summarizes Salesforce opportunity products. Taxes, shipping, discounts outside the line
+            totals, and contractual terms are not added by this template.
+        </p>
+    </body>
+</html>

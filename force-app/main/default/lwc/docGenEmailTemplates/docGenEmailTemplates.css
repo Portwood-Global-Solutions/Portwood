@@ -24,3 +24,9 @@
 .preview-surface table {
     max-width: 100%;
 }
+
+.embedded-card {
+    --slds-c-card-shadow: none;
+    --slds-c-card-color-border: transparent;
+    --slds-c-card-radius-border: 0;
+}

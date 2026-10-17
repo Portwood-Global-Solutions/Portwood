@@ -37,6 +37,22 @@ export const UI_ELSEWHERE = {
 
 /** Written by the engine, never by a person. */
 export const ENGINE_WRITTEN = {
+    'DocGen_Signature_Request__c.Original_Document_CV_Id__c':
+        'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Request__c.Original_Content_Document_Id__c':
+        'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Request__c.Preparation_Config_CV_Id__c':
+        'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Request__c.PDF_Revision__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Request__c.PDF_Internal_Preview__c':
+        'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_Page__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_X__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_Y__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_Width__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_Height__c': 'managed by the record-page PDF signature editor and signing engine',
+    'DocGen_Signature_Placement__c.PDF_Rotation__c':
+        'managed by the record-page PDF signature editor and signing engine',
     'DocGen_Signature_Request__c.Frozen_Document__c': 'snapshot blob written by the signing engine',
     'DocGen_Signature_Request__c.Render_Data_Snapshot__c': 'snapshot blob written by the signing engine',
     'DocGen_Signature_Request__c.Signature_Data__c': 'written by the signing engine',

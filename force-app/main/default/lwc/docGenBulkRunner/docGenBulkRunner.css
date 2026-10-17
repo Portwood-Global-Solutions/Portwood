@@ -228,3 +228,25 @@
     border-radius: var(--slds-g-radius-border-3, 12px) !important;
     overflow: hidden;
 }
+/* Align the standalone bulk tool with the Portwood hub's document workspace. */
+.workspace-header {
+    padding: 1.25rem 1.5rem;
+    border-radius: 6px 6px 0 0;
+}
+.workspace-header h2 {
+    color: #183452;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.workspace-header p {
+    font-size: 0.9rem;
+    color: #526475;
+    max-width: 75ch;
+    line-height: 1.55;
+}
+.workspace-content {
+    padding: 1.5rem;
+}
+.section-title {
+    color: #183452;
+}

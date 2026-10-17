@@ -324,7 +324,7 @@ public with sharing class DocGenEmailTemplateController {
         if (assetId == null) {
             throw DocGenService.ahe('An asset Id is required.');
         }
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Name' });
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Name', 'Asset_Type__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Asset__c> assets = [
             SELECT
@@ -337,7 +337,7 @@ public with sharing class DocGenEmailTemplateController {
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Id = :assetId
+            WHERE Id = :assetId AND Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
             LIMIT 1
         ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
