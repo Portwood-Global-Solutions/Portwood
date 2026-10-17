@@ -1790,6 +1790,7 @@
                     </template>
                     <template if:true={showFlowDesignerTab}>
                         <div class={workspaceRootClass}>
+                            <div class="dg-pill-style-host" lwc:dom="manual" aria-hidden="true"></div>
                             <template if:true={useModernDesigner}>
                                 <c-doc-gen-designer-workspace
                                     data-font-picker="visual"

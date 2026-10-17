@@ -318,7 +318,7 @@ Every template has an optional **API Name** — a unique developer key like `Opp
 
 ### 5.1.2 The Visual Designer (Beta)
 
-HTML templates open in a visual editing workspace. Click text to edit it; merge fields remain atomic pills so their syntax stays intact. The sheet approximates HTML layout. **Preview → Generate PDF** is the authority for printed pagination and native font rendering.
+HTML templates open in a visual editing workspace. Click text to edit it; merge fields remain atomic pills so their syntax stays intact. Purple and green pill tints mark merge tags while editing; typing beside a tag continues as ordinary text. The sheet approximates HTML layout. **Preview → Generate PDF** is the authority for printed pagination and native font rendering.
 
 **Start with the page:**
 

@@ -312,6 +312,64 @@ export function flattenFontBindings(root, faces) {
     for (const element of Array.from(root.children)) walk(element, null);
 }
 
+const CARET_SPACE = '\u200b';
+/** An editable, unstyled caret beside an atomic merge field, with no pill decoration. */
+export function pillCaretRange(surface, pill, side = 'after') {
+    const doc = surface.ownerDocument;
+    const neighbour = side === 'before' ? pill.previousSibling : pill.nextSibling;
+    let slot = neighbour?.nodeType === 1 && neighbour.hasAttribute('data-dg-caret') ? neighbour : null;
+    if (!slot) {
+        slot = doc.createElement('span');
+        slot.setAttribute('data-dg-caret', 'true');
+        slot.appendChild(doc.createTextNode(CARET_SPACE));
+        pill.parentNode.insertBefore(slot, side === 'before' ? pill : pill.nextSibling);
+    }
+    const range = doc.createRange();
+    range.setStart(slot.firstChild, slot.firstChild.nodeType === 3 ? 1 : 0);
+    range.collapse(true);
+    return range;
+}
+
+function removeCaretSpace(slot) {
+    const walker = slot.ownerDocument.createTreeWalker(slot, 4);
+    const text = walker.nextNode();
+    if (text?.nodeValue.startsWith(CARET_SPACE)) {
+        text.deleteData(0, 1);
+        return text;
+    }
+    return null;
+}
+/** Retire a caret slot after typing, retaining actual typed text and its exact selection. */
+export function releasePillCarets(surface, range) {
+    if (!range) return range;
+    const start = range.startContainer,
+        end = range.endContainer;
+    let startOffset = range.startOffset,
+        endOffset = range.endOffset;
+    for (const slot of surface.querySelectorAll('[data-dg-caret]')) {
+        if (slot.textContent === CARET_SPACE) continue;
+        const removed = removeCaretSpace(slot);
+        if (removed === start) startOffset = Math.max(0, startOffset - 1);
+        if (removed === end) endOffset = Math.max(0, endOffset - 1);
+        while (slot.firstChild) slot.parentNode.insertBefore(slot.firstChild, slot);
+        slot.remove();
+    }
+    if (!containsNode(surface, start) || !containsNode(surface, end)) return range;
+    const restored = surface.ownerDocument.createRange();
+    restored.setStart(start, startOffset);
+    restored.setEnd(end, endOffset);
+    return restored;
+}
+
+/** Remove editor-only caret characters and wrappers from serialized document content. */
+export function stripPillCarets(root) {
+    for (const slot of root.querySelectorAll('[data-dg-caret]')) {
+        removeCaretSpace(slot);
+        while (slot.firstChild) slot.parentNode.insertBefore(slot.firstChild, slot);
+        slot.remove();
+    }
+}
+
 /** Inline formatting without invalid cross-paragraph wrappers; merge fields remain atomic. */
 export function styleRange(surface, range, properties, face) {
     if (!range || !containsNode(surface, range.startContainer) || !containsNode(surface, range.endContainer))
@@ -319,6 +377,8 @@ export function styleRange(surface, range, properties, face) {
     const doc = surface.ownerDocument;
     const set = (element) => {
         for (const [key, value] of Object.entries(properties)) element.style.setProperty(key, value);
+        if (element.hasAttribute('data-dg-tag') && properties['background-color'])
+            element.setAttribute('data-dg-highlight', properties['background-color']);
         if (face) setFont(element, face);
     };
     if (range.collapsed) {

@@ -16,6 +16,9 @@ import {
     serializeFontBindings,
     flattenFontBindings,
     styleRange,
+    pillCaretRange,
+    releasePillCarets,
+    stripPillCarets,
     applyFontRange,
     editTableGrid,
     tableGrid,
@@ -1781,6 +1784,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     renderedCallback() {
+        // Outside the editable document, so pill decoration can never be saved or deleted while typing.
+        const pillStyleHost = this.template.querySelector('.dg-pill-style-host');
+        if (pillStyleHost && !pillStyleHost.firstChild) {
+            const style = document.createElement('style');
+            style.textContent = this._pillChromeStyles();
+            pillStyleHost.appendChild(style);
+        }
         // Floating chrome is position: fixed in viewport coordinates, so it can only
         // be placed once the element exists and has been laid out.
         if (this.selectionBubble) {
@@ -7420,6 +7430,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (
             !html ||
             (html.indexOf('data-dg-tag') === -1 &&
+                html.indexOf('data-dg-caret') === -1 &&
                 html.indexOf('dg-pv') === -1 &&
                 html.indexOf('dg-drop-marker') === -1)
         ) {
@@ -10155,7 +10166,33 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // mutates the DOM, the only moment the pre-edit state still exists.
         surface.addEventListener('beforeinput', (e) => {
             this._pushUndo('type:' + ((e && e.inputType) || 'text'));
+            this._preparePillTyping(surface, e);
         });
+    }
+
+    /** Native typing beside an atom must start from editable document text, not the pill's chrome. */
+    _preparePillTyping(surface, event) {
+        if (event.isComposing || !event.inputType?.startsWith('insert')) return;
+        const selection = window.getSelection();
+        if (!selection?.rangeCount || !selection.isCollapsed) return;
+        const range = selection.getRangeAt(0);
+        const node = range.startContainer;
+        const element = node.nodeType === 3 ? node.parentElement : node;
+        if (!this._isInCanvas(node, surface) || element.closest?.('[data-dg-tag],[data-dg-caret]')) return;
+        let left, right;
+        if (node.nodeType === 3) {
+            if (range.startOffset === 0) left = node.previousSibling;
+            if (range.startOffset === node.nodeValue.length) right = node.nextSibling;
+        } else {
+            left = node.childNodes[range.startOffset - 1];
+            right = node.childNodes[range.startOffset];
+        }
+        const isPill = (candidate) => candidate?.nodeType === 1 && candidate.hasAttribute('data-dg-tag');
+        const pill = isPill(left) ? left : isPill(right) ? right : null;
+        if (!pill) return;
+        const caret = pillCaretRange(surface, pill, pill === left ? 'after' : 'before');
+        selection.removeAllRanges();
+        selection.addRange(caret);
     }
 
     /**
@@ -12656,6 +12693,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         pill.style.overflow = 'hidden';
         pill.style.fontSize = '10px';
         pill.style.background = 'repeating-linear-gradient(90deg, #e6e2f5 0 3px, #f6f4fc 3px 6px)';
+        pill.setAttribute('data-dg-barcode', 'true');
         pill.style.borderStyle = 'dashed';
     }
 
@@ -12773,6 +12811,26 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._cellSel = cells.filter((c) => c && c.isConnected);
     }
 
+    _pillChromeStyles() {
+        // The tint belongs to a pseudo-element. Chromium copies background-color
+        // into its typing style at atom boundaries, even from contenteditable=false.
+        // A pseudo-element is decoration rather than text formatting.
+        const surfaces = ['.dg-pv', '.dg-chrome-band'];
+        const pills = surfaces.map((surface) => surface + ' [data-dg-tag]:not(img)').join(',');
+        const tints = surfaces.map((surface) => surface + ' [data-dg-tag]:not(img)::before').join(',');
+        const authored = surfaces
+            .flatMap((surface) => [surface + ' [data-dg-highlight]::before', surface + ' [data-dg-barcode]::before'])
+            .join(',');
+        return (
+            pills +
+            '{position:relative;isolation:isolate;}' +
+            tints +
+            '{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;background:var(--dg-pill-tint,#ede7fd);}' +
+            authored +
+            '{display:none;}'
+        );
+    }
+
     _pillStyleFor(tagText) {
         // Chrome only (tint + border) — font family/size/color/weight INHERIT
         // from the surrounding text, so a pill inside a 24pt serif heading
@@ -12801,13 +12859,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             'vertical-align:baseline;box-sizing:border-box;';
         if (isShared)
             return (
-                'background:#e5f2f0;border:1px solid #83b8b2;border-radius:4px;padding:6px 10px;cursor:pointer;' +
+                '--dg-pill-tint:#e5f2f0;border:1px solid #83b8b2;border-radius:4px;padding:6px 10px;cursor:pointer;' +
                 containment
             );
         return isStructural
-            ? 'background:#e3f5e9;border:1px solid #9fd6b1;border-radius:9px;padding:0 6px;cursor:pointer;' +
+            ? '--dg-pill-tint:#e3f5e9;border:1px solid #9fd6b1;border-radius:9px;padding:0 6px;cursor:pointer;' +
                   containment
-            : 'background:#ede7fd;border:1px solid #c9b8f5;border-radius:9px;padding:0 6px;cursor:pointer;' +
+            : '--dg-pill-tint:#ede7fd;border:1px solid #c9b8f5;border-radius:9px;padding:0 6px;cursor:pointer;' +
                   containment;
     }
 
@@ -13074,16 +13132,27 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._watchFloatingLayer(true);
     }
 
+    /** Rebuild editor decoration without losing deliberate document formatting. */
+    _restylePill(pill, tag) {
+        const properties = ['font-size', 'font-family', 'font-weight', 'font-style', 'text-decoration', 'color'];
+        if (pill.hasAttribute('data-dg-highlight')) properties.push('background-color');
+        const styles = properties.map((key) => [
+            key,
+            pill.style.getPropertyValue(key),
+            pill.style.getPropertyPriority(key)
+        ]);
+        pill.textContent = tag;
+        pill.removeAttribute('data-dg-barcode');
+        pill.style.cssText = this._pillStyleFor(tag);
+        this._sizeBarcodePill(pill, tag);
+        for (const [key, value, priority] of styles) if (value) pill.style.setProperty(key, value, priority);
+    }
+
     handlePillTransform(event) {
         const tag = event.currentTarget.dataset.tag;
         if (this._activePill && tag) {
             this._pushUndo('pill-transform');
-            const styles = ['font-size', 'font-family', 'font-weight', 'font-style', 'text-decoration', 'color'].map(
-                (key) => [key, this._activePill.style.getPropertyValue(key)]
-            );
-            this._activePill.textContent = tag;
-            this._activePill.style.cssText = this._pillStyleFor(tag);
-            for (const [key, value] of styles) if (value) this._activePill.style.setProperty(key, value);
+            this._restylePill(this._activePill, tag);
             this.htmlEditorDirty = true;
         }
         this.pillMenu = null;
@@ -13132,8 +13201,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
         this._pushUndo('pill-edit');
-        this._activePill.textContent = tag;
-        this._activePill.style.cssText = this._pillStyleFor(tag);
+        this._restylePill(this._activePill, tag);
         this.htmlEditorDirty = true;
         this.pillMenu = null;
     }
@@ -13211,9 +13279,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             if (!t.endsWith('}')) {
                 t = t + '}';
             }
-            pill.textContent = t;
             pill.setAttribute('contenteditable', 'false');
-            pill.style.cssText = this._pillStyleFor(t);
+            this._restylePill(pill, t);
             this.htmlEditorDirty = true;
             // An asset tag goes back to being a real image on the canvas.
             if (/^\{%asset:/i.test(t)) {
@@ -13221,21 +13288,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             // Park the caret AFTER the pill — leaving it inside means the next
             // keystrokes grow the pill instead of typing beside it.
-            try {
-                const host = this.template.querySelector('.dg-visual-host');
-                const pv = host && host.querySelector('.dg-pv');
-                const r = document.createRange();
-                r.setStartAfter(pill);
-                r.collapse(true);
-                const s = window.getSelection();
-                s.removeAllRanges();
-                s.addRange(r);
-                if (pv) {
-                    pv.focus();
-                }
-            } catch (e) {
-                /* caret parking best-effort */
-            }
+            this._parkCaretAfter(pill, this._surfaceOwning(pill));
         };
         this._finishPillEdit = finish;
         pill.addEventListener('blur', finish);
@@ -13368,6 +13421,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             if (!sel || !sel.rangeCount || !sel.isCollapsed) {
                 return;
             }
+            const surface = this._surfaceOwning(sel.anchorNode);
+            if (surface) {
+                const released = releasePillCarets(surface, sel.getRangeAt(0));
+                sel.removeAllRanges();
+                sel.addRange(released);
+            }
             const node = sel.anchorNode;
             if (!node || node.nodeType !== 3) {
                 return;
@@ -13383,8 +13442,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 return;
             }
             const doc = node.ownerDocument || document;
+            const caretOffset = sel.anchorOffset;
             const frag = doc.createDocumentFragment();
             let lastPill = null;
+            let caretPill,
+                caretText,
+                caretTextOffset,
+                offset = 0;
             for (const part of node.nodeValue.split(/(\{[^{}]+\})/g)) {
                 if (/^\{[^{}]+\}$/.test(part)) {
                     const pillEl = doc.createElement('span');
@@ -13394,9 +13458,16 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     pillEl.style.cssText = this._pillStyleFor(part);
                     frag.appendChild(pillEl);
                     lastPill = pillEl;
+                    if (caretOffset > offset && caretOffset <= offset + part.length) caretPill = pillEl;
                 } else if (part) {
-                    frag.appendChild(doc.createTextNode(part));
+                    const text = doc.createTextNode(part);
+                    frag.appendChild(text);
+                    if (caretOffset >= offset && caretOffset <= offset + part.length) {
+                        caretText = text;
+                        caretTextOffset = caretOffset - offset;
+                    }
                 }
+                offset += part.length;
             }
             node.parentNode.replaceChild(frag, node);
             // An asset tag becomes the real image, the same as one dropped in from
@@ -13408,15 +13479,18 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 const img = this._assetImgFor((lastPill.textContent || '').trim(), doc);
                 if (img) {
                     this._safeReplace(lastPill, img);
+                    if (caretPill === lastPill) caretPill = img;
                     lastPill = img;
                 }
             }
-            if (lastPill) {
+            if (caretPill) this._parkCaretAfter(caretPill, pv);
+            else if (caretText) {
                 const r = doc.createRange();
-                r.setStartAfter(lastPill);
+                r.setStart(caretText, caretTextOffset);
                 r.collapse(true);
                 sel.removeAllRanges();
                 sel.addRange(r);
+                this._recordCaret(caretText, pv);
             }
             // A freshly typed pill takes its style straight from _pillStyleFor, which
             // knows nothing about zoom — re-apply the spread so it matches its
@@ -13543,6 +13617,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     _unpillifyTags(root) {
+        stripPillCarets(root);
         annotateFontBindings(root, this.workspaceFontFaces);
         // Editor-only selection chrome must never reach saved HTML.
         for (const el of root.querySelectorAll('[data-dg-selcell]')) {
@@ -13594,6 +13669,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 if (st.textDecorationLine || st.textDecoration)
                     kept.push(['text-decoration', st.textDecorationLine || st.textDecoration]);
                 if (st.color) kept.push(['color', st.color]);
+                if (pill.hasAttribute('data-dg-highlight') && st.backgroundColor)
+                    kept.push(['background-color', st.backgroundColor]);
                 if (st.fontFamily) kept.push(['font-family', st.fontFamily]);
                 if (st.fontSize) kept.push(['font-size', st.fontSize]);
             }
@@ -15841,15 +15918,18 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         try {
             const doc = (pv && pv.ownerDocument) || document;
-            const r = doc.createRange();
-            r.setStartAfter(node);
-            r.collapse(true);
+            const r =
+                node.nodeType === 1 && node.hasAttribute('data-dg-tag') ? pillCaretRange(pv, node) : doc.createRange();
+            if (!(node.nodeType === 1 && node.hasAttribute('data-dg-tag'))) {
+                r.setStartAfter(node);
+                r.collapse(true);
+            }
             const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(r);
             if (pv && pv.focus) {
                 pv.focus();
             }
+            sel.removeAllRanges();
+            sel.addRange(r);
             this._lastCanvasRange = r.cloneRange();
             // Recompute from the selection just set so _caret's block/cell context and
             // the active-block highlight follow the caret instead of going stale.
