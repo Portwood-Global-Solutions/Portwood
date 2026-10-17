@@ -116,21 +116,18 @@
             </button>
             <span class="divider"></span>
             <template if:false={sourceMode}>
-                <label class="font"
-                    ><span class="sr-only">Font family</span
-                    ><select
-                        aria-label="Font family"
-                        disabled={formattingDisabled}
-                        onmousedown={captureSelection}
-                        onchange={handleFont}
-                    >
-                        <template for:each={fontOptions} for:item="opt"
-                            ><option key={opt.value} value={opt.value} selected={opt.selected}>
-                                {opt.label}
-                            </option></template
-                        >
-                    </select></label
-                >
+                <c-doc-gen-font-picker
+                    class="font"
+                    label="Font family"
+                    hide-label
+                    options={fontOptions}
+                    loading={fontsLoading}
+                    error={fontError}
+                    disabled={formattingDisabled}
+                    oncapture={captureSelection}
+                    onchange={handleFont}
+                    onretry={handleFontRetry}
+                ></c-doc-gen-font-picker>
                 <input
                     class="size"
                     type="number"

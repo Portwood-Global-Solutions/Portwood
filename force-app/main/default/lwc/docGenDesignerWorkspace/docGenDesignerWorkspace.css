@@ -146,8 +146,9 @@ input[type='number'] {
     padding: 6px 7px;
     height: 34px;
 }
-.font select {
-    max-width: 168px;
+.font {
+    width: 190px;
+    min-width: 150px;
 }
 .size {
     width: 58px;
@@ -393,8 +394,8 @@ footer {
         padding: 0 12px;
         gap: 2px;
     }
-    .font select {
-        max-width: 122px;
+    .font {
+        width: 160px;
     }
     .format .named {
         padding: 6px 8px;

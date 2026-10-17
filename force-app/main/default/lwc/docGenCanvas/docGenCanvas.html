@@ -66,14 +66,12 @@
                     </div>
                 </template>
                 <template lwc:if={showBoxTypography}>
-                    <lightning-combobox
+                    <c-doc-gen-font-picker
                         label="Document font"
-                        variant="label-stacked"
                         value={selFont}
                         options={fontOptions}
                         onchange={handleFontChange}
-                        field-level-help="Built-in fonts are ready to use. Custom faces must be approved in Assets. Language coverage, complex script shaping, color, and emoji support vary; review a native PDF. Each weight or italic style needs its own face."
-                    ></lightning-combobox>
+                    ></c-doc-gen-font-picker>
 
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size (pt)</label>
@@ -422,15 +420,14 @@
                     </p>
 
                     <h4 class="dg-panel-sub">Header text</h4>
-                    <lightning-combobox
+                    <c-doc-gen-font-picker
                         label="Font"
-                        variant="label-stacked"
                         value={selHeaderFont}
                         options={fontOptions}
                         data-which="header"
                         data-key="font"
                         onchange={handleRowTextChange}
-                    ></lightning-combobox>
+                    ></c-doc-gen-font-picker>
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size</label>
                         <input
@@ -465,15 +462,14 @@
                     </div>
 
                     <h4 class="dg-panel-sub">Row text</h4>
-                    <lightning-combobox
+                    <c-doc-gen-font-picker
                         label="Font"
-                        variant="label-stacked"
                         value={selRowFont}
                         options={fontOptions}
                         data-which="row"
                         data-key="font"
                         onchange={handleRowTextChange}
-                    ></lightning-combobox>
+                    ></c-doc-gen-font-picker>
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size</label>
                         <input

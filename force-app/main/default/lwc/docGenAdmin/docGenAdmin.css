@@ -3184,3 +3184,36 @@
         gap: 4px;
     }
 }
+.dg-af-messages {
+    max-height: 20rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.dg-af-turn {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    border-left: 3px solid #c9d7e0;
+    background: #f5f7fa;
+}
+.dg-af-turn strong {
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+.dg-af-turn p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+.dg-af-turn_user {
+    margin-left: 1.5rem;
+}
+.dg-af-turn_agent {
+    margin-right: 1.5rem;
+    border-color: #356d72;
+    background: #edf6f4;
+}
+.dg-font-picker {
+    width: 190px;
+    flex: 0 0 auto;
+}

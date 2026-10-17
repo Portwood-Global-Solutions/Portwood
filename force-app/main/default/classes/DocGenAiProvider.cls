@@ -48,7 +48,10 @@
  *   Portwood merge-tag syntax, the PDF engine's CSS constraints, and what the
  *   author asked for. Send it verbatim; do not summarise it. On an edit it also
  *   contains the current template.
- * - Return the model's raw output. Portwood sanitizes and reports on it.
+ * - Return the model's raw output in the format requested by the prompt.
+ *   Designer conversations request a JSON reply or an edit with complete HTML;
+ *   other authoring requests return HTML directly. Portwood validates all HTML
+ *   before saving it, and discussion replies never change the document.
  * - Do NOT make an HTTP callout. Portwood is a 100% native package and reaches
  *   Einstein through ConnectApi precisely so that stays true. A provider that
  *   calls out breaks that guarantee for the whole product.
@@ -68,7 +71,7 @@ global interface DocGenAiProvider {
 
     /**
      * @param prompt Fully assembled authoring prompt. Send it as-is.
-     * @return Raw model output — a complete HTML document. Portwood validates it.
+     * @return Raw model output in the requested HTML or conversational JSON format.
      */
     String generateHtml(String prompt);
 }

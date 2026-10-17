@@ -1792,12 +1792,15 @@
                         <div class={workspaceRootClass}>
                             <template if:true={useModernDesigner}>
                                 <c-doc-gen-designer-workspace
+                                    data-font-picker="visual"
                                     template-name={editTemplateName}
                                     status-text={workspaceStatus}
                                     notice={workspaceNotice}
                                     review-count={workspaceReviewCount}
                                     selection={workspaceSelection}
                                     font-options={workspaceFontOptions}
+                                    fonts-loading={workspaceFontsLoading}
+                                    font-error={workspaceFontCatalogError}
                                     font-size={fmtSizePt}
                                     format-state={fmtState}
                                     stage={workspaceStage}
@@ -2664,37 +2667,17 @@
                                                     </div>
                                                 </template>
                                             </div>
-                                            <div class="dg-fmt-menu-wrap">
-                                                <button
-                                                    class="dg-fmt-btn dg-fmt-btn_word dg-fmt-trigger_wide"
-                                                    data-menu="font"
-                                                    onmousedown={handleFmtMouseDown}
-                                                    onclick={handleFmtMenuToggle}
-                                                    title="Font — the PDF engine ships exactly these four"
-                                                    aria-haspopup="true"
-                                                >
-                                                    Aa<span class="dg-fmt-caret">&#9662;</span>
-                                                </button>
-                                                <template if:true={isFontMenuOpen}>
-                                                    <div class="dg-fmt-menu dg-fmt-menu_list" role="menu">
-                                                        <div class="dg-fmt-menu-label">Font</div>
-                                                        <template for:each={fontChoices} for:item="font">
-                                                            <button
-                                                                key={font.key}
-                                                                class="dg-fmt-menu-item"
-                                                                style={font.style}
-                                                                data-cmd="fontName"
-                                                                data-value={font.value}
-                                                                onmousedown={handleFmtMouseDown}
-                                                                onclick={handleFormatAction}
-                                                                title={font.title}
-                                                            >
-                                                                {font.label}
-                                                            </button>
-                                                        </template>
-                                                    </div>
-                                                </template>
-                                            </div>
+                                            <c-doc-gen-font-picker
+                                                class="dg-font-picker"
+                                                label="Font family"
+                                                hide-label
+                                                options={workspaceFontOptions}
+                                                loading={workspaceFontsLoading}
+                                                error={workspaceFontCatalogError}
+                                                oncapture={handleDesignerFontCapture}
+                                                onchange={handleDesignerFontChoice}
+                                                onretry={handleDesignerFontRetry}
+                                            ></c-doc-gen-font-picker>
                                             <span class="dg-fmt-sep"></span>
                                             <button
                                                 class="dg-fmt-btn dg-fmt-btn_word"
@@ -6193,7 +6176,7 @@
         <div class="slds-backdrop slds-backdrop_open"></div>
     </template>
 
-    <!-- Generate with Agentforce -->
+    <!-- Designer conversation: closing the panel keeps the thread. -->
     <template if:true={isAgentforcePanelOpen}>
         <section
             role="dialog"
@@ -6211,14 +6194,39 @@
                         variant="bare"
                         class="slds-button slds-button_icon slds-modal__close"
                         onclick={handleCloseAgentforcePanel}
+                        disabled={isAgentforceGenerating}
                     ></lightning-button-icon>
-                    <h2 id="agentforce-modal-title" class="slds-text-heading_medium">Generate with Agentforce</h2>
+                    <h2 id="agentforce-modal-title" class="slds-text-heading_medium">Refine with Agentforce</h2>
                 </header>
                 <div class="slds-modal__content slds-var-p-around_large">
                     <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_medium">
-                        Your fields, the Portwood tag syntax and the PDF engine's layout rules are sent automatically —
-                        the same prompt as <strong>Copy AI Prompt</strong>. Just describe what you want.
+                        Ask for a change, discuss an idea, or reply to a question. Each message includes this
+                        conversation and your latest canvas, including unsaved edits. View the canvas and reopen this
+                        conversation whenever you need to.
                     </p>
+
+                    <div
+                        class="dg-af-messages"
+                        role="log"
+                        aria-label="Template refinement conversation"
+                        aria-live="polite"
+                        aria-relevant="additions text"
+                    >
+                        <template for:each={agentforceTurns} for:item="turn">
+                            <article key={turn.id} class={turn.styleClass}>
+                                <strong>{turn.label}</strong>
+                                <p>{turn.content}</p>
+                            </article>
+                        </template>
+                    </div>
+                    <template if:true={agentforceTurns.length}>
+                        <lightning-button
+                            label="New conversation"
+                            variant="base"
+                            onclick={handleNewAgentforceConversation}
+                            disabled={isAgentforceGenerating}
+                        ></lightning-button>
+                    </template>
 
                     <template if:true={canEditWithAgentforce}>
                         <lightning-radio-group
@@ -6227,6 +6235,7 @@
                             options={agentforceModeOptions}
                             value={agentforceMode}
                             onchange={handleAgentforceModeChange}
+                            disabled={isAgentforceGenerating}
                             type="radio"
                             class="slds-var-m-bottom_medium"
                         ></lightning-radio-group>
@@ -6240,12 +6249,18 @@
 
                     <lightning-textarea
                         label={agentforceDescriptionLabel}
-                        value={aiDocDescription}
-                        onchange={handleAiDocDescriptionChange}
-                        oninput={handleAiDocDescriptionChange}
+                        value={agentforceDraft}
+                        onchange={handleAgentforceDraftChange}
+                        oninput={handleAgentforceDraftChange}
+                        onkeydown={handleAgentforceKeydown}
+                        disabled={isAgentforceGenerating}
                         placeholder={agentforceDescriptionPlaceholder}
                         class="dg-af-desc slds-var-m-bottom_medium"
                     ></lightning-textarea>
+                    <p class="slds-text-body_small slds-text-color_weak">Ctrl / ⌘ + Enter to send</p>
+                    <template if:true={agentforceError}>
+                        <p class="slds-box slds-theme_error slds-var-m-top_small" role="alert">{agentforceError}</p>
+                    </template>
 
                     <template if:true={agentforceNeedsDiscardConfirm}>
                         <div class="slds-box slds-theme_warning slds-var-m-bottom_medium">
@@ -6269,14 +6284,16 @@
                                 class="slds-text-align_center slds-text-body_small slds-text-color_weak"
                                 style="padding-top: 42px"
                             >
-                                Working on the template — this usually takes 10&ndash;20 seconds.
+                                Agentforce is reading your message and the current template…
                             </p>
                         </div>
                     </template>
 
                     <template if:true={hasAgentforceReport}>
-                        <div class="slds-box slds-var-m-top_medium">
-                            <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">{agentforceSummary}</h3>
+                        <details class="slds-box slds-var-m-top_medium">
+                            <summary class="slds-text-heading_small slds-var-m-bottom_x-small">
+                                Latest edit checks: {agentforceSummary}
+                            </summary>
                             <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">
                                 The PDF engine is CSS 2.1. Anything it ignores was removed or rewritten before the
                                 template was saved &mdash; here is exactly what changed.
@@ -6291,20 +6308,21 @@
                                     <p class="slds-text-body_small slds-var-m-left_medium">{f.detail}</p>
                                 </div>
                             </template>
-                        </div>
+                        </details>
                     </template>
                 </div>
                 <footer class="slds-modal__footer slds-theme_default">
                     <lightning-button
-                        label="Close"
+                        label="View canvas"
                         onclick={handleCloseAgentforcePanel}
+                        disabled={isAgentforceGenerating}
                         class="slds-var-m-right_small"
                     ></lightning-button>
                     <lightning-button
                         label={agentforceGenerateLabel}
                         variant="brand"
                         onclick={handleGenerateWithAgentforce}
-                        disabled={isAgentforceGenerating}
+                        disabled={agentforceSendDisabled}
                     ></lightning-button>
                 </footer>
             </div>

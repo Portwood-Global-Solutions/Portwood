@@ -1,0 +1,66 @@
+<template>
+    <div class="font-picker" data-preview-picker="2" onmousedown={handleInside} onfocusin={handleInside}>
+        <template if:false={hideLabel}><label class="font-label" for="font-trigger">{label}</label></template>
+        <button
+            id="font-trigger"
+            class="font-trigger"
+            type="button"
+            aria-label={label}
+            aria-describedby="selected-font"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+            onmousedown={handleCapture}
+            onclick={handleToggle}
+            onkeydown={handleTriggerKeydown}
+        >
+            <span id="selected-font" class="selected-name" style={selectedStyle}>{selectedLabel}</span
+            ><span class="caret" aria-hidden="true">▾</span>
+        </button>
+        <template if:true={open}>
+            <div class="font-popup" style={popupStyle} onkeydown={handlePopupKeydown}>
+                <label class="sr-only" for="font-search">Search fonts</label>
+                <input
+                    id="font-search"
+                    class="font-search"
+                    type="search"
+                    placeholder="Search fonts"
+                    value={query}
+                    oninput={handleInput}
+                    autocomplete="off"
+                />
+                <template if:true={loading}><p class="font-notice" role="status">Loading fonts…</p></template>
+                <template if:true={error}>
+                    <p class="font-notice" role="alert">
+                        The font library could not load.
+                        <button type="button" class="retry" onclick={handleRetry}>Try again</button>
+                    </p>
+                </template>
+                <div class="font-list" role="listbox" aria-label="Fonts">
+                    <template for:each={rows} for:item="font">
+                        <button
+                            key={font.value}
+                            class={font.rowClass}
+                            type="button"
+                            role="option"
+                            aria-selected={font.selected}
+                            disabled={font.disabled}
+                            tabindex="-1"
+                            data-value={font.value}
+                            onmousedown={handleKeepSelection}
+                            onclick={handleChoose}
+                        >
+                            <span class="font-name" style={font.previewStyle}>{font.label}</span>
+                            <span class="font-detail">{font.detail}</span>
+                            <template if:true={font.previewError}
+                                ><span class="font-detail">Preview unavailable</span></template
+                            >
+                        </button>
+                    </template>
+                </div>
+                <template if:true={noResults}><p class="font-notice">No matching fonts.</p></template>
+                <p class="font-count" role="status">{resultCount}</p>
+            </div>
+        </template>
+    </div>
+</template>

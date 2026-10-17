@@ -10,7 +10,7 @@ import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
 import { loadScript } from 'lightning/platformResourceLoader';
-import { loadFontFace } from 'c/docGenFontLoader';
+import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
 import { renderChartToCanvas, SAMPLE_CHART_BUCKETS, prepareChartsClientSide } from 'c/docGenChartJs';
 import { updateRecord } from 'lightning/uiRecordApi';
@@ -1733,7 +1733,7 @@ export default class DocGenCanvas extends LightningElement {
             value = parseFloat(event.target.value);
             if (isNaN(value)) return;
         } else {
-            value = event.target.value;
+            value = key === 'font' ? event.detail.value : event.target.value;
         }
         const field =
             which === 'header'
@@ -2070,10 +2070,7 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get fontOptions() {
-        return [
-            ...FONT_CHOICES,
-            ...this.fontFaces.filter((f) => f.selectable).map((f) => ({ label: f.label, value: 'face:' + f.key }))
-        ];
+        return fontPickerOptions(FONT_CHOICES, this.fontFaces);
     }
 
     get selectedStyle() {

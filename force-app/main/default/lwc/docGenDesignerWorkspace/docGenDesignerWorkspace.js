@@ -14,6 +14,8 @@ export default class DocGenDesignerWorkspace extends LightningElement {
     @api pdfDisplayed = false;
     @api zoomOptions = [];
     @api fontOptions = [];
+    @api fontsLoading = false;
+    @api fontError;
     @api fontSize = 11;
     @api formatState = {};
     @api objectApiName;
@@ -176,7 +178,10 @@ export default class DocGenDesignerWorkspace extends LightningElement {
         this.emit('zoom', event.target.value);
     }
     handleFont(event) {
-        this.emit('font', event.target.value);
+        this.emit('font', event.detail.value);
+    }
+    handleFontRetry() {
+        this.emit('reload-fonts');
     }
     handleSize(event) {
         this.emit('size', event.target.value);

@@ -1,6 +1,6 @@
 import { LightningElement, api, track, wire } from 'lwc';
 import USER_ID from '@salesforce/user/Id';
-import { loadFontFace } from 'c/docGenFontLoader';
+import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import { parsePageLayout, applyPageLayout, pageMargins, pageGeometry } from 'c/docGenPageLayout';
 import {
     selectedBlock,
@@ -172,7 +172,7 @@ import prepareAiReference from '@salesforce/apex/DocGenAiReferenceController.pre
 import getAiReferenceStatus from '@salesforce/apex/DocGenAiReferenceController.getReferenceStatus';
 import attachReferenceImages from '@salesforce/apex/DocGenAiReferenceController.attachReferenceImages';
 import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
-import generateTemplateBody from '@salesforce/apex/DocGenAiTemplateController.generateTemplateBody';
+import converseTemplate from '@salesforce/apex/DocGenAiTemplateController.converseTemplate';
 import generateBodyPreview from '@salesforce/apex/DocGenAiTemplateController.generateBodyPreview';
 import savePdfAcroFormPreparedBodyChunk from '@salesforce/apex/DocGenController.savePdfAcroFormPreparedBodyChunk';
 import finalizePdfAcroFormPreparedBody from '@salesforce/apex/DocGenController.finalizePdfAcroFormPreparedBody';
@@ -623,6 +623,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track isAgentforceGenerating = false;
     @track agentforceSummary = '';
     @track agentforceFindings = [];
+    @track agentforceTurns = [];
+    @track agentforceDraft = '';
+    @track agentforceError = '';
+    _agentforceTemplateId = null;
+    _agentforceRequest = 0;
+    _agentforceTurnId = 0;
     // 'edit' revises the body on the canvas; 'create' writes a new one from
     // scratch. Defaults to edit whenever there is something to edit.
     @track agentforceMode = 'create';
@@ -1578,6 +1584,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     disconnectedCallback() {
+        this._agentforceRequest++;
         this._workspaceResizeObserver?.disconnect();
         this._cancelOverlayClear();
         if (this._selListenerAdded) {
@@ -3221,7 +3228,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     get agentforceBtnLabel() {
-        return this.isAgentforceGenerating ? 'Generating…' : 'Generate with Agentforce';
+        return this.isAgentforceGenerating ? 'Agentforce is working…' : 'Refine with Agentforce';
     }
 
     get hasAgentforceReport() {
@@ -3271,7 +3278,61 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     get agentforceGenerateLabel() {
-        return this.isAgentforceEditMode ? 'Apply Edit' : 'Generate';
+        return this.isAgentforceGenerating ? 'Agentforce is working…' : 'Send to Agentforce';
+    }
+
+    get agentforceSendDisabled() {
+        return this.isAgentforceGenerating || !this.agentforceDraft.trim() || this.agentforceNeedsDiscardConfirm;
+    }
+
+    handleAgentforceDraftChange(event) {
+        this.agentforceDraft = event.target.value;
+    }
+
+    handleAgentforceKeydown(event) {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            if (!this.agentforceSendDisabled) this.handleGenerateWithAgentforce();
+        }
+    }
+
+    _addAgentforceTurn(role, content) {
+        this.agentforceTurns = [
+            ...this.agentforceTurns,
+            {
+                id: String(++this._agentforceTurnId),
+                role,
+                label: role === 'user' ? 'You' : 'Agentforce',
+                content,
+                styleClass: 'dg-af-turn ' + (role === 'user' ? 'dg-af-turn_user' : 'dg-af-turn_agent')
+            }
+        ];
+        // Scroll after Lightning renders the appended message.
+        requestAnimationFrame(() => {
+            const messages = this.template.querySelector('.dg-af-messages');
+            if (messages) messages.scrollTop = messages.scrollHeight;
+        });
+    }
+
+    _resetAgentforceConversation() {
+        this._agentforceRequest++;
+        this._agentforceTemplateId = null;
+        this.agentforceTurns = [];
+        this.agentforceDraft = '';
+        this.agentforceError = '';
+        this.agentforceFindings = [];
+        this.agentforceSummary = '';
+        this.agentforceConfirmDiscard = false;
+        this.isAgentforceGenerating = false;
+        this.isAgentforcePanelOpen = false;
+    }
+
+    handleNewAgentforceConversation() {
+        if (this.isAgentforceGenerating) return;
+        this._resetAgentforceConversation();
+        this._agentforceTemplateId = this.editTemplateId;
+        this.agentforceMode = this.canEditWithAgentforce ? 'edit' : 'create';
+        this.isAgentforcePanelOpen = true;
     }
 
     get agentforceModeOptions() {
@@ -3298,17 +3359,16 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     handleOpenAgentforcePanel() {
-        this.agentforceFindings = [];
-        this.agentforceSummary = '';
-        this.agentforceConfirmDiscard = false;
-        // Editing is the safe default whenever there is something to edit —
-        // "create" throws away whatever is on the canvas.
-        this.agentforceMode = this.canEditWithAgentforce ? 'edit' : 'create';
+        if (this._agentforceTemplateId !== this.editTemplateId) {
+            this._resetAgentforceConversation();
+            this._agentforceTemplateId = this.editTemplateId;
+            this.agentforceMode = this.canEditWithAgentforce ? 'edit' : 'create';
+        }
         this.isAgentforcePanelOpen = true;
     }
 
     handleCloseAgentforcePanel() {
-        this.isAgentforcePanelOpen = false;
+        if (!this.isAgentforceGenerating) this.isAgentforcePanelOpen = false;
     }
 
     // -----------------------------------------------------------------------
@@ -3406,6 +3466,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async handleGenerateWithAgentforce() {
+        if (this.isAgentforceGenerating) return;
         if (!this.editTemplateId) {
             this.dispatchEvent(
                 new ShowToastEvent({
@@ -3427,25 +3488,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
             return;
         }
+        const templateId = this.editTemplateId;
+        const request = ++this._agentforceRequest;
         this.isAgentforceGenerating = true;
-        this.agentforceFindings = [];
-        this.agentforceSummary = '';
+        this.agentforceError = '';
         try {
             // buildAiPrompt owns BOTH the create and the edit framing, so the
             // in-org path, the copy-paste path and the edit path cannot drift.
             //
-            // Read the box directly rather than trusting aiDocDescription.
-            // lightning-textarea fires `change` on BLUR, so clicking straight
-            // from the textarea to Apply Edit could submit a stale (or empty)
-            // instruction — the model then receives the template with the
-            // placeholder "<<DESCRIBE THE CHANGE YOU WANT>>" and hands it
-            // straight back, which reads as "it says it updated but nothing
-            // changed". Measured 2026-07-26.
+            // Read the live input as well as state, including a click directly from the composer.
             const descBox = this.template.querySelector('.dg-af-desc');
-            if (descBox && typeof descBox.value === 'string') {
-                this.aiDocDescription = descBox.value;
-            }
-            const description = (this.aiDocDescription || '').trim();
+            const description = (descBox?.value ?? this.agentforceDraft).trim();
             if (!description) {
                 throw new Error(
                     this.isAgentforceEditMode
@@ -3475,11 +3528,26 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 snippets: this.sharedSnippets
             });
 
-            const res = await generateTemplateBody({
-                templateId: this.editTemplateId,
+            const history = [
+                ...this.agentforceTurns.map(({ role, content }) => ({ role, content })),
+                { role: 'user', content: description }
+            ];
+            if (history.length > 120 || JSON.stringify(history).length > 60000) {
+                throw new Error('Start a new conversation to continue. Your current template is kept.');
+            }
+            this._addAgentforceTurn('user', description);
+            this.agentforceDraft = '';
+            if (descBox) descBox.value = '';
+            const reply = await converseTemplate({
+                templateId,
                 prompt,
-                previousBody: editing ? currentBody : null
+                previousBody: editing ? currentBody : null,
+                historyJson: JSON.stringify(history)
             });
+            if (request !== this._agentforceRequest || templateId !== this.editTemplateId) return;
+            this._addAgentforceTurn('assistant', reply.message);
+            const res = reply.generation;
+            if (!res) return;
 
             this.agentforceSummary = res.summary || '';
             this.agentforceFindings = (res.findings || []).map((f, i) => ({
@@ -3508,21 +3576,18 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // with the previous document — the source textarea updates, the
                 // canvas does not, and the edit looks like it did nothing.
                 // eslint-disable-next-line @lwc/lwc/no-async-operation
-                setTimeout(() => this._enterVisualMode(html), 0);
+                setTimeout(() => {
+                    if (request === this._agentforceRequest && templateId === this.editTemplateId) {
+                        this._enterVisualMode(html);
+                    }
+                }, 0);
             } else {
                 this._enterVisualMode(html);
             }
 
-            // Close on a clean result. Leaving the modal up over the canvas is
-            // what made a working edit look like a no-op: the one thing the
-            // author needs to see is the document behind it.
-            this.aiDocDescription = '';
-            if (descBox) {
-                descBox.value = '';
-            }
-            if (!res.warningCount) {
-                this.isAgentforcePanelOpen = false;
-            }
+            // Continue refining the newly generated canvas on the next turn.
+            this.agentforceMode = 'edit';
+            this.agentforceConfirmDiscard = false;
 
             this.dispatchEvent(
                 new ShowToastEvent({
@@ -3532,12 +3597,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 })
             );
         } catch (e) {
-            const msg = e?.body?.message || e?.message || 'Generation failed.';
-            this.dispatchEvent(
-                new ShowToastEvent({ title: 'Agentforce could not generate this', message: msg, variant: 'error' })
-            );
+            if (request !== this._agentforceRequest || templateId !== this.editTemplateId) return;
+            this.agentforceError =
+                e?.body?.message || e?.message || 'Agentforce could not continue. Your conversation has been kept.';
         } finally {
-            this.isAgentforceGenerating = false;
+            if (request === this._agentforceRequest) this.isAgentforceGenerating = false;
         }
     }
 
@@ -5620,6 +5684,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         try {
             this._editContext = true;
+            if (this.editTemplateId !== row.Id) this._resetAgentforceConversation();
             this.editTemplateId = row.Id;
             // Findings belong to the body that was linted — a different template
             // must never see the previous one's report.
@@ -8653,11 +8718,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track workspacePreviewId;
     @track workspaceFontFaces = [];
     @track workspaceFontCatalogError;
+    @track workspaceFontsLoading = false;
     _workspaceFontsPromise;
     _workspaceFontApply = 0;
     @track workspaceFontLoading = false;
     async _loadDesignerFonts() {
-        if (!this._workspaceFontsPromise)
+        if (!this._workspaceFontsPromise) {
+            this.workspaceFontsLoading = true;
             this._workspaceFontsPromise = getFontFaces()
                 .then((faces) => {
                     this.workspaceFontFaces = faces || [];
@@ -8666,7 +8733,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 .catch((error) => {
                     this.workspaceFontCatalogError = error?.body?.message || error.message;
                     this._workspaceFontsPromise = undefined;
+                })
+                .finally(() => {
+                    this.workspaceFontsLoading = false;
                 });
+        }
         await this._workspaceFontsPromise;
         this._hydrateDesignerFonts();
     }
@@ -8804,15 +8875,32 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     get workspaceFontOptions() {
         const clean = (value) => (value || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase();
         const current = clean(this.workspaceFontFamily);
-        const options = this.fontChoices.map((font) => ({ ...font, selected: clean(font.value) === current }));
-        if (current && !options.some((font) => font.selected))
+        const options = fontPickerOptions(this.fontChoices, this.workspaceFontFaces);
+        const face = this._fontFaceAtCaret();
+        let selected = face
+            ? 'face:' + face.key
+            : options.find((font) => clean(font.fontFace?.family || font.value) === current)?.value;
+        if (current && !selected) {
+            selected = this.workspaceFontFamily;
             options.unshift({
                 label: this.workspaceFontFamily.split(',')[0].replace(/["']/g, ''),
-                value: this.workspaceFontFamily,
-                selected: true
+                value: selected,
+                fontFamily: selected,
+                disabled: true,
+                detail: 'Current font'
             });
-        options.push({ label: 'More fonts…', value: 'library' });
-        return options;
+        }
+        if (!selected && !current) selected = options[0]?.value;
+        return options.map((font) => ({ ...font, selected: font.value === selected }));
+    }
+    handleDesignerFontChoice(event) {
+        return this._applyDesignerFont(event.detail.value);
+    }
+    handleDesignerFontCapture() {
+        this.handleWorkspaceCommand({ detail: { action: 'capture' } });
+    }
+    handleDesignerFontRetry() {
+        return this._loadDesignerFonts();
     }
     _workspaceImageWidth(value) {
         const image = this._workspaceImageEl;
@@ -9225,6 +9313,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         if (action === 'position-mode' || action === 'position') {
             this._workspacePosition(action === 'position' ? 'absolute' : value, box);
+            return;
+        }
+        if (action === 'reload-fonts') {
+            await this._loadDesignerFonts();
             return;
         }
         if (action === 'font') {
@@ -12143,6 +12235,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (!cmd) {
             return;
         }
+        if ((cmd === 'bold' || cmd === 'italic') && this._fontFaceAtCaret()) {
+            return this._applyVerifiedFontVariant(cmd);
+        }
         // Undo/redo are the designer's own stack, not execCommand's. execCommand
         // only ever knew about typing, so the toolbar buttons appeared to skip
         // straight past every table and block edit.
@@ -14879,6 +14974,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * designerHasTemplate goes false and the tab renders its picker.
      */
     handleCanvasBack() {
+        this._resetAgentforceConversation();
         if (this.showHtmlBodyVisual) {
             this._exitVisualMode();
         }
