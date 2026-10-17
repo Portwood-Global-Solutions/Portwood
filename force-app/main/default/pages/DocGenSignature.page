@@ -585,9 +585,31 @@
                     }
                 }
             </style>
+            <apex:stylesheet value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.css')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'purify.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
         <body>
+            <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
+            <header id="signing-brand-header" class="signing-brand-header" hidden="hidden">
+                <img id="signing-brand-logo" class="signing-brand-logo" alt="" hidden="hidden" />
+                <span id="signing-brand-company"></span>
+            </header>
+
             <div class="page-wrapper" id="page-wrapper">
+                <section
+                    id="signing-brand-intro"
+                    class="signing-brand-intro"
+                    aria-labelledby="signing-brand-title"
+                    hidden="hidden"
+                >
+                    <img id="signing-brand-banner" class="signing-brand-banner" alt="" hidden="hidden" />
+                    <h1 id="signing-brand-title"></h1>
+                    <p id="signing-brand-welcome"></p>
+                    <div id="signing-custom-welcome" hidden="hidden"></div>
+                </section>
+
                 <!-- STATE: Loading -->
                 <div id="state-loading">
                     <div class="spinner-container"><div class="spinner"></div></div>
@@ -630,13 +652,15 @@
                                         inputmode="numeric"
                                         pattern="[0-9]{6}"
                                     />
-                                    <button id="btn-verify-pin" class="btn btn-brand" type="button">Verify</button>
+                                    <button id="btn-verify-pin" class="btn btn-brand signing-action" type="button">
+                                        Verify
+                                    </button>
                                 </div>
                             </div>
                             <p id="resend-link" class="resend-link disabled">Resend code</p>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-send-pin" class="btn btn-brand" type="button">
+                            <button id="btn-send-pin" class="btn btn-brand signing-action" type="button">
                                 Send Verification Code
                             </button>
                         </div>
@@ -675,7 +699,12 @@
                                         placeholder="Type your full name"
                                     />
                                 </div>
-                                <button id="btn-confirm-step" class="btn btn-brand" type="button" disabled="disabled">
+                                <button
+                                    id="btn-confirm-step"
+                                    class="btn btn-brand signing-action"
+                                    type="button"
+                                    disabled="disabled"
+                                >
                                     Confirm
                                 </button>
                             </div>
@@ -697,7 +726,7 @@
                                 </button>
                                 <button
                                     id="btn-complete-signing"
-                                    class="btn btn-brand"
+                                    class="btn btn-brand signing-action"
                                     type="button"
                                     disabled="disabled"
                                 >
@@ -824,7 +853,12 @@
                             </label>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-submit" class="btn btn-brand" type="button" disabled="disabled">
+                            <button
+                                id="btn-submit"
+                                class="btn btn-brand signing-action"
+                                type="button"
+                                disabled="disabled"
+                            >
                                 Sign Document
                             </button>
                         </div>
@@ -845,7 +879,10 @@
                     <div class="success-card">
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
-                        <p>Your document has been signed and processed securely. You may close this window.</p>
+                        <p id="signing-completion-message">
+                            Your document has been signed and processed securely. You may close this window.
+                        </p>
+                        <div id="signing-custom-completion" hidden="hidden"></div>
                     </div>
                 </div>
 
@@ -860,6 +897,12 @@
                     </div>
                 </div>
             </div>
+
+            <div id="signing-custom-footer" class="signing-custom-footer" hidden="hidden"></div>
+            <footer id="signing-brand-footer" class="signing-brand-footer" hidden="hidden">
+                <p id="signing-brand-footer-text"></p>
+                <a id="signing-brand-support" target="_blank" rel="noopener noreferrer" hidden="hidden">Get help</a>
+            </footer>
 
             <script>
                 (function () {
@@ -962,6 +1005,7 @@
                         token,
                         function (result, event) {
                             if (event.status && result && result.isValid) {
+                                PortwoodSigningBranding.apply(result.branding);
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);

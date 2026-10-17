@@ -61,11 +61,9 @@
     background: #fafafa;
 }
 .form-title {
-    font-size: 0.6875rem;
+    font-size: 1rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    color: #706e6b;
+    color: #181818;
     margin-bottom: 0.75rem;
 }
 .form-context {
@@ -133,4 +131,177 @@
     --slds-c-card-shadow: none;
     --slds-c-card-color-border: transparent;
     --slds-c-card-radius-border: 0;
+}
+
+.brand-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+.brand-fields {
+    min-width: 0;
+}
+.brand-previews {
+    position: sticky;
+    top: 1rem;
+    min-width: 0;
+}
+.section-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem;
+}
+.signing-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dddbda;
+}
+.page-preview {
+    border: 1px solid #dddbda;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    font-size: 0.75rem;
+}
+.pp-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+.pp-header .mp-logo {
+    max-width: 40%;
+    object-fit: contain;
+}
+.pp-content {
+    padding: 1rem;
+}
+.pp-content h4 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin: 0 0 0.4rem;
+    overflow-wrap: anywhere;
+}
+.pp-copy,
+.pp-footer,
+.completion-preview p {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+.pp-document {
+    background: #fff;
+    color: #181818;
+    border: 1px solid #dddbda;
+    border-radius: 4px;
+    margin: 1rem 0;
+    padding: 1rem;
+}
+.pp-document p {
+    margin: 0.5rem 0 1rem;
+}
+.pp-action {
+    display: inline-block;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    font-weight: 600;
+    border: 1px solid currentColor;
+}
+.pp-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.pp-footer a {
+    color: inherit;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+.completion-preview {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+}
+.completion-preview summary {
+    cursor: pointer;
+}
+.completion-preview p {
+    padding: 0.75rem 0;
+}
+.preview-note {
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    color: #706e6b;
+    margin-top: 0.75rem;
+}
+.editor-group {
+    border-top: 1px solid #dddbda;
+    padding: 0.9rem 0;
+}
+.editor-group > summary,
+.placeholder-guide > summary {
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+.control-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.advanced-editor {
+    border-top: 1px solid #dddbda;
+    padding-top: 1rem;
+}
+.code-editor {
+    --slds-c-textarea-sizing-min-height: 8rem;
+    --slds-c-textarea-font-family: monospace;
+}
+.placeholder-guide {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    margin: 1rem 0;
+}
+.placeholder-guide p {
+    margin: 0.5rem 0;
+    overflow-wrap: anywhere;
+}
+.html-notice {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    padding: 0.75rem;
+    background: #fef4d4;
+    color: #51420f;
+    margin-top: 0.75rem;
+}
+.pp-banner {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: cover;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+.pp-custom-header {
+    overflow-wrap: anywhere;
+}
+.brand-previews [hidden] {
+    display: none !important;
+}
+@media (max-width: 760px) {
+    .brand-editor {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .brand-previews {
+        position: static;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mp-header,
+    .mp-cta {
+        transition: none;
+    }
 }

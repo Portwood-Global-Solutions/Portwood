@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signing_Header_Color__c</fullName>
+    <description>Optional six-digit hex color for the signing page header. Blank uses white.</description>
+    <label>Signing Header Color</label>
+    <length>7</length>
+    <required>false</required>
+    <type>Text</type>
+</CustomField>

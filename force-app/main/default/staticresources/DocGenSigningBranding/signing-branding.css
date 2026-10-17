@@ -1,0 +1,143 @@
+body.signing-branded {
+    background: var(--signing-background);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-size: cover;
+    background-position: center;
+}
+.signing-branded .page-wrapper {
+    flex: 1;
+    min-height: 0;
+    gap: var(--signing-gap);
+}
+.signing-brand-header {
+    background: var(--signing-header);
+    color: var(--signing-header-text);
+    padding: var(--signing-space) max(1rem, calc((100% - var(--signing-width)) / 2));
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    justify-content: var(--signing-header-align);
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+.signing-brand-logo {
+    max-width: min(220px, 40vw);
+    max-height: var(--signing-logo-height);
+    object-fit: contain;
+}
+.signing-brand-intro {
+    width: 100%;
+    max-width: var(--signing-width);
+    color: var(--signing-background-text);
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.signing-brand-intro h1 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+    font-weight: 700;
+    margin: 0 0 0.4rem;
+}
+.signing-brand-intro p,
+.signing-brand-footer p {
+    margin: 0;
+    max-width: 75ch;
+    white-space: pre-line;
+}
+.signing-brand-footer {
+    padding: var(--signing-space) max(1rem, calc((100% - var(--signing-width)) / 2));
+    color: var(--signing-background-text);
+    font-size: 0.8125rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+    overflow-wrap: anywhere;
+}
+.signing-brand-footer a {
+    color: inherit;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+.signing-brand-header[hidden],
+.signing-brand-footer[hidden],
+.signing-brand-intro[hidden],
+.signing-custom-header[hidden],
+.signing-custom-footer[hidden],
+.signing-branded [hidden] {
+    display: none !important;
+}
+.signing-brand-header,
+.signing-brand-intro,
+.signing-brand-footer,
+.signing-custom-header,
+.signing-custom-footer,
+#signing-custom-completion,
+.signing-branded #state-verify,
+.signing-branded .signing-action {
+    font-family: var(--signing-font);
+}
+.signing-custom-header,
+.signing-custom-footer {
+    padding: var(--signing-space) max(1rem, calc((100% - var(--signing-width)) / 2));
+    color: var(--signing-background-text);
+}
+.signing-custom-header {
+    background: var(--signing-header);
+    color: var(--signing-header-text);
+}
+.signing-brand-banner {
+    display: block;
+    width: 100%;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: var(--signing-space);
+}
+.signing-custom-layout .guided-wrapper,
+.signing-custom-layout .pdf-wrapper {
+    max-width: var(--signing-width);
+}
+.signing-custom-layout #state-verify > .sig-card,
+.signing-custom-layout #state-decline > .sig-card {
+    padding: var(--signing-space);
+}
+.signing-branded .btn.signing-action.btn-brand:not(:disabled) {
+    background: var(--signing-action);
+    border-color: var(--signing-action-text);
+    color: var(--signing-action-text);
+}
+.signing-branded .btn.signing-action.btn-brand:not(:disabled):hover {
+    box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.12);
+}
+.signing-branded .signing-action:focus-visible,
+.signing-brand-footer a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+#signing-completion-message {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+    .signing-brand-header {
+        gap: 0.75rem;
+        font-size: 1rem;
+    }
+    .signing-brand-intro h1 {
+        font-size: 1.25rem;
+    }
+    .signing-brand-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .signing-branded .btn {
+        transition: none;
+    }
+}

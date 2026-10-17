@@ -633,9 +633,31 @@
                     }
                 }
             </style>
+            <apex:stylesheet value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.css')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'purify.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
         <body>
+            <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
+            <header id="signing-brand-header" class="signing-brand-header" hidden="hidden">
+                <img id="signing-brand-logo" class="signing-brand-logo" alt="" hidden="hidden" />
+                <span id="signing-brand-company"></span>
+            </header>
+
             <div class="page-wrapper" id="page-wrapper">
+                <section
+                    id="signing-brand-intro"
+                    class="signing-brand-intro"
+                    aria-labelledby="signing-brand-title"
+                    hidden="hidden"
+                >
+                    <img id="signing-brand-banner" class="signing-brand-banner" alt="" hidden="hidden" />
+                    <h1 id="signing-brand-title"></h1>
+                    <p id="signing-brand-welcome"></p>
+                    <div id="signing-custom-welcome" hidden="hidden"></div>
+                </section>
+
                 <!-- STATE: Loading -->
                 <div id="state-loading">
                     <div class="spinner-container"><div class="spinner"></div></div>
@@ -678,13 +700,15 @@
                                         inputmode="numeric"
                                         pattern="[0-9]{6}"
                                     />
-                                    <button id="btn-verify-pin" class="btn btn-brand" type="button">Verify</button>
+                                    <button id="btn-verify-pin" class="btn btn-brand signing-action" type="button">
+                                        Verify
+                                    </button>
                                 </div>
                             </div>
                             <p id="resend-link" class="resend-link disabled">Resend code</p>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-send-pin" class="btn btn-brand" type="button">
+                            <button id="btn-send-pin" class="btn btn-brand signing-action" type="button">
                                 Send Verification Code
                             </button>
                         </div>
@@ -710,7 +734,9 @@
                                 <span id="pdf-progress-info" style="display: none"></span>
                             </div>
                             <button id="btn-decline" class="btn btn-destructive" type="button">Decline</button>
-                            <button id="btn-open-sign" class="btn btn-brand btn-lg" type="button">Sign Document</button>
+                            <button id="btn-open-sign" class="btn btn-brand signing-action btn-lg" type="button">
+                                Sign Document
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -729,7 +755,10 @@
                     <div class="success-card">
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
-                        <p>Your document has been signed and processed securely. You may close this window.</p>
+                        <p id="signing-completion-message">
+                            Your document has been signed and processed securely. You may close this window.
+                        </p>
+                        <div id="signing-custom-completion" hidden="hidden"></div>
                     </div>
                 </div>
 
@@ -835,7 +864,12 @@
                     </div>
                     <div class="modal-footer">
                         <button id="modal-cancel" class="btn" type="button">Cancel</button>
-                        <button id="btn-sign-submit" class="btn btn-brand" type="button" disabled="disabled">
+                        <button
+                            id="btn-sign-submit"
+                            class="btn btn-brand signing-action"
+                            type="button"
+                            disabled="disabled"
+                        >
                             Sign
                         </button>
                         <!-- Guided per-field capture only: "Save & Next" saves and opens the
@@ -843,7 +877,7 @@
                              to the next field without opening it. Hidden in final/fields modes. -->
                         <button
                             id="btn-sign-submit-next"
-                            class="btn btn-brand"
+                            class="btn btn-brand signing-action"
                             type="button"
                             style="display: none"
                             disabled="disabled"
@@ -881,6 +915,12 @@
                 swap is mechanical because the contract above is the entire boundary.
                 ============================================================================
             -->
+            <div id="signing-custom-footer" class="signing-custom-footer" hidden="hidden"></div>
+            <footer id="signing-brand-footer" class="signing-brand-footer" hidden="hidden">
+                <p id="signing-brand-footer-text"></p>
+                <a id="signing-brand-support" target="_blank" rel="noopener noreferrer" hidden="hidden">Get help</a>
+            </footer>
+
             <script>
                 var DocGenPdfViewer = (function () {
                     // ============================================================
@@ -1348,6 +1388,7 @@
                         token,
                         function (result, event) {
                             if (event.status && result && result.isValid) {
+                                PortwoodSigningBranding.apply(result.branding);
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);
@@ -2695,13 +2736,13 @@
                         var nextBtn = document.getElementById('btn-sign-submit-next');
                         if (type === 'Date') {
                             // forceModal error fallback — single confirm button, no "next" variant.
-                            saveBtn.className = 'btn btn-brand';
+                            saveBtn.className = 'btn btn-brand signing-action';
                             saveBtn.textContent = 'Add Date';
                             nextBtn.style.display = 'none';
                         } else {
                             saveBtn.className = 'btn';
                             saveBtn.textContent = 'Save';
-                            nextBtn.className = 'btn btn-brand';
+                            nextBtn.className = 'btn btn-brand signing-action';
                             nextBtn.textContent = 'Save & Next';
                             nextBtn.style.display = '';
                         }
@@ -2783,7 +2824,7 @@
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').checked = false;
                         var finalBtn = document.getElementById('btn-sign-submit');
-                        finalBtn.className = 'btn btn-brand';
+                        finalBtn.className = 'btn btn-brand signing-action';
                         finalBtn.textContent = 'Finish & Submit';
                         document.getElementById('btn-sign-submit-next').style.display = 'none';
                         // Form fields were collected up front (before signing) — not here.
@@ -3014,7 +3055,7 @@
                         var c = document.getElementById('modal-form-fields');
                         if (c) c.style.display = '';
                         var fieldsBtn = document.getElementById('btn-sign-submit');
-                        fieldsBtn.className = 'btn btn-brand';
+                        fieldsBtn.className = 'btn btn-brand signing-action';
                         fieldsBtn.textContent = 'Continue';
                         document.getElementById('btn-sign-submit-next').style.display = 'none';
                         showModalMsg('', 'info');

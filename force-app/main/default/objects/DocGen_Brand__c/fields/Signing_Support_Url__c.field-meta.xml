@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signing_Support_Url__c</fullName>
+    <description>Optional absolute HTTPS support link shown as Get help on signing pages.</description>
+    <label>Signing Support URL</label>
+    <required>false</required>
+    <type>Url</type>
+</CustomField>

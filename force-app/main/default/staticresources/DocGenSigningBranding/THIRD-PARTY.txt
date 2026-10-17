@@ -1,0 +1,4 @@
+DOMPurify 3.4.17
+https://github.com/cure53/DOMPurify
+Bundled from the official npm release. Dual licensed under Apache-2.0 or MPL-2.0.
+Tarball SHA-256: 056cbdae276897208b88c21d1d779adfa09ad7be488a2f510a28e900d3bbffe7

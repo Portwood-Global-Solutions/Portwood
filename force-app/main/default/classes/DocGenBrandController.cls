@@ -22,7 +22,25 @@ public with sharing class DocGenBrandController {
         @AuraEnabled
         public String footerText;
         @AuraEnabled
+        public String signingColor;
+        @AuraEnabled
+        public String signingHeaderColor;
+        @AuraEnabled
+        public String signingBackgroundColor;
+        @AuraEnabled
+        public String signingTitle;
+        @AuraEnabled
+        public String signingWelcomeText;
+        @AuraEnabled
+        public String signingFooterText;
+        @AuraEnabled
+        public String signingCompletionMessage;
+        @AuraEnabled
+        public String signingSupportUrl;
+        @AuraEnabled
         public Boolean isActive;
+        @AuraEnabled
+        public String signingPageConfig;
     }
 
     private static final Set<String> READ_FIELDS = new Set<String>{
@@ -33,6 +51,15 @@ public with sharing class DocGenBrandController {
         'Logo_Asset_Key__c',
         'Company_Name__c',
         'Footer_Text__c',
+        'Signing_Color__c',
+        'Signing_Header_Color__c',
+        'Signing_Background_Color__c',
+        'Signing_Title__c',
+        'Signing_Welcome_Text__c',
+        'Signing_Footer_Text__c',
+        'Signing_Completion_Message__c',
+        'Signing_Support_Url__c',
+        'Signing_Page_Config__c',
         'Is_Active__c'
     };
 
@@ -60,6 +87,15 @@ public with sharing class DocGenBrandController {
                 Logo_Asset_Key__c,
                 Company_Name__c,
                 Footer_Text__c,
+                Signing_Color__c,
+                Signing_Header_Color__c,
+                Signing_Background_Color__c,
+                Signing_Title__c,
+                Signing_Welcome_Text__c,
+                Signing_Footer_Text__c,
+                Signing_Completion_Message__c,
+                Signing_Support_Url__c,
+                Signing_Page_Config__c,
                 Is_Active__c
             FROM DocGen_Brand__c
             WITH SYSTEM_MODE
@@ -117,6 +153,35 @@ public with sharing class DocGenBrandController {
         b.Logo_Asset_Key__c = (String) dto.get('logoAssetKey');
         b.Company_Name__c = (String) dto.get('companyName');
         b.Footer_Text__c = (String) dto.get('footerText');
+        if (dto.containsKey('signingColor')) {
+            b.Signing_Color__c = validatedColor((String) dto.get('signingColor'));
+        }
+        if (dto.containsKey('signingHeaderColor')) {
+            b.Signing_Header_Color__c = validatedColor((String) dto.get('signingHeaderColor'));
+        }
+        if (dto.containsKey('signingBackgroundColor')) {
+            b.Signing_Background_Color__c = validatedColor((String) dto.get('signingBackgroundColor'));
+        }
+        if (dto.containsKey('signingTitle')) {
+            b.Signing_Title__c = (String) dto.get('signingTitle');
+        }
+        if (dto.containsKey('signingWelcomeText')) {
+            b.Signing_Welcome_Text__c = (String) dto.get('signingWelcomeText');
+        }
+        if (dto.containsKey('signingFooterText')) {
+            b.Signing_Footer_Text__c = (String) dto.get('signingFooterText');
+        }
+        if (dto.containsKey('signingCompletionMessage')) {
+            b.Signing_Completion_Message__c = (String) dto.get('signingCompletionMessage');
+        }
+        if (dto.containsKey('signingSupportUrl')) {
+            b.Signing_Support_Url__c = validatedSupportUrl((String) dto.get('signingSupportUrl'));
+        }
+        if (dto.containsKey('signingPageConfig')) {
+            b.Signing_Page_Config__c = DocGenSigningPageConfig.validateAndSerialize(
+                (String) dto.get('signingPageConfig')
+            );
+        }
         b.Is_Active__c = dto.get('isActive') == null ? true : (Boolean) dto.get('isActive');
 
         Set<String> writeFields = new Set<String>{
@@ -128,6 +193,15 @@ public with sharing class DocGenBrandController {
             'Logo_Asset_Key__c',
             'Company_Name__c',
             'Footer_Text__c',
+            'Signing_Color__c',
+            'Signing_Header_Color__c',
+            'Signing_Background_Color__c',
+            'Signing_Title__c',
+            'Signing_Welcome_Text__c',
+            'Signing_Footer_Text__c',
+            'Signing_Completion_Message__c',
+            'Signing_Support_Url__c',
+            'Signing_Page_Config__c',
             'Is_Active__c'
         };
         if (existingId == null) {
@@ -154,8 +228,37 @@ public with sharing class DocGenBrandController {
         d.brandColor = r.Brand_Color__c;
         d.companyName = r.Company_Name__c;
         d.footerText = r.Footer_Text__c;
+        d.signingColor = r.Signing_Color__c;
+        d.signingHeaderColor = r.Signing_Header_Color__c;
+        d.signingBackgroundColor = r.Signing_Background_Color__c;
+        d.signingTitle = r.Signing_Title__c;
+        d.signingWelcomeText = r.Signing_Welcome_Text__c;
+        d.signingFooterText = r.Signing_Footer_Text__c;
+        d.signingCompletionMessage = r.Signing_Completion_Message__c;
+        d.signingSupportUrl = r.Signing_Support_Url__c;
+        d.signingPageConfig = r.Signing_Page_Config__c;
         d.isActive = r.Is_Active__c;
         return d;
+    }
+
+    private static String validatedColor(String value) {
+        if (String.isBlank(value))
+            return null;
+        value = value.trim();
+        if (!Pattern.matches('#[a-fA-F0-9]{6}', value)) {
+            throw DocGenService.ahe('Signing page colors must use six-digit hex values, such as #0176D3.');
+        }
+        return value;
+    }
+
+    private static String validatedSupportUrl(String value) {
+        if (String.isBlank(value))
+            return null;
+        String safe = DocGenSigningBranding.safeHttpsUrl(value);
+        if (safe == null) {
+            throw DocGenService.ahe('Use an absolute HTTPS URL for signing page support.');
+        }
+        return safe;
     }
 
     private static Boolean isCurrentUserAdmin() {

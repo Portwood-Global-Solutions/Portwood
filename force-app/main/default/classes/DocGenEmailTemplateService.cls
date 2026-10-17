@@ -604,8 +604,7 @@ global with sharing class DocGenEmailTemplateService {
      * Returns the public download URL of the asset's latest file, or null when
      * anything is missing so the caller falls back to the stored URL.
      */
-    @TestVisible
-    private static String resolveAssetPublicUrlByKey(String assetKey) {
+    public static String resolveAssetPublicUrlByKey(String assetKey) {
         try {
             // Stored keys are canonical slugs (underscores → hyphens, lowercased);
             // normalize the lookup the same way the {%asset:} tag resolver does.

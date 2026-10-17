@@ -79,6 +79,15 @@ public without sharing class DocGenBrandResolver {
                 'Logo_Height__c',
                 'Company_Name__c',
                 'Footer_Text__c',
+                'Signing_Color__c',
+                'Signing_Header_Color__c',
+                'Signing_Background_Color__c',
+                'Signing_Title__c',
+                'Signing_Welcome_Text__c',
+                'Signing_Footer_Text__c',
+                'Signing_Completion_Message__c',
+                'Signing_Support_Url__c',
+                'Signing_Page_Config__c',
                 'Is_Active__c'
             }
         );
@@ -95,6 +104,15 @@ public without sharing class DocGenBrandResolver {
                 Logo_Height__c,
                 Company_Name__c,
                 Footer_Text__c,
+                Signing_Color__c,
+                Signing_Header_Color__c,
+                Signing_Background_Color__c,
+                Signing_Title__c,
+                Signing_Welcome_Text__c,
+                Signing_Footer_Text__c,
+                Signing_Completion_Message__c,
+                Signing_Support_Url__c,
+                Signing_Page_Config__c,
                 Is_Active__c
             FROM DocGen_Brand__c
             WHERE Id = :brandId AND Is_Active__c = TRUE

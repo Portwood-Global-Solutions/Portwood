@@ -107,6 +107,8 @@ public without sharing class DocGenSignatureController {
 
     public class SignatureInitResponse {
         @AuraEnabled
+        public DocGenSigningBranding.Presentation branding;
+        @AuraEnabled
         public Boolean isValid;
         @AuraEnabled
         public String errorMessage;
@@ -415,7 +417,10 @@ public without sharing class DocGenSignatureController {
                 res.errorMessage = 'This signature link has expired. Please request a new one.';
                 return res;
             }
-            return validateSignerToken(signers[0]);
+            res = validateSignerToken(signers[0]);
+            if (res.isValid)
+                res.branding = DocGenSigningBranding.forRequest(signers[0].Signature_Request__c);
+            return res;
         }
 
         // Legacy fallback: single-signer on DocGen_Signature_Request__c
@@ -457,7 +462,10 @@ public without sharing class DocGenSignatureController {
             return res;
         }
 
-        return validateLegacyRequest(requests[0]);
+        res = validateLegacyRequest(requests[0]);
+        if (res.isValid)
+            res.branding = DocGenSigningBranding.forRequest(requests[0].Id);
+        return res;
     }
 
     /**

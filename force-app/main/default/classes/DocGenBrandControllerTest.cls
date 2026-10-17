@@ -11,6 +11,64 @@
  */
 @IsTest
 private class DocGenBrandControllerTest {
+    @IsTest
+    static void signingPageSettingsRoundTripAndClear() {
+        Map<String, Object> dto = newDto();
+        dto.put('signingColor', '#FFFF00');
+        dto.put('signingHeaderColor', '#123456');
+        dto.put('signingBackgroundColor', '#EEEEEE');
+        dto.put('signingTitle', 'Welcome');
+        dto.put('signingWelcomeText', 'Review your document.');
+        dto.put('signingFooterText', 'Page footer');
+        dto.put('signingCompletionMessage', 'Thank you.');
+        dto.put('signingSupportUrl', 'https://example.com/help');
+        Id brandId = DocGenBrandController.saveBrand(dto);
+        DocGenBrandController.BrandDto saved = DocGenBrandController.getBrands()[0];
+        System.assertEquals('#FFFF00', saved.signingColor);
+        System.assertEquals('#123456', saved.signingHeaderColor);
+        System.assertEquals('#EEEEEE', saved.signingBackgroundColor);
+        System.assertEquals('Welcome', saved.signingTitle);
+        System.assertEquals('Review your document.', saved.signingWelcomeText);
+        System.assertEquals('Page footer', saved.signingFooterText);
+        System.assertEquals('Thank you.', saved.signingCompletionMessage);
+        System.assertEquals('https://example.com/help', saved.signingSupportUrl);
+        // Older clients that do not send the new keys must preserve page settings.
+        DocGenBrandController.saveBrand(new Map<String, Object>{ 'id' => brandId, 'name' => 'Renamed' });
+        System.assertEquals('Welcome', DocGenBrandController.getBrands()[0].signingTitle);
+        dto.put('id', brandId);
+        dto.put('signingColor', '');
+        dto.put('signingTitle', '');
+        dto.put('signingSupportUrl', '');
+        DocGenBrandController.saveBrand(dto);
+        saved = DocGenBrandController.getBrands()[0];
+        System.assertEquals(null, saved.signingColor);
+        System.assertEquals(null, saved.signingTitle);
+        System.assertEquals(null, saved.signingSupportUrl);
+    }
+
+    @IsTest
+    static void unsafePageColorsAndSupportUrlsCannotBeSaved() {
+        for (
+            String key : new List<String>{
+                'signingColor',
+                'signingHeaderColor',
+                'signingBackgroundColor',
+                'signingSupportUrl'
+            }
+        ) {
+            Map<String, Object> dto = newDto();
+            dto.put(key, key == 'signingSupportUrl' ? 'javascript:alert(1)' : 'red;bad');
+            Boolean rejected = false;
+            try {
+                DocGenBrandController.saveBrand(dto);
+            } catch (AuraHandledException ex) {
+                rejected = true;
+            }
+            System.assert(rejected, 'Reject unsafe presentation value: ' + key);
+        }
+        System.assertEquals(0, [SELECT COUNT() FROM DocGen_Brand__c]);
+    }
+
     /**
      * Builds a non-admin Standard User for permission-denial paths. Mirrors
      * DocGenSetupControllerTest's buildStandardUser() exactly.
