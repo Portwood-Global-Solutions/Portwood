@@ -9273,6 +9273,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
         this.workspaceNotice = undefined;
+        if (action === 'color') {
+            this._applyDesignerColor(command, value, this._savedFmtRange);
+            return;
+        }
         if (action === 'mode') {
             this._workspacePreviewRequest++;
             this.workspacePreviewId = undefined;
@@ -9648,18 +9652,28 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * window holds focus, which was the whole reason the color pickers appeared to do
      * nothing. Returns true when a caret was restored.
      */
-    _restoreCaret() {
-        let range;
+    _restoreCaret(preferredRange) {
+        let liveRange;
         try {
             const selection = window.getSelection();
             if (selection?.rangeCount && this._surfaceOwning(selection.getRangeAt(0).startContainer))
-                range = selection.getRangeAt(0).cloneRange();
+                liveRange = selection.getRangeAt(0).cloneRange();
         } catch {
             /* use the remembered selection */
         }
-        range = range || this._caret?.range || this._savedFmtRange || this._lastCanvasRange;
+        const range = [preferredRange, liveRange, this._caret?.range, this._savedFmtRange, this._lastCanvasRange].find(
+            (candidate) => {
+                const owner = candidate && this._surfaceOwning(candidate.startContainer);
+                return (
+                    owner &&
+                    candidate.startContainer.isConnected &&
+                    candidate.endContainer.isConnected &&
+                    this._isInCanvas(candidate.endContainer, owner)
+                );
+            }
+        );
         const surface = range && this._surfaceOwning(range.startContainer);
-        if (!surface || !range.startContainer.isConnected || !range.endContainer.isConnected) return false;
+        if (!surface) return false;
         try {
             surface.focus({ preventScroll: true });
             const selection = window.getSelection();
@@ -12235,6 +12249,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (!cmd) {
             return;
         }
+        if (cmd === 'foreColor' || (cmd === 'hiliteColor' && value !== 'transparent')) {
+            this._applyDesignerColor(cmd, value);
+            return;
+        }
         if ((cmd === 'bold' || cmd === 'italic') && this._fontFaceAtCaret()) {
             return this._applyVerifiedFontVariant(cmd);
         }
@@ -12257,13 +12275,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // does take focus land in this handler too. Restoring is idempotent when the
         // caret never moved.
         this._restoreCaret();
-        // Keep the trigger's underbar showing the colour that was actually applied,
-        // and dismiss the popover the way every other menu in Lightning does.
-        if (cmd === 'foreColor' && value) {
-            this._lastTextColor = value;
-        } else if (cmd === 'hiliteColor' && value) {
-            this._lastHighlight = value;
-        }
+        if (cmd === 'hiliteColor' && value) this._lastHighlight = value;
         if (this.openFmtMenu) {
             this.closeFmtMenu();
         }
@@ -12351,6 +12363,56 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    /** Apply colour directly to selected text and atoms; native execCommand is unreliable under LWS. */
+    _applyDesignerColor(cmd, value, preferredRange) {
+        if (!this.showHtmlBodyVisual || !['foreColor', 'hiliteColor'].includes(cmd)) return;
+        if (!/^#[0-9a-f]{6}$/i.test(value || '')) return;
+        const restored = this._restoreCaret(preferredRange);
+        const cells = (this._cellSel || []).filter((cell) => cell?.isConnected);
+        if (!restored && cells.length < 2) {
+            this.showToast('Choose some text', 'Click a word or select text, then apply a colour.', 'info');
+            return;
+        }
+        this._expandCaretToWord();
+        const selection = window.getSelection();
+        const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+        const surface = range && this._surfaceOwning(range.startContainer);
+        if (cells.length < 2 && (!surface || (range.collapsed && range.startContainer === surface))) {
+            this.showToast('Choose some text', 'Select the wording you want to colour.', 'info');
+            return;
+        }
+        const properties = { [cmd === 'foreColor' ? 'color' : 'background-color']: value };
+        this._pushUndo('colour');
+        let result;
+        if (cells.length > 1) {
+            for (const cell of cells) {
+                const owner = this._surfaceOwning(cell);
+                if (!owner) continue;
+                const cellRange = cell.ownerDocument.createRange();
+                cellRange.selectNodeContents(cell);
+                styleRange(owner, cellRange, properties);
+            }
+            this._repaintCellSel(cells);
+        } else {
+            result = surface && styleRange(surface, range, properties);
+            if (!result) {
+                this.showToast('Choose some text', 'Select the wording you want to colour.', 'info');
+                return;
+            }
+            surface.focus({ preventScroll: true });
+            selection.removeAllRanges();
+            selection.addRange(result);
+            this._savedFmtRange = result.cloneRange();
+            this._recordCaret(result.startContainer, surface);
+        }
+        if (cmd === 'foreColor') this._lastTextColor = value;
+        else this._lastHighlight = value;
+        if (this.openFmtMenu) this.closeFmtMenu();
+        this.htmlEditorDirty = true;
+        this._refreshFmtState();
+        this.workspaceStatus = cmd === 'foreColor' ? 'Text colour applied' : 'Highlight applied';
+    }
+
     /**
      * Custom color pickers: opening the native picker steals focus, so the
      * page selection is snapshotted on mousedown and restored before the
@@ -12359,9 +12421,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     handleColorPickMouseDown() {
         try {
             const sel = window.getSelection();
-            this._savedFmtRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+            const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+            const surface = range && this._surfaceOwning(range.startContainer);
+            // An input or menu may already own focus. Never replace the saved
+            // document selection with a range in the toolbar.
+            if (surface && this._isInCanvas(range.endContainer, surface)) this._savedFmtRange = range.cloneRange();
         } catch (e) {
-            this._savedFmtRange = null;
+            /* retain the last document selection */
         }
         // ALSO capture the border target, now, before anything steals focus.
         //
@@ -12386,12 +12452,16 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     handleColorPickChange(event) {
-        this._pushUndo('colour');
         if (!this.showHtmlBodyVisual) {
             return;
         }
         const cmd = event.currentTarget.dataset.cmd;
         const value = event.currentTarget.value;
+        if (cmd === 'foreColor' || cmd === 'hiliteColor') {
+            this._applyDesignerColor(cmd, value, this._savedFmtRange);
+            return;
+        }
+        this._pushUndo('colour');
         // #239 — re-focus the canvas BEFORE restoring the range. The old code restored
         // the range but left focus on the <input type="color"> (or on the native OS
         // color dialog), and execCommand does nothing in that state — the picker looked

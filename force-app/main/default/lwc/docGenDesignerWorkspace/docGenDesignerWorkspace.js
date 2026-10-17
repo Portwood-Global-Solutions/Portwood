@@ -41,6 +41,8 @@ export default class DocGenDesignerWorkspace extends LightningElement {
     positionX = 0;
     positionY = 0;
     positionWidth = 3;
+    textColor = '#183452';
+    highlightColor = '#fff2b2';
     logoUrl = DOCGEN_LOGO;
     get toolbarClass() {
         return 'format' + (this.pdfDisplayed ? ' pdf-view' : '');
@@ -186,8 +188,54 @@ export default class DocGenDesignerWorkspace extends LightningElement {
     handleSize(event) {
         this.emit('size', event.target.value);
     }
-    handleColor(event) {
-        this.emit('format', event.target.value, { command: event.currentTarget.dataset.command });
+    normalizedColor(value) {
+        const hex = (value || '').trim().replace(/^#/, '');
+        if (/^[0-9a-f]{6}$/i.test(hex)) return '#' + hex.toLowerCase();
+        if (/^[0-9a-f]{3}$/i.test(hex))
+            return (
+                '#' +
+                [...hex]
+                    .map((digit) => digit + digit)
+                    .join('')
+                    .toLowerCase()
+            );
+        return null;
+    }
+    get textColorSwatch() {
+        return this.normalizedColor(this.textColor) || '#183452';
+    }
+    get highlightColorSwatch() {
+        return this.normalizedColor(this.highlightColor) || '#fff2b2';
+    }
+    handleColorDraft(event) {
+        const property = event.currentTarget.dataset.property;
+        if (!['textColor', 'highlightColor'].includes(property)) return;
+        this[property] = event.currentTarget.value;
+        event.currentTarget.setCustomValidity('');
+    }
+    handleColorApply(event) {
+        const { property, command } = event.currentTarget.dataset;
+        if (!['textColor', 'highlightColor'].includes(property) || this.formattingDisabled) return;
+        const value = this.normalizedColor(this[property]);
+        const input = this.template.querySelector('[data-hex="' + property + '"]');
+        if (!value) {
+            input?.setCustomValidity('Enter a hex colour such as #236b4a.');
+            input?.reportValidity();
+            return;
+        }
+        input?.setCustomValidity('');
+        this[property] = value;
+        this.template.querySelector('details.more').open = false;
+        this.emit('color', value, { command });
+    }
+    handleColorKeydown(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            this.handleColorApply(event);
+        }
+    }
+    handleMoreKeydown(event) {
+        if (event.key === 'Enter' || event.key === ' ') this.captureSelection();
     }
     handleRecord(event) {
         this.emit('record', event.detail.recordId);

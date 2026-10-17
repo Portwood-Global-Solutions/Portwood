@@ -177,7 +177,13 @@
                     <u>U</u>
                 </button>
                 <details class="more">
-                    <summary title="Alignment, lists and more formatting">More</summary>
+                    <summary
+                        title="Alignment, lists and more formatting"
+                        onmousedown={captureSelection}
+                        onkeydown={handleMoreKeydown}
+                    >
+                        More
+                    </summary>
                     <div class="more-menu" role="group" aria-label="More formatting">
                         <button
                             data-action="format"
@@ -248,7 +254,7 @@
                         <div class="text-swatches" role="group" aria-label="Text colours">
                             <button
                                 aria-label="Black text"
-                                data-action="format"
+                                data-action="color"
                                 data-command="foreColor"
                                 data-value="#111111"
                                 onclick={handleAction}
@@ -257,7 +263,7 @@
                                 Black</button
                             ><button
                                 aria-label="Navy text"
-                                data-action="format"
+                                data-action="color"
                                 data-command="foreColor"
                                 data-value="#183452"
                                 onclick={handleAction}
@@ -266,7 +272,7 @@
                                 Navy</button
                             ><button
                                 aria-label="Blue text"
-                                data-action="format"
+                                data-action="color"
                                 data-command="foreColor"
                                 data-value="#235fa4"
                                 onclick={handleAction}
@@ -275,7 +281,7 @@
                                 Blue</button
                             ><button
                                 aria-label="Green text"
-                                data-action="format"
+                                data-action="color"
                                 data-command="foreColor"
                                 data-value="#236b4a"
                                 onclick={handleAction}
@@ -284,23 +290,87 @@
                                 Green
                             </button>
                         </div>
-                        <label
-                            >Text colour<input
-                                type="color"
-                                aria-label="Text colour"
-                                data-command="foreColor"
-                                value="#183452"
-                                onmousedown={captureSelection}
-                                onchange={handleColor} /></label
-                        ><label
-                            >Highlight<input
-                                type="color"
-                                aria-label="Text highlight"
-                                data-command="hiliteColor"
-                                value="#fff2b2"
-                                onmousedown={captureSelection}
-                                onchange={handleColor}
-                        /></label>
+                        <p class="colour-help">Choose a colour, then Apply.</p>
+                        <div class="colour-field">
+                            <label for="text-colour-hex">Text colour</label>
+                            <div class="colour-controls">
+                                <input
+                                    type="color"
+                                    aria-label="Choose custom text colour"
+                                    data-property="textColor"
+                                    value={textColorSwatch}
+                                    disabled={formattingDisabled}
+                                    oninput={handleColorDraft}
+                                    onchange={handleColorDraft}
+                                />
+                                <input
+                                    id="text-colour-hex"
+                                    class="colour-hex"
+                                    type="text"
+                                    aria-label="Text colour hex"
+                                    data-hex="textColor"
+                                    data-property="textColor"
+                                    data-command="foreColor"
+                                    value={textColor}
+                                    maxlength="7"
+                                    spellcheck="false"
+                                    disabled={formattingDisabled}
+                                    oninput={handleColorDraft}
+                                    onkeydown={handleColorKeydown}
+                                />
+                                <button
+                                    class="colour-apply"
+                                    aria-label="Apply text colour"
+                                    data-property="textColor"
+                                    data-command="foreColor"
+                                    disabled={formattingDisabled}
+                                    onmousedown={keepSelection}
+                                    onclick={handleColorApply}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        </div>
+                        <div class="colour-field">
+                            <label for="highlight-colour-hex">Highlight</label>
+                            <div class="colour-controls">
+                                <input
+                                    type="color"
+                                    aria-label="Choose custom highlight colour"
+                                    data-property="highlightColor"
+                                    value={highlightColorSwatch}
+                                    disabled={formattingDisabled}
+                                    oninput={handleColorDraft}
+                                    onchange={handleColorDraft}
+                                />
+                                <input
+                                    id="highlight-colour-hex"
+                                    class="colour-hex"
+                                    type="text"
+                                    aria-label="Highlight colour hex"
+                                    data-hex="highlightColor"
+                                    data-property="highlightColor"
+                                    data-command="hiliteColor"
+                                    value={highlightColor}
+                                    maxlength="7"
+                                    spellcheck="false"
+                                    disabled={formattingDisabled}
+                                    oninput={handleColorDraft}
+                                    onkeydown={handleColorKeydown}
+                                />
+                                <button
+                                    class="colour-apply"
+                                    aria-label="Apply highlight colour"
+                                    data-property="highlightColor"
+                                    data-command="hiliteColor"
+                                    disabled={formattingDisabled}
+                                    onmousedown={keepSelection}
+                                    onclick={handleColorApply}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </details>
             </template>
