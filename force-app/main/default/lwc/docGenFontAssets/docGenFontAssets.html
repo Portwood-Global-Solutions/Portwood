@@ -137,8 +137,14 @@
                                 aria-pressed={face.selected}
                                 disabled={busy}
                             >
-                                <span>{face.label}</span><small>{face.detail}</small
-                                ><span class="status">{face.statusLabel}</span>
+                                <span class="face-name">{face.label}</span>
+                                <template if:true={face.canPreview}>
+                                    <span class="face-sample" style={face.previewStyle}>The quick brown fox · 123</span>
+                                </template>
+                                <template if:false={face.canPreview}
+                                    ><span class="face-preview-unavailable">Browser preview unavailable</span></template
+                                >
+                                <small>{face.detail}</small><span class="status">{face.statusLabel}</span>
                             </button></template
                         >
                         <template lwc:if={showNoMatches}

@@ -14,7 +14,7 @@ Branch: `feat/byod-signature-sender`, based on current `main`. This is a review 
 
 ## Reusable terms and HTML snippets
 
-Assets now has **Terms & snippets** with Write / HTML source / Preview, a permanent copyable `{%snippet:key}` tag, active status and native File revision history. Designer supports **Insert → Shared content** and reference chips. Normal and giant-query HTML/Canvas documents expand sections before merging record fields/loops; headers and footers use the same path. Source files remain private, and image/public-logo endpoints reject snippet assets.
+Assets now has **Terms & snippets** with rendered previews in search results, Write / HTML source / Preview, a permanent copyable `{%snippet:key}` tag, active status and native File revision history. Designer supports **Insert → Shared content** and the **@** menu, which previews the HTML being inserted. The canvas shows a read-only rendered section; double-click switches it to its editable merge tag. Save and undo retain the reference. Normal and giant-query HTML/Canvas documents expand sections before merging record fields/loops; headers and footers use the same path. Source files remain private, and image/public-logo endpoints reject snippet assets.
 
 Try **Shared Content - Quote Demo**, using the existing fictional Northstar Quote. Its terms merge customer/quote details, and a second shared closing uses verified Poppins Italic. Live UI tests covered create, edit, copy tag, preview, history and restore. Native PDF proofs confirmed 30-day → 45-day updates from the same template while the original file stayed unchanged. See [SHARED_CONTENT_ASSETS.md](SHARED_CONTENT_ASSETS.md) for the journey, scope, heap safeguards and implementation details.
 
@@ -28,7 +28,7 @@ Families: Amiri, Barlow, Barlow Condensed, Crimson Text, DM Mono, DM Serif Displ
 
 1. Open Portwood → My templates → Your templates.
 2. Choose **Design** for **Designer Fonts - Test Collection**. It is a separate inactive demo, with the fictional Northstar account as its sample record.
-3. Click a word or select text, then use **Font family → More fonts…**. The source remains available through **HTML**.
+3. Click a word or select text, then use the right inspector's **Font family** menu. Built-in and approved fonts share one searchable visual list. **Assets → Fonts** also shows real font samples in its search results. The source remains available through **HTML**.
 4. Preview the document to compare browser and native PDF output. The collection is two Letter pages and embeds all 16 custom faces. Its fixed Arabic line uses prepared visual-order copy; it does not add dynamic Arabic shaping.
 
 Repeat on another development org:
@@ -40,6 +40,16 @@ node scripts/fonts/setup-demo.mjs --target-org YOUR_SCRATCH_ALIAS --create-desig
 ```
 
 The seed tool preserves existing revisions/templates and never approves fonts automatically. Choose an Account sample record in the new org. Full licensed TTF fixtures stay outside managed-package source; the org uses Salesforce Files rather than font Static Resources.
+
+## Canvas and Assets interaction checks
+
+New Designer documents start blank. Text uses native selection, while table sizing, formatting and arrangement live in the right inspector. Table width, column width and row height use explicit numeric controls; row/column changes preserve the table footprint and the current scroll position. Shift-click selects a cell range. The insert shortcut is **@**; brackets, backticks and email addresses remain ordinary text.
+
+Cell fill and border colour have hex inputs and **Apply** buttons. **Apply to Row** fills every cell in the active row, including header cells, as one undo step. Inline merge-tag edits finish on a closing brace, Enter, Escape, Tab or navigation beyond the tag, so later typing stays outside the coloured pill.
+
+Snippet HTML previews appear on the canvas, in @ results and in Assets search. Library previews include inactive root snippets and refresh after a saved revision. Font search results load the exact registered font face, weight and style as rows become visible. Preview requests retain the document caret, ignore stale responses and preserve the shared reference in source and persisted files.
+
+Validated in `portwood-proposal`: **22/22 snippet Apex tests**, **26/26 canvas/table/field browser checks**, **8/8 snippet browser checks** and **7/7 Assets browser checks**. The 57-scenario Designer editing check, explicit-colour and pill-boundary checks, Assets preview checks, five shared-content authoring scenarios, font picker and starter/font paging checks also pass. These targeted results do not replace the broader release gates below.
 
 ## Validation
 

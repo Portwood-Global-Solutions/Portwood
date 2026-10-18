@@ -95,6 +95,21 @@ p {
     grid-column: 1 / -1;
     font-weight: 600;
 }
+.face-sample {
+    grid-column: 1 / -1;
+    display: block;
+    margin: 4px 0 7px;
+    color: #233946;
+    font-size: 22px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+.face-preview-unavailable {
+    grid-column: 1 / -1;
+    margin: 4px 0;
+    color: #627783;
+    font-size: 12px;
+}
 .face:hover {
     background: #e9f0f4;
 }

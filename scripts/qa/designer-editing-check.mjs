@@ -152,6 +152,30 @@ test('selection bookmarks restore selected text after a complete DOM replacement
     root.innerHTML = root.innerHTML;
     assert.equal(model.restoreRange(root, mark).toString(), 'customer');
 });
+test('caret bookmarks survive adjacent text nodes merging during an undo HTML round trip', () => {
+    const d = documentFor('<style>p{color:navy}</style><p></p>'),
+        root = d.querySelector('main'),
+        p = root.querySelector('p');
+    p.append(d.createTextNode('Before '), d.createTextNode('adjacent '));
+    const pill = d.createElement('span');
+    pill.setAttribute('data-dg-tag', 'true');
+    pill.setAttribute('contenteditable', 'false');
+    pill.textContent = '{Name}';
+    p.append(pill);
+    p.append(d.createTextNode(' after '), d.createTextNode('selected words'));
+    const range = d.createRange();
+    range.setStart(p.lastChild, 0);
+    range.setEnd(p.lastChild, 8);
+    const mark = model.bookmarkRange(root, range);
+    root.innerHTML = root.innerHTML;
+    const restored = model.restoreRange(root, mark);
+    assert.equal(restored.toString(), 'selected');
+    const before = d.createRange();
+    before.selectNodeContents(root);
+    before.setEnd(restored.startContainer, restored.startOffset);
+    assert.equal(before.toString().length, mark.startText);
+    assert(!restored.startContainer.parentElement.closest('[data-dg-tag]'));
+});
 const verifiedFace = {
     key: 'a'.repeat(64),
     family: 'Demo Sans',
@@ -303,6 +327,8 @@ const productionMethod = (name, args, document, dependencies = {}) => {
         'window',
         'previewDraftPdf',
         'previewStarterDraft',
+        'insertFragment',
+        'editTableGrid',
         'return (' + method + ');'
     )(
         model.tableGrid,
@@ -312,7 +338,9 @@ const productionMethod = (name, args, document, dependencies = {}) => {
         document,
         document.defaultView,
         dependencies.previewDraftPdf,
-        dependencies.previewStarterDraft
+        dependencies.previewStarterDraft,
+        model.insertFragment,
+        model.editTableGrid
     );
 };
 test('actual Designer tag cleanup retains a styled field and its pinned font without an undefined-variable failure', () => {
@@ -641,7 +669,11 @@ test('actual heading focus selects its placeholder so typing replaces it', () =>
         _setActiveSurface: () => {},
         _recordCaret: () => {}
     };
-    productionMethod('_focusWorkspaceBlock', 'block, selectContents = false', d).call(harness, heading, true);
+    productionMethod('_focusWorkspaceBlock', 'block, selectContents = false, reveal = true', d).call(
+        harness,
+        heading,
+        true
+    );
     assert.equal(d.defaultView.getSelection().toString(), 'Section heading');
 });
 test('source preview reads the current textarea and preserves an intentionally empty source', () => {
@@ -820,6 +852,167 @@ test('clicking a shared reference opens shared content rather than record-field 
     productionMethod('_openPillMenu', 'pill', d).call(harness, d.querySelector('span'));
     assert.equal(harness.activePanel, 'snippets');
     assert.equal(loads, 1);
+});
+
+test('ordinary text dragging across table cells never becomes a cell-range gesture in the new designer', () => {
+    const d = documentFor('<table><tr><td>First</td><td>Second</td></tr></table>');
+    let changed = false;
+    const harness = {
+        useModernDesigner: true,
+        _cellSelecting: false,
+        _cellSelAnchor: d.querySelector('td'),
+        _applyCellSelRect: () => {
+            changed = true;
+        }
+    };
+    productionMethod('_cellSelMove', 'e, pv', d).call(
+        harness,
+        {
+            buttons: 1,
+            target: d.querySelectorAll('td')[1],
+            preventDefault() {
+                throw Error('native selection must survive');
+            }
+        },
+        d.querySelector('main')
+    );
+    assert.equal(changed, false);
+});
+test('table sizing keeps the table footprint and focus in the sidebar at non-default zoom', () => {
+    const d = documentFor('<table style="width:100%"><tr><td>A</td><td>B</td><td>C</td></tr></table>');
+    const root = d.querySelector('main'),
+        table = d.querySelector('table'),
+        cell = d.querySelector('td');
+    const input = d.createElement('input');
+    d.body.append(input);
+    input.focus();
+    table.getBoundingClientRect = () => ({ width: 1200 });
+    for (const c of table.querySelectorAll('td')) c.getBoundingClientRect = () => ({ width: 400 });
+    let undo = 0;
+    const harness = {
+        designerZoom: 2,
+        _caret: { cellEl: cell },
+        _surfaceOwning: () => root,
+        _pushUndo: () => undo++,
+        _clampTablesToCanvas() {},
+        _syncWorkspaceSelection() {},
+        showToast() {
+            throw Error('valid size rejected');
+        }
+    };
+    harness._normalizeTableForResize = productionMethod('_normalizeTableForResize', 'table', d);
+    harness._workspaceTableColumns = productionMethod('_workspaceTableColumns', 'table', d);
+    const resize = productionMethod('_workspaceTableSize', 'metric, value', d);
+    resize.call(harness, 'columnWidth', 2.5);
+    const widths = [...table.querySelectorAll('col')].map((c) => parseFloat(c.style.width));
+    assert.equal(table.style.width, '100%');
+    assert.equal(widths[0], 40);
+    assert(Math.abs(widths.reduce((a, b) => a + b, 0) - 100) < 0.0001);
+    assert.equal(d.activeElement, input);
+    resize.call(harness, 'tableWidth', 75);
+    assert.equal(table.style.width, '75%');
+    resize.call(harness, 'rowHeight', 36);
+    assert.equal(cell.parentElement.style.height, '36pt');
+    resize.call(harness, 'rowHeight', 0);
+    assert.equal(cell.parentElement.style.height, '');
+    assert.equal(undo, 4);
+    const before = table.outerHTML;
+    resize.call(harness, 'tableWidth', 101);
+    assert.equal(table.outerHTML, before);
+    assert.equal(undo, 4);
+});
+test('table focus after a sidebar structure edit never scrolls the page', () => {
+    const d = documentFor('<table><tr><td>A</td></tr></table>'),
+        root = d.querySelector('main'),
+        cell = d.querySelector('td');
+    cell.scrollIntoView = () => {
+        throw Error('unexpected page jump');
+    };
+    const harness = { _surfaceOwning: () => root, _bodyCanvas: () => root, _setActiveSurface() {}, _recordCaret() {} };
+    productionMethod('_focusWorkspaceBlock', 'block, selectContents = false, reveal = true', d).call(
+        harness,
+        cell,
+        false,
+        false
+    );
+    assert.equal(d.defaultView.getSelection().anchorNode, cell);
+});
+test('@ opens insert commands at a word boundary while email addresses and old triggers remain ordinary text', () => {
+    const d = documentFor('<p></p>'),
+        root = d.querySelector('main'),
+        text = d.createTextNode('');
+    root.firstChild.append(text);
+    d.defaultView.Range.prototype.getBoundingClientRect = () => ({ width: 1, height: 16 });
+    let opened = 0;
+    const harness = {
+        template: { querySelector: () => root },
+        _surfaceContaining: () => root,
+        _renderSlashMenu() {
+            opened++;
+        },
+        _closeSlashMenu() {}
+    };
+    const open = productionMethod('_maybeOpenSlashMenu', '', d);
+    for (const value of ['@table', 'Hello @heading', 'email@example.com', '`table', '[table']) {
+        text.nodeValue = value;
+        const r = d.createRange();
+        r.setStart(text, text.length);
+        r.collapse(true);
+        const selection = d.defaultView.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(r);
+        open.call(harness);
+    }
+    assert.equal(opened, 2);
+});
+
+test('inserting a table on an empty new page leaves a normal paragraph below it', () => {
+    const d = documentFor('<p><br></p>'),
+        root = d.querySelector('main'),
+        r = d.createRange();
+    r.setStart(root.firstChild, 0);
+    r.collapse(true);
+    d.defaultView.getSelection().addRange(r);
+    const harness = {
+        useModernDesigner: true,
+        _insertTargetSurface: () => root,
+        _pushUndo() {},
+        _pillifyTags() {},
+        _isInCanvas: (node, surface) => surface.contains(node),
+        _parkCaretAfter() {},
+        _focusWorkspaceBlock() {}
+    };
+    productionMethod('_insertIntoVisualPage', 'markup', d).call(harness, '<table><tr><td>A</td></tr></table>');
+    assert.deepEqual(
+        [...root.children].map((e) => e.tagName),
+        ['TABLE', 'P']
+    );
+    assert(root.lastChild.querySelector('br'));
+});
+test('deleting the last table row leaves an editable destination and clears the old cell', () => {
+    const d = documentFor('<style>p{color:navy}</style><table><tr><td>A</td></tr></table>'),
+        root = d.querySelector('main'),
+        cell = d.querySelector('td');
+    let focus;
+    const harness = {
+        showHtmlBodyVisual: true,
+        useModernDesigner: true,
+        _caret: { cellEl: cell },
+        _pushUndo() {},
+        _restoreCaret() {},
+        _selectedTableCell: () => cell,
+        _surfaceOwning: () => root,
+        _clearCellSel() {},
+        _focusWorkspaceBlock: (target) => (focus = target)
+    };
+    productionMethod('handleTableAction', 'event', d).call(harness, {
+        currentTarget: { dataset: { taction: 'rowDel' } }
+    });
+    assert.equal(root.querySelector('table'), null);
+    assert(root.querySelector('style'));
+    assert.equal(focus.tagName, 'P');
+    assert(focus.querySelector('br'));
+    assert.equal(harness._caret.cellEl, null);
 });
 
 console.log(passed + ' document-editing scenarios passed.');

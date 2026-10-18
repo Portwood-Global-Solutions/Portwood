@@ -1,0 +1,7 @@
+<template>
+    <div class="preview" data-preview-state={state} data-preview-revision={revision} data-image-count={imageCount}>
+        <div class="content" lwc:dom="manual"></div>
+        <template if:true={loading}><span class="notice">Loading snippet preview…</span></template>
+        <template if:true={failed}><span class="notice" title={error}>Preview unavailable</span></template>
+    </div>
+</template>

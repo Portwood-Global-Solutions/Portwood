@@ -73,6 +73,49 @@ private class DocGenSnippetTest {
     }
 
     @IsTest
+    static void canvasPreviewExpandsActiveReferencesAndKeepsFields() {
+        create('preview-clause', '<p>For <strong>{Name}</strong>, payment is due in 30 days.</p>');
+        create('preview-terms', '<h2>Terms</h2>{%snippet:preview-clause}');
+        System.assertEquals(
+            '<h2>Terms</h2><p>For <strong>{Name}</strong>, payment is due in 30 days.</p>',
+            DocGenSnippetController.getSnippetPreview('PREVIEW-TERMS')
+        );
+        System.assertEquals(
+            0,
+            [SELECT COUNT() FROM ContentDistribution],
+            'Canvas previews never publish private Files.'
+        );
+        Map<String, Object> inactive = create('preview-inactive', '<p>Inactive clause</p>');
+        save(inactive, '<p>Inactive clause</p>', false);
+        for (String key : new List<String>{ 'preview-inactive', 'preview-missing', 'invalid:key', null }) {
+            try {
+                DocGenSnippetController.getSnippetPreview(key);
+                System.assert(false, 'Missing, inactive and malformed references must not preview.');
+            } catch (AuraHandledException e) {
+                System.assertNotEquals(null, e.getMessage());
+            }
+        }
+    }
+    @IsTest
+    static void libraryPreviewsLatestInactiveRevisionWithNestedContent() {
+        create('library-clause', '<p>Payment within <strong>30 days</strong>.</p>');
+        Map<String, Object> snippet = create('library-terms', '<h2>Old wording</h2>');
+        snippet = save(snippet, '<h2>Latest terms</h2>{%snippet:library-clause}', false);
+        System.assertEquals(
+            '<h2>Latest terms</h2><p>Payment within <strong>30 days</strong>.</p>',
+            DocGenSnippetController.getSnippetLibraryPreview((Id) snippet.get('id')),
+            'Authors can preview an inactive section without enabling it for documents.'
+        );
+        System.assertEquals(0, [SELECT COUNT() FROM ContentDistribution]);
+        try {
+            DocGenSnippetController.getSnippetLibraryPreview(null);
+            System.assert(false, 'An asset is required.');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+    }
+
+    @IsTest
     static void fieldsAndRowContext() {
         create('greeting', '<p>Hello <strong>{Name}</strong></p>');
         String result = DocGenService.processXmlForTest(

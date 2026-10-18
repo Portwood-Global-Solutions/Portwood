@@ -609,3 +609,96 @@ footer {
         max-width: none;
     }
 }
+
+/* The page is for typing; the inspector owns formatting and sizing. */
+.canvas-hint {
+    color: #536576;
+    font-size: 12px;
+}
+.guide-body {
+    overflow-anchor: none;
+}
+.text-format {
+    margin-top: 20px;
+    padding-top: 4px;
+    border-top: 1px solid #d4dde5;
+}
+.font-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.font-row .font {
+    display: block;
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+.format-buttons {
+    display: flex;
+    gap: 6px;
+}
+.format-buttons button {
+    width: 40px;
+    height: 34px;
+    border: 1px solid #bdcbd6;
+    border-radius: 4px;
+    background: #fff;
+}
+.format-buttons button[aria-pressed='true'] {
+    background: #dcebea;
+    border-color: #285e63;
+}
+.text-format .more-menu {
+    position: static;
+    width: 100%;
+    max-height: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin-top: 10px;
+}
+.text-format .more-menu > button,
+.text-swatches button {
+    min-height: 34px;
+    padding: 6px 9px;
+    border: 0;
+    border-radius: 4px;
+    background: #fff;
+    text-align: left;
+}
+.text-format button:hover {
+    background: #f0f5f6;
+}
+.cell-context {
+    padding: 8px 10px;
+    border-left: 3px solid #285e63;
+    background: #f0f5f6;
+    color: #214f54;
+    font-size: 12px;
+    margin: 0 0 16px;
+}
+.table-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.table-metrics label {
+    min-width: 0;
+    font-size: 12px;
+}
+.table-metrics input {
+    display: block;
+    margin-top: 6px;
+    width: 100%;
+}
+.full-width {
+    width: 100%;
+    text-align: center;
+}
+@media (max-width: 580px) {
+    .canvas-hint {
+        display: none;
+    }
+}

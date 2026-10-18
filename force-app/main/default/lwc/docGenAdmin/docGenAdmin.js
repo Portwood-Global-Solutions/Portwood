@@ -4,6 +4,7 @@ import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import { parsePageLayout, applyPageLayout, pageMargins, pageGeometry } from 'c/docGenPageLayout';
 import {
     selectedBlock,
+    designerMarkup,
     blockLocation,
     moveBlock,
     duplicateBlock,
@@ -120,6 +121,7 @@ import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTempla
 import getConvertedHtmlSnapshot from '@salesforce/apex/DocGenController.getConvertedHtmlSnapshot';
 import listHtmlTemplateImages from '@salesforce/apex/DocGenController.listHtmlTemplateImages';
 import getSnippets from '@salesforce/apex/DocGenSnippetController.getSnippets';
+import getSnippetPreview from '@salesforce/apex/DocGenSnippetController.getSnippetPreview';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import createAsset from '@salesforce/apex/DocGenController.createAsset';
 import addAssetVersion from '@salesforce/apex/DocGenController.addAssetVersion';
@@ -599,7 +601,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track selectionContextLabel = '';
     // Pill inspector: click a pill → formatting menu (currency, date, QR…)
     @track pillMenu = null;
-    // Notion-style slash-command menu: type "/" in the canvas → searchable insert palette.
+    // Type @ in the canvas to search insert commands and preview shared content.
     @track slashMenu = null;
     // Right-click context menu in the canvas.
     @track ctxMenu = null;
@@ -1587,6 +1589,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     disconnectedCallback() {
+        this._slashSnippetObserver?.disconnect();
         this._agentforceRequest++;
         this._workspaceResizeObserver?.disconnect();
         this._cancelOverlayClear();
@@ -1867,10 +1870,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         // The slash menu's search box is deliberately NOT auto-focused. Taking
         // focus the instant the menu appears would break the flow it was built
-        // for — type a backtick and keep typing in the page — by yanking the
+        // for — type @ and keep typing in the page — by yanking the
         // caret out of the document mid-sentence. The box is there for when the
         // mouse has already been used, which is precisely the case that had no
         // way to filter at all.
+        this._renderSlashSnippetPreviews();
         // Inline HTML preview: the lwc:dom="manual" host only exists after the
         // re-render that the Preview toggle triggers, so the content write has
         // to happen here rather than in the click handler.
@@ -1913,10 +1917,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                         this._wireSurfaceInteractions(pv);
                         // Live dirty signal while typing in the page — and
                         // type-to-pill: a completed {tag} snaps into a pill.
-                        pv.addEventListener('input', () => {
+                        pv.addEventListener('input', (event) => {
                             this._healCanvasStyle(pv);
                             this.htmlEditorDirty = true;
-                            this._maybePillifyTyped();
+                            this._maybePillifyTyped(event);
                             // Notion-style: "/" at the caret opens the insert menu.
                             this._maybeOpenSlashMenu();
                         });
@@ -1939,6 +1943,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                             this._setActiveSurface('body');
                         });
                         pv.addEventListener('keydown', (e) => {
+                            this._pillEditKeydown?.(e);
+                            if (e.defaultPrevented) return;
                             // Ctrl/Cmd+Z first: it must beat the floor guard and the
                             // slash menu, and it must preventDefault before the
                             // browser's own undo can run against the wrong history.
@@ -2138,7 +2144,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                         // Snapshot AFTER pillify so "unchanged" compares
                         // like-for-like on exit.
                         // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-                        this._visualEnteredDom = pv.innerHTML;
+                        this._visualEnteredDom = designerMarkup(pv);
                         // #247 — running header/footer are editable bands on the page.
                         this._mountChromeBands();
                         this._applyCanvasDimensions();
@@ -2309,6 +2315,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     /** Shared image assets: the ONE image pipeline — wizard logo picker,
      *  designer asset panel, slash menu, and the AI prompt all read this. */
     async _loadWizardAssets() {
+        const snippets = this._loadSharedSnippets();
         try {
             const assets = (await getAssets()) || [];
             this.wizardAssets = assets.map((a) => ({
@@ -2326,16 +2333,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             this._imagifyAssetPills();
             await this._loadWizardFonts();
-            await this._loadSharedSnippets();
         } catch (e) {
             this.wizardAssets = [];
         }
+        await snippets;
     }
 
     async _loadSharedSnippets() {
         this.snippetLoadError = '';
         try {
             this.sharedSnippets = ((await getSnippets()) || []).filter((a) => a.isActive);
+            if (this.slashMenu) this._renderSlashMenu(null, null);
         } catch (e) {
             this.sharedSnippets = [];
             this.snippetLoadError =
@@ -7893,6 +7901,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             const sel = window.getSelection();
             node = sel && sel.anchorNode;
+            if (this._editingPill && sel?.isCollapsed && !this._isInCanvas(node, this._editingPill))
+                this._finishPillEdit?.({ park: false });
         } catch (e) {
             return;
         }
@@ -8045,7 +8055,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             const sel = window.getSelection();
             const range = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-            const el = node && node.nodeType === 3 ? node.parentElement : node;
+            // A click target can be the whole table/canvas even though the browser
+            // placed the caret in a nested paragraph. Track the actual selection.
+            if (!range || !this._isInCanvas(range.startContainer, pv) || !this._isInCanvas(range.endContainer, pv))
+                return;
+            node = this._isInCanvas(sel.focusNode, pv) ? sel.focusNode : range.startContainer;
+            let el = node && node.nodeType === 3 ? node.parentElement : node;
+            el = el?.closest?.('[data-dg-snippet]') || el;
             const blockEl = el && el.closest ? el.closest(DocGenAdmin.CARET_BLOCK_SELECTOR) : null;
             const cellEl = el && el.closest ? el.closest('td, th') : null;
             this._caret = { range, blockEl, cellEl };
@@ -8536,17 +8552,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // Same undo capture as the body canvas — the bands are edit surfaces
             // for two template fields, and Ctrl+Z has to mean the same thing in all
             // three or the author learns it is unreliable.
-            band.addEventListener('input', () => {
+            band.addEventListener('input', (event) => {
                 this._setActiveSurface(which);
+                this._maybePillifyTyped(event);
                 this._syncBandToRecord(which, band);
-                this._maybePillifyTyped();
-                // The ` / [ insert menu. _maybeOpenSlashMenu resolves its surface
+                // The @ insert menu. _maybeOpenSlashMenu resolves its surface
                 // through _surfaceContaining and has always handled the bands — it
                 // was simply never called from one, so the menu could only ever be
                 // opened in the body.
                 this._maybeOpenSlashMenu();
             });
             band.addEventListener('keydown', (e) => {
+                this._pillEditKeydown?.(e);
+                if (e.defaultPrevented) return;
                 if (this._undoKeydown(e)) {
                     return;
                 }
@@ -8657,7 +8675,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._clearEditorPaint();
         const tpl = document.createElement('template');
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- string round-trip of a live band; re-cleaned below, never cloneNode (LWS drops browser-inserted nodes)
-        tpl.innerHTML = band.innerHTML;
+        tpl.innerHTML = designerMarkup(band);
         const root = tpl.content;
         for (const el of root.querySelectorAll('style, .dg-drop-marker')) {
             el.remove();
@@ -8950,7 +8968,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._workspaceBlockEl = block;
         this._workspaceSurface = surface;
         const table = block.tagName === 'TABLE';
-        const focusedElement = node?.nodeType === 3 ? node.parentElement : node;
+        let focusedElement = node?.nodeType === 3 ? node.parentElement : node;
+        focusedElement = focusedElement?.closest?.('[data-dg-snippet]') || focusedElement;
         const selectedImage =
             focusedElement?.tagName === 'IMG'
                 ? focusedElement
@@ -8978,11 +8997,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                       : 'Paragraph',
             summary: table
                 ? `${block.rows.length} rows · ${block.rows[0]?.cells.length || 0} columns`
-                : (block.textContent || block.querySelector('img')?.alt || 'Image')
+                : (block.textContent || block.querySelector('img')?.alt || (image ? 'Image' : ''))
                       .replace(/\s+/g, ' ')
                       .trim()
                       .slice(0, 120),
             table,
+            ...(table ? this._workspaceTableSelection(block, surface) : {}),
             image: !!selectedImage,
             imageWidth: selectedImage ? round(parseFloat(getComputedStyle(selectedImage).width) / 96) : null,
             fixed: css.position === 'absolute',
@@ -9003,7 +9023,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const element = node?.nodeType === 3 ? node.parentElement : node;
         if (element?.nodeType === 1) this.workspaceFontFamily = getComputedStyle(element).fontFamily;
     }
-    _focusWorkspaceBlock(block, selectContents = false) {
+    _focusWorkspaceBlock(block, selectContents = false, reveal = true) {
         const surface = block && this._surfaceOwning(block);
         if (!block || !surface) {
             this.workspaceSelection = {};
@@ -9019,7 +9039,92 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         selection.removeAllRanges();
         selection.addRange(range);
         this._recordCaret(range.startContainer, surface);
-        block.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (reveal) block.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    _workspaceTableSelection(table, surface) {
+        const remembered = this._caret?.cellEl;
+        const cell =
+            remembered?.isConnected && remembered.closest('table') === table
+                ? remembered
+                : table.querySelector('td,th');
+        const layout = tableGrid(table);
+        const at = layout.positions.get(cell);
+        const zoom = this.designerZoom || 1;
+        const css = window.getComputedStyle(surface);
+        const available =
+            surface.clientWidth - (parseFloat(css.paddingLeft) || 0) - (parseFloat(css.paddingRight) || 0);
+        const width = table.getBoundingClientRect().width / zoom;
+        const selected = this._cellSel?.length || 0;
+        return {
+            cellLabel:
+                selected > 1
+                    ? `${selected} cells selected`
+                    : `Row ${(at?.row || 0) + 1}, column ${(at?.column || 0) + 1}`,
+            tableWidth: Math.round((width / (available || width)) * 100),
+            columnWidth: cell ? Math.round((cell.getBoundingClientRect().width / zoom / 96) * 100) / 100 : 1,
+            rowHeight: Math.round(
+                (parseFloat(cell?.parentElement.style.height) || 0) *
+                    (cell?.parentElement.style.height.endsWith('pt') ? 1 : 0.75)
+            ),
+            columnSizeDisabled: (at?.colSpan || 1) > 1 || layout.width < 2
+        };
+    }
+    /** Keep column geometry proportional, so adding a column cannot widen the page. */
+    _workspaceTableColumns(table) {
+        const width = table.style.width;
+        const cols = this._normalizeTableForResize(table);
+        const total = cols.reduce((sum, col) => sum + parseFloat(col.style.width), 0) || 1;
+        for (const col of cols) col.style.width = (parseFloat(col.style.width) / total) * 100 + '%';
+        if (width) table.style.width = width;
+        return cols;
+    }
+    _workspaceTableSize(metric, value) {
+        const cell = this._caret?.cellEl;
+        const surface = cell && this._surfaceOwning(cell);
+        if (!cell?.isConnected || !surface || value === '') return;
+        const table = cell.closest('table');
+        const size = Number(value);
+        if (!Number.isFinite(size)) return;
+        const width = table.getBoundingClientRect().width / (this.designerZoom || 1);
+        const layout = tableGrid(table);
+        const at = layout.positions.get(cell);
+        if (metric === 'tableWidth' && (size < 10 || size > 100)) return;
+        if (metric === 'rowHeight' && (size < 0 || size > 720)) return;
+        if (
+            metric === 'columnWidth' &&
+            (!at || at.colSpan !== 1 || size < 0.25 || size * 96 > width - 24 * (layout.width - 1))
+        ) {
+            this.showToast(
+                'Check column width',
+                'Leave at least 0.25 inches for each other column. Split a merged cell before sizing its column.',
+                'info'
+            );
+            return;
+        }
+        if (!['tableWidth', 'columnWidth', 'rowHeight'].includes(metric)) return;
+        this._pushUndo('table-size:' + metric);
+        if (metric === 'rowHeight') cell.parentElement.style.height = size ? size + 'pt' : '';
+        else {
+            const cols = this._workspaceTableColumns(table);
+            if (metric === 'tableWidth') table.style.width = size + '%';
+            else if (cols.length > 1) {
+                const requested = ((size * 96) / width) * 100;
+                const others = cols.filter((col, index) => index !== at.column);
+                const remaining = 100 - requested;
+                const minimum = (24 / width) * 100;
+                const extra = Math.max(0, remaining - minimum * others.length);
+                const weights = others.map((col) => Math.max(0, parseFloat(col.style.width) - minimum));
+                const total = weights.reduce((sum, weight) => sum + weight, 0);
+                others.forEach((col, index) => {
+                    col.style.width = minimum + extra * (total ? weights[index] / total : 1 / others.length) + '%';
+                });
+                cols[at.column].style.width = requested + '%';
+            }
+        }
+        this._clampTablesToCanvas();
+        this._syncWorkspaceSelection(cell, surface);
+        this.htmlEditorDirty = true;
+        this.workspaceStatus = 'Table size updated';
     }
     _workspaceArrange(action, value) {
         const block = this._workspaceBlockEl;
@@ -9038,6 +9143,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (action === 'move' && !moveBlock(block, value)) return;
         if (action === 'duplicate') {
             selected = duplicateBlock(block);
+            if (selected) this._pillifyTags(selected);
             if (selected && this.workspaceSelection.fixed) {
                 const geometry = pageGeometry(this.pageSetup);
                 selected.style.left =
@@ -9222,6 +9328,72 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         });
         this._syncWorkspaceSelection(this._workspaceBlockEl, this._workspaceSurface);
     }
+    @track workspaceBorderColor = '#666666';
+    @track workspaceFillColor = '#f2f4f7';
+    _normalizeTableColor(value) {
+        const hex = (value || '').trim().replace(/^#/, '');
+        if (/^[0-9a-f]{6}$/i.test(hex)) return '#' + hex.toLowerCase();
+        if (/^[0-9a-f]{3}$/i.test(hex))
+            return (
+                '#' +
+                [...hex]
+                    .map((digit) => digit + digit)
+                    .join('')
+                    .toLowerCase()
+            );
+        return null;
+    }
+    get workspaceBorderColorSwatch() {
+        return this._normalizeTableColor(this.workspaceBorderColor) || '#666666';
+    }
+    get workspaceFillColorSwatch() {
+        return this._normalizeTableColor(this.workspaceFillColor) || '#f2f4f7';
+    }
+    handleWorkspaceTableColorDraft(event) {
+        const property = event.currentTarget.dataset.colorProperty;
+        if (!['workspaceBorderColor', 'workspaceFillColor'].includes(property)) return;
+        this[property] = event.currentTarget.value;
+        this.template.querySelector('[data-table-color-hex="' + property + '"]')?.setCustomValidity('');
+    }
+    handleWorkspaceTableColorKeydown(event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        this.handleWorkspaceTableColorApply(event);
+    }
+    handleWorkspaceTableColorApply(event) {
+        const property = event.currentTarget.dataset.colorProperty;
+        if (!['workspaceBorderColor', 'workspaceFillColor'].includes(property)) return;
+        const value = this._normalizeTableColor(this[property]);
+        const input = this.template.querySelector('[data-table-color-hex="' + property + '"]');
+        if (!value) {
+            input?.setCustomValidity('Enter a hex colour such as #236b4a.');
+            input?.reportValidity();
+            return;
+        }
+        input?.setCustomValidity('');
+        const cell = this._selectedTableCell();
+        if (!cell?.isConnected || !this._surfaceOwning(cell)) {
+            this.showToast(
+                'Select a cell first',
+                'Click a cell, or Shift-click to select several cells, then Apply.',
+                'info'
+            );
+            return;
+        }
+        this[property] = value;
+        const border = property === 'workspaceBorderColor';
+        const wholeRow = !border && event.currentTarget.dataset.fillScope === 'row';
+        if (border) this._borderPrefs = { ...this._borderPrefs, color: value };
+        const action = border
+            ? this._lastBorderMode === 'bordersNone'
+                ? 'bordersAll'
+                : this._lastBorderMode || 'bordersAll'
+            : wholeRow
+              ? 'rowFill'
+              : 'cellFill';
+        this.handleTableAction({ currentTarget: { dataset: { taction: action, value } } });
+        this.workspaceStatus = border ? 'Border colour applied' : wholeRow ? 'Row fill applied' : 'Cell fill applied';
+    }
 
     _workspacePreviewRequest = 0;
     get workspaceHasPreview() {
@@ -9273,7 +9445,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
     async _runWorkspaceCommand(event) {
-        const { action, value, command, option, box } = event.detail;
+        const { action, value, command, option, box, metric } = event.detail;
         if (action === 'capture') {
             this.handleColorPickMouseDown();
             return;
@@ -9324,6 +9496,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         if (action === 'image-width') {
             this._workspaceImageWidth(value);
+            return;
+        }
+        if (action === 'table-size') {
+            this._workspaceTableSize(metric, value);
             return;
         }
         if (action === 'position-mode' || action === 'position') {
@@ -9644,6 +9820,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 continue;
             }
             for (const pill of pills) {
+                if (pill.hasAttribute('data-dg-snippet')) continue;
                 if (extra === 0) {
                     pill.style.margin = '';
                     pill.style.lineHeight = '';
@@ -9788,7 +9965,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._clearEditorPaint();
         const snap = {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- Read-only undo serialization; LWS cloneNode loses native contenteditable nodes.
-            body: body.innerHTML,
+            body: designerMarkup(body),
             header: null,
             footer: null,
             source: this._visualOriginalCode,
@@ -9813,7 +9990,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const band = this.template.querySelector('.dg-chrome-band_' + which);
             if (band) {
                 // eslint-disable-next-line @lwc/lwc/no-inner-html -- READ, not a write; same undo snapshot as above.
-                snap[which] = band.innerHTML;
+                snap[which] = designerMarkup(band);
             }
         }
         if (painted && painted.isConnected) {
@@ -9972,6 +10149,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     _restoringUndo = false;
 
     handleUndo() {
+        this._finishPillEdit?.();
         if (!this._undoStack.length) {
             return;
         }
@@ -9989,6 +10167,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     handleRedo() {
+        this._finishPillEdit?.();
         if (!this._redoStack.length) {
             return;
         }
@@ -10062,8 +10241,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this._beginPillEdit(pill);
                 return;
             }
-            // Word-style click-and-type: double-click empty space starts a cursor.
-            this._placeCaretAtPoint(e, surface);
+            // Preserve native double-click word selection in existing content.
+            if (e.target === surface) this._placeCaretAtPoint(e, surface);
         });
         // Right-click: contextual menu (pill menu on pills; insert/format/table
         // actions elsewhere).
@@ -10122,9 +10301,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             };
         });
         surface.addEventListener('mousemove', (e) => {
-            this._imgResizeHover(e);
             this._cellSelMove(e, surface);
-            this._tableResizeHover(e, surface);
+            if (!this.useModernDesigner) {
+                this._imgResizeHover(e);
+                this._tableResizeHover(e, surface);
+            }
         });
         // Table row/column handles and the block gutter handle follow the pointer.
         surface.addEventListener('mousemove', this.handleCanvasMouseMove);
@@ -10132,13 +10313,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // Nested-contenteditable blur is unreliable — a click outside an in-edit
             // pill commits it explicitly, so the user is never caught inside it.
             if (this._editingPill && !this._editingPill.contains(e.target) && this._finishPillEdit) {
-                this._finishPillEdit();
+                this._finishPillEdit({ park: false });
             }
-            if (this._imgResizeStart(e, surface)) {
+            if (!this.useModernDesigner && this._imgResizeStart(e, surface)) {
                 return;
             }
             this._cellSelDown(e, surface);
-            this._tableResizeStart(e, surface);
+            if (!this.useModernDesigner) this._tableResizeStart(e, surface);
         });
         surface.addEventListener('keyup', () => this._refreshFmtState());
         surface.addEventListener('mouseup', () => {
@@ -10165,9 +10346,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // Undo capture for plain typing. beforeinput fires BEFORE the browser
         // mutates the DOM, the only moment the pre-edit state still exists.
         surface.addEventListener('beforeinput', (e) => {
-            this._pushUndo('type:' + ((e && e.inputType) || 'text'));
             this._preparePillTyping(surface, e);
+            if (!this._editingPill) this._pushUndo('type:' + ((e && e.inputType) || 'text'));
         });
+        surface.addEventListener('compositionend', () => this._maybePillifyTyped());
     }
 
     /** Native typing beside an atom must start from editable document text, not the pill's chrome. */
@@ -10178,7 +10360,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const range = selection.getRangeAt(0);
         const node = range.startContainer;
         const element = node.nodeType === 3 ? node.parentElement : node;
-        if (!this._isInCanvas(node, surface) || element.closest?.('[data-dg-tag],[data-dg-caret]')) return;
+        if (this._editingPill && !this._isInCanvas(node, this._editingPill)) this._finishPillEdit?.({ park: false });
+        if (!this._isInCanvas(node, surface)) return;
+        const pillEditor = element.closest?.('[data-dg-tag]');
+        if (pillEditor) {
+            if (pillEditor === this._editingPill) {
+                const before = range.cloneRange();
+                before.selectNodeContents(pillEditor);
+                before.setEnd(node, range.startOffset);
+                const closing = pillEditor.textContent.indexOf('}');
+                if (closing >= 0 && before.toString().length > closing) this._finishPillEdit?.();
+            }
+            return;
+        }
+        if (element.closest?.('[data-dg-caret]')) return;
         let left, right;
         if (node.nodeType === 3) {
             if (range.startOffset === 0) left = node.previousSibling;
@@ -11091,11 +11286,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // sandbox and has already broken four features. It matters more here now that
     // these run on the running header and footer as well as the page.
     _cellSelDown(e, pv) {
-        const cell = e.target?.closest?.('td, th');
+        const target = e.target?.closest?.('[data-dg-snippet]') || e.target;
+        const cell = target?.closest?.('td, th');
         const valid = cell && this._isInCanvas(cell, pv);
         if (
             e.shiftKey &&
             valid &&
+            cell !== this._cellSelAnchor &&
             this._cellSelAnchor?.isConnected &&
             this._cellSelAnchor.closest('table') === cell.closest('table')
         ) {
@@ -11109,6 +11306,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     _cellSelMove(e, pv) {
+        // Text dragging belongs to the browser. Cell ranges are explicit Shift-clicks.
+        if (this.useModernDesigner && !this._cellSelecting) return;
         if (this._colResizing || !this._cellSelAnchor || !(e.buttons & 1)) {
             return;
         }
@@ -11210,6 +11409,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 continue;
             }
             for (const t of surface.querySelectorAll('table')) {
+                if (t.closest('[data-dg-snippet]')) continue;
                 // max-width alone is not enough: table-layout:auto refuses to shrink
                 // below min-content, so a table of wide cells still overhangs.
                 t.style.maxWidth = '100%';
@@ -11250,6 +11450,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             return null;
         }
+        node = node.closest('[data-dg-snippet]') || node;
         const cell = node.closest('td, th');
         if (cell && this._isInCanvas(cell, pv)) {
             return cell;
@@ -11305,14 +11506,38 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const table = cell.closest('table');
         const cellIndex = Array.prototype.indexOf.call(row.children, cell);
         if (this.useModernDesigner) {
+            const surface = this._surfaceOwning(table);
+            const neighbour = table.nextElementSibling || table.previousElementSibling;
+            const changingColumns = ['colBefore', 'colAfter', 'colDel'].includes(action);
+            if (changingColumns) this._workspaceTableColumns(table);
             const edited = editTableGrid(table, cell, action);
             if (edited) {
                 if (!edited.removed) {
+                    if (changingColumns) {
+                        const cols = Array.from(table.querySelector('colgroup').children);
+                        const weights = cols.map((col) => parseFloat(col.style.width) || 100 / cols.length);
+                        const total = weights.reduce((sum, weight) => sum + weight, 0);
+                        cols.forEach((col, index) => {
+                            col.style.width = (weights[index] / total) * 100 + '%';
+                        });
+                    }
                     this._pillifyTags(table);
                     this._clampTablesToCanvas();
                 }
                 this.htmlEditorDirty = true;
-                this._focusWorkspaceBlock(edited.cell);
+                this._clearCellSel();
+                if (edited.removed) {
+                    this._workspaceBlockEl = null;
+                    this.workspaceSelection = {};
+                    this._caret = { range: null, blockEl: null, cellEl: null };
+                    let target = neighbour?.matches('style,script') ? null : neighbour;
+                    if (!target && surface) {
+                        target = document.createElement('p');
+                        target.append(document.createElement('br'));
+                        surface.append(target);
+                    }
+                    if (target) this._focusWorkspaceBlock(target, false, false);
+                } else this._focusWorkspaceBlock(edited.cell, false, false);
                 this.workspaceStatus = 'Table updated';
                 return;
             }
@@ -11410,8 +11635,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 c.style.color = '#ffffff';
                 c.style.fontWeight = 'bold';
             }
-        } else if (action === 'cellFill') {
-            const targets = this._cellSel && this._cellSel.length ? this._cellSel : [cell];
+        } else if (action === 'cellFill' || action === 'rowFill') {
+            const targets =
+                action === 'rowFill' ? Array.from(row.cells) : this._cellSel?.length ? this._cellSel : [cell];
             for (const c of targets) {
                 c.style.background = value === 'transparent' ? '' : value;
             }
@@ -11797,7 +12023,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     _imgResizeHover(event) {
         const img = event.target && event.target.tagName === 'IMG' ? event.target : null;
-        if (img) {
+        if (img && !img.closest('[data-dg-snippet]')) {
             img.style.cursor = this._imgCornerHit(event, img) ? 'nwse-resize' : 'grab';
         }
     }
@@ -11807,7 +12033,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // _isInCanvas, not pv.contains — contains() is unreliable under the LWS
         // namespace sandbox and would silently refuse to resize an image that IS in
         // the surface, dropping the drag back to the native (duplicating) one.
-        if (!img || !this._isInCanvas(img, pv)) {
+        if (!img || img.closest('[data-dg-snippet]') || !this._isInCanvas(img, pv)) {
             return false;
         }
         // Body of the image = pick it up and move it; only the bottom-right
@@ -12629,6 +12855,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             nested = root.querySelectorAll('[data-dg-tag] [data-dg-tag]');
         }
+        for (const pill of root.querySelectorAll('[data-dg-tag]'))
+            if (pill !== this._editingPill) pill.setAttribute('contenteditable', 'false');
         const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         const targets = [];
         while (walker.nextNode()) {
@@ -12665,6 +12893,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             node.parentNode.replaceChild(frag, node);
         }
+        this._renderSnippetPreviews(root);
     }
 
     /** Barcode/QR pills occupy their rendered footprint on the canvas so the
@@ -12816,8 +13045,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // into its typing style at atom boundaries, even from contenteditable=false.
         // A pseudo-element is decoration rather than text formatting.
         const surfaces = ['.dg-pv', '.dg-chrome-band'];
-        const pills = surfaces.map((surface) => surface + ' [data-dg-tag]:not(img)').join(',');
-        const tints = surfaces.map((surface) => surface + ' [data-dg-tag]:not(img)::before').join(',');
+        const pills = surfaces.map((surface) => surface + ' [data-dg-tag]:not(img):not([data-dg-snippet])').join(',');
+        const tints = surfaces
+            .map((surface) => surface + ' [data-dg-tag]:not(img):not([data-dg-snippet])::before')
+            .join(',');
         const authored = surfaces
             .flatMap((surface) => [surface + ' [data-dg-highlight]::before', surface + ' [data-dg-barcode]::before'])
             .join(',');
@@ -12998,11 +13229,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         } catch (e) {
             /* best effort */
         }
-        const raw = (pill.textContent || '').trim();
+        const raw = (
+            pill.hasAttribute('data-dg-snippet') ? pill.getAttribute('data-dg-tag') : pill.textContent || ''
+        ).trim();
         if (/^\{%snippet:/i.test(raw)) {
             this.activePanel = 'snippets';
             this.panelSearch = '';
-            this.workspaceStatus = 'Shared content is edited in Assets. Its full content appears in PDF preview.';
+            this.workspaceStatus = 'Double-click shared content to edit its tag. Update shared wording in Assets.';
             this._loadSharedSnippets();
             return;
         }
@@ -13227,24 +13460,55 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.pillMenu = null;
     }
 
-    /**
-     * Edit a pill's tag text in place (loop names, conditionals, modifiers —
-     * anything). Enter or clicking away commits; braces are auto-completed;
-     * an emptied pill removes itself.
-     */
+    /** Split a completed field from ordinary wording pasted or typed beside it. */
+    _pillEditParts(raw) {
+        const text = raw || '';
+        const match = /\{[^{}]+\}/.exec(text);
+        if (match)
+            return {
+                prefix: text.slice(0, match.index),
+                tag: match[0],
+                suffix: text.slice(match.index + match[0].length)
+            };
+        const closing = text.indexOf('}');
+        let tag = (closing < 0 ? text : text.slice(0, closing + 1)).trim();
+        const suffix = closing < 0 ? '' : text.slice(closing + 1);
+        if (!tag || ['{}', '{', '}'].includes(tag)) return { prefix: '', tag: '', suffix };
+        if (!tag.startsWith('{')) tag = '{' + tag;
+        if (!tag.endsWith('}')) tag += '}';
+        return { prefix: '', tag, suffix };
+    }
+
+    /** A field edit is one undo step. Closing the field always leaves ordinary typing outside it. */
     _beginPillEdit(pill) {
+        if (this._editingPill === pill) return;
+        this._finishPillEdit?.({ park: false });
+        this._pushUndo('pill-edit');
         this.pillMenu = null;
-        // Image pills have no text — editing one as text committed '' and
-        // DELETED the image. Swap the img for a text pill showing its tag,
-        // edit that, and the commit re-imagifies asset tags below.
-        if (pill.tagName === 'IMG') {
-            const imgTag = pill.getAttribute('data-dg-tag') || '';
-            const doc = pill.ownerDocument || document;
+        const doc = pill.ownerDocument || document;
+        const surface = this._surfaceOwning(pill);
+        if (!surface) return;
+        if (pill.tagName === 'IMG' || pill.hasAttribute('data-dg-snippet')) {
             const span = doc.createElement('span');
             span.setAttribute('data-dg-tag', 'true');
-            span.setAttribute('contenteditable', 'false');
-            span.textContent = imgTag;
-            span.style.cssText = this._pillStyleFor(imgTag);
+            span.textContent = pill.getAttribute('data-dg-tag') || '';
+            span.style.cssText = this._pillStyleFor(span.textContent);
+            for (const property of [
+                'font-family',
+                'font-size',
+                'font-weight',
+                'font-style',
+                'text-decoration',
+                'color'
+            ])
+                if (pill.style.getPropertyValue(property))
+                    span.style.setProperty(property, pill.style.getPropertyValue(property));
+            const face = pill.getAttribute('data-pw-font-face');
+            if (face) span.setAttribute('data-pw-font-face', face);
+            if (pill.hasAttribute('data-dg-highlight')) {
+                span.setAttribute('data-dg-highlight', 'true');
+                span.style.backgroundColor = pill.style.backgroundColor;
+            }
             this._safeReplace(pill, span);
             pill = span;
         }
@@ -13252,54 +13516,115 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         pill.style.borderStyle = 'dashed';
         pill.style.cursor = 'text';
         this._editingPill = pill;
-        try {
-            const range = document.createRange();
-            range.selectNodeContents(pill);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-        } catch (e) {
-            /* selection best-effort */
-        }
-        const finish = () => {
-            if (this._editingPill !== pill) {
-                return; // already committed (blur + outside-click both fired)
-            }
+        this._activePill = pill;
+        const caretOffset = () => {
+            const selection = window.getSelection();
+            if (!selection?.rangeCount || !selection.isCollapsed || !this._isInCanvas(selection.anchorNode, pill))
+                return null;
+            const before = doc.createRange();
+            before.selectNodeContents(pill);
+            before.setEnd(selection.anchorNode, selection.anchorOffset);
+            return before.toString().length;
+        };
+        const finish = ({ park = true, side = 'after' } = {}) => {
+            if (this._editingPill !== pill) return;
             this._editingPill = null;
-            pill.removeEventListener('blur', finish);
-            let t = (pill.textContent || '').trim();
-            if (!t || t === '{}' || t === '{' || t === '}') {
-                pill.remove();
+            this._finishPillEdit = null;
+            this._syncPillEditInput = null;
+            this._pillEditKeydown = null;
+            pill.removeEventListener('blur', onBlur);
+            pill.removeEventListener('keydown', onKeydown);
+            pill.removeEventListener('input', onInput);
+            pill.removeEventListener('compositionend', onInput);
+            // Native paste/cut can replace the entire editable span before input fires.
+            if (!pill.isConnected || !pill.parentNode) {
+                if (this._activePill === pill) this._activePill = null;
                 this.htmlEditorDirty = true;
                 return;
             }
-            if (!t.startsWith('{')) {
-                t = '{' + t;
+            const { prefix, tag, suffix } = this._pillEditParts(pill.textContent);
+            if (prefix) pill.parentNode.insertBefore(doc.createTextNode(prefix), pill);
+            const tail = suffix ? doc.createTextNode(suffix) : null;
+            if (tail) pill.parentNode.insertBefore(tail, pill.nextSibling);
+            let target = pill;
+            if (!tag) {
+                target = tail || doc.createTextNode('');
+                if (!tail) pill.parentNode.insertBefore(target, pill);
+                pill.remove();
+                this._activePill = null;
+            } else {
+                pill.setAttribute('contenteditable', 'false');
+                this._restylePill(pill, tag);
+                const image = this._assetImgFor(tag, doc);
+                if (image) {
+                    this._safeReplace(pill, image);
+                    target = image;
+                }
+                const snippet = this._snippetPreviewFor(tag, doc, pill);
+                if (snippet) {
+                    this._safeReplace(pill, snippet);
+                    target = snippet;
+                }
+                this._activePill = target;
+                if (this.useModernDesigner) this.workspaceFieldTag = tag;
             }
-            if (!t.endsWith('}')) {
-                t = t + '}';
-            }
-            pill.setAttribute('contenteditable', 'false');
-            this._restylePill(pill, t);
             this.htmlEditorDirty = true;
-            // An asset tag goes back to being a real image on the canvas.
-            if (/^\{%asset:/i.test(t)) {
-                this._imagifyAssetPills();
+            if (!park) {
+                this._renderSnippetPreviews(surface);
+                return;
             }
-            // Park the caret AFTER the pill — leaving it inside means the next
-            // keystrokes grow the pill instead of typing beside it.
-            this._parkCaretAfter(pill, this._surfaceOwning(pill));
+            if (tail || !tag || side === 'before') {
+                const range = side === 'before' && tag ? pillCaretRange(surface, target, 'before') : doc.createRange();
+                if (side !== 'before' || !tag) {
+                    range.selectNodeContents(tail || target);
+                    range.collapse(false);
+                }
+                surface.focus({ preventScroll: true });
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                this._recordCaret(range.startContainer, surface);
+            } else this._parkCaretAfter(target, surface);
+            this._renderSnippetPreviews(surface);
+        };
+        const onBlur = () => finish({ park: false });
+        const onInput = (event) => {
+            if (event.isComposing) return;
+            const closing = pill.textContent.indexOf('}');
+            const offset = caretOffset();
+            if (closing >= 0 && offset !== null && offset > closing) finish();
+        };
+        const onKeydown = (event) => {
+            if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+            const offset = caretOffset();
+            const selection = window.getSelection();
+            if (offset === null && selection?.isCollapsed && !this._isInCanvas(selection.anchorNode, pill)) {
+                finish({ park: false });
+                return;
+            }
+            const text = pill.textContent;
+            const moveBefore = (event.key === 'ArrowLeft' && offset === 0) || event.key === 'Home';
+            const moveAfter = (event.key === 'ArrowRight' && offset === text.length) || event.key === 'End';
+            const existingClose = event.key === '}' && offset !== null && text[offset] === '}';
+            if (['Enter', 'Tab', 'Escape'].includes(event.key) || moveBefore || moveAfter || existingClose) {
+                event.preventDefault();
+                event.stopPropagation();
+                finish({ side: moveBefore ? 'before' : 'after' });
+            }
         };
         this._finishPillEdit = finish;
-        pill.addEventListener('blur', finish);
-        pill.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                finish();
-            }
-        });
-        pill.focus();
+        this._syncPillEditInput = onInput;
+        this._pillEditKeydown = onKeydown;
+        pill.addEventListener('blur', onBlur);
+        pill.addEventListener('keydown', onKeydown);
+        pill.addEventListener('input', onInput);
+        pill.addEventListener('compositionend', onInput);
+        pill.focus({ preventScroll: true });
+        const range = doc.createRange();
+        range.selectNodeContents(pill);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
     }
 
     /**
@@ -13415,8 +13740,18 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
-    _maybePillifyTyped() {
+    _maybePillifyTyped(event) {
         try {
+            if (this._editingPill) {
+                const live = window.getSelection();
+                if (
+                    !this._editingPill.isConnected ||
+                    (live?.isCollapsed && !this._isInCanvas(live.anchorNode, this._editingPill))
+                )
+                    this._finishPillEdit?.({ park: false });
+                else this._syncPillEditInput?.(event || {});
+                if (this._editingPill) return;
+            }
             const sel = window.getSelection();
             if (!sel || !sel.rangeCount || !sel.isCollapsed) {
                 return;
@@ -13492,6 +13827,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 sel.addRange(r);
                 this._recordCaret(caretText, pv);
             }
+            this._renderSnippetPreviews(pv);
             // A freshly typed pill takes its style straight from _pillStyleFor, which
             // knows nothing about zoom — re-apply the spread so it matches its
             // neighbours instead of snapping back to tight spacing.
@@ -13502,6 +13838,155 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     /** Pills back to plain merge-tag text (exit path). */
+    _snippetPreviewByKey = {};
+    _snippetPreviewRequests = new Map();
+    _snippetPreviewErrors = {};
+
+    /** Read-only shared wording; the original reference remains the only saved value. */
+    _snippetPreviewFor(tag, doc, source) {
+        const match = /^\{%snippet:([a-z0-9][a-z0-9-]{0,39})\}$/i.exec(tag || '');
+        const key = match?.[1].toLowerCase();
+        const html = key && this._snippetPreviewByKey[key];
+        if (!html) return null;
+        const preview = doc.createElement('span');
+        preview.setAttribute('data-dg-tag', tag);
+        preview.setAttribute('data-dg-snippet', key);
+        preview.setAttribute('contenteditable', 'false');
+        preview.setAttribute('draggable', 'false');
+        preview.setAttribute('role', 'group');
+        const name = this.sharedSnippets.find((item) => item.assetKey?.toLowerCase() === key)?.name || key;
+        preview.setAttribute('aria-label', 'Shared content: ' + name);
+        preview.title = name + ' — double-click to edit the snippet tag';
+        preview.style.cssText =
+            'display:inline-block;width:100%;max-width:100%;vertical-align:top;box-sizing:border-box;' +
+            'outline:1px dashed #83b8b2;outline-offset:3px;cursor:pointer;';
+        for (const property of ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'color'])
+            if (source?.style.getPropertyValue(property))
+                preview.style.setProperty(property, source.style.getPropertyValue(property));
+        const face = source?.getAttribute('data-pw-font-face');
+        if (face) preview.setAttribute('data-pw-font-face', face);
+        if (source?.hasAttribute('data-dg-highlight')) {
+            preview.setAttribute('data-dg-highlight', 'true');
+            preview.style.backgroundColor = source.style.backgroundColor;
+        }
+        this._writeSnippetContent(preview, key);
+        return preview;
+    }
+
+    /** The canvas and insertion menu display the same validated, expanded HTML. */
+    _writeSnippetContent(host, key) {
+        const doc = host.ownerDocument || document;
+        // eslint-disable-next-line @lwc/lwc/no-inner-html -- Private snippet HTML is validated by DocGenSnippetService; these read-only views never become authored HTML.
+        host.innerHTML = this._snippetPreviewByKey[key];
+        for (const image of host.querySelectorAll('img')) {
+            const asset = this._assetImgFor(image.getAttribute('src') || '', doc);
+            if (asset) {
+                image.src = asset.src;
+                if (asset.style.width && !image.style.width) image.style.width = asset.style.width;
+                if (asset.style.height && !image.style.height) image.style.height = asset.style.height;
+            }
+            image.setAttribute('draggable', 'false');
+        }
+    }
+
+    _slashSnippetObserver = null;
+    _slashScrollSelection = false;
+    _renderSlashSnippetPreviews() {
+        this._slashSnippetObserver?.disconnect();
+        this._slashSnippetObserver = null;
+        if (!this.slashMenu) return;
+        const menu = this.template.querySelector('.dg-slash-menu');
+        if (!menu) return;
+        const waiting = [];
+        for (const host of menu.querySelectorAll('[data-slash-snippet]')) {
+            const key = host.dataset.slashSnippet;
+            if (this._snippetPreviewByKey[key]) {
+                if (host.dataset.previewState !== 'ready') {
+                    this._writeSnippetContent(host, key);
+                    host.dataset.previewState = 'ready';
+                    host.parentElement.setAttribute(
+                        'aria-label',
+                        'Insert snippet: ' + host.textContent.replace(/\s+/g, ' ').trim().slice(0, 300)
+                    );
+                }
+            } else if (this._snippetPreviewErrors[key]) {
+                host.textContent = 'Preview unavailable';
+                host.title = this._snippetPreviewErrors[key];
+                host.dataset.previewState = 'error';
+            } else {
+                host.textContent = 'Loading snippet preview…';
+                host.dataset.previewState = 'loading';
+                waiting.push(host);
+            }
+        }
+        if (this._slashScrollSelection) {
+            this._slashScrollSelection = false;
+            const selected = menu.querySelector('.dg-slash-item_active');
+            if (selected) {
+                const bounds = menu.getBoundingClientRect();
+                const item = selected.getBoundingClientRect();
+                if (item.bottom > bounds.bottom) menu.scrollTop += item.bottom - bounds.bottom + 8;
+                else if (item.top < bounds.top) menu.scrollTop -= bounds.top - item.top + 8;
+            }
+        }
+        // Load visible cards first; opening @ must not fetch the entire library.
+        if (waiting.length && typeof IntersectionObserver !== 'undefined') {
+            this._slashSnippetObserver = new IntersectionObserver(
+                (entries) => {
+                    for (const entry of entries) {
+                        if (entry.isIntersecting) this._requestSnippetPreview(entry.target.dataset.slashSnippet);
+                    }
+                },
+                { root: menu, rootMargin: '100px' }
+            );
+            for (const host of waiting) this._slashSnippetObserver.observe(host);
+        } else for (const host of waiting) this._requestSnippetPreview(host.dataset.slashSnippet);
+    }
+
+    _renderSnippetPreviews(root) {
+        for (const pill of Array.from(root.querySelectorAll('[data-dg-tag]'))) {
+            if (pill === this._editingPill || pill.hasAttribute('data-dg-snippet')) continue;
+            const tag = (pill.textContent || '').trim();
+            const match = /^\{%snippet:([a-z0-9][a-z0-9-]{0,39})\}$/i.exec(tag);
+            if (!match) continue;
+            const key = match[1].toLowerCase();
+            const preview = this._snippetPreviewFor(tag, root.ownerDocument || document, pill);
+            if (preview) {
+                this._safeReplace(pill, preview);
+                if (this._activePill === pill) this._activePill = preview;
+            } else {
+                this._restylePill(pill, tag);
+                pill.title = this._snippetPreviewErrors[key]
+                    ? 'Preview unavailable: ' + this._snippetPreviewErrors[key] + ' Double-click to edit the tag.'
+                    : 'Loading shared content — double-click to edit its tag';
+                this._requestSnippetPreview(key);
+            }
+        }
+    }
+
+    _requestSnippetPreview(key) {
+        if (this._snippetPreviewRequests.has(key) || this._snippetPreviewErrors[key]) return;
+        const cache = this._snippetPreviewByKey;
+        const requests = this._snippetPreviewRequests;
+        const request = getSnippetPreview({ assetKey: key })
+            .then((html) => {
+                if (cache !== this._snippetPreviewByKey) return;
+                cache[key] = html;
+            })
+            .catch((error) => {
+                if (cache !== this._snippetPreviewByKey) return;
+                this._snippetPreviewErrors[key] =
+                    error?.body?.message || error?.message || 'Could not load this snippet.';
+            })
+            .finally(() => {
+                requests.delete(key);
+                if (cache !== this._snippetPreviewByKey) return;
+                for (const surface of this._allSurfaces()) this._renderSnippetPreviews(surface);
+                this._renderSlashSnippetPreviews();
+            });
+        requests.set(key, request);
+    }
+
     /** WYSIWYG assets: {%asset:key} pills become the real image on canvas.
      *  The true tag lives in data-dg-tag; save round-trips through it. */
     _assetImgFor(tag, doc) {
@@ -13653,7 +14138,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         for (const pill of root.querySelectorAll('[data-dg-tag]')) {
             const attr = pill.getAttribute('data-dg-tag');
             const doc = root.ownerDocument || document;
-            const tag = pill.tagName === 'IMG' && attr && attr.startsWith('{') ? attr : pill.textContent;
+            const tag =
+                (pill.tagName === 'IMG' || pill.hasAttribute('data-dg-snippet')) && attr && attr.startsWith('{')
+                    ? attr
+                    : pill.textContent;
             // User formatting applied to the pill (the chrome in _pillStyleFor
             // never sets these props) rides out as a styled span so the merged
             // value prints with it.
@@ -13838,7 +14326,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._clearEditorPaint();
         const tpl = document.createElement('template');
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- string round-trip of the live canvas; re-cleaned below, never cloneNode (LWS drops browser-inserted nodes)
-        tpl.innerHTML = pv.innerHTML;
+        tpl.innerHTML = designerMarkup(pv);
         const root = tpl.content;
         for (const styleEl of root.querySelectorAll('style')) {
             styleEl.remove();
@@ -13952,7 +14440,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const ta = this.template.querySelector('.dg-html-body-editor');
         if (pv && ta && this._visualOriginalCode != null) {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            const current = pv.innerHTML;
+            const current = designerMarkup(pv);
             if (this._visualEnteredDom !== null && current !== this._visualEnteredDom) {
                 // Extract the edited content: everything except the scoped
                 // <style> the preview pipeline injected, with tag pills
@@ -15037,6 +15525,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async _openDesignerSurface() {
+        this._snippetPreviewByKey = {};
+        this._snippetPreviewRequests = new Map();
+        this._snippetPreviewErrors = {};
         this.workspaceSelection = {};
         this._workspaceBlockEl = null;
         this.workspaceNotice = undefined;
@@ -15070,7 +15561,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (!body || !body.trim()) {
             // Blank template: seed a clean sheet so click-and-type just works.
             body =
-                '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8" />\n<style>\n@page { size: Letter portrait; margin: 0.75in; }\nbody { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; }\n</style>\n</head>\n<body>\n<p>Start typing your document here — or drag in blocks, tags, and images from the rail.</p>\n</body>\n</html>\n';
+                '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8" />\n<style>\n@page { size: Letter portrait; margin: 0.75in; }\nbody { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; }\n</style>\n</head>\n<body>\n<p><br /></p>\n</body>\n</html>\n';
             this._syncHtmlBodyEditorDom(body);
         }
         this._enterVisualMode(body);
@@ -15417,6 +15908,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             snippet: '{/FieldName}',
             keywords: 'close end if condition tag finish stop'
         });
+        for (const a of this.sharedSnippets || []) {
+            add(a.name, 'Snippets', {
+                isSnippet: true,
+                snippetKey: (a.assetKey || '').toLowerCase(),
+                accessibleLabel: 'Insert snippet: ' + a.name,
+                snippet: '<div>' + a.mergeTag + '</div><p><br></p>',
+                keywords: `${a.assetKey || ''} ${a.mergeTag || ''} ${a.category || ''} terms conditions disclaimer snippet reusable shared content`
+            });
+        }
         // Editor commands — the format bar, searchable from the keyboard.
         const CMDS = [
             ['Bold text', 'bold', 'bold strong heavy thick'],
@@ -15444,12 +15944,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 add(it.label, sec.label, { snippet: it.snippet, keywords: (it.title || '') + ' merge tag field' });
             }
         }
-        for (const a of this.sharedSnippets || []) {
-            add(a.name, 'Shared content', {
-                snippet: '<div>' + a.mergeTag + '</div>',
-                keywords: 'terms conditions disclaimer snippet reusable shared content'
-            });
-        }
         for (const a of this.wizardAssets || []) {
             add(a.name, 'Image assets', { snippet: a.mergeTag, keywords: 'image picture logo asset photo' });
         }
@@ -15469,7 +15963,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 return;
             }
             // pv.contains() is the LWS-unreliable call documented in #240; a false
-            // negative here meant the ` / [ insert menu simply never opened. It also
+            // negative here meant the @ insert menu simply never opened. It also
             // could not see the running header/footer bands at all.
             const pv = this._surfaceContaining(node);
             if (!pv || (node.parentElement && node.parentElement.closest('[data-dg-tag]'))) {
@@ -15477,8 +15971,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 return;
             }
             const upto = node.nodeValue.slice(0, sel.anchorOffset);
-            // Trigger keys: ` or [ — "/" belongs to Lightning global search.
-            const m = upto.match(/(^|[\s ])[`[]([\w -]{0,30})$/);
+            // @ starts a command at a word boundary; email addresses remain normal text.
+            const m = upto.match(/(^|[\s ])@([\w -]{0,30})$/);
             if (!m) {
                 this._closeSlashMenu();
                 return;
@@ -15566,12 +16060,18 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             posStyle,
             items: items.map((o, idx) => ({
                 ...o,
-                itemClass: idx === this._slashSel ? 'dg-slash-item dg-slash-item_active' : 'dg-slash-item'
+                itemClass:
+                    'dg-slash-item' +
+                    (o.isSnippet ? ' dg-slash-item_snippet' : '') +
+                    (idx === this._slashSel ? ' dg-slash-item_active' : '')
             }))
         };
     }
 
     _closeSlashMenu() {
+        this._slashSnippetObserver?.disconnect();
+        this._slashSnippetObserver = null;
+        this._slashScrollSelection = false;
         if (this.slashMenu) {
             this.slashMenu = null;
             this._slashCtx = null;
@@ -15589,6 +16089,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const n = this.slashMenu.items.length;
             if (n) {
                 this._slashSel = (this._slashSel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+                this._slashScrollSelection = true;
                 this._renderSlashMenu(null, null);
             }
             return true;
@@ -15644,6 +16145,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             const step = event.key === 'ArrowDown' ? 1 : -1;
             this._slashSel = (this._slashSel + step + items.length) % items.length;
+            this._slashScrollSelection = true;
             this._renderSlashMenu(null, { left: 0, top: 0 });
             return;
         }
@@ -15662,12 +16164,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
         // Everything else stays here: the canvas has its own handlers for
-        // backtick and "[", and a search box that reopened the menu it lives in
+        // @, and a search box that reopened the menu it lives in
         // would be its own kind of broken.
         event.stopPropagation();
     }
 
-    /** Remove the typed "/query" trigger text, then insert the chosen thing there. */
+    /** Remove the typed "@query" trigger text, then insert the chosen thing there. */
     _executeSlashItem(item) {
         const ctx = this._slashCtx;
         this._closeSlashMenu();
@@ -15926,7 +16428,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             const sel = window.getSelection();
             if (pv && pv.focus) {
-                pv.focus();
+                pv.focus({ preventScroll: true });
             }
             sel.removeAllRanges();
             sel.addRange(r);
@@ -15961,6 +16463,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this._isInCanvas(candidate.endContainer, surface)
         );
         const inserted = insertFragment(surface, range, template.content);
+        // Leave a normal typing destination after a table at the end of a page.
+        if (this.useModernDesigner && inserted.first?.tagName === 'TABLE' && !inserted.first.nextElementSibling) {
+            const paragraph = document.createElement('p');
+            paragraph.append(document.createElement('br'));
+            inserted.first.insertAdjacentElement('afterend', paragraph);
+        }
         this._parkCaretAfter(inserted.last, surface);
         this._lastInsertWasAppended = inserted.appended;
         this.htmlEditorDirty = true;

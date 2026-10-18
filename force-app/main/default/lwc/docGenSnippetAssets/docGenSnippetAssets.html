@@ -36,8 +36,13 @@
                             onclick={handleSelect}
                             disabled={busy}
                         >
-                            <strong>{row.name}</strong><small>{row.categoryLabel} · {row.state}</small
-                            ><code>{row.mergeTag}</code>
+                            <c-doc-gen-snippet-preview
+                                asset-id={row.id}
+                                revision={previewRevision}
+                                image-urls={imageUrls}
+                                aria-hidden="true"
+                            ></c-doc-gen-snippet-preview>
+                            <strong>{row.name}</strong><small>{row.categoryLabel} · {row.state}</small>
                         </button></template
                     ><template if:false={hasRows}
                         ><p class="empty">

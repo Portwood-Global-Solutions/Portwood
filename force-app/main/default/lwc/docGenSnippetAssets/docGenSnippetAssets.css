@@ -88,6 +88,9 @@ p {
     color: #526475;
     font-size: 0.75rem;
 }
+.entry c-doc-gen-snippet-preview {
+    margin-bottom: 5px;
+}
 .detail {
     position: relative;
     min-width: 0;

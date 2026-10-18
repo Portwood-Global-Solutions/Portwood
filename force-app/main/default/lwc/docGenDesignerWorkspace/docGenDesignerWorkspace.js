@@ -160,6 +160,11 @@ export default class DocGenDesignerWorkspace extends LightningElement {
             command: event.currentTarget.dataset.command
         });
     }
+    handleTableMetric(event) {
+        const input = event.currentTarget;
+        if (!input.reportValidity()) return;
+        this.emit('table-size', input.value, { metric: input.dataset.metric });
+    }
     handleImageWidth(event) {
         this.emit('image-width', event.currentTarget.value);
     }

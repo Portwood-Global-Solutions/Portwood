@@ -1958,7 +1958,7 @@
     white-space: nowrap;
 }
 
-/* --- Slash-command menu (type "/" in the page) --- */
+/* --- Insert menu (type @ in the page) --- */
 .dg-slash-menu {
     position: absolute;
     z-index: 60;
@@ -2028,6 +2028,36 @@
     color: #9a93b5;
     white-space: nowrap;
     flex: 0 0 auto;
+}
+
+.dg-slash-item_snippet {
+    display: block;
+    padding: 9px;
+}
+.dg-slash-snippet-preview {
+    display: block;
+    position: relative;
+    contain: layout paint;
+    max-height: 130px;
+    min-height: 42px;
+    padding: 9px;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    border: 1px solid #d8e3e7;
+    border-radius: 4px;
+    background: #fff;
+    color: #233946;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+}
+.dg-slash-snippet-meta {
+    display: block;
+    margin-top: 5px;
+    color: #627783;
+    font-size: 11px;
+    line-height: 1.3;
+    text-align: right;
 }
 
 .dg-slash-empty {
@@ -3216,4 +3246,64 @@
 .dg-font-picker {
     width: 190px;
     flex: 0 0 auto;
+}
+
+/* Selection and sidebar edits must not re-anchor the document's scroll position. */
+.pw-designer .dg-designer-canvas-col,
+.pw-designer .dg-sheet {
+    overflow-anchor: none;
+}
+
+.pw-table-colour {
+    margin: 16px 0;
+}
+.pw-table-colour > label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.pw-table-colour-controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.pw-table-colour-controls input {
+    min-width: 0;
+    height: 34px;
+    border: 1px solid #bdcbd6;
+    border-radius: 4px;
+    background: #fff;
+    font: inherit;
+}
+.pw-table-colour-controls input[type='color'] {
+    flex: 0 0 36px;
+    width: 36px;
+    padding: 2px;
+    cursor: pointer;
+}
+.pw-table-colour-controls input[type='text'] {
+    flex: 1;
+    width: 80px;
+    padding: 6px 8px;
+}
+.pw-table-colour-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 7px;
+}
+.pw-table-colour-apply {
+    min-height: 34px;
+    padding: 6px 12px;
+    border: 1px solid #285e63;
+    border-radius: 4px;
+    background: #285e63;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.pw-table-colour-apply:hover {
+    background: #214f54;
 }

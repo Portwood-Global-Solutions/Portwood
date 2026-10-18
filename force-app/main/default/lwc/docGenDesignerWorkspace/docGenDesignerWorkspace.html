@@ -115,265 +115,7 @@
                 Page
             </button>
             <span class="divider"></span>
-            <template if:false={sourceMode}>
-                <c-doc-gen-font-picker
-                    class="font"
-                    label="Font family"
-                    hide-label
-                    options={fontOptions}
-                    loading={fontsLoading}
-                    error={fontError}
-                    disabled={formattingDisabled}
-                    oncapture={captureSelection}
-                    onchange={handleFont}
-                    onretry={handleFontRetry}
-                ></c-doc-gen-font-picker>
-                <input
-                    class="size"
-                    type="number"
-                    min="6"
-                    max="96"
-                    step="0.5"
-                    value={fontSize}
-                    aria-label="Font size in points"
-                    disabled={formattingDisabled}
-                    onfocus={captureSelection}
-                    onchange={handleSize}
-                />
-                <button
-                    title="Bold"
-                    aria-label="Bold"
-                    disabled={formattingDisabled}
-                    aria-pressed={boldPressed}
-                    data-action="format"
-                    data-value="bold"
-                    onclick={handleAction}
-                    onmousedown={keepSelection}
-                >
-                    <b>B</b>
-                </button>
-                <button
-                    title="Italic"
-                    aria-label="Italic"
-                    disabled={formattingDisabled}
-                    aria-pressed={italicPressed}
-                    data-action="format"
-                    data-value="italic"
-                    onclick={handleAction}
-                    onmousedown={keepSelection}
-                >
-                    <em>I</em>
-                </button>
-                <button
-                    title="Underline"
-                    aria-label="Underline"
-                    disabled={formattingDisabled}
-                    aria-pressed={underlinePressed}
-                    data-action="format"
-                    data-value="underline"
-                    onclick={handleAction}
-                    onmousedown={keepSelection}
-                >
-                    <u>U</u>
-                </button>
-                <details class="more">
-                    <summary
-                        title="Alignment, lists and more formatting"
-                        onmousedown={captureSelection}
-                        onkeydown={handleMoreKeydown}
-                    >
-                        More
-                    </summary>
-                    <div class="more-menu" role="group" aria-label="More formatting">
-                        <button
-                            data-action="format"
-                            data-value="justifyLeft"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Align left</button
-                        ><button
-                            data-action="format"
-                            data-value="justifyCenter"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Align centre</button
-                        ><button
-                            data-action="format"
-                            data-value="justifyRight"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Align right
-                        </button>
-                        <button
-                            data-action="format"
-                            data-value="insertUnorderedList"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Bulleted list</button
-                        ><button
-                            data-action="format"
-                            data-value="insertOrderedList"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Numbered list
-                        </button>
-                        <button
-                            data-action="format"
-                            data-value="strikeThrough"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Strikethrough</button
-                        ><button
-                            data-action="format"
-                            data-value="superscript"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Superscript</button
-                        ><button
-                            data-action="format"
-                            data-value="subscript"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Subscript</button
-                        ><button
-                            data-action="format"
-                            data-value="removeFormat"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
-                        >
-                            Clear formatting
-                        </button>
-                        <div class="text-swatches" role="group" aria-label="Text colours">
-                            <button
-                                aria-label="Black text"
-                                data-action="color"
-                                data-command="foreColor"
-                                data-value="#111111"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                            >
-                                Black</button
-                            ><button
-                                aria-label="Navy text"
-                                data-action="color"
-                                data-command="foreColor"
-                                data-value="#183452"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                            >
-                                Navy</button
-                            ><button
-                                aria-label="Blue text"
-                                data-action="color"
-                                data-command="foreColor"
-                                data-value="#235fa4"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                            >
-                                Blue</button
-                            ><button
-                                aria-label="Green text"
-                                data-action="color"
-                                data-command="foreColor"
-                                data-value="#236b4a"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                            >
-                                Green
-                            </button>
-                        </div>
-                        <p class="colour-help">Choose a colour, then Apply.</p>
-                        <div class="colour-field">
-                            <label for="text-colour-hex">Text colour</label>
-                            <div class="colour-controls">
-                                <input
-                                    type="color"
-                                    aria-label="Choose custom text colour"
-                                    data-property="textColor"
-                                    value={textColorSwatch}
-                                    disabled={formattingDisabled}
-                                    oninput={handleColorDraft}
-                                    onchange={handleColorDraft}
-                                />
-                                <input
-                                    id="text-colour-hex"
-                                    class="colour-hex"
-                                    type="text"
-                                    aria-label="Text colour hex"
-                                    data-hex="textColor"
-                                    data-property="textColor"
-                                    data-command="foreColor"
-                                    value={textColor}
-                                    maxlength="7"
-                                    spellcheck="false"
-                                    disabled={formattingDisabled}
-                                    oninput={handleColorDraft}
-                                    onkeydown={handleColorKeydown}
-                                />
-                                <button
-                                    class="colour-apply"
-                                    aria-label="Apply text colour"
-                                    data-property="textColor"
-                                    data-command="foreColor"
-                                    disabled={formattingDisabled}
-                                    onmousedown={keepSelection}
-                                    onclick={handleColorApply}
-                                >
-                                    Apply
-                                </button>
-                            </div>
-                        </div>
-                        <div class="colour-field">
-                            <label for="highlight-colour-hex">Highlight</label>
-                            <div class="colour-controls">
-                                <input
-                                    type="color"
-                                    aria-label="Choose custom highlight colour"
-                                    data-property="highlightColor"
-                                    value={highlightColorSwatch}
-                                    disabled={formattingDisabled}
-                                    oninput={handleColorDraft}
-                                    onchange={handleColorDraft}
-                                />
-                                <input
-                                    id="highlight-colour-hex"
-                                    class="colour-hex"
-                                    type="text"
-                                    aria-label="Highlight colour hex"
-                                    data-hex="highlightColor"
-                                    data-property="highlightColor"
-                                    data-command="hiliteColor"
-                                    value={highlightColor}
-                                    maxlength="7"
-                                    spellcheck="false"
-                                    disabled={formattingDisabled}
-                                    oninput={handleColorDraft}
-                                    onkeydown={handleColorKeydown}
-                                />
-                                <button
-                                    class="colour-apply"
-                                    aria-label="Apply highlight colour"
-                                    data-property="highlightColor"
-                                    data-command="hiliteColor"
-                                    disabled={formattingDisabled}
-                                    onmousedown={keepSelection}
-                                    onclick={handleColorApply}
-                                >
-                                    Apply
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </details>
-            </template>
+            <span class="canvas-hint">Type on the page · @ to insert</span>
             <template if:true={sourceMode}>
                 <button class="named" data-action="format-source" onclick={handleAction} disabled={modeDisabled}>
                     Format HTML
@@ -400,54 +142,61 @@
                 <template if:true={isVisualEditing}>
                     <template if:true={hasSelection}>
                         <h2>{selection.label}</h2>
-                        <p class="selection-summary">{selection.summary}</p>
-                        <div class="arrange" role="group" aria-label="Arrange selected block">
-                            <button
-                                data-action="move"
-                                data-value="up"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                                disabled={cannotMoveUp}
-                            >
-                                ↑ Move up</button
-                            ><button
-                                data-action="move"
-                                data-value="down"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                                disabled={cannotMoveDown}
-                            >
-                                ↓ Move down</button
-                            ><button data-action="duplicate" onclick={handleAction} onmousedown={keepSelection}>
-                                Duplicate</button
-                            ><button
-                                class="remove"
-                                data-action="remove"
-                                onclick={handleAction}
-                                onmousedown={keepSelection}
-                            >
-                                Remove
-                            </button>
-                        </div>
-                        <button
-                            class="text-button"
-                            data-action="after"
-                            onclick={handleAction}
-                            onmousedown={keepSelection}
+                        <template if:true={selection.summary}
+                            ><p class="selection-summary">{selection.summary}</p></template
                         >
-                            ＋ Add text below
-                        </button>
-                        <template if:true={imageSelected}
-                            ><label class="stacked"
-                                >Image width (in)<input
-                                    type="number"
-                                    min="0.1"
-                                    step="any"
-                                    value={imageWidth}
-                                    aria-label="Image width in inches"
-                                    onchange={handleImageWidth} /></label
-                        ></template>
                         <template if:true={tableSelected}>
+                            <p class="cell-context" role="status">{selection.cellLabel}</p>
+                            <h3>Table size</h3>
+                            <div class="table-metrics">
+                                <label
+                                    >Width (%)<input
+                                        type="number"
+                                        min="10"
+                                        max="100"
+                                        step="1"
+                                        value={selection.tableWidth}
+                                        data-metric="tableWidth"
+                                        aria-label="Table width percent"
+                                        onmousedown={captureSelection}
+                                        onchange={handleTableMetric}
+                                /></label>
+                                <label
+                                    >Column (in)<input
+                                        type="number"
+                                        min="0.25"
+                                        step="0.01"
+                                        value={selection.columnWidth}
+                                        data-metric="columnWidth"
+                                        aria-label="Selected column width in inches"
+                                        onmousedown={captureSelection}
+                                        onchange={handleTableMetric}
+                                        disabled={selection.columnSizeDisabled}
+                                        title="For a merged or single-column cell, use table width or split the cell first"
+                                /></label>
+                                <label
+                                    >Row height (pt)<input
+                                        type="number"
+                                        min="0"
+                                        max="720"
+                                        step="1"
+                                        value={selection.rowHeight}
+                                        data-metric="rowHeight"
+                                        aria-label="Selected row minimum height in points"
+                                        onmousedown={captureSelection}
+                                        onchange={handleTableMetric}
+                                /></label>
+                            </div>
+                            <p class="hint">Use 0 for automatic row height. Columns resize within the table.</p>
+                            <button
+                                class="secondary full-width"
+                                data-action="table"
+                                data-value="distributeCols"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                Equal column widths
+                            </button>
                             <h3>Rows and columns</h3>
                             <div class="arrange" role="group" aria-label="Table editing">
                                 <button
@@ -551,6 +300,322 @@
                                 </button>
                             </details>
                         </template>
+                    </template>
+                    <section class="text-format" aria-label="Text formatting">
+                        <h3>Text</h3>
+                        <div class="font-row">
+                            <c-doc-gen-font-picker
+                                class="font"
+                                label="Font family"
+                                hide-label
+                                options={fontOptions}
+                                loading={fontsLoading}
+                                error={fontError}
+                                disabled={formattingDisabled}
+                                oncapture={captureSelection}
+                                onchange={handleFont}
+                                onretry={handleFontRetry}
+                            ></c-doc-gen-font-picker>
+                            <input
+                                class="size"
+                                type="number"
+                                min="6"
+                                max="96"
+                                step="0.5"
+                                value={fontSize}
+                                aria-label="Font size in points"
+                                disabled={formattingDisabled}
+                                onfocus={captureSelection}
+                                onchange={handleSize}
+                            />
+                        </div>
+                        <div class="format-buttons" role="group" aria-label="Text style">
+                            <button
+                                title="Bold"
+                                aria-label="Bold"
+                                disabled={formattingDisabled}
+                                aria-pressed={boldPressed}
+                                data-action="format"
+                                data-value="bold"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                <b>B</b>
+                            </button>
+                            <button
+                                title="Italic"
+                                aria-label="Italic"
+                                disabled={formattingDisabled}
+                                aria-pressed={italicPressed}
+                                data-action="format"
+                                data-value="italic"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                <em>I</em>
+                            </button>
+                            <button
+                                title="Underline"
+                                aria-label="Underline"
+                                disabled={formattingDisabled}
+                                aria-pressed={underlinePressed}
+                                data-action="format"
+                                data-value="underline"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                <u>U</u>
+                            </button>
+                        </div>
+                        <details class="more inspector-details">
+                            <summary
+                                title="Alignment, lists and more formatting"
+                                onmousedown={captureSelection}
+                                onkeydown={handleMoreKeydown}
+                            >
+                                More
+                            </summary>
+                            <div class="more-menu" role="group" aria-label="More formatting">
+                                <button
+                                    data-action="format"
+                                    data-value="justifyLeft"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Align left</button
+                                ><button
+                                    data-action="format"
+                                    data-value="justifyCenter"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Align centre</button
+                                ><button
+                                    data-action="format"
+                                    data-value="justifyRight"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Align right
+                                </button>
+                                <button
+                                    data-action="format"
+                                    data-value="insertUnorderedList"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Bulleted list</button
+                                ><button
+                                    data-action="format"
+                                    data-value="insertOrderedList"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Numbered list
+                                </button>
+                                <button
+                                    data-action="format"
+                                    data-value="strikeThrough"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Strikethrough</button
+                                ><button
+                                    data-action="format"
+                                    data-value="superscript"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Superscript</button
+                                ><button
+                                    data-action="format"
+                                    data-value="subscript"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Subscript</button
+                                ><button
+                                    data-action="format"
+                                    data-value="removeFormat"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Clear formatting
+                                </button>
+                                <div class="text-swatches" role="group" aria-label="Text colours">
+                                    <button
+                                        aria-label="Black text"
+                                        data-action="color"
+                                        data-command="foreColor"
+                                        data-value="#111111"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Black</button
+                                    ><button
+                                        aria-label="Navy text"
+                                        data-action="color"
+                                        data-command="foreColor"
+                                        data-value="#183452"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Navy</button
+                                    ><button
+                                        aria-label="Blue text"
+                                        data-action="color"
+                                        data-command="foreColor"
+                                        data-value="#235fa4"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Blue</button
+                                    ><button
+                                        aria-label="Green text"
+                                        data-action="color"
+                                        data-command="foreColor"
+                                        data-value="#236b4a"
+                                        onclick={handleAction}
+                                        onmousedown={keepSelection}
+                                    >
+                                        Green
+                                    </button>
+                                </div>
+                                <p class="colour-help">Choose a colour, then Apply.</p>
+                                <div class="colour-field">
+                                    <label for="text-colour-hex">Text colour</label>
+                                    <div class="colour-controls">
+                                        <input
+                                            type="color"
+                                            aria-label="Choose custom text colour"
+                                            data-property="textColor"
+                                            value={textColorSwatch}
+                                            disabled={formattingDisabled}
+                                            oninput={handleColorDraft}
+                                            onchange={handleColorDraft}
+                                        />
+                                        <input
+                                            id="text-colour-hex"
+                                            class="colour-hex"
+                                            type="text"
+                                            aria-label="Text colour hex"
+                                            data-hex="textColor"
+                                            data-property="textColor"
+                                            data-command="foreColor"
+                                            value={textColor}
+                                            maxlength="7"
+                                            spellcheck="false"
+                                            disabled={formattingDisabled}
+                                            oninput={handleColorDraft}
+                                            onkeydown={handleColorKeydown}
+                                        />
+                                        <button
+                                            class="colour-apply"
+                                            aria-label="Apply text colour"
+                                            data-property="textColor"
+                                            data-command="foreColor"
+                                            disabled={formattingDisabled}
+                                            onmousedown={keepSelection}
+                                            onclick={handleColorApply}
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="colour-field">
+                                    <label for="highlight-colour-hex">Highlight</label>
+                                    <div class="colour-controls">
+                                        <input
+                                            type="color"
+                                            aria-label="Choose custom highlight colour"
+                                            data-property="highlightColor"
+                                            value={highlightColorSwatch}
+                                            disabled={formattingDisabled}
+                                            oninput={handleColorDraft}
+                                            onchange={handleColorDraft}
+                                        />
+                                        <input
+                                            id="highlight-colour-hex"
+                                            class="colour-hex"
+                                            type="text"
+                                            aria-label="Highlight colour hex"
+                                            data-hex="highlightColor"
+                                            data-property="highlightColor"
+                                            data-command="hiliteColor"
+                                            value={highlightColor}
+                                            maxlength="7"
+                                            spellcheck="false"
+                                            disabled={formattingDisabled}
+                                            oninput={handleColorDraft}
+                                            onkeydown={handleColorKeydown}
+                                        />
+                                        <button
+                                            class="colour-apply"
+                                            aria-label="Apply highlight colour"
+                                            data-property="highlightColor"
+                                            data-command="hiliteColor"
+                                            disabled={formattingDisabled}
+                                            onmousedown={keepSelection}
+                                            onclick={handleColorApply}
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </section>
+
+                    <template if:true={hasSelection}>
+                        <details class="inspector-details">
+                            <summary>Arrange {selection.label}</summary>
+                            <div class="arrange" role="group" aria-label="Arrange selected block">
+                                <button
+                                    data-action="move"
+                                    data-value="up"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                    disabled={cannotMoveUp}
+                                >
+                                    ↑ Move up</button
+                                ><button
+                                    data-action="move"
+                                    data-value="down"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                    disabled={cannotMoveDown}
+                                >
+                                    ↓ Move down</button
+                                ><button data-action="duplicate" onclick={handleAction} onmousedown={keepSelection}>
+                                    Duplicate</button
+                                ><button
+                                    class="remove"
+                                    data-action="remove"
+                                    onclick={handleAction}
+                                    onmousedown={keepSelection}
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                            <button
+                                class="text-button"
+                                data-action="after"
+                                onclick={handleAction}
+                                onmousedown={keepSelection}
+                            >
+                                ＋ Add text below
+                            </button>
+                            <template if:true={imageSelected}
+                                ><label class="stacked"
+                                    >Image width (in)<input
+                                        type="number"
+                                        min="0.1"
+                                        step="any"
+                                        value={imageWidth}
+                                        aria-label="Image width in inches"
+                                        onchange={handleImageWidth} /></label
+                            ></template>
+                        </details>
                         <details class="inspector-details">
                             <summary>Placement</summary>
                             <label class="stacked"
@@ -594,8 +659,8 @@
                         </details>
                     </template>
                     <template if:false={hasSelection}
-                        ><h2>Make it yours</h2>
-                        <p>Click text to edit it. Click a table or image to arrange it.</p>
+                        ><h2>Start your document</h2>
+                        <p>Click the page and type. Use @ to add content. Select text to format it here.</p>
                         <button class="text-button" data-action="panel" data-value="insert" onclick={handleAction}>
                             Add text, a table or an image</button
                         ><button class="text-button" data-action="panel" data-value="tags" onclick={handleAction}>

@@ -5,6 +5,7 @@ import getSnippets from '@salesforce/apex/DocGenSnippetController.getSnippets';
 import getSnippet from '@salesforce/apex/DocGenSnippetController.getSnippet';
 import saveSnippet from '@salesforce/apex/DocGenSnippetController.saveSnippet';
 import getReadiness from '@salesforce/apex/DocGenGettingStartedController.getReadiness';
+import getAssets from '@salesforce/apex/DocGenController.getAssets';
 
 const slug = (text) =>
     (text || '')
@@ -28,6 +29,19 @@ export default class DocGenSnippetAssets extends LightningElement {
     canEdit = false;
     wiredCatalog;
     keyTouched = false;
+    previewRevision = 0;
+    imageUrls = {};
+    @wire(getAssets) imageCatalog({ data }) {
+        if (data)
+            this.imageUrls = Object.fromEntries(
+                data
+                    .filter((asset) => asset.latestVersionCvId)
+                    .map((asset) => [
+                        asset.assetKey.toLowerCase(),
+                        '/sfc/servlet.shepherd/version/download/' + asset.latestVersionCvId
+                    ])
+            );
+    }
     @wire(getReadiness) readiness({ data }) {
         if (data) {
             this.canCreate = !!data.canCreateAssets;
@@ -210,6 +224,7 @@ export default class DocGenSnippetAssets extends LightningElement {
             });
             this.dirty = false;
             this.status = 'Saved. Future documents using this tag will use this revision.';
+            this.previewRevision++;
             await refreshApex(this.wiredCatalog);
         } catch (e) {
             this.error = message(e);

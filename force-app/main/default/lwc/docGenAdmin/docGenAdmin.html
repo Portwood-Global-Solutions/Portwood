@@ -488,10 +488,10 @@
                                                     class="slds-var-m-right_x-small"
                                                 ></lightning-icon>
                                                 You get a clean page in the visual designer. Click anywhere and type,
-                                                drag in blocks and merge tags, or press&nbsp;<code>&#96;</code>&nbsp;for
-                                                the insert menu. All of your object's usable fields and its main child
-                                                lists are queried automatically, so the whole tag palette is ready to
-                                                drop in — fine-tune anytime under Query Configuration.
+                                                drag in blocks and merge tags, or press&nbsp;<code>@</code>&nbsp;for the
+                                                insert menu. All of your object's usable fields and its main child lists
+                                                are queried automatically, so the whole tag palette is ready to drop in
+                                                — fine-tune anytime under Query Configuration.
                                             </p>
                                         </div>
                                         <template if:true={isRecordDataSource}>
@@ -2028,7 +2028,7 @@
                                         class="dg-fmt-btn dg-panel-btn"
                                         data-panel="insert"
                                         onclick={handlePanelToggle}
-                                        title="Insert blocks, sections, tables — searchable. Or just type ` or [ in the page."
+                                        title="Insert blocks, sections, tables — searchable. Or type @ in the page."
                                     >
                                         + Insert
                                     </button>
@@ -2186,7 +2186,7 @@
                                             </button>
                                         </div>
                                     </template>
-                                    <!-- Notion-style slash-command menu: type "/" in the page -->
+                                    <!-- Type @ to search insert commands and preview snippets. -->
                                     <template if:true={slashMenu}>
                                         <div class="dg-slash-menu" style={slashMenu.posStyle} role="menu">
                                             <div class="dg-slash-menu-head">
@@ -2222,11 +2222,24 @@
                                                         key={opt.key}
                                                         class={opt.itemClass}
                                                         data-key={opt.key}
+                                                        data-snippet-key={opt.snippetKey}
+                                                        aria-label={opt.accessibleLabel}
                                                         onmousedown={handleFmtMouseDown}
                                                         onclick={handleSlashItemClick}
                                                     >
-                                                        <span class="dg-slash-item-label">{opt.label}</span>
-                                                        <span class="dg-slash-item-group">{opt.group}</span>
+                                                        <template if:true={opt.isSnippet}>
+                                                            <span
+                                                                class="dg-slash-snippet-preview"
+                                                                data-slash-snippet={opt.snippetKey}
+                                                                aria-hidden="true"
+                                                                lwc:dom="manual"
+                                                            ></span>
+                                                            <span class="dg-slash-snippet-meta">Snippet</span>
+                                                        </template>
+                                                        <template if:false={opt.isSnippet}>
+                                                            <span class="dg-slash-item-label">{opt.label}</span>
+                                                            <span class="dg-slash-item-group">{opt.group}</span>
+                                                        </template>
                                                     </button>
                                                 </template>
                                             </template>
@@ -3606,23 +3619,96 @@
                                                         >
                                                     </select></label
                                                 >
-                                                <label class="pw-colour-label"
-                                                    >Border colour<input
-                                                        type="color"
-                                                        aria-label="Border colour"
-                                                        value={borderColorValue}
-                                                        onmousedown={handleColorPickMouseDown}
-                                                        onchange={handleBorderColorChange}
-                                                /></label>
-                                                <label class="pw-colour-label"
-                                                    >Cell fill<input
-                                                        type="color"
-                                                        aria-label="Cell fill"
-                                                        value="#f2f4f7"
-                                                        data-taction="cellFill"
-                                                        onmousedown={handleColorPickMouseDown}
-                                                        onchange={handleWorkspaceTableControl}
-                                                /></label>
+                                                <div class="pw-table-colour">
+                                                    <label for="table-border-hex">Border colour</label>
+                                                    <div class="pw-table-colour-controls">
+                                                        <input
+                                                            type="color"
+                                                            aria-label="Choose border colour"
+                                                            value={workspaceBorderColorSwatch}
+                                                            data-color-property="workspaceBorderColor"
+                                                            onmousedown={handleColorPickMouseDown}
+                                                            onfocus={handleColorPickMouseDown}
+                                                            oninput={handleWorkspaceTableColorDraft}
+                                                            onchange={handleWorkspaceTableColorDraft}
+                                                        />
+                                                        <input
+                                                            id="table-border-hex"
+                                                            type="text"
+                                                            aria-label="Border colour hex"
+                                                            value={workspaceBorderColor}
+                                                            maxlength="7"
+                                                            spellcheck="false"
+                                                            data-color-property="workspaceBorderColor"
+                                                            data-table-color-hex="workspaceBorderColor"
+                                                            onmousedown={handleColorPickMouseDown}
+                                                            onfocus={handleColorPickMouseDown}
+                                                            oninput={handleWorkspaceTableColorDraft}
+                                                            onkeydown={handleWorkspaceTableColorKeydown}
+                                                        />
+                                                        <button
+                                                            class="pw-table-colour-apply"
+                                                            aria-label="Apply border colour"
+                                                            data-color-property="workspaceBorderColor"
+                                                            onmousedown={handleFmtMouseDown}
+                                                            onclick={handleWorkspaceTableColorApply}
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="pw-table-colour">
+                                                    <label for="table-fill-hex">Cell fill</label>
+                                                    <div class="pw-table-colour-controls">
+                                                        <input
+                                                            type="color"
+                                                            aria-label="Choose cell fill"
+                                                            value={workspaceFillColorSwatch}
+                                                            data-color-property="workspaceFillColor"
+                                                            onmousedown={handleColorPickMouseDown}
+                                                            onfocus={handleColorPickMouseDown}
+                                                            oninput={handleWorkspaceTableColorDraft}
+                                                            onchange={handleWorkspaceTableColorDraft}
+                                                        />
+                                                        <input
+                                                            id="table-fill-hex"
+                                                            type="text"
+                                                            aria-label="Cell fill hex"
+                                                            value={workspaceFillColor}
+                                                            maxlength="7"
+                                                            spellcheck="false"
+                                                            data-color-property="workspaceFillColor"
+                                                            data-table-color-hex="workspaceFillColor"
+                                                            onmousedown={handleColorPickMouseDown}
+                                                            onfocus={handleColorPickMouseDown}
+                                                            oninput={handleWorkspaceTableColorDraft}
+                                                            onkeydown={handleWorkspaceTableColorKeydown}
+                                                        />
+                                                    </div>
+                                                    <div class="pw-table-colour-actions">
+                                                        <button
+                                                            class="pw-table-colour-apply"
+                                                            aria-label="Apply cell fill"
+                                                            title="Apply fill to the selected cells"
+                                                            data-color-property="workspaceFillColor"
+                                                            onmousedown={handleFmtMouseDown}
+                                                            onclick={handleWorkspaceTableColorApply}
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                        <button
+                                                            class="pw-table-colour-apply"
+                                                            aria-label="Apply cell fill to row"
+                                                            title="Apply fill to every cell in the active row"
+                                                            data-color-property="workspaceFillColor"
+                                                            data-fill-scope="row"
+                                                            onmousedown={handleFmtMouseDown}
+                                                            onclick={handleWorkspaceTableColorApply}
+                                                        >
+                                                            Apply to Row
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <button
                                                     class="pw-panel-action"
                                                     data-taction="cellFill"
@@ -3650,8 +3736,8 @@
                                                 <details class="pw-panel-disclosure">
                                                     <summary>More elements</summary>
                                                     <p class="dg-float-panel-tip">
-                                                        Tip: type <code>&#96;</code> or <code>[</code> anywhere in the
-                                                        page for this menu at your cursor.
+                                                        Tip: type <code>@</code> anywhere in the page for this menu at
+                                                        your cursor.
                                                     </p>
                                                     <template for:each={filteredBlockSections} for:item="section">
                                                         <div key={section.key} class="dg-tag-section">
@@ -3680,8 +3766,8 @@
                                             </template>
                                             <template if:false={useModernDesigner}>
                                                 <p class="dg-float-panel-tip">
-                                                    Tip: type <code>&#96;</code> or <code>[</code> anywhere in the page
-                                                    for this menu at your cursor.
+                                                    Tip: type <code>@</code> anywhere in the page for this menu at your
+                                                    cursor.
                                                 </p>
                                                 <template for:each={filteredBlockSections} for:item="section">
                                                     <div key={section.key} class="dg-tag-section">
@@ -3935,8 +4021,8 @@
                                         >
                                         <template if:true={isPanelSnippets}>
                                             <p class="dg-float-panel-tip">
-                                                Insert a shared section as a tag. Its full content appears in PDF
-                                                preview. Edit the shared section in Assets → Terms &amp; snippets.
+                                                Insert a shared section to see its text on the page. Double-click it to
+                                                edit its tag. Update shared wording in Assets → Terms &amp; snippets.
                                             </p>
                                             <template if:true={snippetLoadError}
                                                 ><p role="alert">{snippetLoadError}</p></template

@@ -16,6 +16,7 @@ export function containsNode(root, node) {
 export function selectedBlock(node, surface) {
     let element = node?.nodeType === 3 ? node.parentElement : node;
     if (!element || !containsNode(surface, element) || element === surface) return null;
+    element = element.closest?.('[data-dg-snippet]') || element;
     const table = element.closest?.('table');
     if (table && containsNode(surface, table)) return table;
     if (element.tagName === 'IMG') {
@@ -26,6 +27,35 @@ export function selectedBlock(node, surface) {
     }
     const block = element.closest?.(BLOCKS);
     return block && block !== surface ? block : null;
+}
+
+/** Rendered snippet HTML is a view of a reference, never authored document content.
+ * Collapse it BEFORE parsing HTML so block fragments inside inline tags cannot
+ * restructure paragraphs during save, undo, or duplication. Read strings rather
+ * than cloning browser-created contenteditable nodes (which LWS can omit). */
+export function designerMarkup(root, outer = false) {
+    let markup = outer ? root.outerHTML : root.innerHTML;
+    const pills = [...(root.matches?.('[data-dg-tag]') ? [root] : []), ...root.querySelectorAll('[data-dg-tag]')];
+    for (const pill of pills) {
+        const tag = pill.getAttribute('data-dg-snippet') ? pill.getAttribute('data-dg-tag') : pill.textContent;
+        if (!/^\{%snippet:/i.test(tag || '') || pill.closest('[data-dg-tag]') !== pill) continue;
+        const reference = root.ownerDocument.createElement('span');
+        reference.setAttribute('data-dg-tag', 'true');
+        reference.setAttribute('contenteditable', 'false');
+        reference.textContent = tag;
+        for (const property of ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'color']) {
+            const value = pill.style.getPropertyValue(property);
+            if (value) reference.style.setProperty(property, value);
+        }
+        if (pill.hasAttribute('data-dg-highlight')) {
+            reference.setAttribute('data-dg-highlight', 'true');
+            reference.style.backgroundColor = pill.style.backgroundColor;
+        }
+        const face = pill.getAttribute('data-pw-font-face');
+        if (face) reference.setAttribute('data-pw-font-face', face);
+        markup = markup.replace(pill.outerHTML, () => reference.outerHTML);
+    }
+    return markup;
 }
 
 function marker(node) {
@@ -84,7 +114,7 @@ export function duplicateBlock(block) {
     const markup = units[index]
         .map((node) => {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- Read-only serialization of existing authored elements.
-            const elementHtml = node.outerHTML;
+            const elementHtml = node.nodeType === 1 ? designerMarkup(node, true) : null;
             return elementHtml || node.textContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         })
         .join('');
@@ -208,24 +238,54 @@ export function bookmarkRange(surface, range) {
         }
         return indices;
     };
+    const textOffset = (node, offset) => {
+        const prefix = surface.ownerDocument.createRange();
+        prefix.selectNodeContents(surface);
+        prefix.setEnd(node, offset);
+        return prefix.toString().length;
+    };
     return {
         start: path(range.startContainer),
         end: path(range.endContainer),
         startOffset: range.startOffset,
-        endOffset: range.endOffset
+        endOffset: range.endOffset,
+        startText: textOffset(range.startContainer, range.startOffset),
+        endText: textOffset(range.endContainer, range.endOffset)
     };
 }
 
 export function restoreRange(surface, bookmark) {
     if (!bookmark) return null;
     const resolve = (path) => path.reduce((node, index) => node?.childNodes[index], surface);
-    const start = resolve(bookmark.start),
-        end = resolve(bookmark.end);
-    if (!start || !end) return null;
     const length = (node) => (node.nodeType === 3 ? node.nodeValue.length : node.childNodes.length);
+    // HTML serialization merges adjacent text nodes, so a path can resolve to a
+    // different node after Undo. Validate it against the logical text position.
+    const point = (path, offset, textOffset) => {
+        const node = resolve(path);
+        if (node) {
+            const at = Math.min(offset, length(node));
+            if (!Number.isFinite(textOffset)) return { node, offset: at };
+            const prefix = surface.ownerDocument.createRange();
+            prefix.selectNodeContents(surface);
+            prefix.setEnd(node, at);
+            if (prefix.toString().length === textOffset) return { node, offset: at };
+        }
+        if (!Number.isFinite(textOffset)) return null;
+        const walker = surface.ownerDocument.createTreeWalker(surface, 4);
+        let remaining = textOffset;
+        while (walker.nextNode()) {
+            const text = walker.currentNode;
+            if (remaining <= text.nodeValue.length) return { node: text, offset: remaining };
+            remaining -= text.nodeValue.length;
+        }
+        return null;
+    };
+    const start = point(bookmark.start, bookmark.startOffset, bookmark.startText);
+    const end = point(bookmark.end, bookmark.endOffset, bookmark.endText);
+    if (!start || !end) return null;
     const range = surface.ownerDocument.createRange();
-    range.setStart(start, Math.min(bookmark.startOffset, length(start)));
-    range.setEnd(end, Math.min(bookmark.endOffset, length(end)));
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
     return range;
 }
 

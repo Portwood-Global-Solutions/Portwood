@@ -10,8 +10,10 @@ This review branch adds **Assets → Terms & snippets**. Save a section once and
 
 1. Open **Portwood → Assets → Terms & snippets → New shared content**.
 2. Name the section, choose an optional category, and write it. **HTML source** supports exact inline formatting and tables. The tag key is permanent once saved; the name can change.
-3. Save and **Copy tag**. In Designer use **Insert → Shared content**, or paste the tag on its own line in an HTML template. The keyboard insert menu also lists active sections.
-4. Preview a PDF with a sample record. The Designer keeps the reference as an atomic chip; the PDF includes the entire section.
+3. Search the Assets list to see formatted previews before opening a section. Inactive sections remain visible to their authors, and saving a revision refreshes the result preview.
+4. Save and **Copy tag**. In Designer use **Insert → Shared content**, type **@** and search by name, tag key or category, or paste the tag on its own line. The @ menu shows HTML previews of active sections.
+5. The canvas displays the section's formatted HTML as one read-only reference. Double-click it to edit the merge tag; **Enter** or the closing **}** restores the preview. Save, source view, duplication and undo retain the reference rather than copying the shared wording into the template.
+6. Preview a PDF with a sample record to check merged fields, fonts and final pagination.
 
 Use categories such as Terms & Conditions, Payment instructions, Disclaimers, or Closing sections. These share the same HTML snippet asset type.
 
@@ -69,7 +71,12 @@ Source examples: [Quote HTML](examples/SharedTermsQuote.html), [terms fragment](
 - `scripts/e2e-07-syntax7.apex`: standalone normal/giant extraction and latest-revision regression; fixture writes roll back.
 - `node scripts/qa/shared-content-check.mjs`: actual Assets component state, save failure recovery, history restoration and reader/busy restrictions.
 - `node scripts/qa/designer-editing-check.mjs`: shared insertion and saved-tag preservation, plus the existing Designer editing cases.
+- `node scripts/qa/designer-pill-boundary-check.mjs`: tag editing and exits, rendered snippet references, source round-trips, lazy @ previews, request races and missing-content recovery.
+- `node scripts/qa/assets-preview-check.mjs`: lazy snippet result previews, revision refresh and stale-response protection, image resolution, and exact-face font samples.
+- `node scripts/qa/designer-snippet-browser-check.mjs --org portwood-proposal`: eight live keyboard/mouse checks for @ content previews, rendered canvas sections, tag editing, undo/redo, source preservation and persisted reference-only saves. Creates development QA fixtures.
+- `node scripts/qa/assets-preview-browser-check.mjs --org portwood-proposal`: seven live checks for active/inactive result previews, editor selection, saving a new revision, real downloaded font samples, search and empty results. Creates development QA fixtures and requires registered previewable fonts.
 - Native standard and explicitly launched batch Quote PDF proofs include merged terms, all three line items, correct Salesforce totals and embedded Poppins Italic. Chunk-boundary tests verify balanced tbody/tfoot wrappers; font/glyph preparation happens after row injection. The batch proof uses three lines, not a new high-volume benchmark.
 - Final scoped validation: 212 Apex tests passed; 180 merge-tag checks passed with four existing scope skips; syntax6 9/9 and syntax7 3/3; 50 Designer and five Assets authoring Node scenarios. New snippet controller/service coverage is 95%/96%.
+- Preview follow-up in `portwood-proposal`: all 22 current `DocGenSnippetTest` methods passed, including inactive authoring previews and nested expansion. The current Designer editing check has 57 scenarios, and the live snippet/Assets checks above passed with actual private snippet revisions and registered font Files.
 
 See [FEATURE_REVIEW.md](FEATURE_REVIEW.md) for combined branch validation and remaining managed-package release gates.

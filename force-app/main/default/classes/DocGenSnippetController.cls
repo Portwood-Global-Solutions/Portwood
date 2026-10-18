@@ -34,6 +34,28 @@ public with sharing class DocGenSnippetController {
             'mergeTag' => DocGenSnippetService.mergeTag(a.Asset_Key__c)
         };
     }
+    /** Canvas-only preview. Use the same active, sharing-checked expansion as document generation. */
+    @AuraEnabled
+    public static String getSnippetPreview(String assetKey) {
+        try {
+            String key = assetKey == null ? '' : assetKey.trim().toLowerCase();
+            if (!Pattern.matches('[a-z0-9][a-z0-9-]{0,39}', key))
+                throw new DocGenException('Use a shared content tag like {%snippet:standard-terms}.');
+            return DocGenSnippetService.expand(DocGenSnippetService.mergeTag(key));
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e.getMessage());
+        }
+    }
+    /** Authoring previews also include inactive root snippets, using their latest private revision. */
+    @AuraEnabled
+    public static String getSnippetLibraryPreview(Id assetId) {
+        try {
+            Map<String, Object> snippet = getSnippet(assetId, null);
+            return DocGenSnippetService.expand(DocGenSnippetService.validate((String) snippet.get('html')));
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e.getMessage());
+        }
+    }
     private static DocGen_Asset__c asset(Id assetId, Boolean lockRow) {
         DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, ASSET_FIELDS);
         List<DocGen_Asset__c> rows;

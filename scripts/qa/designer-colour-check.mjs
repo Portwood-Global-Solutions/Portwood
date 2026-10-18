@@ -15,8 +15,9 @@ function productionMethod(name, document) {
         .slice(start, end)
         .trim()
         .replace(name + '(', 'function(');
-    return new Function('styleRange', 'document', 'window', 'return (' + source + ');')(
+    return new Function('styleRange', 'editTableGrid', 'document', 'window', 'return (' + source + ');')(
         model.styleRange,
+        model.editTableGrid,
         document,
         document.defaultView
     );
@@ -197,6 +198,113 @@ function editor(html) {
     assert.equal(root.innerHTML, '<p>Replaced</p>', 'A stale range cannot colour another document.');
     assert.equal(snapshots.length, 0);
     assert.equal(messages.length, 1, 'Missing selection receives a visible instruction.');
+}
+{
+    const { document, root, harness, select, selection, snapshots, messages } = editor(
+        '<table><thead><tr><th colspan="2">Heading</th><th>Other heading</th></tr></thead><tbody><tr><td>One</td><td>Two</td><td>Untouched</td></tr><tr><td>Other row</td><td>Still plain</td><td>Also plain</td></tr></tbody></table>'
+    );
+    const cells = [...root.querySelectorAll('td')];
+    select(cells[0].firstChild);
+    harness._caret.cellEl = cells[0];
+    harness._cellSel = cells.slice(0, 2);
+    harness.useModernDesigner = true;
+    harness.template = document;
+    harness._borderPrefs = { width: '0.75', color: '#666666' };
+    harness.workspaceFillColor = '#f2f4f7';
+    harness.workspaceBorderColor = '#666666';
+    harness._selectedTableCell = () => harness._cellSel?.[0] || harness._caret?.cellEl;
+    harness._clampTablesToCanvas = () => {};
+    for (const method of [
+        '_normalizeTableColor',
+        'handleWorkspaceTableColorDraft',
+        'handleWorkspaceTableColorApply',
+        'handleWorkspaceTableColorKeydown',
+        'handleTableAction',
+        '_applyBorders'
+    ])
+        harness[method] = productionMethod(method, document);
+    const inputs = {};
+    for (const property of ['workspaceFillColor', 'workspaceBorderColor']) {
+        const input = document.createElement('input');
+        input.dataset.tableColorHex = property;
+        input.dataset.colorProperty = property;
+        document.querySelector('aside').append(input);
+        inputs[property] = input;
+    }
+    const fill = inputs.workspaceFillColor;
+    harness.handleColorPickMouseDown();
+    selection.removeAllRanges();
+    fill.focus();
+    fill.value = '#abc';
+    const before = root.innerHTML;
+    harness.handleWorkspaceTableColorDraft({ currentTarget: fill });
+    assert.equal(root.innerHTML, before, 'Choosing a cell fill is only a draft.');
+    assert.equal(snapshots.length, 0);
+    harness.handleWorkspaceTableColorApply({ currentTarget: fill });
+    assert.equal(cells[0].style.backgroundColor, 'rgb(170, 187, 204)');
+    assert.equal(cells[1].style.backgroundColor, 'rgb(170, 187, 204)');
+    assert.equal(cells[2].style.backgroundColor, '', 'Fill reaches only the selected cells.');
+    assert.equal(snapshots.length, 1, 'Apply captures one undo step.');
+    assert.equal(snapshots[0], before);
+    harness._cellSel = [cells[2]];
+    harness.handleWorkspaceTableColorApply({ currentTarget: fill });
+    assert.equal(
+        cells[2].style.backgroundColor,
+        'rgb(170, 187, 204)',
+        'Apply reuses the same colour without another change event.'
+    );
+    harness._cellSel = cells.slice(0, 2);
+    const border = inputs.workspaceBorderColor;
+    border.focus();
+    border.value = '#235fa4';
+    const beforeBorder = root.innerHTML;
+    harness.handleWorkspaceTableColorDraft({ currentTarget: border });
+    assert.equal(root.innerHTML, beforeBorder, 'Choosing a border colour does not restyle the document.');
+    assert.equal(harness._borderPrefs.color, '#666666');
+    harness._lastBorderMode = 'bordersNone';
+    harness.handleWorkspaceTableColorKeydown({ key: 'Enter', currentTarget: border, preventDefault() {} });
+    assert.equal(cells[0].style.borderColor, 'rgb(35, 95, 164)');
+    assert.equal(cells[1].style.borderColor, 'rgb(35, 95, 164)');
+    assert.equal(cells[2].style.border, '', 'Border Apply respects a multiple-cell selection.');
+    assert.equal(snapshots.at(-1), beforeBorder);
+    harness._cellSel = [cells[1], cells[4]];
+    const beforeRow = root.innerHTML;
+    const beforeRowCaptures = snapshots.length;
+    fill.value = '#cfe2f3';
+    harness.handleWorkspaceTableColorDraft({ currentTarget: fill });
+    assert.equal(root.innerHTML, beforeRow, 'Row fill also waits for explicit application.');
+    const rowApply = { currentTarget: { dataset: { colorProperty: 'workspaceFillColor', fillScope: 'row' } } };
+    harness.handleWorkspaceTableColorApply(rowApply);
+    assert(cells.slice(0, 3).every((cell) => cell.style.backgroundColor === 'rgb(207, 226, 243)'));
+    assert(
+        cells.slice(3).every((cell) => cell.style.backgroundColor === ''),
+        'Row fill never spills into other selected rows.'
+    );
+    assert.equal(snapshots.length, beforeRowCaptures + 1, 'The entire row is one undo step.');
+    assert.equal(snapshots.at(-1), beforeRow);
+    assert.equal(harness.workspaceStatus, 'Row fill applied');
+    harness._cellSel = [root.querySelector('th')];
+    harness.handleWorkspaceTableColorApply(rowApply);
+    assert(
+        [...root.querySelectorAll('th')].every((cell) => cell.style.backgroundColor === 'rgb(207, 226, 243)'),
+        'Apply to Row includes header cells and cells spanning several columns, and reuses the selected colour.'
+    );
+    const captures = snapshots.length;
+    fill.value = 'invalid';
+    harness.handleWorkspaceTableColorDraft({ currentTarget: fill });
+    harness.handleWorkspaceTableColorApply({ currentTarget: fill });
+    assert.equal(fill.validity.customError, true);
+    assert.equal(snapshots.length, captures, 'Invalid colour creates no document edit.');
+    fill.value = '#ffffff';
+    harness.handleWorkspaceTableColorDraft({ currentTarget: fill });
+    assert.equal(fill.validity.customError, false);
+    root.innerHTML = '<p>Different document</p>';
+    harness.handleWorkspaceTableColorApply({ currentTarget: fill });
+    assert.equal(snapshots.length, captures, 'Detached cells cannot receive a colour.');
+    assert.equal(messages.length, 1);
+    console.log(
+        'PASS Table colours: draft-only pickers, Apply/Enter, selected cells, whole-row fill, header cells, same-colour reuse, border visibility, validation, undo capture and stale-cell protection.'
+    );
 }
 console.log(
     'PASS Designer colours: explicit Apply, hex validation/Enter, repeated colour, captured selection, native-command independence, exact text/merge fields/font bindings, table text, undo snapshot and stale-range protection.'

@@ -31,6 +31,10 @@ export default class DocGenFontAssets extends LightningElement {
     reviewed = false;
     canManage = CAN_MANAGE;
     loaded = new Set();
+    previewErrors = [];
+    _previewRequests = new Map();
+    _faceObserver;
+    _connected = false;
     loading = true;
     get working() {
         return this.busy || this.loading;
@@ -39,10 +43,13 @@ export default class DocGenFontAssets extends LightningElement {
         return !this.loading && !this.hasFaces;
     }
     disconnectedCallback() {
+        this._connected = false;
+        this._faceObserver?.disconnect();
         clearTimeout(this.pollTimer);
         if (this.pollResolve) this.pollResolve();
     }
     async connectedCallback() {
+        this._connected = true;
         await this.refresh();
     }
     async refresh() {
@@ -71,6 +78,8 @@ export default class DocGenFontAssets extends LightningElement {
             className: f.key === this.selectedKey ? 'face face_selected' : 'face',
             selected: f.key === this.selectedKey,
             detail: `${f.weight} / ${f.style}`,
+            previewStyle: `font-family:'${f.previewFamily}';font-weight:${f.weight};font-style:${f.style};font-synthesis:none;`,
+            canPreview: !!f.previewUrl && !this.previewErrors.includes(f.key),
             statusLabel: this.statusLabel(f.status)
         }));
     }
@@ -235,14 +244,45 @@ export default class DocGenFontAssets extends LightningElement {
     }
     async preview() {
         const f = this.selected;
-        if (f?.previewUrl && !this.loaded.has(f.key)) {
-            try {
-                await loadFontFace(f);
-                this.loaded.add(f.key);
-            } catch (e) {
-                this.error = 'The browser preview could not load the font File: ' + this.err(e);
-            }
+        await this.loadPreview(f);
+        if (f && this.previewErrors.includes(f.key)) this.error = 'The browser preview could not load this font File.';
+    }
+    loadPreview(face) {
+        if (!face?.previewUrl || this.loaded.has(face.key)) return Promise.resolve();
+        if (!this._previewRequests.has(face.key)) {
+            const request = loadFontFace(face)
+                .then(() => {
+                    if (this._connected) this.loaded.add(face.key);
+                })
+                .catch(() => {
+                    if (this._connected && !this.previewErrors.includes(face.key))
+                        this.previewErrors = [...this.previewErrors, face.key];
+                });
+            this._previewRequests.set(face.key, request);
         }
+        return this._previewRequests.get(face.key);
+    }
+    renderedCallback() {
+        this._faceObserver?.disconnect();
+        this._faceObserver = null;
+        const list = this.template.querySelector('.faces');
+        if (!list) return;
+        if (typeof IntersectionObserver === 'undefined') {
+            for (const face of this.rows) this.loadPreview(face);
+            return;
+        }
+        this._faceObserver = new IntersectionObserver(
+            (entries) => {
+                if (!this._connected) return;
+                for (const entry of entries) {
+                    if (!entry.isIntersecting) continue;
+                    this.loadPreview(this.faces.find((face) => face.key === entry.target.dataset.key));
+                    this._faceObserver.unobserve(entry.target);
+                }
+            },
+            { root: list, rootMargin: '80px' }
+        );
+        for (const button of list.querySelectorAll('.face')) this._faceObserver.observe(button);
     }
     openUpload() {
         this.showUpload = true;
