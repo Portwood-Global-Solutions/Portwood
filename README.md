@@ -573,9 +573,17 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
-The next **3.60.0 testing beta** includes the Designer/Assets work and fixes for prepared-PDF verification links, Parallel signer notification names and HTML rich-text File images. The replacement package build is pending; install details will be recorded here after it succeeds.
+**3.60.0.3** (`04tVx000001AX5NIAW`) includes the Designer/Assets work and fixes for prepared-PDF verification links, Parallel signer notification names and HTML rich-text File images. Built from source commit `52bc9a3b53d30da3fdcdd76ee4e4871fe8f1e271` with released ancestor **3.59.0.2**.
 
-This beta is for scratch-org and sandbox subscriber installation, uninstallation and reinstallation testing. It is unpromoted and validation-skipped; production release checks remain outstanding. An installed beta must be uninstalled before installing another version; preserve test data/configuration and remove package permission assignments first. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
+[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW)
+
+```bash
+sf package install --package 04tVx000001AX5NIAW --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+```
+
+Validation: fresh non-AI installation, **98/98 namespaced regression tests**, and **8/8 functional PDF smoke checks** pass. The source checks also pass **390 signature** and **78 HTML/image** tests.
+
+This beta is for scratch-org and sandbox subscriber installation, uninstallation and reinstallation testing. It is unpromoted and validation-skipped; production release checks and a separately validated build remain outstanding. An installed beta must be uninstalled before installing another version; preserve test data/configuration and remove package permission assignments first. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
 
 ## Version History
 
@@ -583,6 +591,7 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
+| v3.60.0 | Testing beta 3.60.0.3 — PR #465         | `04tVx000001AX5NIAW` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |

@@ -2,6 +2,9 @@
 
 ## v3.60.0 — Designer, assets and verified signing (testing beta)
 
+Testing beta **3.60.0.3** · 2026-10-19 · `04tVx000001AX5NIAW` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW).
+
 ### Added
 
 - Reusable terms and HTML snippet assets with stable `{%snippet:key}` tags, private Salesforce File revision history, visual/source editing and Designer insertion. Normal and giant-query HTML/Canvas PDFs expand shared content before record merging.
@@ -19,11 +22,11 @@
 - Registered-font PDF previews accept ordinary `!important` colour and layout rules while preserving the exact approved font face.
 - Signature source changes remain inside the request composer, and the font library scrolls within its list rather than extending the entire workspace.
 
-This is an unpromoted, validation-skipped testing beta for [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465), covering scratch-org and sandbox installation, uninstallation and reinstallation. The replacement build ID and install link will be recorded after package creation succeeds.
+This is an unpromoted, validation-skipped testing beta for [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465), covering scratch-org and sandbox installation, uninstallation and reinstallation. Built from source commit `52bc9a3b53d30da3fdcdd76ee4e4871fe8f1e271`.
 
-Validation: **390 scoped signature tests** and **78 HTML/image tests** pass. The actual runner retains the source image pixels in Download, Save to Record and Save & Download; the asset-tag control also passes as a non-owner Standard User. The BYOD certificate check validates its real PDF link annotation. The offline metadata audit retains **51 existing findings**. The exact Bentley asset/scheduled-only case and the image-aging report in #467 remain unconfirmed.
+Validation: **390 scoped signature tests** and **78 HTML/image tests** pass. The actual runner retains the source image pixels in Download, Save to Record and Save & Download; the asset-tag control also passes as a non-owner Standard User. The BYOD certificate check validates its real PDF link annotation. Fresh non-AI subscriber installation succeeds with **98/98 namespaced regression tests** and **8/8 functional PDF smoke checks**. The offline metadata audit retains **51 existing findings**. The exact Bentley asset/scheduled-only case and the image-aging report in #467 remain unconfirmed.
 
-Full release validation, promotion and released-package upgrade checks remain outstanding. Feature review and earlier validation are recorded in `docs/FEATURE_REVIEW.md`.
+A production release requires a separately validated build; full release validation, promotion and released-package upgrade checks remain outstanding. Feature review and earlier validation are recorded in `docs/FEATURE_REVIEW.md`.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
