@@ -2,6 +2,20 @@
 
 Deployed to `portwood-proposal` on October 18, 2026, on `feat/byod-signature-sender`.
 
+The public demo link is currently **blocked by Chrome Safe Browsing as phishing**.
+Do not bypass that warning or distribute the guest links while it is unresolved.
+The page-behavior results below do not establish browser security clearance.
+Use the authenticated **Portwood → Brands** preview to review the appearance.
+
+The hostname matches Salesforce's `SiteDetail.SecureUrl`. On October 18, an HTTP
+inspection found no redirect away from that host; the four served vendor/Brand
+script resources matched the checked-in files. Google's public hostname report
+returned **No available data**, while Chrome's interstitial explicitly said
+**recently found phishing**. These observations do not identify the cause or prove
+the detection is a false positive. Site-owner Security Issues review is still
+required before treating the public demo as ready to share. See
+[Google's Security Issues guidance](https://support.google.com/webmasters/answer/9044101).
+
 Open **Portwood → Brands** and search for **Cedar Community - live theme**. The
 library shows a signing-page thumbnail. Select the Brand to edit its identity,
 page settings, and previews. Under **Signing pages → Live Salesforce theme**, the

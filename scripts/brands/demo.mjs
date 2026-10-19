@@ -5,6 +5,9 @@ import { chromium } from 'playwright';
 import { runAnonymous, debugMap } from '../qa/lib/sf.mjs';
 
 // Explicit developer demo, never part of the product or automatic QA runner.
+// This checks behavior only. Headless Chromium does not establish Chrome Safe
+// Browsing clearance; the public demo is currently blocked in Chrome. See docs.
+
 const org = process.argv[2] || 'portwood-proposal';
 const output = new URL('../../output/brand-live-demo/', import.meta.url);
 await mkdir(output, { recursive: true });
