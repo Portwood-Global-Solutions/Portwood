@@ -14,6 +14,9 @@
 // Same security model as DocGenSignatureController (also without sharing): the
 // capability is the validated signing token upstream, not record sharing.
 public without sharing class DocGenSignatureEmailService {
+    @TestVisible
+    private static List<Messaging.SingleEmailMessage> senderNotificationMessages;
+
     /**
      * Data wrapper for each signer email to send.
      */
@@ -440,6 +443,9 @@ public without sharing class DocGenSignatureEmailService {
                 email.setOrgWideEmailAddressId(owaId);
             }
 
+            if (senderNotificationMessages != null) {
+                senderNotificationMessages.add(email);
+            }
             Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email }, false);
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: Sender notification failed: ' + e.getMessage());

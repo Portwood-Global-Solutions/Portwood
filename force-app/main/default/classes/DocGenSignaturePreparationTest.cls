@@ -223,9 +223,18 @@ private class DocGenSignaturePreparationTest {
 
     @IsTest
     static void sendCreatesCoordinateFieldsAndGatesSigningOrder() {
+        insert new DocGen_Settings__c(
+            SetupOwnerId = UserInfo.getOrganizationId(),
+            Experience_Site_Url__c = 'example.my.site.com/community/s/'
+        );
         Account record = account();
         Map<String, Object> draft = draft(record.Id);
         Id requestId = (Id) draft.get('draftId');
+        System.assertEquals(
+            null,
+            [SELECT Secure_Token__c FROM DocGen_Signature_Request__c WHERE Id = :requestId].Secure_Token__c,
+            'Drafts created before this fix must also acquire a verification token when sent'
+        );
         Map<String, Object> result = DocGenSignaturePreparationController.sendDraft(
             record.Id,
             requestId,
@@ -236,6 +245,31 @@ private class DocGenSignaturePreparationTest {
         System.assertEquals(0, Limits.getEmailInvocations(), 'Internal preview must not send invitations');
         List<DocGen_Signer__c> people = signers(requestId);
         System.assertEquals(2, people.size());
+        String verificationToken = [
+            SELECT Secure_Token__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :requestId
+        ]
+        .Secure_Token__c;
+        System.assertNotEquals(
+            null,
+            verificationToken,
+            'BYOD needs the same request verification capability as templates'
+        );
+        System.assert(Pattern.matches('[a-fA-F0-9]{64}', verificationToken));
+        for (DocGen_Signer__c person : people)
+            System.assertNotEquals(
+                person.Secure_Token__c,
+                verificationToken,
+                'A verification link must not grant signing access'
+            );
+        List<DocGenSignatureSenderController.SignerResult> links = (List<DocGenSignatureSenderController.SignerResult>) result.get(
+            'signers'
+        );
+        System.assert(
+            links[0].signerUrl.contains(DocGenSignatureSenderController.getSigningPdfPagePath() + '?token='),
+            'BYOD must use the same guided PDF signing page as Portwood templates'
+        );
         DocGenSignatureController.SignatureInitResponse init = DocGenSignatureController.validateToken(
             people[0].Secure_Token__c
         );
@@ -244,9 +278,22 @@ private class DocGenSignaturePreparationTest {
         System.assertEquals(null, init.documentUrl, 'Original PDF must not acquire a public file distribution');
         System.assertEquals(0, [SELECT COUNT() FROM ContentDistribution]);
         System.assertEquals(false, DocGenSignatureController.validateToken(people[1].Secure_Token__c).isValid);
+        Map<String, Object> certificate = DocGenSignatureController.getSignatureCertificate(people[0].Secure_Token__c);
+        System.assertEquals('Prepared Agreement', certificate.get('documentTitle'));
         System.assertEquals(
-            'Prepared Agreement',
-            DocGenSignatureController.getSignatureCertificate(people[0].Secure_Token__c).get('documentTitle')
+            ('https://example.my.site.com/community' +
+                Page.DocGenVerify.getUrl() +
+                '?token=' +
+                verificationToken)
+                .toLowerCase(),
+            String.valueOf(certificate.get('verifyUrl')).toLowerCase(),
+            'The shared completion certificate needs an absolute verify URL, including for a bare host or /s entry'
+        );
+        System.assertEquals(false, certificate.get('othersAllSigned'));
+        System.assertEquals(null, DocGenSignatureService.buildVerifyUrl(requestId, null));
+        System.assertEquals(
+            null,
+            DocGenSignatureService.buildVerifyUrl(requestId, 'https://<CONFIGURE_SITE_URL_IN_SETUP>')
         );
         List<Map<String, Object>> fields = DocGenSignatureController.getSignerPlacements(people[0].Secure_Token__c);
         System.assertEquals(2, fields.size());
@@ -265,11 +312,17 @@ private class DocGenSignaturePreparationTest {
 
     @IsTest
     static void sequentialCompletionPreservesOriginalAndRejectsStaleOutput() {
+        insert new DocGen_Settings__c(
+            SetupOwnerId = UserInfo.getOrganizationId(),
+            Experience_Site_Url__c = 'https://example.my.site.com'
+        );
         Account record = account();
         Map<String, Object> draft = draft(record.Id);
         Id requestId = (Id) draft.get('draftId');
         DocGenSignaturePreparationController.sendDraft(record.Id, requestId, 0, preparation(draft));
         List<DocGen_Signer__c> people = signers(requestId);
+        String verificationToken = [SELECT Secure_Token__c FROM DocGen_Signature_Request__c WHERE Id = :requestId]
+        .Secure_Token__c;
         completeFields(people[0].Secure_Token__c);
         Boolean rejected = false;
         try {
@@ -304,10 +357,21 @@ private class DocGenSignaturePreparationTest {
         System.assertNotEquals(null, receipt.branding);
         System.assertEquals(null, receipt.documentUrl);
         System.assertEquals(null, receipt.signerEmail);
+        Map<String, Object> certificate = DocGenSignatureController.getSignatureCertificate(people[1].Secure_Token__c);
+        System.assertEquals(
+            true,
+            certificate.get('othersAllSigned'),
+            'The last signer must append the shared certificate'
+        );
+        System.assertEquals(
+            ('https://example.my.site.com' + Page.DocGenVerify.getUrl() + '?token=' + verificationToken).toLowerCase(),
+            String.valueOf(certificate.get('verifyUrl')).toLowerCase()
+        );
         completeFields(people[1].Secure_Token__c);
+        String finalPdf = EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4\nfinal document with certificate\n%%EOF'));
         DocGenSignatureController.SavePdfSignatureResult second = DocGenSignatureController.savePreparedSignedPdf(
             people[1].Secure_Token__c,
-            PDF,
+            finalPdf,
             true,
             '',
             '',
@@ -349,6 +413,29 @@ private class DocGenSignaturePreparationTest {
             'Completed prepared sessions must resolve the final PDF, including its certificate'
         );
         System.assertEquals(2, [SELECT COUNT() FROM DocGen_Signature_Audit__c WHERE Signature_Request__c = :requestId]);
+        System.assertEquals(
+            2,
+            DocGenAuthenticatorController.verifyByRequestId(verificationToken).size(),
+            'The certificate link must resolve the full BYOD signing roster'
+        );
+        String finalHash = EncodingUtil.convertToHex(
+            Crypto.generateDigest('SHA-256', EncodingUtil.base64Decode(finalPdf))
+        );
+        System.assertEquals(
+            2,
+            DocGenAuthenticatorController.verifyDocument(finalHash).size(),
+            'Dropping the delivered PDF on the same verify page must verify all BYOD signers'
+        );
+        System.assertEquals(
+            0,
+            DocGenAuthenticatorController.verifyDocument(
+                    EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', Blob.valueOf('changed PDF')))
+                )
+                .size(),
+            'A modified PDF must not verify'
+        );
+        System.assertEquals(0, DocGenAuthenticatorController.verifyByRequestId(people[0].Secure_Token__c).size());
+        System.assertEquals(0, DocGenAuthenticatorController.verifyByRequestId(String.valueOf(requestId)).size());
         System.assertEquals(1, [SELECT COUNT() FROM ContentDocumentLink WHERE LinkedEntityId = :record.Id]);
     }
 

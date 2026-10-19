@@ -571,6 +571,12 @@ No user can access Portwood data without an explicitly assigned permission set. 
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
+## PR #465 testing beta
+
+The next **3.60.0 testing beta** includes the Designer/Assets work and fixes for prepared-PDF verification links, Parallel signer notification names and HTML rich-text File images. The replacement package build is pending; install details will be recorded here after it succeeds.
+
+This beta is for scratch-org and sandbox subscriber installation, uninstallation and reinstallation testing. It is unpromoted and validation-skipped; production release checks remain outstanding. An installed beta must be uninstalled before installing another version; preserve test data/configuration and remove package permission assignments first. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
+
 ## Version History
 
 The optional **Portwood Agentforce Extension** versions independently: **v1.1.0** `04tVx000000zxUbIAI` (latest, free, no installation key), v1.0.0 `04tVx000000s80bIAA`.

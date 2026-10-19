@@ -7520,8 +7520,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     /**
      * Returns the <img> tag with src rewritten for HTML-template output, or
      * empty string when the image can't be rendered (data URI, unresolvable).
-     * Already-relative /sfc/ URLs and arbitrary http(s) URLs pass through
-     * unchanged.
+     * Salesforce File URLs use relative paths for the PDF renderer, matching
+     * buildPdfImageMap on the Word path. Other URLs pass through unchanged.
      */
     private static String rewriteRichTextImgForHtml(String imgTag) {
         Integer srcIdx = imgTag.indexOfIgnoreCase('src=');
@@ -7551,6 +7551,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         if (src.toLowerCase().startsWith('/sfc/')) {
             return imgTag;
+        }
+        String approvedSrc = DocGenAssetPolicy.assetUrl(src);
+        if (approvedSrc != null && new Url(approvedSrc).getPath().startsWithIgnoreCase('/sfc/servlet.shepherd/')) {
+            // Absolute File URLs can render as a broken-image placeholder in
+            // synchronous Aura downloads even when the queued save succeeds.
+            // Validate the host before removing it; external URLs must never
+            // become trusted local paths. Preserve query parameters and sizing.
+            String relativeSrc = approvedSrc.substring(approvedSrc.indexOf('/', 8));
+            return imgTag.substring(0, valStart) + relativeSrc.escapeHtml4() + imgTag.substring(valEnd);
         }
         if (src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
             Integer refStart = src.toLowerCase().indexOf('refid=') + 6;

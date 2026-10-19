@@ -2283,6 +2283,7 @@
                             // whoever has to check the document. drawWrappedText returns
                             // the y AFTER the last line it drew, so the sentence below
                             // moves down instead of landing on top of a two-line URL.
+                            var verifyTop = y + 8;
                             y = drawWrappedText(page, String(cert.verifyUrl), {
                                 x: 54,
                                 y: y,
@@ -2291,6 +2292,19 @@
                                 color: brand,
                                 lineHeight: 10
                             });
+                            // A wrapped URL is not reliably auto-linked by PDF readers.
+                            // Keep the complete destination on one clickable annotation.
+                            page.node.addAnnot(
+                                doc.context.register(
+                                    doc.context.obj({
+                                        Type: 'Annot',
+                                        Subtype: 'Link',
+                                        Rect: [CERT_LEFT, y + 8, CERT_LEFT + CERT_LINE_WIDTH, verifyTop],
+                                        Border: [0, 0, 0],
+                                        A: { S: 'URI', URI: PDFLib.PDFString.of(String(cert.verifyUrl)) }
+                                    })
+                                )
+                            );
                             y -= 2;
                             page.drawText('Drop the PDF you received at that link to confirm its integrity.', {
                                 x: 54,

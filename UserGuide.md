@@ -39,6 +39,8 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 
 [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Support](https://portwood.dev/support) · [Expert Services](https://portwood.dev/services)
 
+> **PR #465 testing beta:** the 3.60.0 beta is for sandbox/scratch-org install, uninstall and reinstall testing. It includes verification links on prepared-PDF certificates, correct Parallel signer notification names and the HTML rich-text File image fix. Use the [beta testing instructions](README.md#pr-465-testing-beta); package details are recorded there after the replacement build succeeds. Full release validation and promotion are pending.
+
 ---
 
 ## Table of contents

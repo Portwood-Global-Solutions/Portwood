@@ -1497,6 +1497,7 @@ public without sharing class DocGenSignatureController {
         try {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
+            pdfEvent.Signer_Id__c = signer.Id;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             EventBus.publish(pdfEvent);
         } catch (Exception e) {
@@ -2175,6 +2176,7 @@ public without sharing class DocGenSignatureController {
         try {
             DocGen_Signature_PDF__e notifyEvent = new DocGen_Signature_PDF__e();
             notifyEvent.Request_Id__c = signer.Signature_Request__c;
+            notifyEvent.Signer_Id__c = signer.Id;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             EventBus.publish(notifyEvent);
         } catch (Exception e) {
@@ -2900,6 +2902,7 @@ public without sharing class DocGenSignatureController {
         if (snapshotBacked || !result.isComplete) {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
+            pdfEvent.Signer_Id__c = signer.Id;
             EventBus.publish(pdfEvent);
         }
 
@@ -3271,6 +3274,7 @@ public without sharing class DocGenSignatureController {
             try {
                 DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
                 pdfEvent.Request_Id__c = signer.Signature_Request__c;
+                pdfEvent.Signer_Id__c = signer.Id;
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 EventBus.publish(pdfEvent);
             } catch (Exception seqEx) {

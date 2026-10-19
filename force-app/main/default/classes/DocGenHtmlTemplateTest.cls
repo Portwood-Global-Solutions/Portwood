@@ -777,6 +777,35 @@ private class DocGenHtmlTemplateTest {
         System.assert(result.contains('Before') && result.contains('After'), 'Surrounding HTML preserved: ' + result);
     }
 
+    @IsTest
+    static void richTextAbsoluteFileUrlUsesRelativePdfPath() {
+        String path = '/sfc/servlet.shepherd/version/download/068000000000001';
+        String suffix = '?operationContext=S1&amp;dgsz=128x150';
+        String attributes = ' width="128" height="150" alt="Related image"/>';
+        String relativeTag = '<img src="' + path + suffix + '"' + attributes;
+        String absoluteTag = '<img src="' + URL.getOrgDomainUrl().toExternalForm() + path + suffix + '"' + attributes;
+
+        System.assertEquals(
+            '<p>Before ' + relativeTag + ' After</p>',
+            DocGenService.convertRichTextToHtml('<p>Before ' + absoluteTag + ' After</p>'),
+            'HTML rich-text File images need the same relative PDF URL as Word images, preserving size and query'
+        );
+        System.assertEquals(relativeTag, DocGenService.convertRichTextToHtml(relativeTag));
+    }
+
+    @IsTest
+    static void richTextExternalFileUrlDoesNotBecomeLocal() {
+        String html = '<img src="https://untrusted.example/sfc/servlet.shepherd/version/download/068000000000001"/>';
+        String converted = DocGenService.convertRichTextToHtml(html);
+        System.assertEquals(html, converted, 'Do not turn a foreign File-shaped URL into a trusted local resource');
+        try {
+            DocGenAssetPolicy.assertHtmlResources(converted);
+            System.assert(false, 'The existing asset policy must still reject the foreign host');
+        } catch (DocGenException expected) {
+            System.assert(expected.getMessage().contains('Salesforce-hosted assets'));
+        }
+    }
+
     // Lightning inline rich-text images use ContentReference IDs (0EM prefix),
     // which aren't queryable as ContentVersion/ContentDocument. We can't rewrite
     // those to /sfc/, so leave the original absolute rtaImage URL — Blob.toPdf

@@ -495,11 +495,9 @@ public without sharing class DocGenSignatureService {
      * Site/SiteDetail query within buildVerificationBlockHtml).
      */
     public static String buildVerifyUrl(Id requestId, String siteUrl) {
-        if (String.isBlank(siteUrl)) {
+        siteUrl = DocGenSignatureSenderController.normalizeSiteBaseUrl(siteUrl);
+        if (String.isBlank(siteUrl) || siteUrl.contains('<')) {
             return null;
-        }
-        if (siteUrl.endsWith('/')) {
-            siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
         }
         String ns = DocGenSignatureService.class.getName().substringBefore('.');
         String verifyPage = (String.isNotBlank(ns) && ns != 'DocGenSignatureService')

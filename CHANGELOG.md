@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v3.60.0 — Designer, assets and verified signing (testing beta)
 
 ### Added
 
@@ -12,11 +12,18 @@
 
 ### Fixed
 
+- Prepared PDF signatures follow the shared verification flow, with normalized site URLs and a clickable verification link on the completion certificate ([#476](https://github.com/Portwood-Global-Solutions/Portwood/issues/476)).
+- Parallel completion emails name the person who caused each event, including out-of-order signing and batched events, instead of choosing the highest sort-order signed person ([#477](https://github.com/Portwood-Global-Solutions/Portwood/issues/477)).
+- HTML rich-text images using approved absolute Salesforce File URLs use relative PDF paths, so Download renders the image consistently with Save to Record ([#478](https://github.com/Portwood-Global-Solutions/Portwood/issues/478)).
 - Asset and rich-text images in native Word headers and footers resolve in PDF and DOCX output. Reusing one Salesforce File at different sizes preserves each authored size in PDFs.
 - Registered-font PDF previews accept ordinary `!important` colour and layout rules while preserving the exact approved font face.
 - Signature source changes remain inside the request composer, and the font library scrolls within its list rather than extending the entire workspace.
 
-Validation and remaining release checks are recorded in `docs/FEATURE_REVIEW.md`. These changes are under review; no new package version is published.
+This is an unpromoted, validation-skipped testing beta for [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465), covering scratch-org and sandbox installation, uninstallation and reinstallation. The replacement build ID and install link will be recorded after package creation succeeds.
+
+Validation: **390 scoped signature tests** and **78 HTML/image tests** pass. The actual runner retains the source image pixels in Download, Save to Record and Save & Download; the asset-tag control also passes as a non-owner Standard User. The BYOD certificate check validates its real PDF link annotation. The offline metadata audit retains **51 existing findings**. The exact Bentley asset/scheduled-only case and the image-aging report in #467 remain unconfirmed.
+
+Full release validation, promotion and released-package upgrade checks remain outstanding. Feature review and earlier validation are recorded in `docs/FEATURE_REVIEW.md`.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

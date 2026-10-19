@@ -316,6 +316,8 @@ global with sharing class DocGenSignaturePreparationController {
         DocGen_Signature_Request__c sent = new DocGen_Signature_Request__c(
             Id = draft.Id,
             Status__c = draft.Status__c,
+            // Mint at send time so resumed drafts also get the template flow's verify link.
+            Secure_Token__c = DocGenSignatureSenderController.generateRequestVerificationToken(),
             Signing_Order__c = draft.Signing_Order__c,
             PDF_Internal_Preview__c = draft.PDF_Internal_Preview__c,
             Expires_At__c = draft.Expires_At__c,
@@ -325,6 +327,7 @@ global with sharing class DocGenSignaturePreparationController {
             sent,
             new Set<String>{
                 'Status__c',
+                'Secure_Token__c',
                 'Signing_Order__c',
                 'PDF_Internal_Preview__c',
                 'Expires_At__c',

@@ -560,7 +560,7 @@ public with sharing class DocGenSignatureSenderController {
      * certificate's post-signing verification link (?token=). It is NOT a signing
      * token — it only gates read access to the signature audit roster.
      */
-    private static String generateRequestVerificationToken() {
+    public static String generateRequestVerificationToken() {
         Blob randomBytes = Crypto.generateAesKey(256);
         Blob hash = Crypto.generateDigest('SHA-256', randomBytes);
         return EncodingUtil.convertToHex(hash);
@@ -3299,6 +3299,13 @@ public with sharing class DocGenSignatureSenderController {
             siteUrl = 'https://<CONFIGURE_SITE_URL_IN_SETUP>';
         }
 
+        return normalizeSiteBaseUrl(siteUrl);
+    }
+
+    /** Shared by signing links and certificate verification links. */
+    public static String normalizeSiteBaseUrl(String siteUrl) {
+        if (String.isBlank(siteUrl))
+            return null;
         siteUrl = siteUrl.trim();
         if (!siteUrl.contains('://'))
             siteUrl = 'https://' + siteUrl;
