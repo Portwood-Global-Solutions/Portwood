@@ -85,7 +85,7 @@ try {
         );
         await page.goto('https://branding.test/sign?token=' + 'a'.repeat(64));
         await page.locator('#signing-brand-header').waitFor({ state: 'visible' });
-        checked('equal', await page.title(), 'Cedar Community | Document signing');
+        checked('equal', await page.title(), 'Cedar Community | Signing with Portwood DocGen');
         checked('equal', await page.locator('#signing-brand-title').textContent(), brand.title);
         checked('equal', await page.locator('#signing-brand-welcome').textContent(), brand.welcomeText);
         checked('equal', await page.locator('#signing-brand-support').getAttribute('href'), brand.supportUrl);

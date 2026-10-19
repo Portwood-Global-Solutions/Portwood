@@ -14,7 +14,7 @@
             <!-- Allow pinch-to-zoom so signers can inspect images, QR codes, and fine print
          at full fidelity on mobile instead of us shrinking the document to fit. -->
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Document Signature</title>
+            <title>Portwood DocGen | Document signing</title>
             <apex:slds />
 
             <style>
@@ -591,6 +591,10 @@
             <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
         <body>
+            <div class="signing-service" aria-label="Signing service">
+                <span id="signing-service-context">Document signing provided by</span>
+                <a href="https://portwood.dev/" target="_blank" rel="noopener noreferrer">Portwood DocGen</a>
+            </div>
             <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
             <header id="signing-brand-header" class="signing-brand-header" hidden="hidden">
                 <img id="signing-brand-logo" class="signing-brand-logo" alt="" hidden="hidden" />

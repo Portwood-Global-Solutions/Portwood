@@ -1,3 +1,24 @@
+.signing-service {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    background: #ffffff;
+    color: #43546a;
+    border-bottom: 1px solid #dce3ec;
+    font: 0.75rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow-wrap: anywhere;
+}
+.signing-service a {
+    color: #1b567a;
+    font-weight: 600;
+    text-decoration: underline;
+}
+.signing-service a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
 body.signing-branded {
     background: var(--signing-background);
     min-height: 100vh;

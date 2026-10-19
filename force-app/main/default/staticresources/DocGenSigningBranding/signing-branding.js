@@ -94,11 +94,12 @@
             body.classList.add('signing-branded');
             body.classList.toggle('signing-custom-layout', !!brand.page && page.layoutConfigured !== false);
             text('signing-brand-company', brand.companyName);
+            text('signing-service-context', brand.companyName ? 'Document signing for ' + brand.companyName + ' provided by' : 'Document signing provided by');
             text('signing-brand-title', brand.title);
             text('signing-brand-welcome', brand.welcomeText);
             text('signing-brand-footer-text', brand.footerText);
             if (brand.completionMessage) text('signing-completion-message', brand.completionMessage);
-            if (brand.companyName) document.title = brand.companyName + ' | Document signing';
+            if (brand.companyName) document.title = brand.companyName + ' | Signing with Portwood DocGen';
             image('signing-brand-logo', page.logoUrl || brand.logoUrl, '');
             image('signing-brand-banner', page.bannerUrl, page.bannerAlt);
             var support = document.getElementById('signing-brand-support');

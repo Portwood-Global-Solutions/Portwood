@@ -16,6 +16,18 @@ the detection is a false positive. Site-owner Security Issues review is still
 required before treating the public demo as ready to share. See
 [Google's Security Issues guidance](https://support.google.com/webmasters/answer/9044101).
 
+A correction is now deployed: both signing pages identify Portwood DocGen as the
+service provider and state its relationship to the customer Brand. This remains
+visible outside the customizable HTML, including invalid-link states. The default
+page title also identifies Portwood. This addresses the third-party labeling gap
+in [Google's published guidance](https://developers.google.com/search/docs/monitor-debug/security/social-engineering);
+it does not establish that this gap caused the detection or clear the warning.
+All **14 provider identity DOM checks** pass, and the deployed guest response
+contains the identification. A Google Safe Browsing re-evaluation request is
+prepared in Chrome. Submission and Google's classification decision are separate
+from deployment. The current Google account has no verified Search Console
+property available for this Site.
+
 Open **Portwood → Brands** and search for **Cedar Community - live theme**. The
 library shows a signing-page thumbnail. Select the Brand to edit its identity,
 page settings, and previews. Under **Signing pages → Live Salesforce theme**, the
