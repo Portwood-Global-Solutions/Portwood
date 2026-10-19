@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- Asset and rich-text images in native Word headers and footers resolve in PDF and DOCX output. Reusing one Salesforce File at different sizes preserves each authored size in PDFs.
 - Registered-font PDF previews accept ordinary `!important` colour and layout rules while preserving the exact approved font face.
 - Signature source changes remain inside the request composer, and the font library scrolls within its list rather than extending the entire workspace.
 

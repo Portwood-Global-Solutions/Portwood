@@ -4730,6 +4730,19 @@ public with sharing class DocGenHtmlRenderer {
         if (imageValue == null) {
             return '';
         }
+        if (imageValue.startsWith('/sfc/servlet.shepherd/version/download/')) {
+            // The PDF engine caches a mutable scaled image by URL. Reusing one
+            // File for a small header and a larger body image otherwise makes
+            // both take the same size. Give each authored size its own cache
+            // entry while still serving the original relative Salesforce URL.
+            imageValue +=
+                (imageValue.contains('?') ? '&amp;' : '?') +
+                'docgenSize=' +
+                (drawingXml.contains('DOCGEN_AUTOSIZE') ? 'auto' : 'fixed') +
+                widthPx +
+                'x' +
+                heightPx;
+        }
 
         // Sizing strategy: default to exact width/height from wp:extent — that's
         // the authoritative value Word stores for both template-embedded images

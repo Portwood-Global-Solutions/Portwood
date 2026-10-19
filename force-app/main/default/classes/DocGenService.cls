@@ -1093,6 +1093,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // Restore original path: word__document.xml → word/document.xml
                 String originalPath = key.replace('__', '/');
                 currentTemplateType = mr.templateType;
+                currentEntryName = originalPath;
                 String xml = mergeRunsInTags(rawXml);
                 xml = processXml(xml, recordDataMap);
                 mr.processedXmlEntries.put(originalPath, xml);
@@ -1143,29 +1144,46 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
 
-        if (mr.relsXml != null) {
-            for (Map<String, Object> img : pendingImages) {
-                // PowerPoint images live in ppt/slides/_rels/slideN.xml.rels,
-                // not the presentation-level rels — postProcessPowerPointSlides
-                // owns that wiring. Skip them here.
-                if (img.get('pptHandled') == true) {
-                    continue;
+        for (Map<String, Object> img : pendingImages) {
+            // PowerPoint images live in ppt/slides/_rels/slideN.xml.rels,
+            // not the presentation-level rels — postProcessPowerPointSlides
+            // owns that wiring. Skip them here.
+            if (img.get('pptHandled') == true) {
+                continue;
+            }
+            String relId = (String) img.get('relId');
+            String fName = (String) img.get('fileName');
+            String newRel =
+                '<Relationship Id="' +
+                relId +
+                '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
+                fName +
+                '"/>';
+            String partName = (String) img.get('wordPart');
+            if (String.isNotBlank(partName)) {
+                // Relationships belong to the part containing the drawing. Adding a
+                // header image to document.xml.rels leaves native DOCX images broken.
+                String relsPath = 'word/_rels/' + partName.substringAfterLast('/') + '.rels';
+                Blob existing = mr.passthroughEntries.get(relsPath);
+                String rels = existing == null
+                    ? '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+                    : existing.toString();
+                if (rels.trim().endsWith('/>')) {
+                    // An empty .rels root is commonly written as <Relationships/>.
+                    rels = rels.substring(0, rels.lastIndexOf('/>')) + '></Relationships>';
                 }
-                String relId = (String) img.get('relId');
-                String fName = (String) img.get('fileName');
-                String newRel =
-                    '<Relationship Id="' +
-                    relId +
-                    '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
-                    fName +
-                    '"/>';
+                mr.passthroughEntries.put(
+                    relsPath,
+                    Blob.valueOf(rels.replace('</Relationships>', newRel + '</Relationships>'))
+                );
+            } else if (mr.relsXml != null) {
                 mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
             }
         }
 
         if (collectRenderMaps) {
             for (Map<String, Object> img : pendingImages) {
-                String relId = (String) img.get('relId');
+                String relId = pendingImageRenderRelId(img);
                 if (img.containsKey('blob')) {
                     Blob imgBlob = (Blob) img.get('blob');
                     mr.imageBase64ByRelId.put(relId, EncodingUtil.base64Encode(imgBlob));
@@ -1178,6 +1196,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 }
             }
         }
+    }
+
+    /** Remember the Word part before later merges change currentEntryName. */
+    private static void registerPendingImage(Map<String, Object> image) {
+        if (
+            currentTemplateType == 'Word' &&
+            currentEntryName != null &&
+            (currentEntryName.startsWith('word/header') || currentEntryName.startsWith('word/footer')) &&
+            currentEntryName.endsWith('.xml')
+        ) {
+            image.put('wordPart', currentEntryName);
+        }
+        pendingImages.add(image);
+    }
+
+    /** Match combineXmlWithHeadersFooters' part-prefixed drawing references. */
+    private static String pendingImageRenderRelId(Map<String, Object> image) {
+        String partName = (String) image.get('wordPart');
+        String relId = (String) image.get('relId');
+        return String.isBlank(partName)
+            ? relId
+            : partName.substringAfterLast('/').substringBefore('.xml') + '_' + relId;
     }
 
     /**
@@ -1602,6 +1642,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     (name.startsWith('word/header') && name.endsWith('.xml')) ||
                     (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
+                    currentEntryName = name;
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
                     mr.processedXmlEntries.put(name, xml);
@@ -1626,6 +1667,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Process remaining merge tags (parent-level fields, other loops)
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         mr.documentXml = processedXml;
         mr.processedXmlEntries.put('word/document.xml', processedXml);
@@ -1915,6 +1957,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             } else {
                 String originalPath = key.replace('__', '/');
                 if (originalPath.startsWith('word/header') || originalPath.startsWith('word/footer')) {
+                    currentEntryName = originalPath;
                     rawXml = mergeRunsInTags(rawXml);
                     rawXml = processXml(rawXml, recordDataMap);
                     mr.processedXmlEntries.put(originalPath, rawXml);
@@ -1934,6 +1977,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         loopParts = null;
 
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         rawDocumentXml = null;
         recordDataMap = null;
@@ -1942,7 +1986,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Handle images
         for (Map<String, Object> img : pendingImages) {
-            String relId = (String) img.get('relId');
+            String relId = pendingImageRenderRelId(img);
             if (img.containsKey('url')) {
                 mr.imageUrlByRelId.put(relId, (String) img.get('url'));
             }
@@ -7363,9 +7407,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             if (!src.startsWith('data:')) {
                 imgData.put('url', src);
             }
-            pendingImages.add(imgData);
+            registerPendingImage(imgData);
         } else if (String.isNotBlank(src) && !src.startsWith('data:')) {
-            pendingImages.add(new Map<String, Object>{ 'relId' => relId, 'fileName' => fileName, 'url' => src });
+            registerPendingImage(new Map<String, Object>{ 'relId' => relId, 'fileName' => fileName, 'url' => src });
         } else {
             return null; // Can't resolve image at all
         }
@@ -7834,7 +7878,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             } else if (spec.sourceUrl != null) {
                 imgEntry.put('url', spec.sourceUrl);
             }
-            pendingImages.add(imgEntry);
+            registerPendingImage(imgEntry);
 
             // Compute image dimensions in EMU with intrinsic size detection and scaling.
             //
@@ -10196,6 +10240,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     (name.startsWith('word/header') && name.endsWith('.xml')) ||
                     (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
+                    currentEntryName = name;
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
                     mr.processedXmlEntries.put(name, xml);
@@ -10224,6 +10269,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Now process remaining merge tags (parent-level fields, other loops)
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         mr.documentXml = processedXml;
         mr.processedXmlEntries.put('word/document.xml', processedXml);
@@ -10234,47 +10280,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             mr.docTitle = (String) resolveValue(recordDataMap, 'Name');
         }
 
-        // Handle pending images
-        if (!pendingImages.isEmpty()) {
-            if (mr.contentTypesXml != null) {
-                if (!mr.contentTypesXml.contains('Extension="png"')) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace(
-                        '</Types>',
-                        '<Default Extension="png" ContentType="image/png"/></Types>'
-                    );
-                }
-                if (
-                    !mr.contentTypesXml.contains('Extension="jpeg"') && !mr.contentTypesXml.contains('Extension="jpg"')
-                ) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace(
-                        '</Types>',
-                        '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>'
-                    );
-                }
-            }
-            if (mr.relsXml != null) {
-                for (Map<String, Object> img : pendingImages) {
-                    String relId = (String) img.get('relId');
-                    String fName = (String) img.get('fileName');
-                    String newRel =
-                        '<Relationship Id="' +
-                        relId +
-                        '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
-                        fName +
-                        '"/>';
-                    mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
-                }
-            }
-            for (Map<String, Object> img : pendingImages) {
-                String relId = (String) img.get('relId');
-                if (img.containsKey('blob')) {
-                    mr.imageBase64ByRelId.put(relId, EncodingUtil.base64Encode((Blob) img.get('blob')));
-                }
-                if (img.containsKey('url')) {
-                    mr.imageUrlByRelId.put(relId, (String) img.get('url'));
-                }
-            }
-        }
+        // Share part-scoped image relationships and render IDs with normal merges.
+        applyPendingImages(mr, true);
 
         // Render to final format
         if (outputFormat == 'PDF' && templateType == 'Word') {
