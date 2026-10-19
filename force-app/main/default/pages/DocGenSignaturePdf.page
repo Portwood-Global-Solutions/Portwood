@@ -15,6 +15,7 @@
          at full fidelity on mobile instead of us shrinking the document to fit. -->
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
             <title>Document Signature</title>
+            <link id="brand-favicon" rel="icon" type="image/png" href="" />
             <apex:slds />
             <!-- PDF.js (legacy UMD build) — client-side render + text layer for
                  sign-spot positioning. Bundled as a static resource (no callout). -->
@@ -27,6 +28,7 @@
                     box-sizing: border-box;
                 }
                 body {
+                    --brand-color: #0176d3;
                     background-color: #f3f2f2;
                     font-family:
                         'Salesforce Sans',
@@ -39,13 +41,62 @@
                     padding: 0;
                     color: #181818;
                 }
+                .brand-header {
+                    width: 100%;
+                    max-width: 1600px;
+                    min-height: 58px;
+                    padding: 0.8rem 1.25rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.65rem;
+                    background: var(--brand-color);
+                    border-top: 4px solid var(--brand-color);
+                    border-radius: 8px 8px 0 0;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+                    color: #fff;
+                }
+                .brand-logo {
+                    max-height: 34px;
+                    max-width: 180px;
+                    object-fit: contain;
+                }
+                .brand-name {
+                    font-weight: 700;
+                }
+                .brand-divider {
+                    color: rgba(255, 255, 255, 0.72);
+                }
+                .brand-page-title {
+                    color: rgba(255, 255, 255, 0.9);
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
                 .page-wrapper {
                     min-height: 100vh;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
+                    justify-content: flex-start;
+                    padding: 0 1rem 1rem;
+                }
+                #state-verify,
+                #state-error,
+                #state-processing,
+                #state-success,
+                #state-waiting,
+                #state-decline {
+                    margin-top: 2rem;
+                }
+                #state-error,
+                #state-success {
+                    width: 100%;
+                    min-height: calc(100vh - 2rem);
+                    margin-top: 0;
+                    padding: 2rem 1rem;
+                    display: flex;
+                    align-items: center;
                     justify-content: center;
-                    padding: 1rem;
                 }
 
                 /* Card */
@@ -61,6 +112,7 @@
                     font-size: 1.25rem;
                     font-weight: 700;
                     margin: 0 0 0.25rem 0;
+                    color: var(--brand-color);
                 }
                 .sig-card .subtitle {
                     font-size: 0.875rem;
@@ -183,12 +235,12 @@
                     background: #f3f2f2;
                 }
                 .btn-brand {
-                    background: #0176d3;
+                    background: var(--brand-color);
                     color: #fff;
-                    border-color: #0176d3;
+                    border-color: var(--brand-color);
                 }
                 .btn-brand:hover {
-                    background: #014486;
+                    filter: brightness(0.88);
                 }
                 .btn-brand:disabled {
                     background: #c9c7c5;
@@ -230,7 +282,7 @@
                 /* Role Badge */
                 .role-badge {
                     display: inline-block;
-                    background: #0176d3;
+                    background: var(--brand-color);
                     color: #fff;
                     font-size: 0.75rem;
                     font-weight: 700;
@@ -242,7 +294,7 @@
 
                 /* Resend */
                 .resend-link {
-                    color: #0176d3;
+                    color: var(--brand-color);
                     cursor: pointer;
                     text-decoration: underline;
                     font-size: 0.8125rem;
@@ -267,42 +319,91 @@
                     border-radius: 8px;
                     padding: 2rem;
                     text-align: center;
+                    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
+                    position: relative;
+                    overflow: hidden;
                 }
                 .error-card {
-                    border: 1px solid #fca5a5;
+                    max-width: 560px;
+                    border: 1px solid #fecaca;
+                    background: linear-gradient(180deg, #ffffff 0%, #fff8f8 100%);
+                    border-top: 4px solid #dc2626;
+                    padding: 2.5rem 2.25rem;
                 }
                 .error-icon {
-                    font-size: 3rem;
-                    color: #ea001e;
-                    margin-bottom: 0.5rem;
+                    width: 64px;
+                    height: 64px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #ffe4e6;
+                    color: #b91c1c;
+                    font-size: 2rem;
+                    font-weight: 800;
+                    margin-bottom: 1.1rem;
+                    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.12);
                 }
                 .error-card h2 {
-                    font-size: 1.125rem;
+                    font-size: 1.35rem;
                     font-weight: 700;
-                    margin: 0 0 0.5rem 0;
-                    color: #ea001e;
+                    margin: 0 0 0.65rem 0;
+                    color: #7f1d1d;
                 }
                 .error-card p {
-                    color: #706e6b;
-                    margin: 0;
+                    color: #64748b;
+                    line-height: 1.6;
+                    margin: 0 auto;
+                    max-width: 390px;
+                }
+                .state-kicker {
+                    font-size: 0.7rem;
+                    font-weight: 800;
+                    letter-spacing: 0.12em;
+                    color: #64748b;
+                    margin-bottom: 0.35rem;
                 }
                 .success-card {
-                    border: 1px solid #91db8b;
+                    max-width: 560px;
+                    border: 1px solid #bbf7d0;
+                    background: linear-gradient(180deg, #fff 0%, #f8fffa 100%);
+                    border-top: 4px solid #16a34a;
+                    padding: 2.5rem 2.25rem;
                 }
                 .success-icon {
-                    font-size: 3rem;
-                    color: #2e844a;
-                    margin-bottom: 0.5rem;
+                    width: 64px;
+                    height: 64px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 50%;
+                    background: #dcfce7;
+                    color: #15803d;
+                    font-size: 2rem;
+                    font-weight: 800;
+                    margin-bottom: 1rem;
+                    box-shadow: 0 8px 20px rgba(22, 163, 74, 0.14);
+                }
+                .success-check {
+                    width: 26px;
+                    height: 14px;
+                    display: block;
+                    border-left: 4px solid #15803d;
+                    border-bottom: 4px solid #15803d;
+                    transform: rotate(-45deg) scale(1);
+                    transform-origin: center;
                 }
                 .success-card h2 {
-                    font-size: 1.125rem;
+                    font-size: 1.35rem;
                     font-weight: 700;
-                    margin: 0 0 0.5rem 0;
-                    color: #2e844a;
+                    margin: 0 0 0.65rem 0;
+                    color: var(--brand-color);
                 }
                 .success-card p {
-                    color: #706e6b;
-                    margin: 0;
+                    color: #64748b;
+                    line-height: 1.6;
+                    margin: 0 auto;
+                    max-width: 390px;
                 }
                 .waiting-card {
                     border: 1px solid #ffd27a;
@@ -316,7 +417,7 @@
                     font-size: 1.125rem;
                     font-weight: 700;
                     margin: 0 0 0.5rem 0;
-                    color: #fe9339;
+                    color: var(--brand-color);
                 }
                 .waiting-card p {
                     color: #706e6b;
@@ -329,6 +430,7 @@
                     font-size: 1.125rem;
                     font-weight: 700;
                     margin: 0.75rem 0 0.5rem 0;
+                    color: var(--brand-color);
                 }
                 .processing-card p {
                     color: #706e6b;
@@ -346,7 +448,7 @@
                     width: 40px;
                     height: 40px;
                     border: 4px solid #dddbda;
-                    border-top-color: #0176d3;
+                    border-top-color: var(--brand-color);
                     border-radius: 50%;
                     animation: spin 0.8s linear infinite;
                 }
@@ -379,7 +481,7 @@
 
                 /* Top bar */
                 .pdf-header {
-                    background: #fff;
+                    background: var(--brand-color);
                     padding: 1rem 1.5rem;
                     border-radius: 8px 8px 0 0;
                     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -387,6 +489,24 @@
                     align-items: center;
                     gap: 1rem;
                     flex-shrink: 0;
+                    color: #fff;
+                }
+                .pdf-brand-identity {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.65rem;
+                    flex-shrink: 0;
+                }
+                .pdf-brand-logo {
+                    max-height: 34px;
+                    max-width: 180px;
+                    object-fit: contain;
+                }
+                .pdf-brand-name {
+                    font-weight: 700;
+                }
+                .pdf-brand-divider {
+                    color: rgba(255, 255, 255, 0.72);
                 }
                 .pdf-header h2 {
                     font-size: 1rem;
@@ -397,6 +517,7 @@
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    color: #fff;
                 }
 
                 /* Document viewer area — DocGenPdfViewer.render() owns the inside of this box */
@@ -548,7 +669,8 @@
                 .modal-backdrop {
                     position: fixed;
                     inset: 0;
-                    background: rgba(0, 0, 0, 0.5);
+                    background: rgba(15, 23, 42, 0.58);
+                    backdrop-filter: blur(3px);
                     z-index: 9000;
                     display: flex;
                     align-items: center;
@@ -557,27 +679,28 @@
                 }
                 .modal-dialog {
                     background: #fff;
-                    border-radius: 8px;
-                    max-width: 480px;
+                    border-radius: 14px;
+                    max-width: 680px;
                     width: 100%;
                     max-height: calc(100vh - 2rem);
                     overflow-y: auto;
-                    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+                    box-shadow: 0 18px 55px rgba(15, 23, 42, 0.3);
                 }
                 .modal-header {
-                    padding: 1.25rem 1.5rem;
+                    padding: 1.4rem 1.75rem 1.2rem;
                     border-bottom: 1px solid #e5e5e5;
                     position: relative;
                 }
                 .modal-header h2 {
-                    font-size: 1.125rem;
+                    font-size: 1.35rem;
                     font-weight: 700;
                     margin: 0;
+                    color: var(--brand-color);
                 }
                 .modal-header .modal-subtitle {
-                    font-size: 0.8125rem;
+                    font-size: 0.9rem;
                     color: #706e6b;
-                    margin: 0.25rem 0 0 0;
+                    margin: 0.35rem 0 0 0;
                 }
                 .modal-close {
                     position: absolute;
@@ -585,7 +708,7 @@
                     right: 1rem;
                     background: none;
                     border: none;
-                    font-size: 1.25rem;
+                    font-size: 1.5rem;
                     line-height: 1;
                     color: #706e6b;
                     cursor: pointer;
@@ -595,14 +718,125 @@
                     color: #181818;
                 }
                 .modal-body {
-                    padding: 1.5rem;
+                    padding: 1.5rem 1.75rem 1.75rem;
                 }
                 .modal-footer {
-                    padding: 1rem 1.5rem;
+                    padding: 1rem 1.75rem;
                     border-top: 1px solid #e5e5e5;
+                    background: #fafbfc;
                     display: flex;
                     justify-content: flex-end;
                     gap: 0.5rem;
+                }
+                #sign-modal .form-group {
+                    margin-bottom: 1.25rem;
+                }
+                #sign-modal .form-group > label {
+                    font-size: 0.9rem;
+                    margin-bottom: 0.5rem;
+                }
+                #sign-modal .modal-body {
+                    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+                }
+                #sign-modal .modal-header {
+                    background: #ffffff;
+                }
+                #sign-modal .modal-close {
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 50%;
+                    transition:
+                        background 0.15s ease,
+                        color 0.15s ease;
+                }
+                #sign-modal .modal-close:hover {
+                    background: #f1f5f9;
+                    color: var(--brand-color);
+                }
+                #sign-modal #modal-draw-group {
+                    padding: 1rem;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 10px;
+                    background: #ffffff;
+                }
+                #sign-modal #modal-draw-group > label {
+                    color: #1e293b;
+                    font-weight: 700;
+                }
+                #sign-modal #modal-name-group {
+                    padding: 0.25rem 0;
+                }
+                #sign-modal #modal-typed-name:focus {
+                    border-color: var(--brand-color);
+                    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-color) 18%, transparent);
+                }
+                #sign-modal #modal-typed-name:disabled {
+                    background: #f1f5f9;
+                    color: #94a3b8;
+                    cursor: not-allowed;
+                }
+                #sign-modal #modal-draw-group.is-disabled {
+                    opacity: 0.58;
+                }
+                #sign-modal #modal-draw-group.is-disabled #modal-draw-canvas {
+                    cursor: not-allowed;
+                }
+                #sign-modal .modal-footer .btn:hover {
+                    transform: translateY(-1px);
+                }
+                #sign-modal .modal-footer .btn {
+                    transition:
+                        transform 0.15s ease,
+                        box-shadow 0.15s ease;
+                }
+                #sign-modal .form-input {
+                    min-height: 46px;
+                    border-radius: 7px;
+                }
+                #sign-modal .consent-row {
+                    margin-top: 1.5rem !important;
+                    padding: 1rem 1.1rem;
+                    border-radius: 8px;
+                    background: #f8fafc;
+                    border-color: #d9e2ec;
+                }
+                #sign-modal .consent-row label {
+                    font-size: 0.84rem;
+                    line-height: 1.5;
+                }
+                #sign-modal .modal-footer .btn {
+                    min-height: 44px;
+                    border-radius: 7px;
+                    padding-left: 1.25rem;
+                    padding-right: 1.25rem;
+                }
+                #modal-draw-canvas {
+                    border: 2px dashed #cbd5e1 !important;
+                    border-radius: 9px !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+                }
+                .signature-method-tabs {
+                    display: flex;
+                    gap: 0.5rem;
+                    padding: 0.25rem;
+                    margin-bottom: 1.25rem;
+                    background: #f1f5f9;
+                    border-radius: 9px;
+                }
+                .signature-method-tab {
+                    flex: 1;
+                    min-height: 40px;
+                    border: 0;
+                    border-radius: 7px;
+                    background: transparent;
+                    color: #64748b;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                .signature-method-tab.active {
+                    background: #fff;
+                    color: var(--brand-color);
+                    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
                 }
 
                 @media (max-width: 640px) {
@@ -636,6 +870,12 @@
         </head>
         <body>
             <div class="page-wrapper" id="page-wrapper">
+                <div id="brand-header" class="brand-header" style="display: none">
+                    <img id="brand-logo" class="brand-logo" alt="" style="display: none" />
+                    <span id="brand-name" class="brand-name"></span>
+                    <span id="brand-divider" class="brand-divider">&middot;</span>
+                    <span id="brand-page-title" class="brand-page-title"></span>
+                </div>
                 <!-- STATE: Loading -->
                 <div id="state-loading">
                     <div class="spinner-container"><div class="spinner"></div></div>
@@ -644,7 +884,8 @@
                 <!-- STATE: Error -->
                 <div id="state-error" style="display: none">
                     <div class="error-card">
-                        <div class="error-icon">&#9888;</div>
+                        <div class="error-icon" aria-hidden="true">!</div>
+                        <div class="state-kicker">ACTION REQUIRED</div>
                         <h2>Signature Error</h2>
                         <p id="error-message"></p>
                     </div>
@@ -695,6 +936,11 @@
                 <div id="state-pdf" style="display: none">
                     <div class="pdf-wrapper">
                         <div class="pdf-header">
+                            <div class="pdf-brand-identity">
+                                <img id="pdf-brand-logo" class="pdf-brand-logo" alt="" style="display: none" />
+                                <span id="pdf-brand-name" class="pdf-brand-name"></span>
+                                <span id="pdf-brand-divider" class="pdf-brand-divider">&middot;</span>
+                            </div>
                             <h2 id="pdf-doc-title">Document Signature</h2>
                             <span id="pdf-role-badge" class="role-badge" style="display: none"></span>
                         </div>
@@ -727,7 +973,8 @@
                 <!-- STATE: Success -->
                 <div id="state-success" style="display: none">
                     <div class="success-card">
-                        <div class="success-icon">&#10003;</div>
+                        <div class="success-icon" aria-hidden="true"><span class="success-check"></span></div>
+                        <div class="state-kicker">ALL DONE</div>
                         <h2>Signature Complete</h2>
                         <p>Your document has been signed and processed securely. You may close this window.</p>
                     </div>
@@ -772,7 +1019,7 @@
             <div id="sign-modal" class="modal-backdrop" style="display: none" role="dialog" aria-modal="true">
                 <div class="modal-dialog">
                     <div class="modal-header">
-                        <h2>Sign Document</h2>
+                        <h2 id="modal-title">Sign Document</h2>
                         <p class="modal-subtitle">Confirm your name and consent to sign electronically.</p>
                         <button id="modal-close" class="modal-close" type="button" aria-label="Close">&#10005;</button>
                     </div>
@@ -809,7 +1056,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="modal-name-group">
                             <label for="modal-typed-name">Type your full name to sign</label>
                             <input
                                 id="modal-typed-name"
@@ -904,7 +1151,7 @@
                     // on first render and cached.
                     var MODULE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
                     var WORKER_SRC = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
-                    var MAX_SCALE = 1.6;
+                    var MAX_SCALE = 1.8;
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
                     var pages = []; // { pageNum, viewport, textContent, wrapEl }
@@ -963,17 +1210,24 @@
                     function renderOnePage(pdf, pageNum, containerEl) {
                         return pdf.getPage(pageNum).then(function (page) {
                             var viewport = page.getViewport({ scale: fitScale(page, containerEl) });
+                            // Render at device-pixel density so text and fine signature fields
+                            // stay sharp on Retina/HiDPI displays while preserving the same
+                            // CSS dimensions for overlays and scrolling.
+                            var pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
+                            var renderViewport = page.getViewport({ scale: viewport.scale * pixelRatio });
                             var wrap = document.createElement('div');
                             wrap.className = 'dg-page-wrap';
                             wrap.style.width = viewport.width + 'px';
                             wrap.style.height = viewport.height + 'px';
                             var canvas = document.createElement('canvas');
-                            canvas.width = viewport.width;
-                            canvas.height = viewport.height;
+                            canvas.width = Math.ceil(renderViewport.width);
+                            canvas.height = Math.ceil(renderViewport.height);
+                            canvas.style.width = viewport.width + 'px';
+                            canvas.style.height = viewport.height + 'px';
                             wrap.appendChild(canvas);
                             containerEl.appendChild(wrap);
                             return page
-                                .render({ canvasContext: canvas.getContext('2d'), viewport: viewport })
+                                .render({ canvasContext: canvas.getContext('2d'), viewport: renderViewport })
                                 .promise.then(function () {
                                     return page.getTextContent();
                                 })
@@ -1235,10 +1489,15 @@
                         }
                         // The PDF view uses the full height, so align the wrapper to the top.
                         var pw = document.getElementById('page-wrapper');
+                        var brandHeader = document.getElementById('brand-header');
                         if (name === 'pdf') {
                             pw.style.justifyContent = 'flex-start';
+                            if (brandHeader) brandHeader.style.display = 'none';
+                        } else if (name === 'verify' || name === 'success' || name === 'error') {
+                            if (brandHeader) brandHeader.style.display = 'none';
                         } else {
                             pw.style.justifyContent = 'center';
+                            if (brandHeader && signerData) brandHeader.style.display = 'flex';
                         }
                         pw.style.padding = '1rem';
                     }
@@ -1277,6 +1536,8 @@
                     // (consent + finalize after all spots are signed), 'fields'
                     // (collect signer form fields up front, BEFORE any signing).
                     var modalMode = 'pdf';
+                    var legacyConsentStep = false;
+                    var signatureInputSource = null;
                     var activeSpot = null;
                     // Signer form fields (#161) are collected ONCE, up front — before the
                     // signer captures any signature — because the signature is the
@@ -1317,6 +1578,7 @@
                         '{!$RemoteAction.DocGenSignatureController.validateToken}',
                         token,
                         function (result, event) {
+                            if (result && (result.brandColor || result.brandName)) applyBrand(result);
                             if (event.status && result && result.isValid) {
                                 signerData = result;
                                 if (result.requiresPin) {
@@ -1335,6 +1597,10 @@
                                     initAfterVerification(result);
                                 }
                             } else {
+                                // Error responses can still contain the resolved brand.
+                                // Apply it before rendering the error state so the browser
+                                // tab keeps the company name and logo favicon.
+                                if (result) applyBrand(result);
                                 showError(
                                     result && result.errorMessage
                                         ? result.errorMessage
@@ -1347,8 +1613,9 @@
 
                     // ===== EMAIL VERIFICATION (PIN) =====
                     function initVerifyScreen(data) {
+                        applyBrand(data);
                         document.getElementById('verify-doc-title').textContent =
-                            data.documentTitle || 'Document Signature';
+                            data.brandName || 'Document Signature';
                         if (data.signerEmail) {
                             var parts = data.signerEmail.split('@');
                             document.getElementById('verify-email').placeholder =
@@ -1463,10 +1730,10 @@
 
                     // ===== AFTER VERIFICATION: SHOW PDF =====
                     function initAfterVerification(data) {
+                        applyBrand(data);
                         isMultiSigner = data.isSignerToken === true;
 
-                        document.getElementById('pdf-doc-title').textContent =
-                            data.documentTitle || 'Document Signature';
+                        document.getElementById('pdf-doc-title').textContent = data.brandName || 'Document Signature';
                         document.getElementById('pdf-signer-name').textContent = data.signerName || '';
                         if (data.roleName) {
                             var badge = document.getElementById('pdf-role-badge');
@@ -1504,6 +1771,45 @@
 
                         // Load and render the real PDF through the viewer abstraction.
                         loadPdf();
+                    }
+
+                    function applyBrand(data) {
+                        var color = data && data.brandColor ? data.brandColor : '#0176d3';
+                        document.documentElement.style.setProperty('--brand-color', color);
+                        if (document.body) document.body.style.setProperty('--brand-color', color);
+                        document.title = (data && data.brandName) || 'Document Signature';
+                        var header = document.getElementById('brand-header');
+                        if (!header || !data) return;
+                        var name = data.brandName || 'Portwood';
+                        var title = data.brandName || 'Document Signature';
+                        var favicon = document.getElementById('brand-favicon');
+                        if (favicon && data.brandLogoUrl) favicon.href = data.brandLogoUrl;
+                        var sameBrandTitle = name.trim().toLowerCase() === title.trim().toLowerCase();
+                        document.getElementById('brand-name').textContent = name;
+                        document.getElementById('brand-page-title').textContent = title;
+                        document.getElementById('pdf-brand-name').textContent = name;
+                        document.getElementById('brand-divider').style.display = sameBrandTitle ? 'none' : '';
+                        document.getElementById('brand-page-title').style.display = sameBrandTitle ? 'none' : '';
+                        document.getElementById('pdf-brand-divider').style.display = sameBrandTitle ? 'none' : '';
+                        // Keep the flexible title slot in the layout so the role badge stays right-aligned.
+                        document.getElementById('pdf-doc-title').style.visibility = sameBrandTitle
+                            ? 'hidden'
+                            : 'visible';
+                        var modalTitle = document.getElementById('modal-title');
+                        if (modalTitle) modalTitle.textContent = title;
+                        var logo = document.getElementById('brand-logo');
+                        if (data.brandLogoUrl) {
+                            logo.src = data.brandLogoUrl;
+                            logo.alt = name;
+                            logo.style.display = '';
+                            var pdfLogo = document.getElementById('pdf-brand-logo');
+                            if (pdfLogo) {
+                                pdfLogo.src = data.brandLogoUrl;
+                                pdfLogo.alt = name;
+                                pdfLogo.style.display = '';
+                            }
+                        }
+                        header.style.display = 'flex';
                     }
 
                     // ===== PDF LOAD + RENDER (via DocGenPdfViewer) =====
@@ -1812,7 +2118,8 @@
                         var canvas,
                             ctx,
                             drawing = false,
-                            inked = false;
+                            inked = false,
+                            drawStarted = false;
                         function pos(e) {
                             var r = canvas.getBoundingClientRect();
                             var cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
@@ -1820,7 +2127,22 @@
                             return { x: cx * (canvas.width / r.width), y: cy * (canvas.height / r.height) };
                         }
                         function start(e) {
+                            var nameInput = document.getElementById('modal-typed-name');
+                            var currentName = nameInput.value.trim();
+                            // The typed field is disabled while drawing is active; that
+                            // must not prevent the signer from starting another stroke.
+                            // Only reject drawing when the user has an active typed value.
+                            if (currentName) {
+                                signatureInputSource = 'typed';
+                                syncSignatureInputState();
+                                return;
+                            }
                             drawing = true;
+                            drawStarted = true;
+                            signatureInputSource = 'draw';
+                            // Disable typed signing immediately on the first pointer
+                            // event, before validation/state refresh can run.
+                            lockTypedInputForDrawing();
                             var p = pos(e);
                             ctx.beginPath();
                             ctx.moveTo(p.x, p.y);
@@ -1828,25 +2150,32 @@
                         }
                         function move(e) {
                             if (!drawing) return;
+                            // Keep this fallback on the first actual stroke event as well;
+                            // it covers browsers that delay repainting after touchstart.
+                            lockTypedInputForDrawing();
                             var p = pos(e);
                             ctx.lineTo(p.x, p.y);
                             ctx.stroke();
                             inked = true;
-                            if (typeof updateSignSubmitState === 'function') updateSignSubmitState();
                             if (e.cancelable) e.preventDefault();
+                        }
+                        function lockTypedInputForDrawing() {
+                            var input = document.getElementById('modal-typed-name');
+                            if (input) input.disabled = true;
+                            if (typeof syncSignatureInputState === 'function') syncSignatureInputState('draw');
                         }
                         function end() {
                             drawing = false;
+                            // Update validation once per completed stroke, never on every
+                            // touch/mousemove event. The canvas stroke remains immediate.
+                            if (typeof updateSignSubmitState === 'function') updateSignSubmitState();
                         }
                         return {
                             init: function () {
                                 canvas = document.getElementById('modal-draw-canvas');
                                 if (!canvas) return;
                                 ctx = canvas.getContext('2d');
-                                ctx.lineWidth = 2.5;
-                                ctx.lineCap = 'round';
-                                ctx.lineJoin = 'round';
-                                ctx.strokeStyle = '#16324f';
+                                configureContext();
                                 canvas.addEventListener('mousedown', start);
                                 canvas.addEventListener('mousemove', move);
                                 window.addEventListener('mouseup', end);
@@ -1862,15 +2191,41 @@
                             clear: function () {
                                 if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
                                 inked = false;
+                                drawStarted = false;
+                                var typedName = document.getElementById('modal-typed-name');
+                                signatureInputSource = typedName && typedName.value.trim() ? 'typed' : null;
+                                if (typeof syncSignatureInputState === 'function') syncSignatureInputState();
                                 if (typeof updateSignSubmitState === 'function') updateSignSubmitState();
+                            },
+                            resize: function () {
+                                if (!canvas || !ctx) return;
+                                var rect = canvas.getBoundingClientRect();
+                                if (!rect.width || !rect.height) return;
+                                var ratio = Math.min(window.devicePixelRatio || 1, 3);
+                                canvas.width = Math.ceil(rect.width * ratio);
+                                canvas.height = Math.ceil(rect.height * ratio);
+                                configureContext(ratio);
+                                inked = false;
+                                drawStarted = false;
                             },
                             hasInk: function () {
                                 return inked;
+                            },
+                            isStarted: function () {
+                                return drawStarted;
                             },
                             toPng: function () {
                                 return canvas.toDataURL('image/png');
                             }
                         };
+                        function configureContext(ratio) {
+                            if (!ctx) return;
+                            var scale = ratio || 1;
+                            ctx.lineWidth = 2.5 * scale;
+                            ctx.lineCap = 'round';
+                            ctx.lineJoin = 'round';
+                            ctx.strokeStyle = '#16324f';
+                        }
                     })();
 
                     // Render a signed chip showing the DRAWN signature image (vs. text).
@@ -2635,13 +2990,18 @@
                                 nameLabel.textContent = 'Type your full name to sign';
                                 nameInput.placeholder = 'e.g., John Smith';
                                 nameInput.value = signerData && signerData.signerName ? signerData.signerName : '';
+                                // A prefilled signer name counts as the typed method;
+                                // drawing remains disabled until this value is cleared.
+                                signatureInputSource = nameInput.value.trim() ? 'typed' : null;
                             }
                             updateSignSubmitState();
                         }
                         document.getElementById('sign-modal').style.display = '';
-                        setTimeout(function () {
-                            if (nameGroup.style.display !== 'none') nameInput.focus();
-                        }, 50);
+                        // Paint the modal immediately; resize the already-visible pad without
+                        // delaying the first frame of the signing experience.
+                        DrawPad.resize();
+                        syncSignatureInputState();
+                        if (nameGroup.style.display !== 'none') nameInput.focus();
                     }
 
                     function openFinalSubmit() {
@@ -2924,9 +3284,18 @@
                         document
                             .getElementById('modal-consent-checkbox')
                             .addEventListener('change', updateSignSubmitState);
-                        document.getElementById('modal-typed-name').addEventListener('input', updateSignSubmitState);
+                        document.getElementById('modal-typed-name').addEventListener('input', function () {
+                            var value = this.value.trim();
+                            signatureInputSource = value ? 'typed' : null;
+                            syncSignatureInputState();
+                            updateSignSubmitState();
+                        });
                         // Native date inputs (DatePick) fire 'change' on selection, not always 'input'.
-                        document.getElementById('modal-typed-name').addEventListener('change', updateSignSubmitState);
+                        document.getElementById('modal-typed-name').addEventListener('change', function () {
+                            signatureInputSource = this.value.trim() ? 'typed' : null;
+                            syncSignatureInputState();
+                            updateSignSubmitState();
+                        });
                         document.getElementById('btn-sign-submit').addEventListener('click', handleSignSubmit);
                         // "Save & Next" — guided per-field capture only (shown in spot mode).
                         document.getElementById('btn-sign-submit-next').addEventListener('click', function () {
@@ -2942,30 +3311,51 @@
                             return;
                         }
                         modalMode = 'pdf';
-                        document.getElementById('modal-draw-group').style.display = 'none';
-                        // Re-show name + consent (the form-fields step hides them).
+                        legacyConsentStep = false;
+                        signatureInputSource = null;
+                        // Re-show both drawing and typed signature inputs.
+                        document.getElementById('modal-draw-group').style.display = '';
                         document.getElementById('modal-typed-name').parentNode.style.display = '';
-                        document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
+                        document.getElementById('modal-consent-checkbox').parentNode.style.display = 'none';
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Sign Document';
                         document.querySelector('#sign-modal .modal-subtitle').textContent =
-                            'Confirm your name and consent to sign electronically.';
-                        document.getElementById('btn-sign-submit').textContent = 'Sign';
+                            'Choose how you want to sign this document.';
+                        document.getElementById('btn-sign-submit').textContent = 'Save & Next';
                         // Prefill the confirmed name from validateToken.signerName.
                         var nameInput = document.getElementById('modal-typed-name');
+                        // Show the verified signer name as the default and disable drawing
+                        // while that value remains present.
                         nameInput.value = signerData && signerData.signerName ? signerData.signerName : '';
+                        signatureInputSource = nameInput.value.trim() ? 'typed' : null;
                         document.getElementById('modal-consent-checkbox').checked = false;
                         // Form fields were collected up front — don't ask again here.
                         hideFormFields();
                         showModalMsg('', 'info');
                         updateSignSubmitState();
                         document.getElementById('sign-modal').style.display = '';
-                        setTimeout(function () {
-                            nameInput.focus();
-                        }, 50);
+                        DrawPad.resize();
+                        syncSignatureInputState();
+                        nameInput.focus();
                     }
 
                     function closeSignModal() {
                         document.getElementById('sign-modal').style.display = 'none';
+                    }
+
+                    // Drawing and typed signing are mutually exclusive. A programmatic
+                    // prefilled signer name does not claim the typed method; only actual
+                    // user input does. Clearing either method makes both available again.
+                    function syncSignatureInputState(source) {
+                        var input = document.getElementById('modal-typed-name');
+                        var drawGroup = document.getElementById('modal-draw-group');
+                        if (!input || !drawGroup) return;
+                        if (source === 'draw') signatureInputSource = input.value.trim() ? 'typed' : 'draw';
+                        var typedActive = signatureInputSource === 'typed' && !!input.value.trim();
+                        var drawActive = signatureInputSource === 'draw' && (DrawPad.hasInk() || DrawPad.isStarted());
+                        input.disabled = drawActive;
+                        drawGroup.classList.toggle('is-disabled', typedActive);
+                        var canvas = document.getElementById('modal-draw-canvas');
+                        if (canvas) canvas.setAttribute('aria-disabled', typedActive ? 'true' : 'false');
                     }
 
                     function updateSignSubmitState() {
@@ -2989,9 +3379,9 @@
                             // signer record — we don't re-ask for it).
                             btn.disabled = !consentVal;
                         } else {
-                            // 'pdf' legacy single-modal flow: name + consent (the typed name IS
-                            // the signature). Signer form fields (#161) collected up front.
-                            btn.disabled = !(nameVal && consentVal);
+                            // 'pdf' legacy flow has separate signature-entry and consent steps.
+                            var signatureReady = !!(nameVal || DrawPad.hasInk());
+                            btn.disabled = legacyConsentStep ? !consentVal : !signatureReady;
                         }
                     }
 
@@ -3032,6 +3422,25 @@
                         }
                         if (modalMode === 'fields') {
                             handleFieldsContinue();
+                            return;
+                        }
+
+                        if (modalMode === 'pdf' && !legacyConsentStep) {
+                            var signatureReady = !!(
+                                document.getElementById('modal-typed-name').value.trim() || DrawPad.hasInk()
+                            );
+                            if (!signatureReady) return;
+                            legacyConsentStep = true;
+                            document.getElementById('modal-draw-group').style.display = 'none';
+                            document.getElementById('modal-name-group').style.display = 'none';
+                            document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
+                            document.querySelector('#sign-modal .modal-header h2').textContent =
+                                'Confirm your signature';
+                            document.querySelector('#sign-modal .modal-subtitle').textContent =
+                                'Review your signature and confirm your consent to finish.';
+                            document.getElementById('btn-sign-submit').textContent = 'Finish & Submit';
+                            document.getElementById('modal-consent-checkbox').checked = false;
+                            updateSignSubmitState();
                             return;
                         }
 
