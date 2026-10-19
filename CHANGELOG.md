@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- **DOCX saves no longer fail with `Regex too complicated` on large or complex templates.**
+  The upload-time DOCX fidelity linter previously applied whole-document regular expressions
+  while scanning text runs, merge tags, table rows, and conditional expressions. Apex could
+  exceed its regex step limit during **Save as New Version**, especially with long paragraphs,
+  repeated tags, and large tables. Those scans now use linear string processing while
+  preserving the existing warning behavior. The focused `DocGenDocxTemplateLinterTest` suite
+  passes all 20 tests. Extremely large files can still be subject to Salesforce heap, CPU, and
+  DOCX/rendering limits.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
