@@ -559,6 +559,91 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Native Word source metadata, without bringing the archive into Apex heap. */
+    public static Map<String, Object> getNativeWordTemplateSource(Id templateId, Id recordId) {
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Type__c', 'Base_Object_API__c', 'Query_Config__c', 'Document_Title_Format__c' }
+        );
+        List<DocGen_Template__c> templates = [
+            SELECT Type__c, Base_Object_API__c, Query_Config__c, Document_Title_Format__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (templates.isEmpty())
+            throw new DocGenException('Template not found or access denied.');
+        DocGen_Template__c template = templates[0];
+        if (template.Type__c != 'Word')
+            return null;
+        Map<String, Object> data = DocGenDataRetriever.getRecordData(
+            recordId,
+            template.Base_Object_API__c,
+            template.Query_Config__c
+        );
+        DocGen_Template_Version__c snapshot = loadActiveVersionSnapshot(templateId);
+        String format = snapshot != null &&
+            snapshot.Document_Title_Format__c != null
+            ? snapshot.Document_Title_Format__c
+            : template.Document_Title_Format__c;
+        String title = DocGenService.generateDocTitle(format, data);
+        if (title == null)
+            title = (String) data.get('Name');
+        return new Map<String, Object>{
+            'contentVersionId' => DocGenTemplateManager.getTemplateFileVersionId(templateId),
+            'title' => title
+        };
+    }
+
+    @AuraEnabled
+    public static Id prepareNativeWordDocument(Id templateId, Id recordId, Boolean saveToRecord) {
+        Map<String, Object> source = getNativeWordTemplateSource(templateId, recordId);
+        if (source == null)
+            return null;
+        return System.enqueueJob(
+            new DocGenNativeWordQueueable(
+                (Id) source.get('contentVersionId'),
+                saveToRecord == true ? recordId : null,
+                (String) source.get('title')
+            )
+        );
+    }
+
+    @AuraEnabled
+    public static Map<String, Object> getNativeWordDocumentStatus(Id jobId) {
+        Id caller = UserInfo.getUserId();
+        List<AsyncApexJob> jobs = [
+            SELECT Status, ExtendedStatus
+            FROM AsyncApexJob
+            WHERE Id = :jobId AND CreatedById = :caller AND ApexClass.Name = 'DocGenNativeWordQueueable'
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (jobs.isEmpty())
+            throw new DocGenException('Document generation job not found or access denied.');
+        Map<String, Object> result = new Map<String, Object>{
+            'status' => jobs[0].Status,
+            'error' => jobs[0].ExtendedStatus
+        };
+        if (jobs[0].Status == 'Completed') {
+            String path = DocGenNativeWordQueueable.outputPath(jobId);
+            List<ContentVersion> files = [
+                SELECT Id, Title
+                FROM ContentVersion
+                WHERE PathOnClient = :path AND CreatedById = :caller AND IsLatest = TRUE
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            result.put('requiresMerge', files.isEmpty());
+            if (!files.isEmpty()) {
+                result.put('contentVersionId', files[0].Id);
+                result.put('title', files[0].Title);
+            }
+        }
+        return result;
+    }
+
     /**
      * Returns merged document parts for client-side DOCX assembly.
      * Server merges the XML (lightweight). Client fetches the shell ZIP and images

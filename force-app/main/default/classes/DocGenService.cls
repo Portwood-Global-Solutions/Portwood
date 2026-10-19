@@ -3734,7 +3734,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * closing tag admits no whitespace.
      */
     @TestVisible
-    private static void collectTextRunBodies(
+    public static void collectTextRunBodies(
         String xml,
         List<Integer> contentStarts,
         List<Integer> contentEnds,
@@ -5505,7 +5505,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * ({#, {/, {^, {%, {@, {:) are excluded by shape, so this never shadows a real tag.
      */
     @TestVisible
-    private static Boolean isOoxmlGuidToken(String tagContent) {
+    public static Boolean isOoxmlGuidToken(String tagContent) {
         if (String.isBlank(tagContent) || tagContent.length() != 36) {
             return false;
         }

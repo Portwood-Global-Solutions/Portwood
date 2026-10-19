@@ -15,6 +15,44 @@ public with sharing class DocGenTemplateManager {
             return EncodingUtil.base64Encode(Blob.valueOf(DocGenService.draftHtmlBodyOverride));
         }
 
+        Id targetCvId = getTemplateFileVersionId(templateId);
+
+        // Explicit CRUD check on ContentVersion — standard object, isAccessible()
+        // returns true for any user with file access. This documents enforcement
+        // for the AppExchange reviewer.
+        if (!Schema.sObjectType.ContentVersion.isAccessible()) {
+            throw new DocGenException('ContentVersion access denied.');
+        }
+        // SYSTEM_MODE: the template body CV is a package-internal artifact whose
+        // access is already gated upstream — the caller reaches this point only
+        // via an active version of a DocGen_Template__c that the user can read.
+        // USER_MODE on this specific query can return "ContentVersion not found"
+        // when the body CV's CDL defaults to Visibility=InternalUsers on fresh
+        // upload (subscriber-org artifact of the platform behavior).
+        // v2.0.1 — per-field FLS enforcement on SOQL reads (see DocGenFlsGuard).
+        DocGenFlsGuard.assertAccessible(
+            ContentVersion.sObjectType,
+            new Set<String>{ 'VersionData', 'Title', 'FileExtension' }
+        );
+        List<ContentVersion> cvs = [
+            SELECT VersionData, Title, FileExtension
+            FROM ContentVersion
+            WHERE Id = :targetCvId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+
+        if (cvs.isEmpty()) {
+            throw new DocGenException('ContentVersion not found.');
+        }
+
+        return EncodingUtil.base64Encode(cvs[0].VersionData);
+    }
+
+    /** Resolve the active body without loading or base64-encoding the archive. */
+    public static Id getTemplateFileVersionId(Id templateId) {
+        if (templateId == null)
+            throw new DocGenException('Template ID is required.');
         // Object-level CRUD gate — caller (generateDocumentData) has already
         // enforced Template CRUD; this redundant check documents enforcement
         // at this entry point too.
@@ -81,35 +119,6 @@ public with sharing class DocGenTemplateManager {
             throw new DocGenException('No template file found (active or attached).');
         }
 
-        // Explicit CRUD check on ContentVersion — standard object, isAccessible()
-        // returns true for any user with file access. This documents enforcement
-        // for the AppExchange reviewer.
-        if (!Schema.sObjectType.ContentVersion.isAccessible()) {
-            throw new DocGenException('ContentVersion access denied.');
-        }
-        // SYSTEM_MODE: the template body CV is a package-internal artifact whose
-        // access is already gated upstream — the caller reaches this point only
-        // via an active version of a DocGen_Template__c that the user can read.
-        // USER_MODE on this specific query can return "ContentVersion not found"
-        // when the body CV's CDL defaults to Visibility=InternalUsers on fresh
-        // upload (subscriber-org artifact of the platform behavior).
-        // v2.0.1 — per-field FLS enforcement on SOQL reads (see DocGenFlsGuard).
-        DocGenFlsGuard.assertAccessible(
-            ContentVersion.sObjectType,
-            new Set<String>{ 'VersionData', 'Title', 'FileExtension' }
-        );
-        List<ContentVersion> cvs = [
-            SELECT VersionData, Title, FileExtension
-            FROM ContentVersion
-            WHERE Id = :targetCvId
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
-
-        if (cvs.isEmpty()) {
-            throw new DocGenException('ContentVersion not found.');
-        }
-
-        return EncodingUtil.base64Encode(cvs[0].VersionData);
+        return targetCvId;
     }
 }

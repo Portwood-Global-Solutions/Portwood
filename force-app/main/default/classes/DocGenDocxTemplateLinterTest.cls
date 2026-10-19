@@ -105,6 +105,48 @@ private class DocGenDocxTemplateLinterTest {
     // The nine checks
     // -----------------------------------------------------------------------
 
+    private static String largeBody() {
+        String unit =
+            '<w:p><w:pPr><w:spacing w:before="0"/></w:pPr><w:r><w:rPr w:metadata="' +
+            'x'.repeat(600) +
+            '"/><w:t>Quote line</w:t></w:r></w:p>';
+        return unit.repeat(1400000 / unit.length());
+    }
+
+    @isTest
+    static void largeStaticWordFileDoesNotSpendARegexBudget() {
+        String xml =
+            XML_HEAD +
+            '<w:body>' +
+            largeBody() +
+            '<w:p w:rsid="{01234567-89AB-CDEF-0123-456789ABCDEF}"/>' +
+            '</w:body></w:document>';
+        Blob archive = buildDocx(xml);
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenDocxTemplateLinter.lint(archive);
+        Test.stopTest();
+        System.assertEquals(0, findings.size(), 'Word metadata GUIDs are not merge tags.');
+    }
+
+    @isTest
+    static void largeWordFileStillReportsTagsAndTablePlacement() {
+        String xml =
+            XML_HEAD +
+            '<w:body>' +
+            largeBody() +
+            tableRow('{#Lines}{Name}{/Lines}') +
+            '<w:p><w:r><w:t>{#IF Amount &gt; 0}{Na</w:t></w:r><w:r><w:t>me}{/IF}</w:t></w:r></w:p>' +
+            '</w:body></w:document>';
+        Blob archive = buildDocx(xml);
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenDocxTemplateLinter.lint(archive);
+        Test.stopTest();
+        System.assertNotEquals(null, findRule(findings, 'Merge tag split across runs'));
+        System.assertNotEquals(null, findRule(findings, 'HTML-encoded IF operator'));
+        System.assertEquals(null, findRule(findings, 'Loop opener with no closer'));
+        System.assertEquals(null, findRule(findings, 'Closing tag outside a container'));
+    }
+
     @isTest
     static void cleanDocxProducesZeroFindings() {
         String xml = XML_HEAD + '<w:body>' + p('Hello {Name}, {Industry}.') + '</w:body></w:document>';

@@ -89,6 +89,7 @@ import getTemplateVersions from '@salesforce/apex/DocGenController.getTemplateVe
 import getVersionBodyFileInfo from '@salesforce/apex/DocGenController.getVersionBodyFileInfo';
 import deleteTemplateVersion from '@salesforce/apex/DocGenController.deleteTemplateVersion';
 import generateDocumentParts from '@salesforce/apex/DocGenController.generateDocumentParts';
+import { generateStaticWord } from 'c/docGenNativeWord';
 import getContentVersionBase64 from '@salesforce/apex/DocGenController.getContentVersionBase64';
 import getLatestContentVersionId from '@salesforce/apex/DocGenController.getLatestContentVersionId';
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
@@ -6178,26 +6179,23 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const isPPT = ['PowerPoint', 'PPT', 'PPTX'].includes(previewTemplateType);
 
             if (isPPT || this.editTemplateOutputFormat === 'Native') {
-                let result;
-                const chartContext = await this._prepareChartsForAdmin(
+                const result = await this._generateOfficeSampleWithCharts(
                     this.editTemplateId,
                     this.editTemplateTestRecordId
                 );
-                try {
-                    result = await this._generateOfficeSample(
-                        this.editTemplateId,
-                        this.editTemplateTestRecordId,
-                        chartContext
-                    );
-                } finally {
-                    await this._cleanupChartsForAdmin(chartContext.cvIds);
-                }
-                if (!result || !result.base64) {
+                if (!result || (!result.base64 && !result.contentVersionId)) {
                     throw new Error('Document generation returned empty result.');
                 }
                 const docTitle = 'Preview_' + this.previewVersion.VersionNumber + '_' + (result.title || 'Document');
                 const ext = this._officeExtensionForType(previewTemplateType, result.isMacroEnabled);
-                this.downloadBase64(result.base64, docTitle + ext, 'application/octet-stream');
+                if (result.contentVersionId) {
+                    this[NavigationMixin.Navigate]({
+                        type: 'standard__webPage',
+                        attributes: { url: `/sfc/servlet.shepherd/version/download/${result.contentVersionId}` }
+                    });
+                } else {
+                    this.downloadBase64(result.base64, docTitle + ext, 'application/octet-stream');
+                }
                 this.showToast(
                     'Success',
                     'Sample document generated for ' + this.previewVersion.VersionNumber,
@@ -6555,28 +6553,24 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
             if (isPPT || this.editTemplateOutputFormat === 'Native') {
                 // Native DOCX/PPTX download
-                let result;
-                const chartContext = await this._prepareChartsForAdmin(
+                const result = await this._generateOfficeSampleWithCharts(
                     this.editTemplateId,
                     this.editTemplateTestRecordId
                 );
-                try {
-                    result = await this._generateOfficeSample(
-                        this.editTemplateId,
-                        this.editTemplateTestRecordId,
-                        chartContext
-                    );
-                } finally {
-                    await this._cleanupChartsForAdmin(chartContext.cvIds);
-                }
-
-                if (!result || !result.base64) {
+                if (!result || (!result.base64 && !result.contentVersionId)) {
                     throw new Error('Document generation returned empty result.');
                 }
 
                 const docTitle = 'Sample_' + (result.title || 'Document');
                 const ext = this._officeExtensionForType(this.editTemplateType, result.isMacroEnabled);
-                this.downloadBase64(result.base64, docTitle + ext, 'application/octet-stream');
+                if (result.contentVersionId) {
+                    this[NavigationMixin.Navigate]({
+                        type: 'standard__webPage',
+                        attributes: { url: `/sfc/servlet.shepherd/version/download/${result.contentVersionId}` }
+                    });
+                } else {
+                    this.downloadBase64(result.base64, docTitle + ext, 'application/octet-stream');
+                }
                 this.showToast('Success', 'Sample Document Downloaded', 'success');
             } else {
                 // PDF generation — same path as bulk
@@ -6804,6 +6798,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return '.pdf';
         }
         return '.docx';
+    }
+
+    async _generateOfficeSampleWithCharts(templateId, recordId) {
+        const copy = await generateStaticWord(templateId, recordId);
+        if (copy) return copy;
+        const chartContext = await this._prepareChartsForAdmin(templateId, recordId);
+        try {
+            return await this._generateOfficeSample(templateId, recordId, chartContext);
+        } finally {
+            await this._cleanupChartsForAdmin(chartContext.cvIds);
+        }
     }
 
     async _generateOfficeSample(templateId, recordId, chartContext) {

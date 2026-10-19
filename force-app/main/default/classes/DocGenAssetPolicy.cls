@@ -301,22 +301,26 @@ public without sharing class DocGenAssetPolicy {
         for (Compression.ZipEntry entry : reader.getEntries()) {
             if (!entry.getName().endsWith('.rels'))
                 continue;
-            Dom.Document xml = new Dom.Document();
-            String source = reader.extract(entry.getName()).toString();
-            if (Pattern.compile('(?is)<!ENTITY|<!DOCTYPE').matcher(source).find())
+            assertOfficeRelationshipXml(reader.extract(entry.getName()).toString());
+        }
+    }
+
+    public static void assertOfficeRelationshipXml(String source) {
+        Dom.Document xml = new Dom.Document();
+        String lower = source.toLowerCase();
+        if (lower.contains('<!entity') || lower.contains('<!doctype'))
+            fail();
+        xml.load(source);
+        for (Dom.XmlNode relationship : xml.getRootElement().getChildElements()) {
+            String type = relationship.getAttribute('Type', null);
+            String target = relationship.getAttribute('Target', null);
+            if (type != null && type.endsWith('/hyperlink'))
+                continue;
+            if (
+                (relationship.getAttribute('TargetMode', null) == 'External' ||
+                (target != null && Pattern.matches('(?i)(https?:)?//.*', target))) && assetUrl(target) == null
+            )
                 fail();
-            xml.load(source);
-            for (Dom.XmlNode relationship : xml.getRootElement().getChildElements()) {
-                String type = relationship.getAttribute('Type', null);
-                String target = relationship.getAttribute('Target', null);
-                if (type != null && type.endsWith('/hyperlink'))
-                    continue;
-                if (
-                    (relationship.getAttribute('TargetMode', null) == 'External' ||
-                    (target != null && Pattern.matches('(?i)(https?:)?//.*', target))) && assetUrl(target) == null
-                )
-                    fail();
-            }
         }
     }
 }

@@ -38,6 +38,7 @@ import {
     prepareChartsClientSide
 } from 'c/docGenChartJs';
 import { buildDocx } from './docGenZipWriter';
+import { generateStaticWord } from 'c/docGenNativeWord';
 import { mergePdfs } from './docGenPdfMerger';
 import { extractFirstImageFromPdfBase64 } from './docGenPdfImageExtractor';
 import renderImageAsPdfBase64 from '@salesforce/apex/DocGenController.renderImageAsPdfBase64';
@@ -1453,6 +1454,22 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
      * For DOCX images, use {%FieldName} tags with ContentVersion IDs.
      */
     async _generateOfficeClientSide(extension, mimeType) {
+        if (extension === 'docx') {
+            const copy = await generateStaticWord(this.selectedTemplateId, this.recordId, this.wantsSaveToRecord);
+            if (copy) {
+                if (this.wantsDownload) this._downloadSavedContentVersion(copy.contentVersionId);
+                this.showToast(
+                    'Success',
+                    this.wantsSaveToRecord
+                        ? this.wantsDownload
+                            ? 'DOCX saved to record and downloaded.'
+                            : 'DOCX saved to record.'
+                        : 'DOCX downloaded.',
+                    'success'
+                );
+                return;
+            }
+        }
         // #117 chart pipeline: rasterize any {Chart:...} tags in the template
         // body to PNGs (uploaded as transient CVs) before kicking off the
         // server-side merge. The merge sees the signature → CV Id map and
