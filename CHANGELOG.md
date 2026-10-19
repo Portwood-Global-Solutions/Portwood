@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added - branded guest signing experience
+
+- Applied reusable brand company name, logo, color, and favicon behavior across the signing
+  verification, signing, confirmation, success, and error paths.
+- Preserved the existing org-wide Signature Settings experience when a template has no Sending
+  Brand selected.
+- Improved success and error cards with centered responsive layouts and clearer status treatment.
+
+### Fixed - signer input and error-state behavior
+
+- Drawing and typed signatures are mutually exclusive while retaining manual multi-stroke drawing.
+- Signature drawing now renders immediately and keeps the typed field disabled from the first
+  stroke; clearing either method restores the available input controls.
+- Error pages retain the resolved company name and logo favicon in the browser tab, including
+  already-signed and expired-link responses.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
