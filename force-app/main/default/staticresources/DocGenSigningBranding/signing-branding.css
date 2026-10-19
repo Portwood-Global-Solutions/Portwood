@@ -7,7 +7,11 @@
     background: #ffffff;
     color: #43546a;
     border-bottom: 1px solid #dce3ec;
-    font: 0.75rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font:
+        0.75rem/1.5 -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
     overflow-wrap: anywhere;
 }
 .signing-service a {
@@ -168,4 +172,9 @@ body.signing-branded {
     .signing-branded .btn {
         transition: none;
     }
+}
+
+/* Advanced author HTML is sanitized synchronously before its first visible paint. */
+body.signing-brand-pending > :not(.signing-service) {
+    visibility: hidden;
 }

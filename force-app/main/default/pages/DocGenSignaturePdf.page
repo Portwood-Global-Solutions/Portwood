@@ -1,6 +1,7 @@
 <!-- CxSAST: without sharing required for guest user signing context; access gated by cryptographic token -->
 <apex:page
     controller="DocGenSignatureController"
+    cache="false"
     showHeader="false"
     sidebar="false"
     standardStylesheets="false"
@@ -14,7 +15,7 @@
             <!-- Allow pinch-to-zoom so signers can inspect images, QR codes, and fine print
          at full fidelity on mobile instead of us shrinking the document to fit. -->
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Portwood DocGen | Document signing</title>
+            <title><apex:outputText value="{!initialPage.documentTitle}" /></title>
             <apex:slds />
             <!-- PDF.js (legacy UMD build) — client-side render + text layer for
                  sign-spot positioning. Bundled as a static resource (no callout). -->
@@ -638,15 +639,22 @@
             <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
             <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
-        <body>
+        <body class="{!initialPage.bodyClass}" style="{!initialPage.bodyStyle}">
             <div class="signing-service" aria-label="Signing service">
-                <span id="signing-service-context">Document signing provided by</span>
+                <span id="signing-service-context"><apex:outputText value="{!initialPage.serviceContext}" /></span>
                 <a href="https://portwood.dev/" target="_blank" rel="noopener noreferrer">Portwood DocGen</a>
             </div>
             <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
-            <header id="signing-brand-header" class="signing-brand-header" hidden="hidden">
-                <img id="signing-brand-logo" class="signing-brand-logo" alt="" hidden="hidden" />
-                <span id="signing-brand-company"></span>
+            <header id="signing-brand-header" class="signing-brand-header" style="{!initialPage.visibility}">
+                <img
+                    id="signing-brand-logo"
+                    class="signing-brand-logo"
+                    src="{!initialPage.logoUrl}"
+                    alt=""
+                    referrerpolicy="no-referrer"
+                    style="{!initialPage.logoVisibility}"
+                />
+                <span id="signing-brand-company"><apex:outputText value="{!initialPage.companyName}" /></span>
             </header>
 
             <div class="page-wrapper" id="page-wrapper">
@@ -654,11 +662,18 @@
                     id="signing-brand-intro"
                     class="signing-brand-intro"
                     aria-labelledby="signing-brand-title"
-                    hidden="hidden"
+                    style="{!initialPage.visibility}"
                 >
-                    <img id="signing-brand-banner" class="signing-brand-banner" alt="" hidden="hidden" />
-                    <h1 id="signing-brand-title"></h1>
-                    <p id="signing-brand-welcome"></p>
+                    <img
+                        id="signing-brand-banner"
+                        class="signing-brand-banner"
+                        src="{!initialPage.bannerUrl}"
+                        alt="{!initialPage.bannerAlt}"
+                        referrerpolicy="no-referrer"
+                        style="{!initialPage.bannerVisibility}"
+                    />
+                    <h1 id="signing-brand-title"><apex:outputText value="{!initialPage.title}" /></h1>
+                    <p id="signing-brand-welcome"><apex:outputText value="{!initialPage.welcomeText}" /></p>
                     <div id="signing-custom-welcome" hidden="hidden"></div>
                 </section>
 
@@ -760,7 +775,7 @@
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
                         <p id="signing-completion-message">
-                            Your document has been signed and processed securely. You may close this window.
+                            <apex:outputText value="{!initialPage.completionMessage}" />
                         </p>
                         <div id="signing-custom-completion" hidden="hidden"></div>
                     </div>
@@ -920,10 +935,35 @@
                 ============================================================================
             -->
             <div id="signing-custom-footer" class="signing-custom-footer" hidden="hidden"></div>
-            <footer id="signing-brand-footer" class="signing-brand-footer" hidden="hidden">
-                <p id="signing-brand-footer-text"></p>
-                <a id="signing-brand-support" target="_blank" rel="noopener noreferrer" hidden="hidden">Get help</a>
+            <footer id="signing-brand-footer" class="signing-brand-footer" style="{!initialPage.footerVisibility}">
+                <p id="signing-brand-footer-text"><apex:outputText value="{!initialPage.footerText}" /></p>
+                <a
+                    id="signing-brand-support"
+                    href="{!initialPage.supportUrl}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="{!initialPage.supportVisibility}"
+                    >Get help</a
+                >
             </footer>
+
+            <script id="signing-initial-brand" type="application/json">
+                <apex:outputText value="{!initialPage.json}" escape="false" />
+            </script>
+            <script>
+                // Standard presentation is already in the response. Sanitize optional
+                // Advanced sections before revealing them; no remoting brand swap.
+                try {
+                    PortwoodSigningBranding.initialize(
+                        JSON.parse(document.getElementById('signing-initial-brand').textContent)
+                    );
+                } catch (error) {
+                    // The server-rendered Standard presentation remains usable if
+                    // optional custom content cannot initialize.
+                } finally {
+                    document.body.classList.remove('signing-brand-pending');
+                }
+            </script>
 
             <script>
                 var DocGenPdfViewer = (function () {
@@ -1392,7 +1432,6 @@
                         token,
                         function (result, event) {
                             if (event.status && result && result.isValid) {
-                                PortwoodSigningBranding.apply(result.branding);
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);

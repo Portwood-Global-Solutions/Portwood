@@ -498,4 +498,19 @@ private class DocGenSignaturePreparationTest {
         }
         System.assert(rejected);
     }
+    @IsTest
+    static void initialBrandingRespectsPreparedPdfSigningOrder() {
+        Account record = account();
+        Map<String, Object> draft = draft(record.Id);
+        Id requestId = (Id) draft.get('draftId');
+        DocGenSignaturePreparationController.sendDraft(record.Id, requestId, 0, preparation(draft));
+        List<DocGen_Signer__c> people = signers(requestId);
+        Test.setCurrentPage(Page.DocGenSignaturePdf);
+        ApexPages.currentPage().getParameters().put('token', people[1].Secure_Token__c);
+        System.assertEquals(false, new DocGenSignatureController().getInitialPage().getValid());
+        ApexPages.currentPage().getParameters().put('token', people[0].Secure_Token__c);
+        Integer writes = Limits.getDmlStatements();
+        System.assertEquals(true, new DocGenSignatureController().getInitialPage().getValid());
+        System.assertEquals(writes, Limits.getDmlStatements());
+    }
 }

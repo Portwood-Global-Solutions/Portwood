@@ -2,18 +2,22 @@
 
 Deployed to `portwood-proposal` on October 18, 2026, on `feat/byod-signature-sender`.
 
-The public demo link is currently **blocked by Chrome Safe Browsing as phishing**.
-Do not bypass that warning or distribute the guest links while it is unresolved.
-The page-behavior results below do not establish browser security clearance.
-Use the authenticated **Portwood → Brands** preview to review the appearance.
+The **original demo URL** still shows Chrome's phishing warning when reloaded.
+A fresh, unsigned PDF request using the server-rendered presentation opens in
+regular Chrome with the normal site-information indicator and no warning. This
+is a URL-specific observation, not proof that the rendering change caused the
+original flag or cleared every signing link. Do not bypass an interstitial.
+The previous PDF request was already signed; it was preserved, and the new
+request sends no email. Current local demo links are in
+`output/brand-live-demo/links.json`.
 
 The hostname matches Salesforce's `SiteDetail.SecureUrl`. On October 18, an HTTP
 inspection found no redirect away from that host; the four served vendor/Brand
 script resources matched the checked-in files. Google's public hostname report
 returned **No available data**, while Chrome's interstitial explicitly said
 **recently found phishing**. These observations do not identify the cause or prove
-the detection is a false positive. Site-owner Security Issues review is still
-required before treating the public demo as ready to share. See
+the detection is a false positive. The original URL's warning is unresolved;
+clearing it may require Google's review. See
 [Google's Security Issues guidance](https://support.google.com/webmasters/answer/9044101).
 
 A correction is now deployed: both signing pages identify Portwood DocGen as the
@@ -27,6 +31,28 @@ contains the identification. A Google Safe Browsing re-evaluation request is
 prepared in Chrome. Submission and Google's classification decision are separate
 from deployment. The current Google account has no verified Search Console
 property available for this Site.
+
+Both signing pages now resolve the current Brand and linked Salesforce theme on
+the server. Their initial HTML contains the title, identity, text, image URLs and
+validated CSS variables. The getter shares the existing token, expiry, request
+status and prepared-PDF signing-order gates, but performs no Viewed updates or
+public document-link creation. Only the public branding projection is embedded;
+signer names, emails, tokens, document data and internal theme associations are
+not included. Invalid, expired, cancelled and already-signed tokens receive a
+neutral page.
+
+The remoting callback no longer applies branding. Advanced author HTML remains
+in script-safe JSON and is sanitized synchronously before its section becomes
+visible; Standard presentation is the fallback if initialization fails. The
+Portwood provider identity remains visible throughout. The live theme still
+updates on the next page load: changing its action color changed the initial
+HTML at the same signing URL without resaving the Brand.
+
+Current validation: **444/444 Apex tests**, **30 live initial HTML/DOM checks**,
+**34 live escaping/Advanced initialization checks**, and **22 provider identity
+and page-initialization checks** passed. Chrome loaded the fresh PDF and its signing controls without
+script errors. The original URL still warns. The prepared Google review has
+**not been submitted**, as requested.
 
 Open **Portwood → Brands** and search for **Cedar Community - live theme**. The
 library shows a signing-page thumbnail. Select the Brand to edit its identity,
@@ -56,6 +82,8 @@ After deploying the changed source to the authorized Proposal scratch org:
 node scripts/brands/demo.mjs portwood-proposal
 node scripts/qa/brand-library-browser-check.mjs portwood-proposal
 node scripts/qa/preparation-brand-browser-check.mjs portwood-proposal
+node scripts/qa/signing-first-paint-check.mjs
+node scripts/qa/signing-first-paint-security-check.mjs portwood-proposal
 ```
 
 The first command creates new fictional requests. To repeat the color-change

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { signingPageFixture } from './lib/signing-page-fixture.mjs';
 
 // Exercise the actual page markup/scripts and shared brand resource in a real
 // browser. Only Visualforce remoting and external assets are replaced locally.
@@ -33,8 +34,13 @@ function checked(method, ...args) {
 try {
     for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
         const source = await readFile(new URL(`force-app/main/default/pages/${name}.page`, root), 'utf8');
-        const markup = source
-            .slice(source.indexOf('<html'), source.indexOf('</html>') + 7)
+        const markup = signingPageFixture(source, brand)
+            .replace(/<apex:[^>]+\/>/g, '')
+            .replace(
+                '</head>',
+                `<style>${css}</style><script>${purifier}</script><script>${contentRenderer}</script><script>${js}</script></head>`
+            );
+        const unbrandedMarkup = signingPageFixture(source)
             .replace(/<apex:[^>]+\/>/g, '')
             .replace(
                 '</head>',
@@ -54,7 +60,10 @@ try {
             if (route.request().url().includes('api.ipify.org')) {
                 return route.fulfill({ contentType: 'application/json', body: '{"ip":"127.0.0.1"}' });
             }
-            return route.fulfill({ contentType: 'text/html', body: markup });
+            return route.fulfill({
+                contentType: 'text/html',
+                body: route.request().url().includes('token=invalid') ? unbrandedMarkup : markup
+            });
         });
         await page.addInitScript(
             ({ brand }) => {

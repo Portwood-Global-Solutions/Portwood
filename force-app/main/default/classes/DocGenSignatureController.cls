@@ -1,5 +1,26 @@
 public without sharing class DocGenSignatureController {
     private static Boolean preparedPdfSave = false;
+    private transient DocGenSigningPageView initialPage;
+
+    /** Initial branding is a read-only, token-authorized public projection. */
+    public DocGenSigningPageView getInitialPage() {
+        if (initialPage == null) {
+            SignatureInitResponse response;
+            try {
+                String token = ApexPages.currentPage().getParameters().get('token');
+                response = initializeToken(token, true);
+            } catch (Exception ex) {
+                // Fail closed: the existing remoting flow displays the signing error.
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: initial signing presentation unavailable (' + ex.getTypeName() + ').'
+                );
+                response = new SignatureInitResponse();
+            }
+            initialPage = new DocGenSigningPageView(response.isValid == true ? response.branding : null);
+        }
+        return initialPage;
+    }
     private static final String INCOMPLETE_SIGNATURE_FIELDS_MESSAGE =
         'Signing cannot be completed because one or more required signature fields are incomplete. ' +
         'Please complete all required fields and try again.';
@@ -324,6 +345,10 @@ public without sharing class DocGenSignatureController {
     @AuraEnabled
     @RemoteAction
     public static SignatureInitResponse validateToken(String token) {
+        return initializeToken(token, false);
+    }
+
+    private static SignatureInitResponse initializeToken(String token, Boolean presentationOnly) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
@@ -417,7 +442,7 @@ public without sharing class DocGenSignatureController {
                 res.errorMessage = 'This signature link has expired. Please request a new one.';
                 return res;
             }
-            res = validateSignerToken(signers[0]);
+            res = validateSignerToken(signers[0], presentationOnly);
             if (res.isValid)
                 res.branding = DocGenSigningBranding.forRequest(signers[0].Signature_Request__c);
             return res;
@@ -462,7 +487,7 @@ public without sharing class DocGenSignatureController {
             return res;
         }
 
-        res = validateLegacyRequest(requests[0]);
+        res = validateLegacyRequest(requests[0], presentationOnly);
         if (res.isValid)
             res.branding = DocGenSigningBranding.forRequest(requests[0].Id);
         return res;
@@ -762,7 +787,7 @@ public without sharing class DocGenSignatureController {
         return null;
     }
 
-    private static SignatureInitResponse validateSignerToken(DocGen_Signer__c signer) {
+    private static SignatureInitResponse validateSignerToken(DocGen_Signer__c signer, Boolean presentationOnly) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
@@ -774,6 +799,11 @@ public without sharing class DocGenSignatureController {
         DocGen_Signature_Request__c parentReq = signer.Signature_Request__r;
         if (parentReq.Status__c == 'Signed' || parentReq.Status__c == 'Cancelled') {
             res.errorMessage = 'This signature request is no longer active.';
+            return res;
+        }
+
+        if (presentationOnly) {
+            res.isValid = true;
             return res;
         }
 
@@ -878,7 +908,10 @@ public without sharing class DocGenSignatureController {
         return res;
     }
 
-    private static SignatureInitResponse validateLegacyRequest(DocGen_Signature_Request__c req) {
+    private static SignatureInitResponse validateLegacyRequest(
+        DocGen_Signature_Request__c req,
+        Boolean presentationOnly
+    ) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
@@ -888,6 +921,11 @@ public without sharing class DocGenSignatureController {
         }
         if (req.Status__c == 'Cancelled') {
             res.errorMessage = 'This signature request has been cancelled.';
+            return res;
+        }
+
+        if (presentationOnly) {
+            res.isValid = true;
             return res;
         }
 

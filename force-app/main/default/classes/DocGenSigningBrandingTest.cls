@@ -239,4 +239,164 @@ private class DocGenSigningBrandingTest {
             DocGenSigningBranding.safeHttpsUrl(' https://example.com/help?q=a&b=c ')
         );
     }
+    private static DocGenSigningPageView initialPage(String token) {
+        Test.setCurrentPage(Page.DocGenSignaturePdf);
+        if (token != null)
+            ApexPages.currentPage().getParameters().put('token', token);
+        return new DocGenSignatureController().getInitialPage();
+    }
+
+    @IsTest
+    static void initialRenderIsReadOnlyCachedAndContainsOnlyPresentation() {
+        Test.setCurrentPage(Page.DocGenSignature);
+        ApexPages.currentPage().getParameters().put('token', TOKEN);
+        DocGenSignatureController controller = new DocGenSignatureController();
+        Integer writes = Limits.getDmlStatements();
+        DocGenSigningPageView view = controller.getInitialPage();
+        Integer queries = Limits.getQueries();
+        System.assertEquals(true, view.getValid());
+        System.assertEquals('Acme', view.getCompanyName());
+        System.assertEquals('Acme | Signing with Portwood DocGen', view.getDocumentTitle());
+        System.assert(view.getBodyStyle().contains('--signing-action:#FFFF00;--signing-action-text:#000000'));
+        System.assert(view.getBodyStyle().contains('--signing-header:#113355;--signing-header-text:#FFFFFF'));
+        System.assertEquals('https://example.com/acme.png', view.getLogoUrl());
+        System.assertEquals('', view.getVisibility());
+        System.assertEquals('', view.getLogoVisibility());
+        System.assertEquals('', view.getSupportVisibility());
+        System.assertEquals('', view.getFooterVisibility());
+        System.assertEquals('https://example.com/help', view.getSupportUrl());
+        System.assertEquals('Acme signing', view.getFooterText());
+        System.assertEquals('Thank you from Acme.', view.getCompletionMessage());
+        System.assertEquals(view, controller.getInitialPage());
+        System.assertEquals(
+            queries,
+            Limits.getQueries(),
+            'Visualforce getter evaluation must reuse the authorized presentation.'
+        );
+        System.assertEquals(
+            writes,
+            Limits.getDmlStatements(),
+            'Initial rendering must not mark Viewed or publish documents.'
+        );
+        System.assertEquals(
+            'Pending',
+            [SELECT Status__c FROM DocGen_Signer__c WHERE Secure_Token__c = :TOKEN].Status__c
+        );
+        System.assert(!view.getJson().contains('pat@example.com'));
+        System.assert(!view.getJson().contains('signerName'));
+        System.assert(!view.getJson().contains('Secure_Token'));
+        System.assert(!view.getJson().contains('brandingSetId'));
+        System.assertEquals('Other company', initialPage(OTHER_TOKEN).getCompanyName());
+        System.assertEquals('Org identity', initialPage(LEGACY_TOKEN).getCompanyName());
+        System.assertEquals(
+            'Sent',
+            [SELECT Status__c FROM DocGen_Signature_Request__c WHERE Secure_Token__c = :LEGACY_TOKEN].Status__c
+        );
+    }
+
+    @IsTest
+    static void initialRenderRejectsInvalidExpiredAndInactiveRequests() {
+        for (
+            String token : new List<String>{
+                null,
+                'bad',
+                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            }
+        ) {
+            DocGenSigningPageView view = initialPage(token);
+            System.assertEquals(false, view.getValid());
+            System.assertEquals('null', view.getJson());
+            System.assertEquals('', view.getBodyStyle());
+            System.assertEquals('', view.getBodyClass());
+            System.assertEquals('display:none', view.getVisibility());
+            System.assertEquals('display:none', view.getLogoVisibility());
+            System.assertEquals('display:none', view.getFooterVisibility());
+            System.assertEquals('display:none', view.getSupportVisibility());
+            System.assertEquals('Portwood DocGen | Document signing', view.getDocumentTitle());
+            System.assertEquals('Document signing provided by', view.getServiceContext());
+        }
+        DocGen_Signature_Request__c request = [
+            SELECT Id, Status__c
+            FROM DocGen_Signature_Request__c
+            WHERE Template__r.Name = 'Agreement'
+        ];
+        request.Expires_At__c = Datetime.now().addHours(-1);
+        update request;
+        System.assertEquals(false, initialPage(TOKEN).getValid());
+        request.Expires_At__c = Datetime.now().addHours(1);
+        request.Status__c = 'Cancelled';
+        update request;
+        System.assertEquals(false, initialPage(TOKEN).getValid());
+        request.Status__c = 'Sent';
+        update request;
+        DocGen_Signer__c signer = [SELECT Id, Status__c FROM DocGen_Signer__c WHERE Secure_Token__c = :TOKEN];
+        signer.Status__c = 'Signed';
+        update signer;
+        System.assertEquals(false, initialPage(TOKEN).getValid());
+    }
+
+    @IsTest
+    static void initialAdvancedLayoutUsesSafeStylesAndScriptSafeJson() {
+        DocGen_Brand__c brand = [SELECT Id FROM DocGen_Brand__c WHERE Company_Name__c = 'Acme'];
+        brand.Company_Name__c = '</script><img src=x onerror=alert(1)>';
+        brand.Signing_Page_Config__c = DocGenSigningPageConfig.validateAndSerialize(
+            '{"mode":"Advanced","logoUrl":"https://example.com/page.png","bannerUrl":"https://example.com/banner.png","bannerAlt":"Our banner","backgroundUrl":"https://example.com/background.png?a=1&b=2","font":"Humanist","spacing":"Compact","logoAlignment":"Right","logoHeight":80,"contentWidth":1200,"headerHtml":"<h2>Welcome</h2>"}'
+        );
+        update brand;
+        DocGenBrandResolver.clearCache();
+        DocGenSigningPageView view = initialPage(TOKEN);
+        System.assert(view.getBodyClass().contains('signing-brand-pending'));
+        System.assert(view.getBodyStyle().contains('--signing-space:0.75rem'));
+        System.assert(view.getBodyStyle().contains('--signing-header-align:flex-end'));
+        System.assert(view.getBodyStyle().contains('--signing-logo-height:80px'));
+        System.assert(view.getBodyStyle().contains('--signing-width:1200px'));
+        System.assert(view.getBodyStyle().contains('background-image:linear-gradient'));
+        System.assertEquals('https://example.com/page.png', view.getLogoUrl());
+        System.assertEquals('https://example.com/banner.png', view.getBannerUrl());
+        System.assertEquals('Our banner', view.getBannerAlt());
+        System.assertEquals('', view.getBannerVisibility());
+        System.assert(!view.getJson().contains('<'), 'Embedded JSON cannot close its application/json script element.');
+        Map<String, Object> payload = (Map<String, Object>) JSON.deserializeUntyped(view.getJson());
+        System.assertEquals(brand.Company_Name__c, payload.get('companyName'));
+    }
+
+    @IsTest
+    static void initialStyleRejectsUnsafeAndOutOfRangePresentationValues() {
+        DocGenSigningBranding.Presentation brand = new DocGenSigningBranding.Presentation();
+        brand.color = 'red;position:fixed';
+        brand.headerColor = '#000000';
+        brand.backgroundColor = '#FFFFFF';
+        brand.logoUrl = 'javascript:alert(1)';
+        brand.supportUrl = 'https://user:password@example.com';
+        brand.page = new Map<String, Object>{
+            'mode' => 'Standard',
+            'font' => 'Serif',
+            'fontFamily' => 'x;display:none',
+            'logoHeight' => 99999,
+            'contentWidth' => 'bad',
+            'backgroundUrl' => 'https://example.com/";display:none'
+        };
+        DocGenSigningPageView view = new DocGenSigningPageView(brand);
+        String style = view.getBodyStyle();
+        System.assert(!style.contains('display:none'));
+        System.assert(!style.contains('position:fixed'));
+        System.assert(style.contains('--signing-action:#0176D3'));
+        System.assert(style.contains('--signing-font:Georgia'));
+        System.assert(style.contains('--signing-logo-height:56px'));
+        System.assert(style.contains('--signing-width:1040px'));
+        System.assertEquals('', view.getLogoUrl());
+        System.assertEquals('', view.getSupportUrl());
+    }
+
+    @IsTest
+    static void initialBrandingWorksForGuestWithoutWrites() {
+        List<User> guests = [SELECT Id FROM User WHERE UserType = 'Guest' AND IsActive = TRUE LIMIT 1];
+        if (guests.isEmpty())
+            return;
+        System.runAs(guests[0]) {
+            Integer writes = Limits.getDmlStatements();
+            System.assertEquals('Acme', initialPage(TOKEN).getCompanyName());
+            System.assertEquals(writes, Limits.getDmlStatements());
+        }
+    }
 }

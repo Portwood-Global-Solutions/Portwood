@@ -33,6 +33,7 @@
         var element = document.getElementById(id);
         url = https(url);
         element.hidden = !url;
+        element.style.removeProperty('display');
         element.alt = alt || '';
         element.onerror = function () {
             element.hidden = true;
@@ -41,6 +42,37 @@
             element.referrerPolicy = 'no-referrer';
             element.src = url;
         } else element.removeAttribute('src');
+    }
+    function renderSections(brand) {
+        var page = brand.page || {};
+        var tokens = Object.assign({}, brand, {
+            logoUrl: page.logoUrl || brand.logoUrl,
+            bannerUrl: page.bannerUrl,
+            backgroundUrl: page.backgroundUrl
+        });
+        var rendered = {};
+        ['header', 'welcome', 'footer', 'completion'].forEach(function (section) {
+            var container = document.getElementById('signing-custom-' + section);
+            rendered[section] =
+                container && window.PortwoodBrandContent
+                    ? window.PortwoodBrandContent.render(
+                          container,
+                          page.mode === 'Advanced' ? page[section + 'Html'] : '',
+                          page.customCss || '',
+                          tokens
+                      ).rendered
+                    : false;
+        });
+        if (rendered.header) document.getElementById('signing-brand-header').hidden = true;
+        if (rendered.welcome) {
+            document.getElementById('signing-brand-title').hidden = true;
+            document.getElementById('signing-brand-welcome').hidden = true;
+        } else {
+            document.getElementById('signing-brand-title').hidden = false;
+            document.getElementById('signing-brand-welcome').hidden = false;
+        }
+        if (rendered.footer) document.getElementById('signing-brand-footer').hidden = true;
+        document.getElementById('signing-completion-message').hidden = rendered.completion;
     }
     window.PortwoodSigningBranding = {
         apply: function (brand) {
@@ -70,9 +102,10 @@
             body.style.setProperty(
                 '--signing-font',
                 (/^[a-zA-Z0-9 ,"'_-]{1,180}$/.test(page.fontFamily || '') ? page.fontFamily : '') ||
-                { Serif: 'Georgia, "Times New Roman", serif', Humanist: '"Trebuchet MS", Verdana, sans-serif' }[
-                    page.font
-                ] || '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                    { Serif: 'Georgia, "Times New Roman", serif', Humanist: '"Trebuchet MS", Verdana, sans-serif' }[
+                        page.font
+                    ] ||
+                    '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
             );
             var backgroundUrl = https(page.backgroundUrl);
             var rgb = background
@@ -94,7 +127,12 @@
             body.classList.add('signing-branded');
             body.classList.toggle('signing-custom-layout', !!brand.page && page.layoutConfigured !== false);
             text('signing-brand-company', brand.companyName);
-            text('signing-service-context', brand.companyName ? 'Document signing for ' + brand.companyName + ' provided by' : 'Document signing provided by');
+            text(
+                'signing-service-context',
+                brand.companyName
+                    ? 'Document signing for ' + brand.companyName + ' provided by'
+                    : 'Document signing provided by'
+            );
             text('signing-brand-title', brand.title);
             text('signing-brand-welcome', brand.welcomeText);
             text('signing-brand-footer-text', brand.footerText);
@@ -107,37 +145,28 @@
             support.hidden = !supportUrl;
             if (supportUrl) support.href = supportUrl;
             else support.removeAttribute('href');
+            ['signing-brand-header', 'signing-brand-intro', 'signing-brand-footer', 'signing-brand-support'].forEach(
+                function (id) {
+                    document.getElementById(id).style.removeProperty('display');
+                }
+            );
             document.getElementById('signing-brand-header').hidden = false;
             document.getElementById('signing-brand-intro').hidden = false;
             document.getElementById('signing-brand-footer').hidden = !brand.footerText && !supportUrl;
-            var tokens = Object.assign({}, brand, {
-                logoUrl: page.logoUrl || brand.logoUrl,
-                bannerUrl: page.bannerUrl,
-                backgroundUrl: page.backgroundUrl
+            renderSections(brand);
+        },
+        initialize: function (brand) {
+            if (!brand) return;
+            // The server has already emitted the identity, images and CSS variables.
+            // Only attach image failure handling and sanitize optional author HTML.
+            ['signing-brand-logo', 'signing-brand-banner'].forEach(function (id) {
+                var element = document.getElementById(id);
+                element.onerror = function () {
+                    element.hidden = true;
+                };
+                if (element.getAttribute('src') && element.complete && !element.naturalWidth) element.hidden = true;
             });
-            var rendered = {};
-            ['header', 'welcome', 'footer', 'completion'].forEach(function (section) {
-                var container = document.getElementById('signing-custom-' + section);
-                rendered[section] =
-                    container && window.PortwoodBrandContent
-                        ? window.PortwoodBrandContent.render(
-                              container,
-                              page.mode === 'Advanced' ? page[section + 'Html'] : '',
-                              page.customCss || '',
-                              tokens
-                          ).rendered
-                        : false;
-            });
-            if (rendered.header) document.getElementById('signing-brand-header').hidden = true;
-            if (rendered.welcome) {
-                document.getElementById('signing-brand-title').hidden = true;
-                document.getElementById('signing-brand-welcome').hidden = true;
-            } else {
-                document.getElementById('signing-brand-title').hidden = false;
-                document.getElementById('signing-brand-welcome').hidden = false;
-            }
-            if (rendered.footer) document.getElementById('signing-brand-footer').hidden = true;
-            document.getElementById('signing-completion-message').hidden = rendered.completion;
+            renderSections(brand);
         }
     };
 })();
