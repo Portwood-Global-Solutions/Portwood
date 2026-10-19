@@ -287,13 +287,14 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 return;
             }
 
-            // Save as ContentVersion linked to Job
+            // Save as an internal temporary ContentVersion. Do not publish the
+            // cache to the Job's Files related list; it is implementation data,
+            // not user output. The cache is deleted in finish().
             ContentVersion cv = new ContentVersion(
                 Title = 'docgen_cache_' + jobId,
                 PathOnClient = 'docgen_cache_' + jobId + '.json',
                 VersionData = Blob.valueOf(jsonStr),
-                IsMajorVersion = true,
-                FirstPublishLocationId = jobId
+                IsMajorVersion = false
             );
             SObjectAccessDecision cvDec = Security.stripInaccessible(
                 AccessType.CREATABLE,
@@ -406,8 +407,9 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             Title = 'docgen_merge_' + jobId + '_' + seq,
             PathOnClient = 'docgen_merge_' + jobId + '_' + seq + '.html',
             VersionData = Blob.valueOf(html),
-            IsMajorVersion = false,
-            FirstPublishLocationId = jobId
+            // Internal merge input only. Leaving FirstPublishLocationId unset
+            // keeps the temporary HTML out of the Job's Files related list.
+            IsMajorVersion = false
         );
         SObjectAccessDecision cvDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
         insert cvDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
