@@ -113,6 +113,59 @@ private class DocGenTemplateLinterTest {
         System.assertEquals(null, findRule(findings, 'tbody in a CSS selector'));
     }
 
+    private static String multiPageHtml() {
+        // The old selector regex retried every suffix of these declaration
+        // blocks. A modest stylesheet could therefore prevent the entire save.
+        String declarations =
+            'font-family:Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.4;' +
+            'color:#333333;margin:0;padding:6pt;border:1pt solid #cccccc;' +
+            'vertical-align:middle;text-align:left;page-break-inside:avoid;';
+        String css = ('.quote-cell{' + declarations + '}\n').repeat(100);
+        return '<style>' + css + '</style><p>{Name}</p><p>{#Contacts}{LastName}{/Contacts}</p>';
+    }
+
+    @isTest
+    static void multiPageStylesheetDoesNotExhaustRegexBudget() {
+        String html = multiPageHtml();
+        String before = html;
+        Test.startTest();
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        Test.stopTest();
+        System.assertEquals(0, findings.size(), 'Large ordinary stylesheets must still lint cleanly: ' + findings);
+        System.assertEquals(before, html, 'Lint must preserve the original HTML');
+    }
+
+    @isTest
+    static void multiPageHtmlSavesWithoutChangingItsContent() {
+        DocGen_Template__c template = accountTemplate('Name');
+        insert template;
+        String html = multiPageHtml();
+        Test.startTest();
+        Map<String, Object> saved = DocGenController.saveHtmlTemplateBody(template.Id, 'quote.html', html);
+        Test.stopTest();
+        Id versionId = (Id) saved.get('contentVersionId');
+        System.assertNotEquals(null, versionId, 'The advisory CSS scan must not roll back a template save');
+        ContentVersion stored = [SELECT VersionData FROM ContentVersion WHERE Id = :versionId];
+        System.assertEquals(html, stored.VersionData.toString(), 'The saved source must remain intact');
+        System.assertEquals(0, saved.get('warningCount'), 'The full save must still return lint results');
+    }
+
+    @isTest
+    static void selectorScanSeparatesDeclarationsAndNestedRules() {
+        String html =
+            '<STYLE type="text/css">@page{margin:1in;@bottom-center{content:"tbody";}}' +
+            'td{font-family:tbody;}' +
+            'table > tbody > tr{color:#333;}' +
+            '</STYLE><style>@media print{tbody td{padding:1pt;}}</style>' +
+            '<p>{Missing_Field__c}</p><p>{#Contacts}{LastName}</p>';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        DocGenAiHtmlValidator.Finding selectors = findRule(findings, 'tbody in a CSS selector');
+        System.assertNotEquals(null, selectors, 'Selectors in every style block must still be checked');
+        System.assertEquals(2, selectors.occurrences, 'Declaration values must not count as selectors');
+        System.assertNotEquals(null, findRule(findings, 'Merge tag does not resolve'));
+        System.assertNotEquals(null, findRule(findings, 'Unclosed loop tag'));
+    }
+
     @isTest
     static void unclosedLoopTagIsReported() {
         List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
