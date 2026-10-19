@@ -12,6 +12,12 @@
   preserving the existing warning behavior. The focused `DocGenDocxTemplateLinterTest` suite
   passes all 20 tests. Extremely large files can still be subject to Salesforce heap, CPU, and
   DOCX/rendering limits.
+- **HTML template processing no longer relies on whole-document regex scans.** Style/script
+  removal, substantive-content detection, merge-tag detection, and long-link handling now use
+  bounded linear scans, preventing the same regex limit from being reached by large HTML
+  templates while preserving styles and normal merge behavior. Large uploads also bypass the
+  regex-heavy advisory fidelity report, preventing that optional scan from rolling back the
+  upload when Apex reaches its regex step limit.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

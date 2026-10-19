@@ -288,6 +288,25 @@ private class DocGenTemplateLinterTest {
         System.assertNotEquals(null, noTemplate);
     }
 
+    @isTest
+    static void largeHtmlSaveSkipsRegexHeavyLintWithoutBlockingUpload() {
+        DocGen_Template__c tpl = newHtmlTemplate();
+        List<String> paragraphs = new List<String>();
+        for (Integer i = 0; i < 5000; i++) {
+            paragraphs.add('<p class="row">A long imported HTML paragraph with {Name}.</p>');
+        }
+        String html = '<html><body>' + String.join(paragraphs, '') + '</body></html>';
+        System.assert(html.length() > 200000, 'precondition: exercise the bounded large-file path');
+
+        Test.startTest();
+        Map<String, Object> res = DocGenController.saveHtmlTemplateBody(tpl.Id, 'large.html', html);
+        Test.stopTest();
+
+        System.assertNotEquals(null, res.get('contentVersionId'), 'large HTML must still be uploaded');
+        List<DocGenAiHtmlValidator.Finding> warnings = (List<DocGenAiHtmlValidator.Finding>) res.get('warnings');
+        System.assertNotEquals(null, findRule(warnings, 'Detailed fidelity scan skipped'));
+    }
+
     // -----------------------------------------------------------------------
     // The hook: every HTML body write funnels through saveHtmlTemplateBody, so
     // the warnings ride back with the save result.

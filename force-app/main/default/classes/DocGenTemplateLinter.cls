@@ -21,6 +21,13 @@
  * never touches the author's bytes. A warning is a heads-up, not a blocker.
  */
 public with sharing class DocGenTemplateLinter {
+    // The compatibility validator intentionally uses many regex-based rewrite rules.
+    // Apex enforces a non-catchable regex step ceiling, so running those advisory
+    // rules over a large imported HTML file can roll back the body save itself.
+    // Large files still save and receive the cheap page-setup check; their detailed
+    // fidelity report is deferred instead of risking an uncatchable LimitException.
+    private static final Integer MAX_REGEX_LINT_CHARS = 200000;
+
     // Tags that resolve without a field on the base object. GROUPNAME only
     // exists inside a {#GroupBy} block; skipping it globally is harmless
     // because it never describes-validates anyway.
@@ -47,6 +54,19 @@ public with sharing class DocGenTemplateLinter {
     public static List<DocGenAiHtmlValidator.Finding> lint(String html, DocGen_Template__c tmpl) {
         List<DocGenAiHtmlValidator.Finding> findings = new List<DocGenAiHtmlValidator.Finding>();
         if (String.isBlank(html)) {
+            return findings;
+        }
+        if (html.length() > MAX_REGEX_LINT_CHARS) {
+            runPageSetupConflictCheck(html, tmpl, findings);
+            findings.add(
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    'Detailed fidelity scan skipped',
+                    1,
+                    'The HTML is too large for Apex regex-based advisory checks. The file was saved unchanged; ' +
+                    'normal merge and rendering behavior is unaffected.'
+                )
+            );
             return findings;
         }
         runRendererCompatibilityCheck(html, findings);

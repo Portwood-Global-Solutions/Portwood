@@ -10518,8 +10518,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return html;
         }
-        return html.replaceAll('(?is)<style[^>]*>.*?</style\\s*>', '')
-            .replaceAll('(?is)<script[^>]*>.*?</script\\s*>', '');
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer style = lower.indexOf('<style', cursor);
+            Integer script = lower.indexOf('<script', cursor);
+            Integer start = style == -1 ? script : script == -1 ? style : Math.min(style, script);
+            if (start == -1) {
+                break;
+            }
+            String name = style != -1 && style == start ? 'style' : 'script';
+            Integer boundary = start + 1 + name.length();
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            String closeToken = name == 'style' ? '</style' : '</script';
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf(closeToken, openEnd + 1);
+            Integer closeEnd = closeStart == -1 ? -1 : lower.indexOf('>', closeStart);
+            if (openEnd == -1 || closeEnd == -1) {
+                cursor = start + 1;
+                continue;
+            }
+            parts.add(html.substring(cursor, start));
+            cursor = closeEnd + 1;
+        }
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
     }
 
     // ---------------------------------------------------------------------------
@@ -11027,16 +11054,30 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return html;
         }
 
-        Matcher m = Pattern.compile('(?is)<a\\b[^>]*>.*?</a>').matcher(html);
-        String out = '';
-        Integer last = 0;
-        while (m.find()) {
-            out += html.substring(last, m.start());
-            out += addBreaksToOneLongHyperlink(m.group(0));
-            last = m.end();
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (true) {
+            Integer start = lower.indexOf('<a', cursor);
+            if (start == -1) {
+                break;
+            }
+            Integer boundary = start + 2;
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf('</a>', openEnd + 1);
+            if (openEnd == -1 || closeStart == -1) {
+                break;
+            }
+            parts.add(html.substring(cursor, start));
+            parts.add(addBreaksToOneLongHyperlink(html.substring(start, closeStart + 4)));
+            cursor = closeStart + 4;
         }
-        out += html.substring(last);
-        return out;
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
     }
 
     private static String addBreaksToOneLongHyperlink(String anchorHtml) {
