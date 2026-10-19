@@ -3,6 +3,49 @@
     color: var(--docgen-color-neutral-10, #111827);
 }
 
+.template-review {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.75rem;
+    color: #4b5563;
+    font-size: 0.8125rem;
+}
+
+.template-review summary {
+    cursor: pointer;
+    display: list-item;
+    list-style: disclosure-closed inside;
+}
+
+.template-review details[open] > summary {
+    list-style-type: disclosure-open;
+}
+
+.template-review-toggle {
+    align-items: center;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 0.5rem;
+    padding: 0;
+    text-align: left;
+    width: 100%;
+}
+
+.template-review-toggle:focus-visible,
+.template-review summary:focus-visible {
+    outline: 2px solid #0176d3;
+    outline-offset: 3px;
+}
+
+.template-review-note {
+    border-top: 1px solid #e5e7eb;
+    padding: 0.625rem 0;
+}
+
 /* Builder 2.0 */
 .slash-item:hover {
     background: #f0f4ff !important;

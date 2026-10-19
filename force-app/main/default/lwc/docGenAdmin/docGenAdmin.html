@@ -3417,8 +3417,8 @@
                                         <template if:true={isPanelReview}>
                                             <div class="pw-panel-copy">
                                                 <p>
-                                                    These notes describe differences to check in the PDF. Your document
-                                                    can still be saved.
+                                                    Generate a sample to check the layout and merge fields. Expand a
+                                                    note below for details.
                                                 </p>
                                                 <template if:false={hasLintFindings}
                                                     ><p>No PDF notes for the current saved content.</p></template
@@ -6033,35 +6033,47 @@
                                             </div>
                                         </template>
 
-                                        <!-- #272 fidelity report. Warnings, never blockers: the body
-                                             was already stored when these were produced, so the heading
-                                             says what will happen, not what failed. -->
+                                        <!-- Advisory notes are available on demand after a successful upload. -->
                                         <template if:true={hasLintFindings}>
-                                            <div class="slds-box slds-var-m-top_medium">
-                                                <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">
-                                                    Template warnings — this will still render
-                                                </h3>
-                                                <p
-                                                    class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
+                                            <section class="template-review slds-var-m-top_medium">
+                                                <button
+                                                    type="button"
+                                                    class="template-review-toggle"
+                                                    aria-expanded={lintReviewOpen}
+                                                    aria-controls="template-review-notes"
+                                                    onclick={handleToggleLintReview}
                                                 >
-                                                    Nothing was blocked and your file was saved as-is. The PDF engine is
-                                                    CSS 2.1, so at render time it handles the items below differently
-                                                    than a browser would — here's what changes.
-                                                </p>
-                                                <template for:each={lintFindings} for:item="f">
-                                                    <div key={f.key} class="slds-var-m-bottom_x-small">
-                                                        <lightning-badge label={f.badge} class={f.badgeClass}>
-                                                        </lightning-badge>
-                                                        <strong class="slds-var-m-left_x-small">{f.rule}</strong>
-                                                        <span class="slds-text-body_small slds-text-color_weak">
-                                                            &times;{f.occurrences}</span
+                                                    <lightning-icon
+                                                        icon-name={lintReviewIcon}
+                                                        size="xx-small"
+                                                    ></lightning-icon>
+                                                    <span>Review template notes</span>
+                                                </button>
+                                                <div id="template-review-notes">
+                                                    <template if:true={lintReviewOpen}>
+                                                        <p
+                                                            class="slds-text-body_small slds-text-color_weak slds-var-m-vertical_small"
                                                         >
-                                                        <p class="slds-text-body_small slds-var-m-left_medium">
-                                                            {f.detail}
+                                                            Your file was accepted. Generate a sample to check the
+                                                            layout and merge fields. These notes can help with that
+                                                            review.
                                                         </p>
-                                                    </div>
-                                                </template>
-                                            </div>
+                                                        <template for:each={lintFindings} for:item="f">
+                                                            <details key={f.key} class="template-review-note">
+                                                                <summary>
+                                                                    {f.rule}
+                                                                    <span class="slds-text-color_weak"
+                                                                        >&times;{f.occurrences}</span
+                                                                    >
+                                                                </summary>
+                                                                <p class="slds-text-body_small slds-var-m-top_x-small">
+                                                                    {f.detail}
+                                                                </p>
+                                                            </details>
+                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </section>
                                         </template>
 
                                         <template if:true={hasUploadedPdfAcroFormFields}>

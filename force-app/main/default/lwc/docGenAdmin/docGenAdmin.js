@@ -652,6 +652,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // the saveHtmlTemplateBody / saveAndPublishHtmlBody response. Advisory
     // only — the body is already stored when these show, nothing was blocked.
     @track lintFindings = [];
+    @track lintReviewOpen = false;
     // Live PDF preview: draft HTML → real Blob.toPdf render → blob: iframe.
     @track pdfPreviewUrl = null;
     @track isPdfPreviewLoading = false;
@@ -5709,7 +5710,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateId = row.Id;
             // Findings belong to the body that was linted — a different template
             // must never see the previous one's report.
-            this.lintFindings = [];
+            this._setLintFindings();
             this.editTemplateName = row.Name;
             this.editTemplateCategory = row[F.Category];
             this.editTemplateBrand = row[F.Brand] || '';
@@ -6422,9 +6423,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // path's saveHtmlTemplateBody). Advisory only — the version is already
             // stored, nothing was blocked. Render into the SAME panel the HTML
             // report uses.
-            if (saveResult && Array.isArray(saveResult.warnings) && saveResult.warnings.length > 0) {
-                this.lintFindings = this._mapLintFindings(saveResult.warnings);
-                this._toastLintFindings();
+            if (['Word', 'PowerPoint', 'PPT', 'PPTX'].includes(this.editTemplateType)) {
+                this._setLintFindings(saveResult?.warnings);
             }
             if (versionId && savedPdfSnapshotJson) {
                 await savePdfAcroFormSnapshot({
@@ -7201,33 +7201,30 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.lintFindings && this.lintFindings.length > 0;
     }
 
+    get lintReviewIcon() {
+        return this.lintReviewOpen ? 'utility:chevrondown' : 'utility:chevronright';
+    }
+
+    handleToggleLintReview() {
+        this.lintReviewOpen = !this.lintReviewOpen;
+    }
+
+    _setLintFindings(warnings) {
+        this.lintReviewOpen = false;
+        this.lintFindings = this._mapLintFindings(warnings);
+    }
+
     /**
-     * Fidelity report (#272): server Finding DTOs → badge rows, the same shape
-     * the Agentforce report renders. Lint actions are always 'warning'.
+     * Advisory review notes stay available in the review panel without issuing
+     * another toast after a successful save.
      */
     _mapLintFindings(warnings) {
         return (warnings || []).map((f, i) => ({
             key: `lint-${i}`,
             rule: f.rule,
             detail: f.detail,
-            occurrences: f.occurrences,
-            badge: f.action === 'repaired' ? 'Repaired' : f.action === 'removed' ? 'Removed' : 'Check this',
-            badgeClass:
-                f.action === 'warning' ? 'slds-theme_warning' : f.action === 'repaired' ? 'slds-theme_success' : ''
+            occurrences: f.occurrences
         }));
-    }
-
-    // Sticky so the author can read it while scrolling to the report; the save
-    // itself already got its own success toast.
-    _toastLintFindings() {
-        if (this.useModernDesigner && this.activeMainTab === 'design') return;
-        const n = this.lintFindings.length;
-        this.showToast(
-            'Saved — ' + n + ' template warning' + (n === 1 ? '' : 's'),
-            'This will still render. The fidelity report in the edit view lists what the PDF engine handles differently — nothing was blocked.',
-            'warning',
-            'sticky'
-        );
     }
 
     // Canvas saves bypass _processAndSaveHtmlBody (docGenCanvas calls
@@ -7235,10 +7232,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // event instead of a save response this component holds.
     handleCanvasSaved(event) {
         const warnings = event && event.detail ? event.detail.warnings : null;
-        this.lintFindings = this._mapLintFindings(warnings);
-        if (this.lintFindings.length > 0) {
-            this._toastLintFindings();
-        }
+        this._setLintFindings(warnings);
     }
 
     triggerHtmlFilePicker() {
@@ -7308,7 +7302,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async _processAndSaveHtmlBody(templateId, htmlText, fileName, zipImages, source) {
         // A new save invalidates whatever the last fidelity report said — never
         // leave stale findings showing for a body they were not run against.
-        this.lintFindings = [];
+        this._setLintFindings();
         // REGIONS: this is the single choke point every body reaches on its way to a
         // ContentVersion — editor save, file upload, AI paste-back, switch-to-HTML.
         // Adopting here means an author can upload an HTML file that carries
@@ -7423,15 +7417,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             : '';
         // #272 fidelity report — the linter's warnings ride the save response.
         // Advisory only: the body above is already stored.
-        this.lintFindings = this._mapLintFindings(bodyResult.warnings);
+        this._setLintFindings(bodyResult.warnings);
         this.showToast(
             source === 'editor' ? 'Editor HTML staged' : 'Uploaded',
             fileName + imgMsg + '.' + pageMsg + ' Click "Save as New Version" to activate.',
             'success'
         );
-        if (this.lintFindings.length > 0) {
-            this._toastLintFindings();
-        }
         return rewritten;
     }
 
