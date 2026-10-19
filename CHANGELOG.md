@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Canvas rich text colors now persist when applied through the toolbar or entered as RGB in HTML (#469).**
+  RGB colors are converted to equivalent hex values before sanitization, keeping the selected colors in the
+  canvas and saved template. Existing named and hex colors continue to work; unsupported color functions
+  remain filtered.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
