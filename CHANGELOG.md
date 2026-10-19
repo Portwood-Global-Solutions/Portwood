@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Word-to-PDF conversion preserves zero page margins and header/footer distances so full-page covers fit on the intended page (#479).
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
