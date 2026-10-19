@@ -189,6 +189,7 @@ global with sharing class DocGenEmailTemplateService {
         if (String.isBlank(logo)) {
             logo = settings.Signature_Email_Logo_Url__c;
         }
+        logo = DocGenAssetPolicy.assetUrl(logo);
         String footer = String.isNotBlank(def.footerTextOverride)
             ? def.footerTextOverride
             : (activeBrand != null && String.isNotBlank(activeBrand.Footer_Text__c))
@@ -227,6 +228,8 @@ global with sharing class DocGenEmailTemplateService {
         } else {
             out.htmlBody = wrapChrome(bodyInner, brand, logo, company, footer, def.logoHeight);
         }
+
+        DocGenAssetPolicy.assertHtmlResources(out.htmlBody);
 
         // Plain part: explicit override if provided, else derive from the body.
         if (String.isNotBlank(def.bodyPlain)) {

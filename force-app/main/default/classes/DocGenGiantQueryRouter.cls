@@ -245,7 +245,10 @@ public with sharing class DocGenGiantQueryRouter {
                 String.escapeSingleQuotes(lookupField) +
                 ' = :parentRecordId LIMIT 1';
             // CxSAST: object + fields validated against Schema / no dots; USER_MODE enforced.
-            List<SObject> sampleRows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection
+            List<SObject> sampleRows = Database.query(
+                DocGenSignatureIpContext.publicQuery(soql),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection
             if (sampleRows.isEmpty()) {
                 return 0;
             }

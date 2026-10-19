@@ -29,6 +29,8 @@ export function fontPickerOptions(builtins, faces = []) {
 }
 export function loadFontFace(face) {
     if (!face?.previewUrl || !face?.previewFamily) return Promise.resolve();
+    if (!/^\/sfc\/dist\/version\/download\//.test(face.previewUrl) || /[\\\r\n]/.test(face.previewUrl))
+        return Promise.reject(new Error('Font previews must use Salesforce Files.'));
     if (!loaded.has(face.key)) {
         const promise = (async () => {
             const response = await fetch(face.previewUrl, { credentials: 'include' });

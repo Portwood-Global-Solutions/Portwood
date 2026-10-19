@@ -631,7 +631,9 @@ public with sharing class DocGenFontController {
             '</p><p>' +
             instructions +
             '</p></body></html>';
-        Blob pdf = Test.isRunningTest() ? Blob.valueOf('%PDF-test') : Blob.toPdf(html);
+        Blob pdf = Test.isRunningTest()
+            ? Blob.valueOf('%PDF-test')
+            : Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
         ContentVersion proof = new ContentVersion(
             Title = 'Portwood font specimen ' + f.Name,
             PathOnClient = 'font-specimen.pdf',

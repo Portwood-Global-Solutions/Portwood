@@ -1231,7 +1231,9 @@ public without sharing class DocGenSignatureService {
 
         if (Test.isRunningTest()) {
             try {
-                Blob pdfBlob = Blob.toPdf('<html><body><p>Test PDF - Signed Document</p></body></html>');
+                Blob pdfBlob = Blob.toPdf(
+                    DocGenAssetPolicy.assertHtmlResources('<html><body><p>Test PDF - Signed Document</p></body></html>')
+                );
                 DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title' });
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 List<ContentVersion> sources = [
@@ -1334,7 +1336,9 @@ public without sharing class DocGenSignatureService {
                 Blob stampedBlob;
                 Blob pdfBlob;
                 if (Test.isRunningTest()) {
-                    pdfBlob = Blob.toPdf('<html><body><p>Test PDF - Signed</p></body></html>');
+                    pdfBlob = Blob.toPdf(
+                        DocGenAssetPolicy.assertHtmlResources('<html><body><p>Test PDF - Signed</p></body></html>')
+                    );
                 } else {
                     // Stamp typed names into DOCX
                     stampedBlob = stampAllSignaturesToBlob(req.Source_Document_Id__c, signerDataList);
@@ -1371,7 +1375,7 @@ public without sharing class DocGenSignatureService {
 
                     String html = DocGenHtmlRenderer.convertToHtml(documentXml, imageUrlMap);
                     assertNoUnresolvedSignatureSentinels(html);
-                    pdfBlob = Blob.toPdf(html);
+                    pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
                 }
 
                 // Save PDF to related record
@@ -1611,7 +1615,9 @@ public without sharing class DocGenSignatureService {
                 formFieldsResolvedHere = true;
                 Blob pdfBlob;
                 if (Test.isRunningTest()) {
-                    pdfBlob = Blob.toPdf('<html><body><p>Test PDF - Signed</p></body></html>');
+                    pdfBlob = Blob.toPdf(
+                        DocGenAssetPolicy.assertHtmlResources('<html><body><p>Test PDF - Signed</p></body></html>')
+                    );
                 } else if (String.isNotBlank(req.Render_Data_Snapshot__c) && req.Template__c != null) {
                     // M2 snapshot-backed: re-render the document from the send-time
                     // data snapshot (not the live record), then append the cert page.
@@ -2112,7 +2118,7 @@ public without sharing class DocGenSignatureService {
 
             assertNoUnresolvedSignatureSentinels(html);
 
-            return Blob.toPdf(html);
+            return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
         }
 
         /**
@@ -2340,7 +2346,7 @@ public without sharing class DocGenSignatureService {
 
             assertNoUnresolvedSignatureSentinels(fullHtml);
 
-            return Blob.toPdf(fullHtml);
+            return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(fullHtml));
         }
     }
 }

@@ -46,10 +46,10 @@ public without sharing class DocGenSigningPageView {
             : brand.completionMessage;
     }
     public String getLogoUrl() {
-        return brand == null ? '' : safeUrl(brand.logoUrl);
+        return brand == null ? '' : safeAsset(brand.logoUrl);
     }
     public String getBannerUrl() {
-        return safeUrl(pageText('bannerUrl'));
+        return safeAsset(pageText('bannerUrl'));
     }
     public String getBannerAlt() {
         return pageText('bannerAlt');
@@ -139,7 +139,7 @@ public without sharing class DocGenSigningPageView {
             ';--signing-font:' +
             font +
             ';';
-        String image = safeUrl(pageText('backgroundUrl'));
+        String image = safeAsset(pageText('backgroundUrl'));
         if (String.isNotBlank(image)) {
             List<String> rgb = new List<String>();
             for (Integer i = 1; i < 7; i += 2)
@@ -170,6 +170,10 @@ public without sharing class DocGenSigningPageView {
     }
     private static String hex(String value, String fallback) {
         return value != null && Pattern.matches('#[a-fA-F0-9]{6}', value) ? value : fallback;
+    }
+    private static String safeAsset(String value) {
+        String image = DocGenAssetPolicy.assetUrl(value);
+        return image == null ? '' : image;
     }
     private static String safeUrl(String value) {
         String url = DocGenSigningBranding.safeHttpsUrl(value);

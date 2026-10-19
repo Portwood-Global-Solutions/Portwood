@@ -201,7 +201,9 @@ public with sharing class DocGenGettingStartedController {
         }
         // A real-record render must obey the caller's sharing, object and field permissions.
         List<SObject> visible = Database.query(
-            'SELECT Id FROM ' + objectName + ' WHERE Id = :recordId WITH USER_MODE LIMIT 1'
+            DocGenSignatureIpContext.publicQuery(
+                'SELECT Id FROM ' + objectName + ' WHERE Id = :recordId WITH USER_MODE LIMIT 1'
+            )
         );
         if (visible.isEmpty())
             throw new DocGenException('You cannot access this record. Choose another record.');

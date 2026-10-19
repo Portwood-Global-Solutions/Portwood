@@ -838,6 +838,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Full ZIP decompression path — used for DOCX/PPTX/XLSX output or when pre-decomposed parts are unavailable
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
 
         // Excel two-pass: worksheets collected here, processed after shared strings are read
         Map<String, String> pendingExcelSheets = new Map<String, String>();
@@ -1585,6 +1586,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
         String rawDocumentXml = null;
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
@@ -2216,6 +2218,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Blob templateBlob = cvs[0].VersionData;
         cvs = null; // release the SObject wrapper, keep just the Blob
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
 
         // Determine paths based on template type
         String relsPath;
@@ -2847,7 +2850,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 String.isNotBlank(mr.documentXml))
                 ? mr.documentXml
                 : '<html><body><p>Test PDF</p></body></html>';
-            return Blob.toPdf(lastRenderedHtml);
+            return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(lastRenderedHtml));
         }
 
         // Orientation override drives canonical letter dimensions in the
@@ -2873,7 +2876,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 String htmlDoc = DocGenHtmlRenderer.injectAdminWatermarkIntoHtml(mr.documentXml);
                 ensureTemplateAssetImageAccessForPdf(templateId, recordId, htmlDoc);
                 lastRenderedHtml = htmlDoc;
-                Blob htmlPdf = Blob.toPdf(htmlDoc);
+                Blob htmlPdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(htmlDoc));
                 removeTemplateImageLinksAfterRender(templateId, recordId, htmlDoc);
                 return htmlPdf;
             }
@@ -2889,7 +2892,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             ensureTemplateAssetImageAccessForPdf(templateId, recordId, html);
             lastRenderedHtml = html;
 
-            Blob docxPdf = Blob.toPdf(html);
+            Blob docxPdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
             removeTemplateImageLinksAfterRender(templateId, recordId, html);
             return docxPdf;
         } finally {
@@ -7165,6 +7168,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return null;
         }
         String src = imgTag.substring(srcIdx, srcEnd).replace('&amp;', '&');
+        if (!src.startsWith('data:') && DocGenAssetPolicy.assetUrl(src) == null)
+            throw new DocGenException('Use Salesforce-hosted images from Assets in rich text.');
 
         // Extract optional width/height. Two storage forms exist in rich text HTML:
         //   1. width="200" height="150" attributes — set by older editors
@@ -9548,7 +9553,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         public List<SObject> query(String soql, Id recordId) {
             // recordId is bound via the :recordId reference inside soql.
             /* code-analyzer-suppress ApexFlsViolation */
-            return Database.query(soql); // NOPMD — title field read, package-internal, sharing-bypassed by design
+            return Database.query(DocGenSignatureIpContext.publicQuery(soql)); // NOPMD — title field read, package-internal, sharing-bypassed by design
         }
     }
 
@@ -9621,7 +9626,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Default: pull Name + try common parent relationship fields. Best-effort.
         try {
             String objType = String.valueOf(recordId.getSObjectType());
-            List<SObject> rows = Database.query('SELECT Id, Name FROM ' + objType + ' WHERE Id = :recordId LIMIT 1');
+            List<SObject> rows = Database.query(
+                DocGenSignatureIpContext.publicQuery(
+                    'SELECT Id, Name FROM ' + objType + ' WHERE Id = :recordId LIMIT 1'
+                )
+            );
             Map<String, Object> out = new Map<String, Object>();
             if (!rows.isEmpty()) {
                 out.put('Name', rows[0].get('Name'));
@@ -10171,6 +10180,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Decode template ZIP to get the raw document XML
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
         String rawDocumentXml = null;
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
@@ -10921,6 +10931,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String footer,
         Boolean prepareFonts
     ) {
+        DocGenAssetPolicy.assertHtmlResources(body);
+        DocGenAssetPolicy.assertHtmlResources(header);
+        DocGenAssetPolicy.assertHtmlResources(footer);
+        DocGenAssetPolicy.assertCss(sourceStyles);
         body = DocGenFontService.expandTags(body);
         header = DocGenFontService.expandTags(header);
         footer = DocGenFontService.expandTags(footer);

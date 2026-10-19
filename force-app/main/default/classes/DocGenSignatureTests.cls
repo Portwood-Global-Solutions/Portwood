@@ -592,7 +592,7 @@ private class DocGenSignatureTests {
         Test.startTest();
         DocGenSetupController.saveSignatureSettings(
             '#FF0000',
-            'https://logo.png',
+            URL.getOrgDomainUrl().toExternalForm() + '/resource/logo.png',
             'Sign {DocumentTitle}',
             'Please sign',
             'Footer text',

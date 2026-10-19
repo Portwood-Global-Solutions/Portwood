@@ -53,6 +53,27 @@
         ).split(' ')
     );
 
+    function assetUrl(value) {
+        if (!value || /[\\<>\s]/.test(value) || String(value).startsWith('//')) return '';
+        if (/^data:image\/(png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=]+$/i.test(value)) return value;
+        try {
+            var source = new URL(value, window.location.href);
+            if (source.protocol !== 'https:' || source.username || source.password) return '';
+            if (!/^\/(resource\/|sfc\/|sfsites\/|file-asset\/|servlet\/(rtaImage|servlet\.Image))/i.test(source.pathname) &&
+                !/\/(sfsites|file-asset)\//i.test(source.pathname)) return '';
+            if (!/^https?:/i.test(value)) return source.pathname + source.search;
+            if (source.origin === window.location.origin) return source.href;
+            function identity(host) {
+                var match = host.match(/^(.*?)\.(?:my\.salesforce-sites\.com|my\.salesforce\.com|my\.site\.com|file\.force\.com|lightning\.force\.com|vf\.force\.com)$/i);
+                return match ? match[1].replace(/--(?:c|portwoodglobal)(?=\.|$)/i,'').toLowerCase() : null;
+            }
+            if (source.hostname.endsWith('.content.force.com') && /^\/servlet\/rtaImage/i.test(source.pathname)) return source.href;
+            var org = identity(window.location.hostname);
+            return org && org === identity(source.hostname) ? source.href : '';
+        } catch (_e) {
+            return '';
+        }
+    }
     function https(value) {
         try {
             var url = new URL(value);
@@ -174,6 +195,7 @@
         }
     }
     window.PortwoodBrandContent = {
+        assetUrl: assetUrl,
         render: function (container, source, css, tokens) {
             while (container.firstChild) container.removeChild(container.firstChild);
             container.hidden = true;
@@ -183,6 +205,42 @@
             source = source.replace(/\{\{([a-zA-Z]+)\}\}/g, function (_match, key) {
                 return escape(tokens[key]);
             });
+            // Strip resource destinations inside an inert template before any
+            // sanitizer parser or rendered fragment can encounter them.
+            var preOmitted = false;
+            var inert = document.createElement('template');
+            // eslint-disable-next-line @lwc/lwc/no-inner-html -- Inert prepass filters resources before DOMPurify or live insertion.
+            inert.innerHTML = source;
+            Array.prototype.forEach.call(
+                inert.content.querySelectorAll(
+                    'script,link,style,iframe,object,embed,svg,math,video,audio,source,base,meta'
+                ),
+                function (node) {
+                    preOmitted = true;
+                    node.remove();
+                }
+            );
+            Array.prototype.forEach.call(inert.content.querySelectorAll('*'), function (node) {
+                Array.prototype.slice.call(node.attributes).forEach(function (attribute) {
+                    var name = attribute.name.toLowerCase();
+                    if (
+                        name.indexOf('on') === 0 ||
+                        ['srcset', 'ping', 'poster', 'background', 'data', 'xlink:href'].indexOf(name) !== -1
+                    )
+                        node.removeAttribute(attribute.name);
+                    else if (name === 'src') {
+                        var local = node.tagName === 'IMG' ? assetUrl(attribute.value) : '';
+                        if (local) node.setAttribute('src', local);
+                        else {
+                            preOmitted = true;
+                            node.removeAttribute('src');
+                        }
+                    }
+                });
+                if (node.hasAttribute('style')) node.setAttribute('style', declarations(node.style).css);
+            });
+            // eslint-disable-next-line @lwc/lwc/no-inner-html -- Serialize the resource-filtered inert fragment.
+            source = inert.innerHTML;
             var fragment = window.DOMPurify.sanitize(source, {
                 ALLOWED_TAGS: tags,
                 ALLOWED_ATTR: [
@@ -216,9 +274,11 @@
             });
             // DOMPurify's inert parser reports its temporary BODY wrapper when
             // an explicit tag list is used. It is not omitted author content.
-            var omitted = window.DOMPurify.removed.some(function (item) {
-                return !item.element || item.element.nodeName !== 'BODY';
-            });
+            var omitted =
+                preOmitted ||
+                window.DOMPurify.removed.some(function (item) {
+                    return !item.element || item.element.nodeName !== 'BODY';
+                });
             Array.prototype.forEach.call(fragment.querySelectorAll('*'), function (node) {
                 if (node.hasAttribute('style')) {
                     var declaration = declarations(node.style);
@@ -227,7 +287,7 @@
                     omitted = omitted || declaration.omitted;
                 }
                 if (node.tagName === 'IMG') {
-                    var src = https(node.getAttribute('src'));
+                    var src = assetUrl(node.getAttribute('src'));
                     if (!src) {
                         omitted = omitted || !!node.getAttribute('src');
                         node.remove();

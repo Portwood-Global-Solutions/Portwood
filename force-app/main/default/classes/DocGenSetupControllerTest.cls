@@ -182,8 +182,27 @@ private class DocGenSetupControllerTest {
     // =========================================================================
 
     @IsTest
+    static void externalSignatureLogoIsRejected() {
+        Boolean rejected = false;
+        try {
+            DocGenSetupController.saveSignatureSettings(
+                '#0176D3',
+                'https://example.com/tracker.png',
+                'Subject',
+                'Message',
+                'Footer',
+                'Company',
+                null
+            );
+        } catch (AuraHandledException ex) {
+            rejected = true;
+        }
+        System.assert(rejected, 'Signature emails must use Salesforce-hosted assets.');
+    }
+
+    @IsTest
     static void testSaveSignatureSettingsOversizedLogoUrlFriendlyError() {
-        String longUrl = 'https://example.com/' + 'a'.repeat(300);
+        String longUrl = URL.getOrgDomainUrl().toExternalForm() + '/resource/' + 'a'.repeat(300);
         Boolean caught = false;
         String message;
         Test.startTest();
@@ -212,7 +231,7 @@ private class DocGenSetupControllerTest {
 
     @IsTest
     static void testSaveSettingsOversizedSiteUrlFriendlyError() {
-        String longUrl = 'https://example.com/' + 'a'.repeat(300);
+        String longUrl = URL.getOrgDomainUrl().toExternalForm() + '/resource/' + 'a'.repeat(300);
         Boolean caught = false;
         String message;
         Test.startTest();

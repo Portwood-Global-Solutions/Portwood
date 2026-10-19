@@ -161,7 +161,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         Blob pdfBlob;
         try {
-            pdfBlob = Blob.toPdf(html);
+            pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
         } catch (Exception pdfErr) {
             // Flying Saucer stack overflow — fall back to multi-part PDF approach
             pdfBlob = null;
@@ -828,7 +828,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                 ' FROM ' +
                 String.escapeSingleQuotes(baseObj) +
                 ' WHERE Id = :recordId LIMIT 1';
-            List<SObject> recs = Database.query(soql, AccessLevel.USER_MODE);
+            List<SObject> recs = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE);
             if (recs.isEmpty()) {
                 return html;
             }
@@ -1288,7 +1288,10 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         AggregateResult agg;
         try {
-            List<AggregateResult> results = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — child object + fields validated against Schema + declared template fields; lookup and where re-use the same sanitized clauses as row queries
+            List<AggregateResult> results = Database.query(
+                DocGenSignatureIpContext.publicQuery(soql),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection — child object + fields validated against Schema + declared template fields; lookup and where re-use the same sanitized clauses as row queries
             if (results.isEmpty()) {
                 return html;
             }
@@ -1418,7 +1421,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         List<AggregateResult> groups;
         try {
-            groups = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — field names resolved through the child Schema describe; lookup and where reuse the same sanitized clauses as row queries
+            groups = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — field names resolved through the child Schema describe; lookup and where reuse the same sanitized clauses as row queries
         } catch (Exception qErr) {
             // Grouped read failed — leave these tags to the caller's ungrouped path rather
             // than blocking the render. Same non-fatal posture as the surrounding method.
@@ -1568,7 +1571,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                         ' FROM ' +
                         String.escapeSingleQuotes(String.valueOf(parentType)) +
                         ' WHERE Id = :recordId LIMIT 1';
-                    List<SObject> rows = Database.query(q, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — source field validated against parent Schema field map; object name from describe; parameterized Id
+                    List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(q), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — source field validated against parent Schema field map; object name from describe; parameterized Id
                     if (!rows.isEmpty()) {
                         Object v = rows[0].get(sourceField);
                         String s = v == null ? null : String.valueOf(v).trim();
@@ -1798,7 +1801,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
             List<AggregateResult> rows;
             try {
-                rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup/pivot validated against Schema; whereCls + chartWhere pre-sanitized
+                rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup/pivot validated against Schema; whereCls + chartWhere pre-sanitized
             } catch (Exception qErr) {
                 String noop = qErr.getMessage(); // NOPMD — non-fatal
                 continue;

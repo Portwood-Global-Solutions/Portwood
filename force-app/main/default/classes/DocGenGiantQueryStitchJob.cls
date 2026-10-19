@@ -153,7 +153,7 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
             fullHtml += combinedHtml + '</body></html>';
             combinedHtml = null;
 
-            Blob pdfBlob = Blob.toPdf(fullHtml);
+            Blob pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(fullHtml));
 
             // Collect intermediate part PDF (prefixed for identification in finish)
             String seq = String.valueOf(groupIdx).leftPad(5, '0');

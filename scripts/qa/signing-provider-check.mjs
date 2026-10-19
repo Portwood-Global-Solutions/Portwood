@@ -66,6 +66,7 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
     };
     const markup = signingPageFixture(read(`pages/${name}.page`), brand).replace('</head>', sharedScripts + '</head>');
     const errors = [];
+    const network = [];
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('jsdomError', (error) => errors.push(error.message));
     const dom = new JSDOM(markup, {
@@ -73,7 +74,10 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
         runScripts: 'dangerously',
         virtualConsole,
         beforeParse(window) {
-            window.fetch = async () => ({ ok: true, json: async () => ({ ip: '127.0.0.1' }) });
+            window.fetch = (url) => {
+                network.push(url);
+                throw new Error('Signing initialization must not make browser fetch requests.');
+            };
             window.Visualforce = {
                 remoting: {
                     Manager: {
@@ -102,6 +106,8 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
     assert.equal(dom.window.document.querySelector('#state-verify').style.display, '');
     checks++;
     assert.deepEqual(errors, []);
+    checks++;
+    assert.deepEqual(network, [], 'Signing must not contact an IP lookup or another external service.');
     checks++;
     dom.window.close();
 }

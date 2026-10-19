@@ -1,3 +1,4 @@
+import { salesforceAssetUrl } from 'c/docGenAuthoringKit';
 import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { loadScript } from 'lightning/platformResourceLoader';
@@ -160,8 +161,8 @@ export default class DocGenBrands extends LightningElement {
         const tokens = {
             companyName: this.previewCompanyOrName,
             logoUrl: this.pageLogoUrl,
-            bannerUrl: safeHttps(this.page.bannerUrl),
-            backgroundUrl: safeHttps(this.page.backgroundUrl),
+            bannerUrl: salesforceAssetUrl(this.page.bannerUrl),
+            backgroundUrl: salesforceAssetUrl(this.page.backgroundUrl),
             title: this.pageTitle,
             welcomeText: this.pageWelcome,
             footerText: this.pageFooter,
@@ -319,7 +320,10 @@ export default class DocGenBrands extends LightningElement {
                         safeColor(theme.color || b.signingColor || b.brandColor, '#5A4FCF'),
                     thumbnailTitle: b.signingTitle || 'Review and sign',
                     thumbnailCompany: b.companyName || b.name,
-                    thumbnailLogo: safeHttps(theme.logoUrl) || safeHttps(config.logoUrl) || safeHttps(b.logoUrl),
+                    thumbnailLogo:
+                        salesforceAssetUrl(theme.logoUrl) ||
+                        salesforceAssetUrl(config.logoUrl) ||
+                        salesforceAssetUrl(b.logoUrl),
                     themeLabel: config.brandingSetId ? 'Live Salesforce theme' : 'Brand colors',
                     initials: initialsOf(b.name),
                     statusLabel: b.isActive === false ? 'Inactive' : 'Active',
@@ -367,7 +371,9 @@ export default class DocGenBrands extends LightningElement {
     }
 
     get previewLogoUrl() {
-        return safeHttps(this.form.logoUrl) || safeHttps(this.orgDefaults.Signature_Email_Logo_Url__c);
+        return (
+            salesforceAssetUrl(this.form.logoUrl) || salesforceAssetUrl(this.orgDefaults.Signature_Email_Logo_Url__c)
+        );
     }
     get placeholderGuide() {
         return '{{companyName}}, {{logoUrl}}, {{bannerUrl}}, {{backgroundUrl}}, {{title}}, {{welcomeText}}, {{footerText}}, {{completionMessage}}, {{supportUrl}}';
@@ -404,13 +410,15 @@ export default class DocGenBrands extends LightningElement {
         return !!this.customSections.completion;
     }
     get pageLogoUrl() {
-        return safeHttps(this.liveTheme.logoUrl) || safeHttps(this.page.logoUrl) || this.previewLogoUrl;
+        return (
+            salesforceAssetUrl(this.liveTheme.logoUrl) || salesforceAssetUrl(this.page.logoUrl) || this.previewLogoUrl
+        );
     }
     get pageHasLogo() {
         return !!this.pageLogoUrl;
     }
     get pageBannerUrl() {
-        return safeHttps(this.page.bannerUrl);
+        return salesforceAssetUrl(this.page.bannerUrl);
     }
     get pageFont() {
         return (
@@ -433,7 +441,7 @@ export default class DocGenBrands extends LightningElement {
             this.liveTheme.backgroundColor,
             safeColor(this.form.signingBackgroundColor, '#F3F2F2')
         );
-        const image = safeHttps(this.page.backgroundUrl);
+        const image = salesforceAssetUrl(this.page.backgroundUrl);
         const rgb = background
             .slice(1)
             .match(/../g)

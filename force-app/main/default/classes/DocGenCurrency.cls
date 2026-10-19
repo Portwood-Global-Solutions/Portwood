@@ -74,7 +74,9 @@ public with sharing class DocGenCurrency {
             // static query would fail to compile the package there.
             for (
                 SObject ct : Database.query(
-                    'SELECT IsoCode, ConversionRate FROM CurrencyType WHERE IsActive = true WITH SYSTEM_MODE'
+                    DocGenSignatureIpContext.publicQuery(
+                        'SELECT IsoCode, ConversionRate FROM CurrencyType WHERE IsActive = true WITH SYSTEM_MODE'
+                    )
                 )
             ) {
                 Object iso = ct.get('IsoCode');

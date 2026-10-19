@@ -46,6 +46,8 @@ import {
     buildAiPrompt,
     prettyPrintHtml,
     scopeHtmlForInlinePreview,
+    salesforceResourceHtml,
+    salesforceAssetUrl,
     buildTagPalette,
     buildBlockPalette,
     splitRegions,
@@ -1882,7 +1884,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const host = this.template.querySelector(this._pendingPreviewWrite.selector);
             if (host) {
                 // eslint-disable-next-line @lwc/lwc/no-inner-html
-                host.innerHTML = this._pendingPreviewWrite.html;
+                host.innerHTML = salesforceResourceHtml(this._pendingPreviewWrite.html);
                 // Visual mode: the rendered page becomes the editor.
                 if (this._pendingPreviewWrite.editable) {
                     const pv = host.querySelector('.dg-pv');
@@ -8533,7 +8535,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const stored = (which === 'header' ? this.editTemplateHeaderHtml : this.editTemplateFooterHtml) || '';
             if (this._bandMounted !== band || this._bandSource[which] !== stored) {
                 // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM band write; content is re-cleaned by _extractBandHtml on the way out
-                band.innerHTML = stored || '<p><br/></p>';
+                band.innerHTML = salesforceResourceHtml(stored || '<p><br/></p>');
                 this._bandSource[which] = stored;
                 band.setAttribute('contenteditable', 'true');
                 band.setAttribute('spellcheck', 'false');
@@ -10087,7 +10089,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this._caret = { range: null, blockEl: null, cellEl: null };
             this._lastCanvasRange = null;
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- restoring a snapshot this component took of its own canvas
-            body.innerHTML = snap.body;
+            body.innerHTML = salesforceResourceHtml(snap.body);
             this._pvStyleEl = body.querySelector('style');
             if (snap.source != null) {
                 this._visualOriginalCode = snap.source;
@@ -10103,7 +10105,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 const band = this.template.querySelector('.dg-chrome-band_' + which);
                 if (band && snap[which] != null) {
                     // eslint-disable-next-line @lwc/lwc/no-inner-html -- restoring a snapshot this component took of its own band
-                    band.innerHTML = snap[which];
+                    band.innerHTML = salesforceResourceHtml(snap[which]);
                     // The bands are the live edit surface for two template FIELDS;
                     // restoring the DOM without re-syncing would leave the record
                     // holding the undone version.
@@ -13877,11 +13879,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     _writeSnippetContent(host, key) {
         const doc = host.ownerDocument || document;
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- Private snippet HTML is validated by DocGenSnippetService; these read-only views never become authored HTML.
-        host.innerHTML = this._snippetPreviewByKey[key];
+        host.innerHTML = salesforceResourceHtml(this._snippetPreviewByKey[key]);
         for (const image of host.querySelectorAll('img')) {
             const asset = this._assetImgFor(image.getAttribute('src') || '', doc);
             if (asset) {
-                image.src = asset.src;
+                image.src = salesforceAssetUrl(asset.src);
                 if (asset.style.width && !image.style.width) image.style.width = asset.style.width;
                 if (asset.style.height && !image.style.height) image.style.height = asset.style.height;
             }
@@ -14007,7 +14009,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // which COPIES the image rather than moving it, so a fumbled resize left a
         // duplicate behind. Nothing here needs the native behaviour.
         img.setAttribute('draggable', 'false');
-        img.src = url;
+        img.src = salesforceAssetUrl(url);
         img.style.cssText = 'vertical-align:middle;outline:1px dashed #b8e6c9;outline-offset:2px;cursor:nwse-resize;';
         const size = m[2];
         if (size) {
@@ -17048,7 +17050,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 'box-shadow:0 2px 6px rgba(60,40,120,0.18);';
             if (imgUrl) {
                 const thumb = doc.createElement('img');
-                thumb.src = imgUrl;
+                thumb.src = salesforceAssetUrl(imgUrl);
                 thumb.style.cssText = 'width:26px;height:26px;object-fit:cover;border-radius:3px;';
                 ghost.appendChild(thumb);
             }
@@ -17524,7 +17526,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = () => reject(new Error('Could not read the image'));
-                img.src = url;
+                img.src = salesforceAssetUrl(url);
             });
             const canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth || img.width;
@@ -17655,7 +17657,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 URL.revokeObjectURL(url);
                 reject(err instanceof Error ? err : new Error('SVG image load failed'));
             };
-            img.src = url;
+            img.src = salesforceAssetUrl(url);
         });
     }
 

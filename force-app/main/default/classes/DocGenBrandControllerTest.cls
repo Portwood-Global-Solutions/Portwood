@@ -11,6 +11,7 @@
  */
 @IsTest
 private class DocGenBrandControllerTest {
+    private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     @IsTest
     static void signingPageSettingsRoundTripAndClear() {
         Map<String, Object> dto = newDto();
@@ -95,7 +96,7 @@ private class DocGenBrandControllerTest {
             'name' => 'Acme Advisors',
             'owaId' => '0D2000000000001AAA',
             'brandColor' => '#1E3A5F',
-            'logoUrl' => 'https://example.com/acme-logo.png',
+            'logoUrl' => 'https://example.com/acme-logo.png'.replace('https://example.com/', ASSET_BASE),
             'logoAssetKey' => 'acme-logo',
             'companyName' => 'Acme Advisors',
             'footerText' => 'Acme Footer',
@@ -165,7 +166,10 @@ private class DocGenBrandControllerTest {
         System.assertEquals('Acme Advisors', saved.Name);
         System.assertEquals('0D2000000000001AAA', saved.OWA_Id__c);
         System.assertEquals('#1E3A5F', saved.Brand_Color__c);
-        System.assertEquals('https://example.com/acme-logo.png', saved.Logo_Url__c);
+        System.assertEquals(
+            'https://example.com/acme-logo.png'.replace('https://example.com/', ASSET_BASE),
+            saved.Logo_Url__c
+        );
         System.assertEquals('acme-logo', saved.Logo_Asset_Key__c);
         System.assertEquals('Acme Advisors', saved.Company_Name__c);
         System.assertEquals('Acme Footer', saved.Footer_Text__c);
@@ -231,7 +235,7 @@ private class DocGenBrandControllerTest {
     // ---- saveBrand: long logo URL splits to the extended field ----
     @IsTest
     static void saveBrand_longLogoUrl_usesExtendedField() {
-        String longUrl = 'https://files.example.com/' + '0'.repeat(240) + '/logo.png'; // > 255 chars
+        String longUrl = ASSET_BASE + '0'.repeat(240) + '/logo.png'; // > 255 chars
         System.assert(longUrl.length() > 255, 'test fixture must actually exceed the 255-char cap');
 
         Map<String, Object> dto = newDto();
@@ -249,14 +253,17 @@ private class DocGenBrandControllerTest {
     @IsTest
     static void saveBrand_shortLogoUrl_usesStandardField() {
         Map<String, Object> dto = newDto();
-        dto.put('logoUrl', 'https://example.com/short-logo.png');
+        dto.put('logoUrl', 'https://example.com/short-logo.png'.replace('https://example.com/', ASSET_BASE));
 
         Test.startTest();
         Id newId = DocGenBrandController.saveBrand(dto);
         Test.stopTest();
 
         DocGen_Brand__c saved = [SELECT Logo_Url__c, Logo_Url_Extended__c FROM DocGen_Brand__c WHERE Id = :newId];
-        System.assertEquals('https://example.com/short-logo.png', saved.Logo_Url__c);
+        System.assertEquals(
+            'https://example.com/short-logo.png'.replace('https://example.com/', ASSET_BASE),
+            saved.Logo_Url__c
+        );
         System.assertEquals(null, saved.Logo_Url_Extended__c);
     }
 
@@ -265,21 +272,24 @@ private class DocGenBrandControllerTest {
     // value there would keep serving the old logo after the admin shortened it.
     @IsTest
     static void saveBrand_longThenShortLogoUrl_clearsExtendedField() {
-        String longUrl = 'https://files.example.com/' + '0'.repeat(240) + '/logo.png';
+        String longUrl = ASSET_BASE + '0'.repeat(240) + '/logo.png';
         Map<String, Object> createDto = newDto();
         createDto.put('logoUrl', longUrl);
         Id brandId = DocGenBrandController.saveBrand(createDto);
 
         Map<String, Object> updateDto = newDto();
         updateDto.put('id', brandId);
-        updateDto.put('logoUrl', 'https://example.com/new-short-logo.png');
+        updateDto.put('logoUrl', 'https://example.com/new-short-logo.png'.replace('https://example.com/', ASSET_BASE));
 
         Test.startTest();
         DocGenBrandController.saveBrand(updateDto);
         Test.stopTest();
 
         DocGen_Brand__c saved = [SELECT Logo_Url__c, Logo_Url_Extended__c FROM DocGen_Brand__c WHERE Id = :brandId];
-        System.assertEquals('https://example.com/new-short-logo.png', saved.Logo_Url__c);
+        System.assertEquals(
+            'https://example.com/new-short-logo.png'.replace('https://example.com/', ASSET_BASE),
+            saved.Logo_Url__c
+        );
         System.assertEquals(null, saved.Logo_Url_Extended__c, 'the stale long URL must be cleared');
     }
 
@@ -287,7 +297,7 @@ private class DocGenBrandControllerTest {
     @IsTest
     static void saveBrand_blankLogoUrl_clearsBothSlots() {
         Map<String, Object> createDto = newDto();
-        createDto.put('logoUrl', 'https://example.com/logo.png');
+        createDto.put('logoUrl', 'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE));
         Id brandId = DocGenBrandController.saveBrand(createDto);
 
         Map<String, Object> updateDto = newDto();

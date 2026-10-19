@@ -926,7 +926,7 @@
                 <p id="signing-brand-footer-text"><apex:outputText value="{!initialPage.footerText}" /></p>
                 <a
                     id="signing-brand-support"
-                    href="{!initialPage.supportUrl}"
+                    href="{!HTMLENCODE(initialPage.supportUrl)}"
                     target="_blank"
                     rel="noopener noreferrer"
                     style="{!initialPage.supportVisibility}"
@@ -1030,30 +1030,11 @@
                     var resendTimer = null;
                     var placements = [];
                     var currentStepIndex = 0;
-                    var capturedIp = '';
+                    var capturedIp = '{!JSENCODE(nativeIpAddress)}';
+                    var ipCaptureContext = '{!JSENCODE(nativeIpProof)}';
 
-                    // ===== CLIENT-SIDE IP CAPTURE =====
-                    // The signing page is hosted on a Salesforce Site, so signers are Guest users.
-                    // Auth.SessionManagement.getCurrentSession() is blocked for Guest, and
-                    // X-Forwarded-For headers aren't always set by Salesforce's edge for VF requests.
-                    // Asking the browser to fetch its own public IP is the most reliable path —
-                    // the third-party service only sees the signer's IP (which they'd see anyway
-                    // by virtue of the request), no other PII flows. Server-side resolveClientIp()
-                    // falls back to header inspection if this fetch fails.
-                    try {
-                        fetch('https://api.ipify.org?format=json', { cache: 'no-store' })
-                            .then(function (r) {
-                                return r.ok ? r.json() : null;
-                            })
-                            .then(function (j) {
-                                if (j && j.ip) capturedIp = j.ip;
-                            })
-                            .catch(function () {
-                                /* fallback to server-side capture */
-                            });
-                    } catch (e) {
-                        /* fetch unavailable — fall back to server-side capture */
-                    }
+                    // IP audit capture uses Salesforce request/session information only.
+                    // Never send a signer's browser to an external IP lookup service.
 
                     // ===== STEP 1: VALIDATE TOKEN =====
                     Visualforce.remoting.Manager.invokeAction(
@@ -1070,6 +1051,12 @@
                                 return;
                             }
                             if (event.status && result && result.isValid) {
+                                if (!ipCaptureContext) {
+                                    showError(
+                                        'We could not prepare secure signing. Reload this page or contact the sender.'
+                                    );
+                                    return;
+                                }
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);
@@ -1553,7 +1540,7 @@
                             token,
                             typedName,
                             true,
-                            capturedIp,
+                            ipCaptureContext,
                             userAgent,
                             // formFieldJson. This page has no signer form-field UI —
                             // that lives only on DocGenSignaturePdf.page — so it always
@@ -1605,7 +1592,7 @@
                             '{!$RemoteAction.DocGenSignatureController.declineSignature}',
                             token,
                             reason,
-                            capturedIp,
+                            ipCaptureContext,
                             ua,
                             function (result, event) {
                                 btn.disabled = false;
@@ -1701,7 +1688,7 @@
                                 token,
                                 typedName,
                                 consentGiven,
-                                capturedIp,
+                                ipCaptureContext,
                                 userAgent,
                                 // formFieldJson — see the note on the other call site.
                                 '{}',

@@ -76,7 +76,7 @@ projected to a signer; asset keys and unknown configuration keys stay internal.
 
 Standard controls include a page-specific logo, logo height/alignment, banner
 and alternative text, background image, system/serif/humanist typography,
-content width, and spacing. Every image supports a public HTTPS URL or a linked
+content width, and spacing. Every image requires a Salesforce-hosted asset URL or a linked
 Shared Asset. The background has a color overlay to preserve text contrast.
 The logo/banner carry the customer's identity; document surfaces stay quiet.
 
@@ -87,7 +87,7 @@ details into each section. Switching modes preserves the saved HTML.
 
 HTML is sanitized using a pinned, bundled DOMPurify build. Sections allow
 ordinary content, links, tables, and images; executable elements, forms, and
-event handlers are removed. Image/link URLs must be absolute HTTPS. CSS is
+event handlers are removed. Images must be hosted in Salesforce; ordinary support hyperlinks may use HTTPS. CSS is
 parsed by the browser, limited to presentation/layout properties, and scoped
 inside each custom content container. It cannot position content over signing
 controls or select the document. Standard controls and Advanced sections use
@@ -114,7 +114,7 @@ including the completion message. Choose that brand in the template's
 both signing pages. Clearing a page color or footer restores inheritance.
 
 Use **Images** to select a page-specific logo, banner, or background from Shared
-Assets or public HTTPS URLs. **Layout and typography** controls the page font,
+Assets or Salesforce-hosted asset URLs. **Layout and typography** controls the page font,
 spacing, and maximum content width. The document retains its own typography.
 
 Choose **Advanced** in **Page design mode** to edit the four HTML sections and

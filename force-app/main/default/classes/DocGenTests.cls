@@ -53,6 +53,13 @@ private class DocGenTests {
         System.runAs(u) {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
+            // This test owns its active-version state. The shared factory also
+            // seeds an active version with no file; leaving it active makes the
+            // manager's LIMIT 1/fallback depend on record ordering and timing.
+            DocGen_Template_Version__c seededVersion = TestDataFactory.getTestTemplateVersion();
+            seededVersion.Is_Active__c = false;
+            update seededVersion;
+
             // 1. Setup - Create V1 Record
             ContentVersion cv1 = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Title = 'TestDoc' LIMIT 1];
 

@@ -414,7 +414,7 @@ public with sharing class DocGenAiQueryPlanner {
             // No customer rows can match Id=null. Every identifier is schema-validated;
             // predicates are compiled from typed structured inputs, never raw model SQL.
             /* code-analyzer-suppress ApexSOQLInjection */
-            Database.query(probe, AccessLevel.USER_MODE);
+            Database.query(DocGenSignatureIpContext.publicQuery(probe), AccessLevel.USER_MODE);
             sections.add(
                 new Map<String, Object>{
                     'label' => label,

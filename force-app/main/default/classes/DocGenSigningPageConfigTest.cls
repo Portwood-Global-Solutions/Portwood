@@ -1,5 +1,6 @@
 @IsTest
 private class DocGenSigningPageConfigTest {
+    private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     @IsTest
     static void emptyAndMalformedStoredConfigKeepStandardDefaults() {
         for (String source : new List<String>{ null, '', '{broken', '[]', '{"logoHeight":9999}' }) {
@@ -17,12 +18,12 @@ private class DocGenSigningPageConfigTest {
         String source = JSON.serialize(
             new Map<String, Object>{
                 'mode' => 'Advanced',
-                'logoUrl' => 'https://example.com/logo.png',
+                'logoUrl' => 'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE),
                 'logoHeight' => 80,
                 'logoAlignment' => 'Center',
-                'bannerUrl' => 'https://example.com/banner.jpg',
+                'bannerUrl' => 'https://example.com/banner.jpg'.replace('https://example.com/', ASSET_BASE),
                 'bannerAlt' => 'Our community',
-                'backgroundUrl' => 'https://example.com/background.jpg',
+                'backgroundUrl' => 'https://example.com/background.jpg'.replace('https://example.com/', ASSET_BASE),
                 'font' => 'Serif',
                 'spacing' => 'Spacious',
                 'contentWidth' => 1200,
@@ -117,6 +118,7 @@ private class DocGenSigningPageConfigTest {
         String url = DocGenEmailTemplateController.resolveAssetPublicUrl(asset.Id);
         Map<String, Object> result = DocGenSigningPageConfig.forSigner(
             '{"bannerAssetKey":"signing-banner","bannerUrl":"https://example.com/fallback.png"}'
+                .replace('https://example.com/', ASSET_BASE)
         );
         System.assertEquals(url, result.get('bannerUrl'));
         System.assert(!result.containsKey('bannerAssetKey'));

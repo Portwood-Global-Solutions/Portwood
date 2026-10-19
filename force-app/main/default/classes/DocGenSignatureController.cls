@@ -1,5 +1,16 @@
 public without sharing class DocGenSignatureController {
     private static Boolean preparedPdfSave = false;
+    private transient String nativeIpProof = '';
+    private transient String nativeIpAddress = '';
+    public String getNativeIpProof() {
+        getInitialPage();
+        return nativeIpProof;
+    }
+    public String getNativeIpAddress() {
+        getInitialPage();
+        return DocGenSignatureIpContext.validIp(nativeIpAddress) ? nativeIpAddress : '';
+    }
+
     private transient DocGenSigningPageView initialPage;
 
     /** Initial branding is a read-only, token-authorized public projection. */
@@ -7,8 +18,12 @@ public without sharing class DocGenSignatureController {
         if (initialPage == null) {
             SignatureInitResponse response;
             try {
-                String token = ApexPages.currentPage().getParameters().get('token');
+                String token = ApexPages.currentPage().getParameters().get('token')?.escapeHtml4();
                 response = initializeToken(token, true);
+                if (response.isValid == true) {
+                    nativeIpAddress = captureClientIp();
+                    nativeIpProof = DocGenSignatureIpContext.issue(token, nativeIpAddress);
+                }
             } catch (Exception ex) {
                 // Fail closed: the existing remoting flow displays the signing error.
                 System.debug(
@@ -204,31 +219,25 @@ public without sharing class DocGenSignatureController {
         public Integer remaining;
     }
 
-    /**
-     * Prefers the client-supplied IP (browser fetched it from a public service)
-     * over header inspection. The client path is more reliable for guest signers
-     * because Sites/Site CDNs don't always set X-Forwarded-For consistently.
-     * Validates input is a sane IPv4/IPv6 string before trusting it; falls back
-     * to captureClientIp() otherwise.
-     */
+    /** Current Salesforce request IP, then a signer-bound page observation.
+     * Plain IP hints remain a compatibility fallback for authenticated callers only. */
     @TestVisible
     private static String resolveClientIp(String supplied) {
-        // SECURITY (audit integrity): prefer the server-observed IP and never let
-        // the client-supplied `ipAddress` argument override it. Previously the
-        // caller-passed value won unconditionally, so a signer could forge the IP
-        // recorded on their own tamper-evident audit / certificate. The client
-        // hint is now used ONLY as a last resort when the server has no IP at all
-        // (e.g. a guest LWR context with no infrastructure header) — recorded as
-        // best-effort, not authoritative.
-        // NOTE: captureClientIp() still reads X-Forwarded-For, whose leftmost hop
-        // can be client-influenced behind some proxy configs. Validating the
-        // trusted-hop selection requires a live Experience Cloud guest test before
-        // hardening further.
+        return resolveClientIp(supplied, null);
+    }
+    @TestVisible
+    private static String resolveClientIp(String supplied, String token) {
         String serverIp = captureClientIp();
         if (String.isNotBlank(serverIp) && serverIp != 'Unknown') {
             return serverIp;
         }
-        if (String.isNotBlank(supplied)) {
+        if (DocGenSignatureIpContext.isContext(supplied)) {
+            String observed = DocGenSignatureIpContext.verify(token, supplied);
+            if (observed == null)
+                throw DocGenService.ahe('Reload this signing page to refresh its secure network context.');
+            return observed;
+        }
+        if (UserInfo.getUserType() != 'Guest' && String.isNotBlank(supplied)) {
             String trimmed = supplied.trim();
             // Cheap sanity: length cap + only chars valid in IPv4/IPv6.
             // (Not a strict parse — just rejects obvious garbage/injection.)
@@ -236,6 +245,8 @@ public without sharing class DocGenSignatureController {
                 return trimmed;
             }
         }
+        if (UserInfo.getUserType() == 'Guest')
+            throw DocGenService.ahe('We could not prepare secure signing. Reload this page or contact the sender.');
         return 'Unknown';
     }
 
@@ -302,8 +313,9 @@ public without sharing class DocGenSignatureController {
 
     /**
      * Captures the client IP address from the current request context.
-     * Checks X-Forwarded-For (load balancer/proxy) first, falls back to
-     * Salesforce session info, then to True-Client-IP.
+     * Prefer Salesforce's platform header. Forwarding headers are best-effort
+     * fallbacks for other hosting/proxy configurations; authenticated sessions
+     * can supply SourceIp when request headers are unavailable.
      */
     private static String captureClientIp() {
         // Try VF page request headers first
@@ -311,7 +323,12 @@ public without sharing class DocGenSignatureController {
             PageReference pr = ApexPages.currentPage();
             if (pr != null) {
                 Map<String, String> headers = pr.getHeaders();
-                // X-Forwarded-For contains the original client IP when behind a proxy/LB
+                // Salesforce overwrites this platform header on the native Site.
+                // Prefer it to caller-influenced forwarding chains (live spoof test).
+                String platformIp = headers.get('X-Salesforce-SIP');
+                if (DocGenSignatureIpContext.validIp(platformIp))
+                    return platformIp.trim();
+                // Compatibility for contexts that expose only forwarding headers.
                 String forwarded = headers.get('X-Forwarded-For');
                 if (String.isNotBlank(forwarded)) {
                     // May contain comma-separated list — first is the real client
@@ -1218,6 +1235,7 @@ public without sharing class DocGenSignatureController {
 
     @TestVisible
     private static String prepareSigningPreviewHtml(String html) {
+        DocGenAssetPolicy.assertHtmlResources(html);
         if (String.isBlank(html) || !containsRtlText(html) || html.contains('docgen-signing-preview-rtl')) {
             return html;
         }
@@ -1406,7 +1424,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -1762,7 +1780,9 @@ public without sharing class DocGenSignatureController {
      */
     public static Blob convertSignatureRequestToPdf(Id requestId) {
         if (Test.isRunningTest()) {
-            return Blob.toPdf('<html><body><p>Test PDF - Signed Document</p></body></html>');
+            return Blob.toPdf(
+                DocGenAssetPolicy.assertHtmlResources('<html><body><p>Test PDF - Signed Document</p></body></html>')
+            );
         }
 
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
@@ -1859,7 +1879,7 @@ public without sharing class DocGenSignatureController {
         }
 
         String html = DocGenHtmlRenderer.convertToHtml(documentXml, imageUrlMap);
-        return Blob.toPdf(html);
+        return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
     }
 
     /**
@@ -2128,7 +2148,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = false;
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Create").
@@ -2784,7 +2804,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -3013,7 +3033,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;

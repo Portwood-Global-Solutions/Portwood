@@ -896,7 +896,118 @@ export function prettyPrintHtml(html) {
  * are stripped. Merge tags render as-is — this is a layout preview, not a
  * data merge.
  */
+/** Resolve native asset routes locally; arbitrary origins are never contacted. */
+export function salesforceAssetUrl(value) {
+    if (!value) return '';
+    const text = String(value).trim();
+    if (/^\{[^<>]+\}$/.test(text)) return text;
+    if (/^data:(?:image\/(?:png|jpe?g|gif|webp|bmp)|font\/(?:ttf|otf|woff2?));base64,[a-z\d+/=\s]+$/i.test(text))
+        return text;
+    if (/^data:image\/svg\+xml;base64,/i.test(text)) {
+        try {
+            const svg = atob(text.slice(text.indexOf(',') + 1));
+            const local = svg
+                .replace(/(?:xlink:)?href\s*=\s*["']#[a-z0-9_:-]+["']/gi, '')
+                .replace(/url\s*\(\s*["']?#[a-z0-9_:-]+["']?\s*\)/gi, '');
+            return /href\s*=|url\s*\(|@import|image-set|cross-fade|<script|<foreignObject|<!DOCTYPE|<!ENTITY|[\s/]on[a-z]+\s*=/i.test(
+                local
+            ) || local.includes('\\')
+                ? ''
+                : text;
+        } catch {
+            return '';
+        }
+    }
+    if (/^blob:/i.test(text)) {
+        return typeof window !== 'undefined' && text.startsWith('blob:' + window.location.origin + '/') ? text : '';
+    }
+    if (/^[#]/.test(text)) return text;
+    if (/[\\<>\s]/.test(text) || text.startsWith('//')) return '';
+    try {
+        const url = new URL(text, 'https://local.invalid');
+        if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.pathname.includes('..'))
+            return '';
+        if (!/^\/(?:resource\/|sfc\/|sfsites\/|file-asset\/|servlet\/(?:rtaImage|servlet\.Image))/i.test(url.pathname))
+            if (!/\/(?:sfsites|file-asset)\//i.test(url.pathname)) return '';
+        if (/^https?:/i.test(text)) {
+            if (url.protocol !== 'https:') return '';
+            const current = typeof window !== 'undefined' ? window.location : null;
+            if (!current) return '';
+            if (url.origin === current.origin) return url.href;
+            const identity = (host) => {
+                const match = host.match(
+                    /^(.*?)\.(?:my\.salesforce-sites\.com|my\.salesforce\.com|my\.site\.com|file\.force\.com|lightning\.force\.com|vf\.force\.com)$/i
+                );
+                return match ? match[1].replace(/--(?:c|portwoodglobal)(?=\.|$)/i, '').toLowerCase() : null;
+            };
+            if (url.hostname.endsWith('.content.force.com') && /^\/servlet\/rtaImage/i.test(url.pathname))
+                return url.href;
+            const org = identity(current.hostname);
+            return org && org === identity(url.hostname) ? url.href : '';
+        }
+        // A native route is always requested from the current Salesforce host,
+        // even if someone pastes an unrelated hostname in front of that route.
+        return url.pathname + url.search;
+    } catch {
+        return '';
+    }
+}
+
+export function salesforceResourceCss(css) {
+    let text = String(css || '').replace(/\/\*[\s\S]*?\*\//g, '');
+    if (text.includes('\\')) return '';
+    text = text.replace(/@import\b[^;]*(?:;|$)/gi, '');
+    text = text.replace(/url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, (_all, a, b, c) => {
+        const src = salesforceAssetUrl((a ?? b ?? c ?? '').trim());
+        return src ? 'url("' + src.replace(/"/g, '%22') + '")' : 'none';
+    });
+    return /(?:image|image-set|cross-fade|expression)\s*\(/i.test(text) ? '' : text;
+}
+
+/** An inert parse removes resource loads before markup reaches a live surface. */
+export function salesforceResourceHtml(html) {
+    const template = document.createElement('template');
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- Inert template; resource URLs are filtered before any live DOM insertion.
+    template.innerHTML = html || '';
+    for (const node of template.content.querySelectorAll(
+        'script,link,iframe,object,embed,base,meta,video,audio,source,foreignObject,animate,animateTransform,animateMotion,animateColor,set,discard,math,template,noscript,form'
+    ))
+        node.remove();
+    for (const node of template.content.querySelectorAll('*')) {
+        for (const attr of [...node.attributes]) {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on') || ['srcset', 'ping', 'lowsrc', 'dynsrc'].includes(name))
+                node.removeAttribute(attr.name);
+            else if (
+                ['src', 'poster', 'background', 'data', 'xlink:href'].includes(name) ||
+                (name === 'href' && node.tagName !== 'A')
+            ) {
+                const safe = salesforceAssetUrl(attr.value);
+                if (safe) node.setAttribute(attr.name, safe);
+                else node.removeAttribute(attr.name);
+            }
+        }
+        for (const attr of [
+            'style',
+            'fill',
+            'stroke',
+            'filter',
+            'clip-path',
+            'mask',
+            'marker-start',
+            'marker-mid',
+            'marker-end',
+            'cursor'
+        ])
+            if (node.hasAttribute(attr)) node.setAttribute(attr, salesforceResourceCss(node.getAttribute(attr)));
+        if (node.tagName === 'STYLE') node.textContent = salesforceResourceCss(node.textContent);
+    }
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- Serialize the filtered inert fragment.
+    return template.innerHTML;
+}
+
 export function scopeHtmlForInlinePreview(html) {
+    html = salesforceResourceHtml(html);
     let work = (html || '').replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<link\b[^>]*>/gi, '');
     const styles = [];
     work = work.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (m, css) => {

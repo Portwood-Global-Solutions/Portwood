@@ -1,16 +1,21 @@
 @IsTest
 private class DocGenBrandingSetThemeTest {
+    private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     @IsTest
     static void mapsOnlySupportedSafePresentation() {
         insert new DocGen_Settings__c(
             SetupOwnerId = UserInfo.getOrganizationId(),
-            Experience_Site_Url__c = 'example.my.site.com/community/s/'
+            Experience_Site_Url__c = URL.getOrgDomainUrl().toExternalForm()
         );
         Map<String, String> theme = new Map<String, String>();
         DocGenBrandingSetTheme.putProperty(theme, 'ActionColor', '#2574A9');
         DocGenBrandingSetTheme.putProperty(theme, 'HeaderBackgroundColor', '#123');
         DocGenBrandingSetTheme.putProperty(theme, 'PageBackgroundColor', '#FAFAFA');
-        DocGenBrandingSetTheme.putProperty(theme, 'CompanyLogo', 'https://example.com/logo.png');
+        DocGenBrandingSetTheme.putProperty(
+            theme,
+            'CompanyLogo',
+            'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE)
+        );
         DocGenBrandingSetTheme.putProperty(theme, 'PrimaryFont', 'Lato, sans-serif');
         System.assertEquals('#2574A9', theme.get('color'));
         System.assertEquals('#112233', theme.get('headerColor'));
@@ -22,9 +27,15 @@ private class DocGenBrandingSetThemeTest {
         DocGenBrandingSetTheme.putProperty(theme, 'privateProperty', 'hidden');
         System.assertEquals(5, theme.size());
         System.assertEquals('#2574A9', theme.get('color'));
-        System.assertEquals('https://example.com/logo.png', theme.get('logoUrl'));
+        System.assertEquals(
+            'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE),
+            theme.get('logoUrl')
+        );
         DocGenBrandingSetTheme.putProperty(theme, 'CompanyLogo', '../../sfsites/c/file-asset/logo');
-        System.assertEquals('https://example.my.site.com/community/sfsites/c/file-asset/logo', theme.get('logoUrl'));
+        System.assertEquals(
+            URL.getOrgDomainUrl().toExternalForm() + '/sfsites/c/file-asset/logo',
+            theme.get('logoUrl')
+        );
         System.assertEquals(0, DocGenBrandingSetTheme.resolve('bad-id').size());
         System.assertEquals(0, DocGenBrandingSetTheme.resolve(UserInfo.getUserId()).size());
     }

@@ -1603,7 +1603,7 @@ public with sharing class DocGenSignatureSenderController {
         viewingHtml = applyFormFieldViewingSentinels(viewingHtml);
 
         // Render the viewing PDF (invisible sentinels) → standalone ContentVersion.
-        Blob viewingBlob = Blob.toPdf(viewingHtml);
+        Blob viewingBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(viewingHtml));
         String fileTitle = tpls[0].Name;
         ContentVersion viewCv = new ContentVersion();
         viewCv.Title = fileTitle;
@@ -1869,7 +1869,7 @@ public with sharing class DocGenSignatureSenderController {
             viewingParts.add(titleHeader + docViewing);
         }
 
-        Blob viewingBlob = Blob.toPdf(String.join(viewingParts, ''));
+        Blob viewingBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(String.join(viewingParts, '')));
         String fileTitle = templateMap.get(templateIds[0]).Name + ' (+' + (templateIds.size() - 1) + ' more)';
         ContentVersion viewCv = new ContentVersion();
         viewCv.Title = fileTitle;
@@ -3100,7 +3100,9 @@ public with sharing class DocGenSignatureSenderController {
         }
         html = injectPlacementSpans(html);
 
-        return Test.isRunningTest() ? Blob.valueOf('test-preview-pdf') : Blob.toPdf(html);
+        return Test.isRunningTest()
+            ? Blob.valueOf('test-preview-pdf')
+            : Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
     }
 
     @TestVisible

@@ -1,5 +1,6 @@
 @IsTest
 private class DocGenSigningBrandingTest {
+    private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     private static final String TOKEN = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
     private static final String OTHER_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     private static final String LEGACY_TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -11,7 +12,7 @@ private class DocGenSigningBrandingTest {
             Company_Name__c = 'Org identity',
             Signature_Email_Brand_Color__c = '#246810',
             Signature_Email_Footer_Text__c = 'Org footer',
-            Signature_Email_Logo_Url__c = 'https://example.com/org.png'
+            Signature_Email_Logo_Url__c = 'https://example.com/org.png'.replace('https://example.com/', ASSET_BASE)
         );
         Account account = new Account(Name = 'Branding test');
         insert account;
@@ -19,7 +20,7 @@ private class DocGenSigningBrandingTest {
             Name = 'Internal brand name',
             Company_Name__c = 'Acme',
             Brand_Color__c = '#135790',
-            Logo_Url__c = 'https://example.com/acme.png',
+            Logo_Url__c = 'https://example.com/acme.png'.replace('https://example.com/', ASSET_BASE),
             Footer_Text__c = 'Shared footer',
             Is_Active__c = true,
             Signing_Color__c = '#FFFF00',
@@ -94,7 +95,10 @@ private class DocGenSigningBrandingTest {
         Test.stopTest();
         System.assertEquals(true, result.isValid);
         System.assertEquals('Acme', result.branding.companyName);
-        System.assertEquals('https://example.com/acme.png', result.branding.logoUrl);
+        System.assertEquals(
+            'https://example.com/acme.png'.replace('https://example.com/', ASSET_BASE),
+            result.branding.logoUrl
+        );
         System.assertEquals('#FFFF00', result.branding.color);
         System.assertEquals('#113355', result.branding.headerColor);
         System.assertEquals('#EEF4FA', result.branding.backgroundColor);
@@ -160,7 +164,7 @@ private class DocGenSigningBrandingTest {
         System.assertEquals('Org identity', result.companyName);
         System.assertEquals('#246810', result.color);
         System.assertEquals('Org footer', result.footerText);
-        System.assertEquals('https://example.com/org.png', result.logoUrl);
+        System.assertEquals('https://example.com/org.png'.replace('https://example.com/', ASSET_BASE), result.logoUrl);
         System.assertEquals('Review and sign', result.title);
         System.assertEquals('#FFFFFF', result.headerColor);
         System.assertEquals('#F3F2F2', result.backgroundColor);
@@ -182,7 +186,7 @@ private class DocGenSigningBrandingTest {
         System.assertEquals('#135790', result.color);
         System.assertEquals('Shared footer', result.footerText);
         System.assertEquals('#FFFFFF', result.headerColor);
-        System.assertEquals('https://example.com/org.png', result.logoUrl);
+        System.assertEquals('https://example.com/org.png'.replace('https://example.com/', ASSET_BASE), result.logoUrl);
         System.assertEquals(null, result.supportUrl);
     }
 
@@ -209,7 +213,10 @@ private class DocGenSigningBrandingTest {
         }
         System.assertEquals(true, result.isValid);
         System.assertEquals('Acme', result.branding.companyName);
-        System.assertEquals('https://example.com/acme.png', result.branding.logoUrl);
+        System.assertEquals(
+            'https://example.com/acme.png'.replace('https://example.com/', ASSET_BASE),
+            result.branding.logoUrl
+        );
     }
 
     @IsTest
@@ -259,7 +266,10 @@ private class DocGenSigningBrandingTest {
         System.assertEquals('Acme | Signing with Portwood DocGen', view.getDocumentTitle());
         System.assert(view.getBodyStyle().contains('--signing-action:#FFFF00;--signing-action-text:#000000'));
         System.assert(view.getBodyStyle().contains('--signing-header:#113355;--signing-header-text:#FFFFFF'));
-        System.assertEquals('https://example.com/acme.png', view.getLogoUrl());
+        System.assertEquals(
+            'https://example.com/acme.png'.replace('https://example.com/', ASSET_BASE),
+            view.getLogoUrl()
+        );
         System.assertEquals('', view.getVisibility());
         System.assertEquals('', view.getLogoVisibility());
         System.assertEquals('', view.getSupportVisibility());
@@ -444,6 +454,7 @@ private class DocGenSigningBrandingTest {
         brand.Company_Name__c = '</script><img src=x onerror=alert(1)>';
         brand.Signing_Page_Config__c = DocGenSigningPageConfig.validateAndSerialize(
             '{"mode":"Advanced","logoUrl":"https://example.com/page.png","bannerUrl":"https://example.com/banner.png","bannerAlt":"Our banner","backgroundUrl":"https://example.com/background.png?a=1&b=2","font":"Humanist","spacing":"Compact","logoAlignment":"Right","logoHeight":80,"contentWidth":1200,"headerHtml":"<h2>Welcome</h2>"}'
+                .replace('https://example.com/', ASSET_BASE)
         );
         update brand;
         DocGenBrandResolver.clearCache();
@@ -454,8 +465,14 @@ private class DocGenSigningBrandingTest {
         System.assert(view.getBodyStyle().contains('--signing-logo-height:80px'));
         System.assert(view.getBodyStyle().contains('--signing-width:1200px'));
         System.assert(view.getBodyStyle().contains('background-image:linear-gradient'));
-        System.assertEquals('https://example.com/page.png', view.getLogoUrl());
-        System.assertEquals('https://example.com/banner.png', view.getBannerUrl());
+        System.assertEquals(
+            'https://example.com/page.png'.replace('https://example.com/', ASSET_BASE),
+            view.getLogoUrl()
+        );
+        System.assertEquals(
+            'https://example.com/banner.png'.replace('https://example.com/', ASSET_BASE),
+            view.getBannerUrl()
+        );
         System.assertEquals('Our banner', view.getBannerAlt());
         System.assertEquals('', view.getBannerVisibility());
         System.assert(!view.getJson().contains('<'), 'Embedded JSON cannot close its application/json script element.');

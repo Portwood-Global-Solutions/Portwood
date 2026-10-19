@@ -451,7 +451,7 @@ global with sharing class DocGenSignaturePreparationController {
             fail('Open the sender from a Salesforce record.');
         String objectName = recordId.getSObjectType().getDescribe().getName();
         List<SObject> records = Database.queryWithBinds(
-            'SELECT Id FROM ' + objectName + ' WHERE Id = :rid LIMIT 1',
+            DocGenSignatureIpContext.publicQuery('SELECT Id FROM ' + objectName + ' WHERE Id = :rid LIMIT 1'),
             new Map<String, Object>{ 'rid' => recordId },
             AccessLevel.USER_MODE
         );

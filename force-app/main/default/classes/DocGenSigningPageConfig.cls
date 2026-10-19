@@ -38,9 +38,7 @@ public without sharing class DocGenSigningPageConfig {
             String key = (String) config.remove(image + 'AssetKey');
             String resolved;
             if (String.isNotBlank(key))
-                resolved = DocGenSigningBranding.safeHttpsUrl(
-                    DocGenEmailTemplateService.resolveAssetPublicUrlByKey(key)
-                );
+                resolved = DocGenAssetPolicy.assetUrl(DocGenEmailTemplateService.resolveAssetPublicUrlByKey(key));
             if (String.isNotBlank(resolved))
                 config.put(image + 'Url', resolved);
         }
@@ -87,15 +85,17 @@ public without sharing class DocGenSigningPageConfig {
         }
         for (String image : new List<String>{ 'logo', 'banner', 'background' }) {
             String value = text(input, image + 'Url', 8192).trim();
-            if (String.isNotBlank(value) && DocGenSigningBranding.safeHttpsUrl(value) == null) {
-                throw new IllegalArgumentException('Use an absolute HTTPS URL for the ' + image + ' image.');
+            if (String.isNotBlank(value) && DocGenAssetPolicy.assetUrl(value) == null) {
+                throw new IllegalArgumentException('Choose a Salesforce-hosted asset for the ' + image + ' image.');
             }
             result.put(image + 'Url', value);
             result.put(image + 'AssetKey', DocGenAssetKeyHandler.normalizeKey(text(input, image + 'AssetKey', 80)));
         }
         for (String key : HTML_KEYS)
-            result.put(key, text(input, key, 12000));
-        result.put('customCss', text(input, 'customCss', 8000));
+            result.put(key, DocGenAssetPolicy.assertHtmlResources(text(input, key, 12000)));
+        String customCss = text(input, 'customCss', 8000);
+        DocGenAssetPolicy.assertCss(customCss);
+        result.put('customCss', customCss);
         return result;
     }
 

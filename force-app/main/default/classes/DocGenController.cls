@@ -1153,12 +1153,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (String.isBlank(imageUrl)) {
             return null;
         }
-        // Security: only allow Salesforce-hosted URLs
-        String lower = imageUrl.toLowerCase();
-        Boolean isSafe = imageUrl.startsWith('/') || lower.contains('.salesforce.com') || lower.contains('.force.com');
-        if (!isSafe) {
+        imageUrl = DocGenAssetPolicy.assetUrl(imageUrl);
+        if (imageUrl == null)
             return null;
-        }
         if (Test.isRunningTest()) {
             return EncodingUtil.base64Encode(Blob.valueOf('test-pdf'));
         }
@@ -1178,7 +1175,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 '" />' +
                 '<p>End wrapper.</p>' +
                 '</body></html>';
-            Blob pdf = Blob.toPdf(html);
+            Blob pdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
             return EncodingUtil.base64Encode(pdf);
         } catch (Exception e) {
             String noop = e.getMessage(); // NOPMD UnusedLocalVariable
@@ -1972,7 +1969,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         query += ' ORDER BY Id LIMIT :pageSize';
 
         // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() validation + escapeSingleQuotes + USER_MODE
-        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
+        List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
 
         List<Map<String, Object>> recordMaps = new List<Map<String, Object>>();
         for (SObject rec : records) {
@@ -2087,7 +2084,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         List<Id> sortedIds = new List<Id>();
         // CxSAST: SOQL injection mitigated by Schema allowlist validation on object, lookupField, ORDER BY fields, WHERE fields + keyword blocklist + USER_MODE
-        for (SObject rec : Database.query(query, AccessLevel.USER_MODE)) {
+        for (SObject rec : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             // NOPMD ApexSOQLInjection — all dynamic elements validated against Schema.describeSObjects() field map; USER_MODE enforced
             sortedIds.add(rec.Id);
         }
@@ -2161,7 +2158,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ' WHERE Id IN :recordIds';
 
         // CxSAST: SOQL injection mitigated by Schema allowlist validation on object and all field names + USER_MODE
-        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+        List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
 
         // Re-order to match input ID sequence
         Map<Id, SObject> byId = new Map<Id, SObject>();
@@ -2484,7 +2481,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     safeClause +
                     ') LIMIT 1';
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized via DocGenDataRetriever.sanitizeWhereClause; object name escaped; Id param bound
+                List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized via DocGenDataRetriever.sanitizeWhereClause; object name escaped; Id param bound
                 matched = !rows.isEmpty();
             }
         } catch (Exception e) {
@@ -2559,7 +2556,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 safeClause +
                 ') LIMIT 1';
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized, object escaped, Id bound
+            List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized, object escaped, Id bound
             result.put('matched', !rows.isEmpty());
         } catch (DocGenException e) {
             result.put('error', e.getMessage());
@@ -3710,6 +3707,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static Map<String, Object> saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent) {
+        DocGenAssetPolicy.assertHtmlResources(htmlContent);
         if (templateId == null) {
             throw new DocGenException('Template ID is required.');
         }
@@ -5122,7 +5120,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedOptions = new List<Option>();
         for (Schema.SObjectType sobj : Schema.getGlobalDescribe().values()) {
             Schema.DescribeSObjectResult describe = sobj.getDescribe();
-            if (describe.isQueryable() && !describe.isDeprecatedAndHidden()) {
+            if (
+                describe.isQueryable() &&
+                !describe.isDeprecatedAndHidden() &&
+                !DocGenSignatureIpContext.isPrivateObject(describe.getName())
+            ) {
                 sortedOptions.add(
                     new Option(describe.getLabel() + ' (' + describe.getName() + ')', describe.getName())
                 );
@@ -5155,7 +5157,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         query += ' ORDER BY Name LIMIT 50';
 
-        for (ApexClass cls : Database.query(query, AccessLevel.USER_MODE)) {
+        for (ApexClass cls : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             // Try to instantiate and check interface
             Type t = Type.forName(cls.Name);
             if (t != null) {
@@ -5226,7 +5228,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedFields = new List<Option>();
         Map<String, String> fieldTypes = new Map<String, String>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5264,7 +5266,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedFields = new List<Option>();
         Map<String, String> fieldTypes = new Map<String, String>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5299,7 +5301,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     public static List<Map<String, String>> getChildRelationships(String objectName) {
         List<Option> sortedRels = new List<Option>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5340,7 +5342,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     public static List<Map<String, String>> getParentRelationships(String objectName) {
         List<Option> sortedParents = new List<Option>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5739,7 +5741,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<SObject> childRecords;
         try {
             // CxSAST: SOQL injection mitigated by Schema allowlist validation on all dynamic elements (object, lookupField, displayField, filterClause fields) + USER_MODE
-            childRecords = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+            childRecords = Database.query(DocGenSignatureIpContext.publicQuery(childQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error querying child records');
         }
@@ -5820,7 +5822,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         query += ' ORDER BY Name LIMIT 50';
 
         List<Map<String, String>> results = new List<Map<String, String>>();
-        for (Report r : Database.query(query, AccessLevel.USER_MODE)) {
+        for (Report r : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             results.add(new Map<String, String>{ 'id' => r.Id, 'name' => r.Name, 'folder' => r.FolderName });
         }
         return results;

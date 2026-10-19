@@ -97,7 +97,7 @@ public without sharing class DocGenBrandingSetTheme {
         }
     }
     private static String imageUrl(String value) {
-        String absolute = DocGenSigningBranding.safeHttpsUrl(value);
+        String absolute = DocGenAssetPolicy.assetUrl(value);
         if (absolute != null)
             return absolute;
         // Builder stores site-local images as relative /sfsites paths.
@@ -122,6 +122,6 @@ public without sharing class DocGenBrandingSetTheme {
             base = base.substring(0, base.length() - 1);
         if (base.endsWith('/s'))
             base = base.substring(0, base.length() - 2);
-        return DocGenSigningBranding.safeHttpsUrl(base + relative);
+        return DocGenAssetPolicy.assetUrl(base + relative);
     }
 }

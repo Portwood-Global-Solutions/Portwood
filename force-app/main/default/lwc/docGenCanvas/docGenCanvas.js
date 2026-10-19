@@ -8,7 +8,7 @@ import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
-import { extractQueryShape } from 'c/docGenAuthoringKit';
+import { extractQueryShape, salesforceAssetUrl, salesforceResourceHtml } from 'c/docGenAuthoringKit';
 import { loadScript } from 'lightning/platformResourceLoader';
 import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
@@ -2543,7 +2543,7 @@ export default class DocGenCanvas extends LightningElement {
         for (const el of this.template.querySelectorAll('.dg-cbox-body')) {
             const model = byId.get(el.dataset.id);
             if (!model) continue;
-            const want = this.previewHtmlFor(model);
+            const want = salesforceResourceHtml(this.previewHtmlFor(model));
             // The comparison is a READ; the write below is this component's own
             // sanitized preview markup, never author input straight from the page.
             // eslint-disable-next-line @lwc/lwc/no-inner-html
@@ -3198,11 +3198,12 @@ export default class DocGenCanvas extends LightningElement {
         if (model.kind === 'image') {
             const img = model.image || {};
             const imgHPx = Math.max(1, inToPx(model.h, this.zoom));
-            if (img.src) {
+            const assetSrc = salesforceAssetUrl(img.src);
+            if (assetSrc) {
                 const fit = img.keepRatio === false ? 'fill' : 'contain';
                 return (
                     '<img src="' +
-                    img.src +
+                    assetSrc +
                     '" style="width:100%;height:' +
                     imgHPx +
                     'px;object-fit:' +

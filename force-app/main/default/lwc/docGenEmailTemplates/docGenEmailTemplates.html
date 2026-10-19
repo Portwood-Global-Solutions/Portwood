@@ -155,7 +155,7 @@
                                 value={bodyHtml}
                                 onchange={handleBodyChange}
                                 class="full-html-source"
-                                field-level-help="Paste a complete HTML email. Use absolute hosted image URLs (https://…). Merge tokens and the {ActionButton}/{VerificationCode} widgets still resolve."
+                                field-level-help="Paste a complete HTML email. Use Salesforce-hosted images from Assets. Merge tokens and the {ActionButton}/{VerificationCode} widgets still resolve."
                             ></lightning-textarea>
                         </template>
 
@@ -191,7 +191,7 @@
                                     label="Logo URL Override"
                                     value={logoUrl}
                                     onchange={handleLogoChange}
-                                    placeholder="https://…/logo.png"
+                                    placeholder="Choose a Salesforce-hosted logo from Assets"
                                     field-level-help="Any public image URL — no length limit. Or pick a Portwood Asset below to host the logo in Salesforce Files. In Full custom HTML this value renders wherever you place {LogoUrl}."
                                 ></lightning-input>
                                 <lightning-combobox

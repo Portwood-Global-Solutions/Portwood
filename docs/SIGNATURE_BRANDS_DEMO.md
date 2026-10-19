@@ -1,74 +1,81 @@
 # Dynamic signature Brands demo
 
-Deployed to `portwood-proposal` on October 18, 2026, on `feat/byod-signature-sender`.
+Current work is on `feat/byod-signature-sender` / PR #465. Both demo orgs are
+throwaway scratch orgs with Salesforce Sites, not published Experience Builder
+Networks. Public tokens, captured responses and diagnostic logs remain local in
+`output/` and must not be committed.
 
-**Latest independent retest: the warning is not fixed.** A new fictional Harbor
-Works Account, Brand, Salesforce branding set, inactive HTML template, and two
-unsigned requests were created on the existing Proposal scratch org/Site. The
-new HTML signing link loads normally in regular Chrome, including after reload.
-The new PDF signing link shows **Dangerous site** on first navigation and reload;
-its Details say **recently found phishing**. No warning was bypassed, no document
-was signed, no email was sent, and no Google review was submitted.
+## Chrome investigation and fresh-org comparison
 
-Both initial HTTP responses contain the correct Harbor Works branding before
-JavaScript. Changing only the new theme's action color from orange to teal
-updates both responses at the same URLs; the Brand modification timestamp stays
-unchanged. The HTML page also displays the new color after reload, loads its
-document/signing controls, and reports no captured console warnings or errors.
-**56 HTTP/DOM assertions passed** across the initial and updated theme. These
-functional checks do not establish Safe Browsing clearance. Local fixture links,
-response captures and results are in `output/brand-independent-check/`.
+The original `portwood-proposal` warning remains unresolved. Its reported
+`DocGenSignaturePdf` endpoint returned HTTP 200 without an off-platform redirect.
+Tests were performed one at a time with normal Chrome security:
 
-The earlier fresh Cedar PDF did open normally in Chrome, but this independent
-retest shows that result was not consistent across new requests. The original
-demo URL also remains unresolved. The earlier signed request was preserved.
-Do not bypass an interstitial. Earlier Cedar links are in
-`output/brand-live-demo/links.json`.
+1. Removed the pre-existing `api.ipify.org` browser lookup from both signing pages.
+   The user's reported link subsequently loaded normally, but a fresh branded
+   PDF request on the same Site was still blocked. Removal alone was insufficient.
+2. Temporarily replaced dynamic branding with static Portwood presentation. The
+   same PDF URL still showed **Dangerous site**. The full implementation was restored.
+3. Temporarily served a plain Visualforce diagnostic page at that exact endpoint,
+   with no package controller, document, forms, images or package scripts. Salesforce
+   still injects its own platform scripts. Fresh Chrome navigation remained blocked.
+   The full signing page was restored.
+4. Created `portwood-signing-clean`, deployed the same Salesforce-only source and
+   configured a new native Site. Fictional Harbor Works HTML and prepared-PDF
+   requests both open and reload normally in regular Chrome. The PDF renders its
+   document and signing controls with normal site information and no captured
+   console warnings/errors. Dynamic branding remains enabled.
 
-The hostname matches Salesforce's `SiteDetail.SecureUrl`. On October 18, an HTTP
-inspection found no redirect away from that host; the four served vendor/Brand
-script resources matched the checked-in files. Google's public hostname report
-returned **No available data**, while Chrome's interstitial explicitly said
-**recently found phishing**. These observations do not identify the cause or prove
-the detection is a false positive. The original URL's warning is unresolved;
-clearing it may require Google's review. See
-[Google's Security Issues guidance](https://support.google.com/webmasters/answer/9044101).
+The comparison supports a persistent classification associated with the original
+Site or URL; it does not identify the original trigger, clear existing warnings,
+or guarantee future Safe Browsing classification. Moving a demo is a diagnostic,
+not remediation of an already flagged customer link. No warning was bypassed,
+no live agreement was signed, no email was sent and no Google review was submitted.
+The prepared review was left unsubmitted at the user's request.
 
-A correction is now deployed: both signing pages identify Portwood DocGen as the
-service provider and state its relationship to the customer Brand. This remains
-visible outside the customizable HTML, including invalid-link states. The default
-page title also identifies Portwood. This addresses the third-party labeling gap
-in [Google's published guidance](https://developers.google.com/search/docs/monitor-debug/security/social-engineering);
-it does not establish that this gap caused the detection or clear the warning.
-All **14 provider identity DOM checks** pass, and the deployed guest response
-contains the identification. A Google Safe Browsing re-evaluation request is
-prepared in Chrome. Submission and Google's classification decision are separate
-from deployment. The current Google account has no verified Search Console
-property available for this Site.
+## Salesforce-only resources and signature IP capture
 
-Both signing pages now resolve the current Brand and linked Salesforce theme on
-the server. Their initial HTML contains the title, identity, text, image URLs and
-validated CSS variables. The getter shares the existing token, expiry, request
-status and prepared-PDF signing-order gates, but performs no Viewed updates or
-public document-link creation. Only the public branding projection is embedded;
-signer names, emails, tokens, document data and internal theme associations are
-not included. Invalid, expired and cancelled tokens receive a neutral page.
-Recognized, unexpired completed links retain public branding and render a
-read-only confirmation, as described below.
+The IP lookup predates this work: the HTML page added it in `f0b4067`, and the PDF
+page inherited it in `eb42bec`. It has now been removed. Signing IP capture remains
+required; removing the lookup alone exposed a native-context gap in live testing:
+Visualforce page requests provide IP headers, while VF remoting supplies no headers.
 
-The remoting callback no longer applies branding. Advanced author HTML remains
-in script-safe JSON and is sanitized synchronously before its section becomes
-visible; Standard presentation is the fallback if initialization fails. The
-Portwood provider identity remains visible throughout. The live theme still
-updates on the next page load: changing its action color changed the initial
-HTML at the same signing URL without resaving the Brand.
+Both pages now capture the native request observation during read-only initial rendering.
+A server HMAC binds the IP and two-hour validity window to the signer token. Audit
+writes verify that observation when a current request IP is unavailable. The
+random org-specific key lives in a protected custom setting and is never rendered
+or exposed by a remote method. Generic document-query gateways explicitly reject this private settings object. Installation/upgrade and authorized admin setup initialize the private key. Source-deployed QA orgs initialize it through setup as well. Guest rendering never writes settings, marks a signer Viewed, publishes a document or changes signing status. Completed/rejected links do not expose an IP observation. No additional browser endpoint or
+external service is used. Plain guest-supplied IP strings are not accepted as
+observations. A stale or modified proof requires reloading the page.
 
-Current validation: **448/448 Apex tests**, **30 live initial HTML/DOM checks**,
-**34 live escaping/Advanced initialization checks**, and **22 provider identity
-and page-initialization checks** passed. Chrome previously loaded the fresh Cedar
-PDF and its signing controls without script errors; the independent Harbor Works
-PDF now warns, as described above. The Google review has **not been submitted**,
-as requested.
+Salesforce's platform IP header takes priority over forwarding headers. Native
+Site checks include deliberately supplied forwarding/platform headers. Other
+custom-domain/CDN configurations still require integration validation; forwarding
+headers are best-effort fallbacks, and an unavailable platform address must never
+be represented as a verified public address.
+
+`DocGenAssetPolicy` rejects automatic off-platform images, fonts, stylesheets and
+embedded content in Brand/configuration, email, template/merged HTML, rich text,
+Office resource relationships and native PDF-rendering paths. Native Salesforce
+asset URLs, inline images/fonts, local vector charts and manual hyperlinks remain supported. Live
+previews filter resource URLs before attaching content. Older unsafe configuration
+falls back or fails clearly instead of loading its resources. The guide no longer
+automatically redirects outside Salesforce. Existing customer content with remote
+images must move those images into Salesforce Assets/Files.
+
+Validation: **1,275/1,275 Apex regression tests** passed after correcting the seven
+failures from the initial 2,317-test full run. Local checks pass: **34** resource
+policy assertions, **24** provider/page initialization assertions and **92**
+completed-link assertions. Fresh-org initial-response/theme checks pass **84** assertions
+across both endpoints, including server-rendered theme values and script-safe
+public presentation. Final scoped checks pass **407/407 Apex tests**, including an audit write from a verified observation, read-only guest rendering, installation/setup initialization, private-key query rejection and the corrected versioning fixture. Four live native observations verify across requests; supplied forwarding/platform headers do not replace the baseline address. A native public File image also loads in the real guest PDF page. Both orgs have the same review build. The fresh-org full run passed **2,326/2,327 tests**. Its one failure was a versioning fixture that left the factory's empty revision active alongside V2; the fixture now deactivates that revision before the test, and the final scoped rerun passes with the original assertions unchanged.
+
+The metadata audit retains **51 existing findings**. Security/AppExchange analysis is not a clean release signoff: the broad scan has existing DOM/vendor/output findings and Graph Engine internal errors. Final targeted PMD reports four VF output warnings on encoded support links and script-safe presentation JSON. The new IP controller/helper has no remaining URL-parameter or GET-action findings. Managed-package/subscriber security validation remains a release gate.
+
+Both signing pages identify Portwood DocGen as the service provider outside the
+customizable content. Branding is present in the initial HTML; remoting does not
+swap the theme after load. Advanced content is sanitized before reveal. The live
+Salesforce branding set remains dynamic on the next page load.
 
 ## Completed-link reload behavior
 
@@ -143,7 +150,7 @@ checks against the existing local links, add `--reuse` to that command.
 Salesforce documents BrandingSet properties including `ActionColor`,
 `CompanyLogo`, and `PrimaryFont` in its
 [BrandingSet metadata reference](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_brandingset.htm).
-The implementation projects supported action/header/page colors, a public HTTPS
+The implementation projects supported action/header/page colors, a Salesforce-hosted
 logo, and a safe font-family list. It supports site-relative `/sfsites/`,
 `/file-asset/`, and `/resource/` images using the configured signing-site base.
 Missing or invalid values fall back to the Brand. Custom font files and arbitrary

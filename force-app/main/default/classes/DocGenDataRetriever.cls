@@ -140,7 +140,7 @@ public with sharing class DocGenDataRetriever {
 
         Map<String, Object> data;
         try {
-            List<SObject> results = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - field names from template config validated by Schema describe; base object escaped; runs with USER_MODE
+            List<SObject> results = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - field names from template config validated by Schema describe; base object escaped; runs with USER_MODE
             if (results.isEmpty()) {
                 return null;
             }
@@ -406,7 +406,7 @@ public with sharing class DocGenDataRetriever {
 
         Map<String, Object> data;
         try {
-            List<SObject> results = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - field names from V2 query config; base object escaped; runs with USER_MODE
+            List<SObject> results = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - field names from V2 query config; base object escaped; runs with USER_MODE
             if (results.isEmpty()) {
                 return null;
             }
@@ -510,7 +510,10 @@ public with sharing class DocGenDataRetriever {
         Map<Id, Map<String, Object>> targetMap = new Map<Id, Map<String, Object>>();
         try {
             // CxSAST: SOQL injection mitigated by Schema allowlist validation on object, fields, ORDER BY + keyword blocklist + USER_MODE
-            List<SObject> targetRecs = Database.query(targetQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — dynamic elements allowlist-validated; USER_MODE enforced
+            List<SObject> targetRecs = Database.query(
+                DocGenSignatureIpContext.publicQuery(targetQuery),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection — dynamic elements allowlist-validated; USER_MODE enforced
             for (SObject targetRec : targetRecs) {
                 targetMap.put(targetRec.Id, mapSObject(targetRec));
             }
@@ -695,7 +698,10 @@ public with sharing class DocGenDataRetriever {
 
         Map<String, Object> rootData;
         try {
-            List<SObject> results = Database.query(rootQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 tree node fields from query config; object name escaped; runs with USER_MODE
+            List<SObject> results = Database.query(
+                DocGenSignatureIpContext.publicQuery(rootQuery),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection - V3 tree node fields from query config; object name escaped; runs with USER_MODE
             if (results.isEmpty()) {
                 return null;
             }
@@ -842,7 +848,10 @@ public with sharing class DocGenDataRetriever {
 
         Map<Id, Map<String, Object>> allData = new Map<Id, Map<String, Object>>();
         try {
-            List<SObject> results = Database.query(rootQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 tree node fields from query config; object name escaped; runs with USER_MODE
+            List<SObject> results = Database.query(
+                DocGenSignatureIpContext.publicQuery(rootQuery),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection - V3 tree node fields from query config; object name escaped; runs with USER_MODE
             for (SObject rec : results) {
                 allData.put(rec.Id, mapSObject(rec));
             }
@@ -958,7 +967,10 @@ public with sharing class DocGenDataRetriever {
                     }
                     piQuery += ') FROM ProcessInstance WHERE Id IN :parentIds';
 
-                    List<SObject> piResults = Database.query(piQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    List<SObject> piResults = Database.query(
+                        DocGenSignatureIpContext.publicQuery(piQuery),
+                        AccessLevel.USER_MODE
+                    ); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                     childResults = new List<SObject>();
                     for (SObject pi : piResults) {
                         SObject[] piChildren = pi.getSObjects(child.relationshipName);
@@ -991,7 +1003,10 @@ public with sharing class DocGenDataRetriever {
                         childQuery += ' LIMIT ' + sanitizeClause(child.limitClause, 'LIMIT');
                     }
 
-                    childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    childResults = Database.query(
+                        DocGenSignatureIpContext.publicQuery(childQuery),
+                        AccessLevel.USER_MODE
+                    ); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
                     // Child query failed — skip this child relationship
                     continue;
@@ -1135,7 +1150,10 @@ public with sharing class DocGenDataRetriever {
                     }
                     piQuery += ') FROM ProcessInstance WHERE Id IN :parentIds';
 
-                    List<SObject> piResults = Database.query(piQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    List<SObject> piResults = Database.query(
+                        DocGenSignatureIpContext.publicQuery(piQuery),
+                        AccessLevel.USER_MODE
+                    ); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                     childResults = new List<SObject>();
                     for (SObject pi : piResults) {
                         SObject[] piChildren = pi.getSObjects(child.relationshipName);
@@ -1195,7 +1213,10 @@ public with sharing class DocGenDataRetriever {
                         }
                     }
 
-                    childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    childResults = Database.query(
+                        DocGenSignatureIpContext.publicQuery(childQuery),
+                        AccessLevel.USER_MODE
+                    ); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
                     // Bulk child query failed — skip this child relationship
                     continue;
@@ -1318,7 +1339,10 @@ public with sharing class DocGenDataRetriever {
 
         Map<Id, Map<String, Object>> targetMap = new Map<Id, Map<String, Object>>();
         try {
-            List<SObject> targetRecs = Database.query(tQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — dynamic elements allowlist-validated; USER_MODE enforced
+            List<SObject> targetRecs = Database.query(
+                DocGenSignatureIpContext.publicQuery(tQuery),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection — dynamic elements allowlist-validated; USER_MODE enforced
             for (SObject rec : targetRecs) {
                 targetMap.put(rec.Id, mapSObject(rec));
             }
@@ -1780,7 +1804,7 @@ public with sharing class DocGenDataRetriever {
 
                 List<SObject> piResults;
                 try {
-                    piResults = Database.query(piQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    piResults = Database.query(DocGenSignatureIpContext.publicQuery(piQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
                     // ProcessInstance subquery failed — skip this relationship
                     continue;
@@ -1814,7 +1838,7 @@ public with sharing class DocGenDataRetriever {
                 }
 
                 try {
-                    gcResults = Database.query(gcQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+                    gcResults = Database.query(DocGenSignatureIpContext.publicQuery(gcQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
                     // Grandchild query failed — skip this relationship
                     continue;

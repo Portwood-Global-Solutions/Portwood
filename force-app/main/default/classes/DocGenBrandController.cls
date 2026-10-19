@@ -173,6 +173,11 @@ public with sharing class DocGenBrandController {
         // clearing the logo) doesn't leave a stale value in the other slot —
         // the reader prefers Logo_Url_Extended__c whenever it's non-blank.
         String logoUrl = (String) dto.get('logoUrl');
+        if (String.isNotBlank(logoUrl)) {
+            logoUrl = DocGenAssetPolicy.assetUrl(logoUrl);
+            if (logoUrl == null)
+                throw DocGenService.ahe('Choose a Salesforce-hosted image from Assets for the logo.');
+        }
         if (String.isNotBlank(logoUrl) && logoUrl.length() > 255) {
             b.Logo_Url_Extended__c = logoUrl;
             b.Logo_Url__c = null;
@@ -253,7 +258,9 @@ public with sharing class DocGenBrandController {
         d.id = r.Id;
         d.name = r.Name;
         d.owaId = r.OWA_Id__c;
-        d.logoUrl = String.isNotBlank(r.Logo_Url_Extended__c) ? r.Logo_Url_Extended__c.trim() : r.Logo_Url__c;
+        d.logoUrl = DocGenAssetPolicy.assetUrl(
+            String.isNotBlank(r.Logo_Url_Extended__c) ? r.Logo_Url_Extended__c.trim() : r.Logo_Url__c
+        );
         d.logoAssetKey = r.Logo_Asset_Key__c;
         d.brandColor = r.Brand_Color__c;
         d.companyName = r.Company_Name__c;

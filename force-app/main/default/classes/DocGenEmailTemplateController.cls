@@ -198,6 +198,10 @@ public with sharing class DocGenEmailTemplateController {
     /** Upserts a template from editor values. Returns the saved record Id. */
     @AuraEnabled
     public static Id saveTemplate(Map<String, Object> data) {
+        DocGenAssetPolicy.assertHtmlResources((String) data.get('bodyHtml'));
+        String image = (String) data.get('logoUrl');
+        if (String.isNotBlank(image) && DocGenAssetPolicy.assetUrl(image) == null)
+            throw DocGenService.ahe('Choose a Salesforce-hosted logo from Assets.');
         String type = (String) data.get('type');
         if (String.isBlank(type) || !TYPE_LABELS.containsKey(type)) {
             throw new AuraHandledException('Unknown email template type.');

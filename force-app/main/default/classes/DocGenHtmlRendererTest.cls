@@ -2052,7 +2052,7 @@ private class DocGenHtmlRendererTest {
                 '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
                 '<w:body><w:p><w:r><w:t>FontTest</w:t></w:r></w:p></w:body></w:document>';
 
-            String fontCss = '@font-face { font-family: "Custom"; src: url("data:;base64,abc"); }';
+            String fontCss = '@font-face { font-family: "Custom"; src: url("data:font/ttf;base64,abc"); }';
             String html = DocGenHtmlRenderer.convertToHtml(xml, new Map<String, String>(), fontCss);
 
             System.assert(html.contains('@font-face'), 'Should inject font-face CSS');

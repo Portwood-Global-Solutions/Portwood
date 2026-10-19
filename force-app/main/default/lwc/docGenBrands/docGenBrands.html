@@ -131,7 +131,7 @@
                                             value={form.logoUrl}
                                             oninput={handleLogoChange}
                                             onchange={handleLogoChange}
-                                            placeholder="https://…/logo.png"
+                                            placeholder="Choose an image from Assets"
                                             field-level-help="Must be a PUBLIC image URL — no Salesforce login required to view it. A private/internal file link (e.g. from a file's default 'Copy Link') will show as broken. Pick a Portwood Asset below instead to avoid this."
                                             class="slds-p-bottom_x-small"
                                         ></lightning-input>
@@ -308,7 +308,7 @@
                                         <details class="editor-group">
                                             <summary>Images</summary>
                                             <p class="form-context">
-                                                Use a public image URL or link an image from Shared Assets. Page images
+                                                Choose an image stored in Salesforce from Shared Assets. Page images
                                                 apply only to signing pages.
                                             </p>
                                             <lightning-input
@@ -320,7 +320,7 @@
                                                 placeholder="Inherit the shared brand logo"
                                                 maxlength="8192"
                                                 pattern="https://.+"
-                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                message-when-pattern-mismatch="Choose a Salesforce-hosted image from Assets."
                                                 class="slds-p-bottom_x-small"
                                             ></lightning-input>
                                             <lightning-combobox
@@ -357,10 +357,10 @@
                                                 label="Banner image URL"
                                                 value={page.bannerUrl}
                                                 onchange={handleConfigChange}
-                                                placeholder="https://example.com/banner.jpg"
+                                                placeholder="Salesforce-hosted banner URL"
                                                 maxlength="8192"
                                                 pattern="https://.+"
-                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                message-when-pattern-mismatch="Choose a Salesforce-hosted image from Assets."
                                                 class="slds-p-bottom_x-small"
                                             ></lightning-input>
                                             <lightning-combobox
@@ -388,10 +388,10 @@
                                                 label="Background image URL"
                                                 value={page.backgroundUrl}
                                                 onchange={handleConfigChange}
-                                                placeholder="https://example.com/background.jpg"
+                                                placeholder="Salesforce-hosted background URL"
                                                 maxlength="8192"
                                                 pattern="https://.+"
-                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                message-when-pattern-mismatch="Choose a Salesforce-hosted image from Assets."
                                                 class="slds-p-bottom_x-small"
                                             ></lightning-input>
                                             <lightning-combobox
@@ -456,11 +456,11 @@
                                                     <summary>Available fields and supported styling</summary>
                                                     <p>{placeholderGuide}</p>
                                                     <p>
-                                                        Use HTML content tags, HTTPS images and links, inline styles,
-                                                        and class selectors. CSS supports typography, colors, spacing,
-                                                        borders, flex/grid layouts, and width-based media queries.
-                                                        Scripts, forms, fixed positioning, and external stylesheets are
-                                                        omitted.
+                                                        Use HTML content tags, Salesforce-hosted images, links, inline
+                                                        styles, and class selectors. CSS supports typography, colors,
+                                                        spacing, borders, flex/grid layouts, and width-based media
+                                                        queries. Scripts, forms, fixed positioning, and external
+                                                        stylesheets are omitted.
                                                     </p>
                                                 </details>
                                                 <lightning-textarea

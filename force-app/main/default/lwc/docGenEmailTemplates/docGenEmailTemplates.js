@@ -1,3 +1,4 @@
+import { salesforceResourceHtml } from 'c/docGenAuthoringKit';
 import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getTemplates from '@salesforce/apex/DocGenEmailTemplateController.getTemplates';
@@ -445,7 +446,7 @@ export default class DocGenEmailTemplates extends LightningElement {
             // LWC-native way to render arbitrary table+inline-style markup otherwise.
             // See code-analyzer.yml + DocGen_False_Positive_Report.md.
             // eslint-disable-next-line @lwc/lwc/no-inner-html
-            surface.innerHTML = this.previewHtml || '';
+            surface.innerHTML = salesforceResourceHtml(this.previewHtml || '');
             this._previewDirty = false;
         }
     }

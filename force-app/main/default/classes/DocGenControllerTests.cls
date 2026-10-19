@@ -6312,7 +6312,7 @@ private class DocGenControllerTests {
     static void testRenderImageAsPdfBase64_acceptsForceComUrl() {
         Test.startTest();
         String result = DocGenController.renderImageAsPdfBase64(
-            'https://example.sandbox.file.force.com/servlet/rtaImage?eid=001000000000000'
+            'https://' + DomainCreator.getContentHostname() + '/servlet/rtaImage?eid=001000000000000'
         );
         Test.stopTest();
         System.assertNotEquals(null, result, 'force.com hosted URL should be accepted in test stub mode');

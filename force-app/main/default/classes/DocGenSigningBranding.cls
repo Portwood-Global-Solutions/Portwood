@@ -64,14 +64,16 @@ public without sharing class DocGenSigningBranding {
         String logo;
         if (brand != null) {
             if (String.isNotBlank(brand.Logo_Asset_Key__c)) {
-                logo = safeHttpsUrl(DocGenEmailTemplateService.resolveAssetPublicUrlByKey(brand.Logo_Asset_Key__c));
+                logo = DocGenAssetPolicy.assetUrl(
+                    DocGenEmailTemplateService.resolveAssetPublicUrlByKey(brand.Logo_Asset_Key__c)
+                );
             }
-            logo = first(logo, safeHttpsUrl(first(brand.Logo_Url_Extended__c, brand.Logo_Url__c)));
+            logo = first(logo, DocGenAssetPolicy.assetUrl(first(brand.Logo_Url_Extended__c, brand.Logo_Url__c)));
         }
         p.page = DocGenSigningPageConfig.forSigner(brand == null ? null : brand.Signing_Page_Config__c);
         p.logoUrl = first(
             (String) p.page.get('logoUrl'),
-            first(logo, safeHttpsUrl(settings.Signature_Email_Logo_Url__c))
+            first(logo, DocGenAssetPolicy.assetUrl(settings.Signature_Email_Logo_Url__c))
         );
         p.page.put('logoUrl', p.logoUrl);
         // Resolve on every visit so Theme panel changes reach already-sent links.

@@ -1212,7 +1212,7 @@ private class DocGenHtmlTemplateTest {
         // the image file and nothing server-side can read it without loading the blob
         // (which the zero-heap PDF path exists to avoid). Assuming square is a floor,
         // wrong only in the safe direction for anything wider than it is tall.
-        Decimal h = DocGenService.estimateChromeHeightIn('<img style="width:200px;height:auto" src="x">');
+        Decimal h = DocGenService.estimateChromeHeightIn('<img style="width:200px;height:auto" src="/resource/local">');
         System.assertEquals(
             Decimal.valueOf(200) / 96,
             h,
@@ -1235,7 +1235,7 @@ private class DocGenHtmlTemplateTest {
         System.assertEquals(h1, twoCells, 'Cells in one row do not stack');
         // A tall image in a row makes that row tall.
         Decimal withImg = DocGenService.estimateChromeHeightIn(
-            '<table><tr><td><img style="height:1in" src="x"></td></tr></table>'
+            '<table><tr><td><img style="height:1in" src="/resource/local"></td></tr></table>'
         );
         System.assert(withImg > 1, 'A 1in image in a row must make the row at least that tall: ' + withImg);
     }
@@ -1245,7 +1245,7 @@ private class DocGenHtmlTemplateTest {
         // The end-to-end contract: a header table pushes the body down instead of
         // being overlapped by it.
         String hdr =
-            '<table><tr><td><img style="height:0.8in" src="x"></td></tr>' +
+            '<table><tr><td><img style="height:0.8in" src="/resource/local"></td></tr>' +
             '<tr><td>row two</td></tr><tr><td>row three</td></tr></table>';
         String src = '@page { size: Letter portrait; margin: 0.75in; }';
         String outp = DocGenService.wrapHtmlForPdf('<p>body</p>', src, hdr, null);
@@ -1276,7 +1276,7 @@ private class DocGenHtmlTemplateTest {
         // Logo left, address right — side by side, so the height is the taller of
         // the two, not their sum.
         Decimal imageWins = DocGenService.estimateChromeHeightIn(
-            '<div><img style="height:1in" src="x"><p>a</p><p>b</p></div>'
+            '<div><img style="height:1in" src="/resource/local"><p>a</p><p>b</p></div>'
         );
         System.assertEquals(1, imageWins, 'A 1in image beats two short lines');
         Decimal textWins = DocGenService.estimateChromeHeightIn(

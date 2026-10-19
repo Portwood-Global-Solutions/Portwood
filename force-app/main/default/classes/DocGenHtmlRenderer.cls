@@ -715,7 +715,7 @@ public with sharing class DocGenHtmlRenderer {
         // emerged here as <p>__DGTXBX_OPEN_...__</p> / <p>__DGTXBX_CLOSE__</p>.
         bodyHtml = postProcessTextboxMarkers(bodyHtml, pageDims);
 
-        return dynamicPrefix + wrapNonLatinGlyphs(bodyHtml) + HTML_SUFFIX;
+        return DocGenAssetPolicy.assertHtmlResources(dynamicPrefix + wrapNonLatinGlyphs(bodyHtml) + HTML_SUFFIX);
     }
 
     /**

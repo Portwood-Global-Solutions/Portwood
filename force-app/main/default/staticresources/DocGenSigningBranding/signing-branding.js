@@ -31,7 +31,7 @@
     }
     function image(id, url, alt) {
         var element = document.getElementById(id);
-        url = https(url);
+        url = window.PortwoodBrandContent ? window.PortwoodBrandContent.assetUrl(url) : '';
         element.hidden = !url;
         element.style.removeProperty('display');
         element.alt = alt || '';
@@ -107,7 +107,9 @@
                     ] ||
                     '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
             );
-            var backgroundUrl = https(page.backgroundUrl);
+            var backgroundUrl = window.PortwoodBrandContent
+                ? window.PortwoodBrandContent.assetUrl(page.backgroundUrl)
+                : '';
             var rgb = background
                 .slice(1)
                 .match(/../g)

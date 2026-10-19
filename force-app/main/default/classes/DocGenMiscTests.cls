@@ -2503,7 +2503,10 @@ private class DocGenMiscTests {
     static void testProcessDocumentImgTagWithRefid() {
         // <img> with refid= attribute — exercises extractImageFromHtml refid branch
         Account acc = TestDataFactory.getTestAccount();
-        acc.Description = '<img src="https://example.com/servlet/rtaImage?eid=001&refid=0EM000000000001" />';
+        acc.Description =
+            '<img src="' +
+            URL.getOrgDomainUrl().toExternalForm() +
+            '/servlet/rtaImage?eid=001&refid=0EM000000000001" />';
         update acc;
 
         DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
@@ -6914,7 +6917,10 @@ private class DocGenMiscTests {
     @IsTest
     static void testGeneratePdfBlobWithAbsoluteImageUrl() {
         Account acc = TestDataFactory.getTestAccount();
-        acc.Description = '<img src="https://mydomain.my.salesforce.com/sfc/servlet.shepherd/version/download/068000000000001" />';
+        acc.Description =
+            '<img src="' +
+            URL.getOrgDomainUrl().toExternalForm() +
+            '/sfc/servlet.shepherd/version/download/068000000000001" />';
         update acc;
 
         DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
