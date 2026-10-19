@@ -69,6 +69,7 @@
             body.style.setProperty('--signing-gap', { Compact: '1rem', Spacious: '1.5rem' }[page.spacing] || '1.25rem');
             body.style.setProperty(
                 '--signing-font',
+                (/^[a-zA-Z0-9 ,"'_-]{1,180}$/.test(page.fontFamily || '') ? page.fontFamily : '') ||
                 { Serif: 'Georgia, "Times New Roman", serif', Humanist: '"Trebuchet MS", Verdana, sans-serif' }[
                     page.font
                 ] || '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'

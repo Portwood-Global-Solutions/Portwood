@@ -83,6 +83,7 @@ global with sharing class DocGenSignaturePreparationController {
         return new Map<String, Object>{
             'files' => files,
             'drafts' => drafts,
+            'brands' => availableBrands(),
             'maxBytes' => MAX_PDF_BYTES,
             'publicSite' => publicSite,
             'canEmail' => publicSite && String.isNotBlank(settings.Signature_OWA_Id__c),
@@ -218,9 +219,11 @@ global with sharing class DocGenSignaturePreparationController {
         draft.Preparation_Config_CV_Id__c = cv.Id;
         draft.PDF_Revision__c = (draft.PDF_Revision__c == null ? 0 : draft.PDF_Revision__c) + 1;
         draft.Document_Title_Format__c = text(config, 'title', 200);
+        String brandId = text(config, 'brandId', 18);
+        draft.Brand__c = String.isBlank(brandId) ? null : (Id) brandId;
         DocGenFlsGuard.assertUpdateable(
             draft,
-            new Set<String>{ 'Preparation_Config_CV_Id__c', 'PDF_Revision__c', 'Document_Title_Format__c' }
+            new Set<String>{ 'Preparation_Config_CV_Id__c', 'PDF_Revision__c', 'Document_Title_Format__c', 'Brand__c' }
         );
         Database.update(draft, AccessLevel.SYSTEM_MODE);
     }
@@ -426,6 +429,23 @@ global with sharing class DocGenSignaturePreparationController {
             fail('This draft changed in another window. Reopen it before saving or sending.');
     }
 
+    private static List<Map<String, Object>> availableBrands() {
+        List<Map<String, Object>> result = new List<Map<String, Object>>();
+        if (!Schema.sObjectType.DocGen_Brand__c.isAccessible())
+            return result;
+        for (DocGen_Brand__c brand : [
+            SELECT Id, Name
+            FROM DocGen_Brand__c
+            WHERE Is_Active__c = TRUE
+            WITH USER_MODE
+            ORDER BY Name
+            LIMIT 100
+        ]) {
+            result.add(new Map<String, Object>{ 'id' => brand.Id, 'name' => brand.Name });
+        }
+        return result;
+    }
+
     private static void assertRecordAccess(Id recordId) {
         if (recordId == null || UserInfo.getUserType() == 'Guest')
             fail('Open the sender from a Salesforce record.');
@@ -463,6 +483,16 @@ global with sharing class DocGenSignaturePreparationController {
             fail('The prepared fields belong to a different PDF. Prepare the document again.');
         if (String.isBlank(text(config, 'title', 200)))
             fail('Enter a document title.');
+        String brandId = text(config, 'brandId', 18);
+        if (String.isNotBlank(brandId)) {
+            Boolean found = false;
+            for (Map<String, Object> brand : availableBrands()) {
+                if (String.valueOf(brand.get('id')) == brandId)
+                    found = true;
+            }
+            if (!found)
+                fail('Choose an active Brand you can access, or use the org default.');
+        }
         List<Object> recipients = listValue(config, 'recipients');
         List<Object> pages = listValue(config, 'pages');
         List<Object> fields = listValue(config, 'fields');

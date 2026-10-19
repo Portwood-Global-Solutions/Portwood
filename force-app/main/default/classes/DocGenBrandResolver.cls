@@ -1,6 +1,6 @@
 /**
  * Resolves the Portwood Brand (#369) a signature email should use — the sender
- * identity a Template optionally points at via DocGen_Template__c.Brand__c.
+ * identity selected on the request, falling back to its template Brand.
  * Per-transaction cached so a bulk send issues at most one query per distinct
  * request and one per distinct brand, regardless of recipient count.
  */
@@ -15,8 +15,7 @@ public without sharing class DocGenBrandResolver {
     private static Map<Id, DocGen_Brand__c> brandCache = new Map<Id, DocGen_Brand__c>();
 
     /**
-     * The Brand Id the given signature request's template points at, or null
-     * when the request has no template or the template has no Brand. Does NOT
+     * The request Brand, then its template Brand, or null. Does NOT
      * check Is_Active__c — getBrand() below is where "active" is enforced, so a
      * brand deactivated after being assigned still resolves here but getBrand()
      * returns null for it, falling through to the org default exactly the same
@@ -37,19 +36,24 @@ public without sharing class DocGenBrandResolver {
         // next-signer email in the caller that doesn't catch it locally.
         DocGenFlsGuard.advisoryAssertAccessible(
             DocGen_Signature_Request__c.sObjectType,
-            new Set<String>{ 'Template__c' }
+            new Set<String>{ 'Template__c', 'Brand__c' }
         );
         DocGenFlsGuard.advisoryAssertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Brand__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Signature_Request__c> reqs = [
-            SELECT Template__c, Template__r.Brand__c
+            SELECT Brand__c, Template__c, Template__r.Brand__c
             FROM DocGen_Signature_Request__c
             WHERE Id = :requestId
             WITH SYSTEM_MODE
             LIMIT 1
         ];
 
-        Id brandId = (!reqs.isEmpty() && reqs[0].Template__c != null) ? reqs[0].Template__r.Brand__c : null;
+        Id brandId;
+        if (!reqs.isEmpty()) {
+            brandId = reqs[0].Brand__c != null
+                ? reqs[0].Brand__c
+                : (reqs[0].Template__c == null ? null : reqs[0].Template__r.Brand__c);
+        }
         requestBrandCache.put(requestId, brandId);
         return brandId;
     }

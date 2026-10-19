@@ -15,7 +15,7 @@
         documentId: null, title: '', recipients: [{ key: 'recipient-1', name: '', email: '' }],
         fields: [], pages: [], page: 1, owner: 'recipient-1', tool: null, selected: null,
         expirationDays: 30, requireVerification: null, prefill: true, subject: '', message: '',
-        delivery: 'preview', dirty: false
+        delivery: 'preview', brandId: '', dirty: false
     };
     var context = { files: [], drafts: [] }, pdf, pdfjs, viewport, pageModel, renderTask, renderSequence = 0;
     var busy = false, documentBytes, contactTimer, lastWidth = 0, pendingSource = null;
@@ -46,7 +46,7 @@
         return { version: 1, documentId: state.documentId, title: state.title, recipients: state.recipients,
             fields: state.fields, pages: state.pages, expirationDays: Number(state.expirationDays),
             requireVerification: state.requireVerification, prefill: state.prefill, subject: state.subject,
-            message: state.message, delivery: state.delivery };
+            message: state.message, delivery: state.delivery, brandId: state.brandId };
     }
     function namespaceValue(row, name) { return row[name] == null ? row['portwoodglobal__' + name] : row[name]; }
     function missingSignatures() {
@@ -130,6 +130,10 @@
     function reviewControls() {
         var html = '<h3>Review and send</h3><label for="title">Document title</label><input id="title" data-setting="title" maxlength="200" value="' + escapeHtml(state.title) + '" />' +
             '<p class="small">' + state.pages.length + ' pages · ' + state.fields.length + ' fields · Sign in order</p>';
+        html += '<label for="brandId">Signing Brand</label><select id="brandId" data-setting="brandId"><option value="">Use org default</option>';
+        if (state.brandId && !(context.brands || []).some(function (brand) { return brand.id === state.brandId; })) html += '<option value="' + escapeHtml(state.brandId) + '" selected disabled>Previously selected Brand (unavailable)</option>';
+        (context.brands || []).forEach(function (brand) { html += '<option value="' + escapeHtml(brand.id) + '" ' + (state.brandId === brand.id ? 'selected' : '') + '>' + escapeHtml(brand.name) + '</option>'; });
+        html += '</select><p class="small">Applies to the invitation and guest signing page.</p>';
         state.recipients.forEach(function (person, index) { html += '<div class="recipient-head" style="margin:12px 0"><span class="avatar">' + (index + 1) + '</span><div><strong>' + escapeHtml(person.name) + '</strong><div class="small">' + escapeHtml(person.email) + '</div></div></div>'; });
         html += '<label for="expirationDays">Links expire in days</label><input id="expirationDays" data-setting="expirationDays" type="number" min="1" max="365" value="' + state.expirationDays + '" />' +
             '<label for="verification">Email verification</label><select id="verification"><option value="inherit" ' + (state.requireVerification == null ? 'selected' : '') + '>Use org default (' + (context.verificationDefault ? 'required' : 'off') + ')</option><option value="yes" ' + (state.requireVerification === true ? 'selected' : '') + '>Require an email code</option><option value="no" ' + (state.requireVerification === false ? 'selected' : '') + '>No email code</option></select>' +
@@ -163,10 +167,11 @@
         if (pdf) await pdf.destroy();
         pdf = await pdfjs.getDocument({ data: documentBytes.slice(), isEvalSupported: false }).promise;
         state.draftId = result.draftId; state.revision = Number(result.revision); state.documentId = result.documentId;
+        state.brandId = '';
         if (result.config) {
             var restored = JSON.parse(result.config);
-            ['title', 'recipients', 'fields', 'expirationDays', 'requireVerification', 'prefill', 'subject', 'message', 'delivery'].forEach(function (key) { if (restored[key] !== undefined) state[key] = restored[key]; });
-        } else { state.title = result.title; state.fields = []; }
+            ['title', 'brandId', 'recipients', 'fields', 'expirationDays', 'requireVerification', 'prefill', 'subject', 'message', 'delivery'].forEach(function (key) { if (restored[key] !== undefined) state[key] = restored[key]; });
+        } else { state.title = result.title; state.fields = []; state.brandId = ''; }
         state.pages = geometry; state.page = 1; state.selected = null; state.tool = null; state.dirty = false;
         state.owner = state.recipients[0].key;
         $('file-label').textContent = state.title + '.pdf'; $('page-controls').hidden = false;

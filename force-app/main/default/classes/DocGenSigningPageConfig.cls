@@ -32,6 +32,8 @@ public without sharing class DocGenSigningPageConfig {
             configured = false;
         }
         config.put('layoutConfigured', configured);
+        // The public DTO contains resolved presentation, never internal theme associations.
+        config.remove('brandingSetId');
         for (String image : new List<String>{ 'logo', 'banner', 'background' }) {
             String key = (String) config.remove(image + 'AssetKey');
             String resolved;
@@ -60,6 +62,7 @@ public without sharing class DocGenSigningPageConfig {
             input = new Map<String, Object>();
         Map<String, Object> result = new Map<String, Object>{
             'version' => 2,
+            'brandingSetId' => text(input, 'brandingSetId', 18).trim(),
             'mode' => option(input, 'mode', new Set<String>{ 'Standard', 'Advanced' }, 'Standard'),
             'logoHeight' => numberValue(input, 'logoHeight', 24, 160, 56),
             'logoAlignment' => option(input, 'logoAlignment', new Set<String>{ 'Left', 'Center', 'Right' }, 'Left'),
@@ -73,6 +76,15 @@ public without sharing class DocGenSigningPageConfig {
             'contentWidth' => numberValue(input, 'contentWidth', 640, 1440, 1040),
             'bannerAlt' => text(input, 'bannerAlt', 255)
         };
+        String setId = (String) result.get('brandingSetId');
+        if (String.isNotBlank(setId)) {
+            try {
+                if (((Id) setId).getSObjectType() != BrandingSet.sObjectType)
+                    throw new IllegalArgumentException('Wrong record type.');
+            } catch (Exception ex) {
+                throw new IllegalArgumentException('Choose a Salesforce branding set.');
+            }
+        }
         for (String image : new List<String>{ 'logo', 'banner', 'background' }) {
             String value = text(input, image + 'Url', 8192).trim();
             if (String.isNotBlank(value) && DocGenSigningBranding.safeHttpsUrl(value) == null) {

@@ -167,3 +167,10 @@ Screenshots are generated under `output/signing-branding/`.
 - **Community signing — Advanced demo** is saved in the AI org for review.
 
 Additional local check: `node scripts/qa/brand-image-linking-check.mjs`.
+
+## Live theme and uploaded-PDF follow-up
+
+Brands now have a searchable visual library and can reference a live Salesforce
+branding set. Uploaded-PDF preparation also supports choosing a Brand. See
+[the dynamic Brands demo](SIGNATURE_BRANDS_DEMO.md) for behavior, validation, and
+the Experience Cloud integration boundary.

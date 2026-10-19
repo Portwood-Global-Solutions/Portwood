@@ -818,6 +818,11 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Brand__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Signature_Request__c.Template__c</field>
         <readable>true</readable>

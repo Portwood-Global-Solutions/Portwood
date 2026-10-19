@@ -1,8 +1,118 @@
+.brands-workspace {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+}
+.brand-library {
+    background: #f7f9fc;
+    border: 1px solid #dce3ec;
+    border-radius: 12px;
+    padding: 1rem;
+    position: sticky;
+    top: 1rem;
+}
+.library-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+.library-heading h2 {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.brand-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    max-height: 75vh;
+    overflow: auto;
+    padding: 2px;
+}
+.brand-row {
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    background: white;
+    border: 1px solid #dce3ec;
+}
+.brand-row.selected {
+    border-color: #3969bb;
+    box-shadow: 0 0 0 1px #3969bb;
+}
+.brand-row:focus-visible {
+    outline: 3px solid #3969bb;
+    outline-offset: 2px;
+}
+.brand-thumbnail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.7rem;
+    border-radius: 5px;
+    border-top: 5px solid;
+    color: #243247;
+}
+.brand-thumbnail img {
+    height: 25px;
+    max-width: 130px;
+    object-fit: contain;
+    object-position: left;
+}
+.thumbnail-company {
+    font-size: 0.65rem;
+    font-weight: 700;
+}
+.thumbnail-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.thumbnail-document {
+    display: block;
+    height: 28px;
+    border: 1px solid #dde3eb;
+    background: white;
+    border-radius: 3px;
+}
+.brand-meta .brand-name,
+.brand-meta .brand-sub {
+    display: block;
+}
+.brand-detail {
+    min-width: 0;
+}
+.brand-empty {
+    padding: 4rem 2rem;
+    max-width: 560px;
+    margin: auto;
+    text-align: center;
+    color: #526176;
+    line-height: 1.6;
+}
+.brand-empty h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #18283c;
+    margin: 1rem 0 0.5rem;
+}
+.brand-empty p + p {
+    margin-top: 0.75rem;
+}
+.library-empty,
+.theme-note {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #526176;
+    padding: 0.7rem 0;
+}
 .brand-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.6rem 0.4rem;
+    padding: 0.75rem;
     border-bottom: 1px solid #e5e5e5;
     cursor: pointer;
     border-radius: 0.25rem;
@@ -55,10 +165,10 @@
     border: 1px solid #dddbda;
 }
 .add-form {
-    border: 1px dashed #c9c9c9;
+    border: 1px solid #dce3ec;
     border-radius: 0.5rem;
     padding: 1rem;
-    background: #fafafa;
+    background: #fff;
 }
 .form-title {
     font-size: 1rem;
@@ -303,5 +413,29 @@
     .mp-header,
     .mp-cta {
         transition: none;
+    }
+}
+
+.brand-detail .add-form {
+    margin-top: 0;
+}
+@media (max-width: 1100px) {
+    .brand-editor {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .brand-previews {
+        position: static;
+    }
+}
+@media (max-width: 760px) {
+    .brands-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .brand-library {
+        position: static;
+    }
+    .brand-list {
+        max-height: 350px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
 }

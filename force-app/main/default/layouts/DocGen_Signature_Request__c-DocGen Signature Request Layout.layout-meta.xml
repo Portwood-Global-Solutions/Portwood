@@ -19,6 +19,10 @@
                 <field>Template__c</field>
             </layoutItems>
             <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Brand__c</field>
+            </layoutItems>
+            <layoutItems>
                 <behavior>Readonly</behavior>
                 <field>Template_Ids__c</field>
             </layoutItems>

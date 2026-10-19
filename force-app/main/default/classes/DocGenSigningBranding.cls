@@ -74,6 +74,29 @@ public without sharing class DocGenSigningBranding {
             first(logo, safeHttpsUrl(settings.Signature_Email_Logo_Url__c))
         );
         p.page.put('logoUrl', p.logoUrl);
+        // Resolve on every visit so Theme panel changes reach already-sent links.
+        String brandingSetId;
+        try {
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(
+                brand == null ? '{}' : first(brand.Signing_Page_Config__c, '{}')
+            );
+            brandingSetId = (String) config.get('brandingSetId');
+        } catch (Exception ex) {
+            /* Older or malformed config uses the Brand defaults. */
+        }
+        Map<String, String> theme = DocGenBrandingSetTheme.resolve(brandingSetId);
+        if (theme.containsKey('color'))
+            p.color = theme.get('color');
+        if (theme.containsKey('headerColor'))
+            p.headerColor = theme.get('headerColor');
+        if (theme.containsKey('backgroundColor'))
+            p.backgroundColor = theme.get('backgroundColor');
+        if (theme.containsKey('logoUrl')) {
+            p.logoUrl = theme.get('logoUrl');
+            p.page.put('logoUrl', p.logoUrl);
+        }
+        if (theme.containsKey('fontFamily'))
+            p.page.put('fontFamily', theme.get('fontFamily'));
         return p;
     }
 

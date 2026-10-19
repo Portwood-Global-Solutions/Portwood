@@ -62,6 +62,28 @@ private class DocGenBrandResolverTest {
         System.assertEquals(brand.Id, DocGenBrandResolver.resolveBrandForRequest(req.Id));
     }
 
+    @IsTest
+    static void requestBrandOverridesTemplateAndWorksWithoutTemplate() {
+        Account acc = new Account(Name = 'Direct Brand Test');
+        insert acc;
+        DocGen_Brand__c templateBrand = new DocGen_Brand__c(Name = 'Template brand', Is_Active__c = true);
+        DocGen_Brand__c directBrand = new DocGen_Brand__c(Name = 'Direct brand', Is_Active__c = true);
+        insert new List<DocGen_Brand__c>{ templateBrand, directBrand };
+        DocGen_Template__c template = newTemplate('Branded template', templateBrand.Id);
+        DocGen_Signature_Request__c fromTemplate = newRequest(template.Id, acc.Id);
+        DocGen_Signature_Request__c fromPdf = new DocGen_Signature_Request__c(
+            Related_Record_Id__c = acc.Id,
+            Status__c = 'Sent'
+        );
+        insert fromPdf;
+        fromTemplate.Brand__c = directBrand.Id;
+        fromPdf.Brand__c = directBrand.Id;
+        update new List<DocGen_Signature_Request__c>{ fromTemplate, fromPdf };
+        DocGenBrandResolver.clearCache();
+        System.assertEquals(directBrand.Id, DocGenBrandResolver.resolveBrandForRequest(fromTemplate.Id));
+        System.assertEquals(directBrand.Id, DocGenBrandResolver.resolveBrandForRequest(fromPdf.Id));
+    }
+
     // ---- getBrand: null safety, active gate, field values ----
     @IsTest
     static void getBrand_nullId_returnsNull() {

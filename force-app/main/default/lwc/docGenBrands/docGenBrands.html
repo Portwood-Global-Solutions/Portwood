@@ -5,14 +5,15 @@
                 icon-name="utility:refresh"
                 alternative-text="Reload"
                 title="Reload brands"
-                onclick={loadBrands}
+                onclick={handleRefresh}
             ></lightning-button-icon>
         </div>
 
         <div class="slds-p-horizontal_medium slds-p-bottom_medium">
             <p class="slds-text-body_small slds-text-color_weak slds-p-bottom_small">
                 A Brand controls your signature emails and signing pages — company identity, logo, colors, and page
-                text. Set one up once here, then choose it on any Portwood Template.
+                text. Choose a Brand on a template or an uploaded PDF. Link a Salesforce theme to keep guest signing
+                pages in sync.
             </p>
 
             <template if:true={isLoading}>
@@ -22,528 +23,591 @@
             </template>
 
             <template if:false={isLoading}>
-                <template if:true={hasBrands}>
-                    <template for:each={brandRows} for:item="b">
-                        <div key={b.id} class="brand-row" data-id={b.id} onclick={handleEditRow}>
-                            <div class="swatch" style={b.swatchStyle}>{b.initials}</div>
-                            <div class="brand-meta">
-                                <p class="brand-name">{b.name}</p>
-                                <p class="brand-sub">{b.owaId}</p>
-                            </div>
-                            <span class={b.statusClass}>{b.statusLabel}</span>
-                            <lightning-icon icon-name="utility:chevronright" size="x-small"></lightning-icon>
+                <div class="brands-workspace">
+                    <aside class="brand-library" aria-label="Brand library">
+                        <div class="library-heading">
+                            <h2>Brand library</h2>
+                            <lightning-button label="+ Add Brand" onclick={handleAddNew}></lightning-button>
                         </div>
-                    </template>
-                </template>
-                <template if:false={hasBrands}>
-                    <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_small">
-                        No brands yet — every template still uses the org-wide Signature Settings default.
-                    </p>
-                </template>
-
-                <template if:false={showForm}>
-                    <lightning-button
-                        variant="brand-outline"
-                        label="+ Add Brand"
-                        onclick={handleAddNew}
-                        class="slds-m-top_small"
-                    ></lightning-button>
-                </template>
-
-                <template if:true={showForm}>
-                    <div class="add-form slds-m-top_medium">
-                        <p class="form-title">{formTitle}</p>
-                        <p class="form-context">
-                            Choose the identity your signers see from the first email through signing. Preview your
-                            changes before saving.
-                        </p>
-
-                        <div class="brand-editor">
-                            <div class="brand-fields">
-                                <h3 class="section-title">Brand identity</h3>
-                                <lightning-input
-                                    data-field="name"
-                                    type="text"
-                                    label="Brand name"
-                                    value={form.name}
-                                    oninput={handleNameChange}
-                                    onchange={handleNameChange}
-                                    required
-                                    field-level-help="Internal name only — used to pick this brand on a Template. Not shown to signers."
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-input>
-
-                                <lightning-combobox
-                                    data-field="owaId"
-                                    label="Send emails from"
-                                    value={form.owaId}
-                                    options={owaOptions}
-                                    onchange={handleOwaChange}
-                                    field-level-help="Which Org-Wide Email Address this brand's signature emails send from. Blank falls back to the org-wide Signature Settings default."
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-combobox>
-
-                                <lightning-input
-                                    data-field="companyName"
-                                    type="text"
-                                    label="Company name"
-                                    value={form.companyName}
-                                    oninput={handleCompanyChange}
-                                    onchange={handleCompanyChange}
-                                    placeholder="Shown when there's no logo"
-                                    field-level-help="Shown in signing page headers and used in emails when no logo is set."
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-input>
-
-                                <lightning-input
-                                    data-field="logoUrl"
-                                    type="url"
-                                    label="Logo URL"
-                                    value={form.logoUrl}
-                                    oninput={handleLogoChange}
-                                    onchange={handleLogoChange}
-                                    placeholder="https://…/logo.png"
-                                    field-level-help="Must be a PUBLIC image URL — no Salesforce login required to view it. A private/internal file link (e.g. from a file's default 'Copy Link') will show as broken. Pick a Portwood Asset below instead to avoid this."
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-input>
-
-                                <lightning-combobox
-                                    data-field="logoAssetKey"
-                                    label="…or override with an Asset file"
-                                    value={form.logoAssetKey}
-                                    options={logoAssetOptions}
-                                    onchange={handleLogoAssetChange}
-                                    placeholder="Pick a Shared Asset image…"
-                                    disabled={logoAssetsUnavailable}
-                                    field-level-help="Links the logo to a Shared Asset (Command Hub → Assets): always uses the asset's LATEST image and is always public, so replacing its file updates the logo everywhere — no re-save needed. Typing a URL above unlinks the asset."
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-combobox>
-
-                                <lightning-input
-                                    data-field="footerText"
-                                    type="text"
-                                    label="Shared footer text"
-                                    value={form.footerText}
-                                    oninput={handleFooterChange}
-                                    onchange={handleFooterChange}
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-input>
-
-                                <lightning-input
-                                    data-field="brandColor"
-                                    type="color"
-                                    label="Brand color"
-                                    value={form.brandColor}
-                                    onchange={handleColorChange}
-                                    class="slds-p-bottom_x-small"
-                                ></lightning-input>
-
-                                <lightning-input
-                                    data-field="isActive"
-                                    type="toggle"
-                                    label="Active"
-                                    checked={form.isActive}
-                                    onchange={handleActiveChange}
-                                    message-toggle-active="On"
-                                    message-toggle-inactive="Off"
-                                    field-level-help="Inactive brands can't be selected on a Template. Pending requests use the org defaults while the brand is inactive."
-                                    class="slds-p-bottom_small"
-                                ></lightning-input>
-
-                                <h3 class="section-title signing-section">Signing pages</h3>
-                                <p class="form-context">
-                                    Applies automatically to requests from templates using this brand. Leave optional
-                                    fields blank to use the defaults shown in the preview.
-                                </p>
-                                <lightning-combobox
-                                    data-config="mode"
-                                    label="Page design mode"
-                                    value={page.mode}
-                                    options={pageModeOptions}
-                                    onchange={handleConfigChange}
-                                    class="slds-p-bottom_small"
-                                ></lightning-combobox>
-                                <details class="editor-group" open>
-                                    <summary>Colors and text</summary>
-                                    <lightning-input
-                                        data-field="signingColor"
-                                        type="text"
-                                        label="Button color (optional)"
-                                        value={form.signingColor}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="Inherit brand color"
-                                        pattern="#[a-fA-F0-9]{6}"
-                                        message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
-                                        maxlength="7"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-input
-                                        data-field="signingHeaderColor"
-                                        type="text"
-                                        label="Header color (optional)"
-                                        value={form.signingHeaderColor}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="#FFFFFF"
-                                        pattern="#[a-fA-F0-9]{6}"
-                                        message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
-                                        maxlength="7"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-input
-                                        data-field="signingBackgroundColor"
-                                        type="text"
-                                        label="Page background color (optional)"
-                                        value={form.signingBackgroundColor}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="#F3F2F2"
-                                        pattern="#[a-fA-F0-9]{6}"
-                                        message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
-                                        maxlength="7"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-input
-                                        data-field="signingTitle"
-                                        type="text"
-                                        label="Page heading"
-                                        value={form.signingTitle}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="Review and sign"
-                                        maxlength="80"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-textarea
-                                        data-field="signingWelcomeText"
-                                        label="Welcome text"
-                                        value={form.signingWelcomeText}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        maxlength="1000"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-textarea>
-                                    <lightning-input
-                                        data-field="signingFooterText"
-                                        type="text"
-                                        label="Page footer (optional)"
-                                        value={form.signingFooterText}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="Inherit shared footer"
-                                        maxlength="255"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-textarea
-                                        data-field="signingCompletionMessage"
-                                        label="Completion message"
-                                        value={form.signingCompletionMessage}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        maxlength="1000"
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-textarea>
-                                    <lightning-input
-                                        data-field="signingSupportUrl"
-                                        type="url"
-                                        label="Support URL (optional)"
-                                        value={form.signingSupportUrl}
-                                        oninput={handlePageChange}
-                                        onchange={handlePageChange}
-                                        placeholder="https://example.com/help"
-                                        pattern="https://.+"
-                                        message-when-pattern-mismatch="Use an absolute HTTPS URL."
-                                        maxlength="255"
-                                        field-level-help="Shown as a Get help link in the signing page footer."
-                                        class="slds-p-bottom_small"
-                                    ></lightning-input>
-                                </details>
-                                <details class="editor-group">
-                                    <summary>Images</summary>
-                                    <p class="form-context">
-                                        Use a public image URL or link an image from Shared Assets. Page images apply
-                                        only to signing pages.
-                                    </p>
-                                    <lightning-input
-                                        data-config="logoUrl"
-                                        type="url"
-                                        label="Page logo URL"
-                                        value={page.logoUrl}
-                                        onchange={handleConfigChange}
-                                        placeholder="Inherit the shared brand logo"
-                                        maxlength="8192"
-                                        pattern="https://.+"
-                                        message-when-pattern-mismatch="Use a public HTTPS image URL."
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-combobox
-                                        data-image="logo"
-                                        label="Page logo from Shared Assets"
-                                        value={page.logoAssetKey}
-                                        options={logoAssetOptions}
-                                        onchange={handlePageAssetChange}
-                                        disabled={logoAssetsUnavailable}
-                                        class="slds-p-bottom_small"
-                                    ></lightning-combobox>
-                                    <div class="control-pair">
-                                        <lightning-input
-                                            data-config="logoHeight"
-                                            type="number"
-                                            label="Logo height (px)"
-                                            value={page.logoHeight}
-                                            min="24"
-                                            max="160"
-                                            step="1"
-                                            onchange={handleConfigChange}
-                                        ></lightning-input
-                                        ><lightning-combobox
-                                            data-config="logoAlignment"
-                                            label="Logo alignment"
-                                            value={page.logoAlignment}
-                                            options={alignmentOptions}
-                                            onchange={handleConfigChange}
-                                        ></lightning-combobox>
-                                    </div>
-                                    <lightning-input
-                                        data-config="bannerUrl"
-                                        type="url"
-                                        label="Banner image URL"
-                                        value={page.bannerUrl}
-                                        onchange={handleConfigChange}
-                                        placeholder="https://example.com/banner.jpg"
-                                        maxlength="8192"
-                                        pattern="https://.+"
-                                        message-when-pattern-mismatch="Use a public HTTPS image URL."
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-combobox
-                                        data-image="banner"
-                                        label="Banner image from Shared Assets"
-                                        value={page.bannerAssetKey}
-                                        options={logoAssetOptions}
-                                        onchange={handlePageAssetChange}
-                                        disabled={logoAssetsUnavailable}
-                                        class="slds-p-bottom_small"
-                                    ></lightning-combobox>
-                                    <lightning-input
-                                        data-config="bannerAlt"
-                                        type="text"
-                                        label="Banner image description"
-                                        value={page.bannerAlt}
-                                        maxlength="255"
-                                        onchange={handleConfigChange}
-                                        field-level-help="Describe meaningful banner content for people using a screen reader. Leave blank for a decorative image."
-                                        class="slds-p-bottom_small"
-                                    ></lightning-input>
-                                    <lightning-input
-                                        data-config="backgroundUrl"
-                                        type="url"
-                                        label="Background image URL"
-                                        value={page.backgroundUrl}
-                                        onchange={handleConfigChange}
-                                        placeholder="https://example.com/background.jpg"
-                                        maxlength="8192"
-                                        pattern="https://.+"
-                                        message-when-pattern-mismatch="Use a public HTTPS image URL."
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-input>
-                                    <lightning-combobox
-                                        data-image="background"
-                                        label="Background image from Shared Assets"
-                                        value={page.backgroundAssetKey}
-                                        options={logoAssetOptions}
-                                        onchange={handlePageAssetChange}
-                                        disabled={logoAssetsUnavailable}
-                                        class="slds-p-bottom_small"
-                                    ></lightning-combobox>
-                                </details>
-                                <details class="editor-group">
-                                    <summary>Layout and typography</summary>
-                                    <lightning-combobox
-                                        data-config="font"
-                                        label="Page typography"
-                                        value={page.font}
-                                        options={fontOptions}
-                                        onchange={handleConfigChange}
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-combobox>
-                                    <lightning-combobox
-                                        data-config="spacing"
-                                        label="Page spacing"
-                                        value={page.spacing}
-                                        options={spacingOptions}
-                                        onchange={handleConfigChange}
-                                        class="slds-p-bottom_x-small"
-                                    ></lightning-combobox>
-                                    <lightning-input
-                                        data-config="contentWidth"
-                                        type="number"
-                                        label="Content width (px)"
-                                        value={page.contentWidth}
-                                        min="640"
-                                        max="1440"
-                                        step="1"
-                                        onchange={handleConfigChange}
-                                        field-level-help="Maximum width on larger screens. The page fits the available width on phones."
-                                        class="slds-p-bottom_small"
-                                    ></lightning-input>
-                                </details>
-                                <template if:true={isAdvanced}>
-                                    <div class="advanced-editor">
-                                        <h4 class="section-title">Custom page sections</h4>
-                                        <p class="form-context">
-                                            Use HTML for each section and CSS for its classes. Empty sections use the
-                                            Standard design. Portwood supplies the document and signing controls.
-                                        </p>
-                                        <lightning-button
-                                            label="Use starter layout"
-                                            onclick={handleStarterLayout}
-                                            class="slds-p-bottom_x-small"
-                                        ></lightning-button>
-                                        <p class="preview-note">
-                                            The starter layout replaces the four HTML sections and CSS in this editor.
-                                            Save to apply.
-                                        </p>
-                                        <details class="placeholder-guide">
-                                            <summary>Available fields and supported styling</summary>
-                                            <p>{placeholderGuide}</p>
-                                            <p>
-                                                Use HTML content tags, HTTPS images and links, inline styles, and class
-                                                selectors. CSS supports typography, colors, spacing, borders, flex/grid
-                                                layouts, and width-based media queries. Scripts, forms, fixed
-                                                positioning, and external stylesheets are omitted.
-                                            </p>
-                                        </details>
-                                        <lightning-textarea
-                                            data-config="headerHtml"
-                                            label="Header HTML"
-                                            value={page.headerHtml}
-                                            onchange={handleConfigChange}
-                                            maxlength="12000"
-                                            class="code-editor slds-p-bottom_small"
-                                        ></lightning-textarea>
-                                        <lightning-textarea
-                                            data-config="welcomeHtml"
-                                            label="Welcome HTML"
-                                            value={page.welcomeHtml}
-                                            onchange={handleConfigChange}
-                                            maxlength="12000"
-                                            class="code-editor slds-p-bottom_small"
-                                        ></lightning-textarea>
-                                        <lightning-textarea
-                                            data-config="footerHtml"
-                                            label="Footer HTML"
-                                            value={page.footerHtml}
-                                            onchange={handleConfigChange}
-                                            maxlength="12000"
-                                            class="code-editor slds-p-bottom_small"
-                                        ></lightning-textarea>
-                                        <lightning-textarea
-                                            data-config="completionHtml"
-                                            label="Completion HTML"
-                                            value={page.completionHtml}
-                                            onchange={handleConfigChange}
-                                            maxlength="12000"
-                                            class="code-editor slds-p-bottom_small"
-                                        ></lightning-textarea>
-                                        <lightning-textarea
-                                            data-config="customCss"
-                                            label="Section CSS"
-                                            value={page.customCss}
-                                            onchange={handleConfigChange}
-                                            maxlength="8000"
-                                            class="code-editor slds-p-bottom_small"
-                                        ></lightning-textarea>
-                                    </div>
-                                </template>
-                            </div>
-                            <aside class="brand-previews" aria-label="Brand previews">
-                                <h3 class="section-title">Email preview</h3>
-                                <div class="mini-preview">
-                                    <div class="mp-header" style={previewHeaderStyle}>
-                                        <template if:true={previewHasLogo}>
-                                            <img src={previewLogoUrl} alt={previewCompanyOrName} class="mp-logo" />
-                                        </template>
-                                        <template if:false={previewHasLogo}>
-                                            <span class="mp-badge">
-                                                <span>{previewCompanyOrName}</span>
-                                            </span>
-                                        </template>
-                                    </div>
-                                    <div class="mp-body">A document is ready for your signature.</div>
-                                    <div class="mp-cta" style={previewCtaStyle}>Review &amp; Sign</div>
-                                </div>
-
-                                <h3 class="section-title">Signing page preview</h3>
-                                <div class="page-preview" style={pagePreviewStyle}>
-                                    <template if:false={hasCustomHeader}
-                                        ><div class="pp-header" style={pageHeaderStyle}>
-                                            <template if:true={pageHasLogo}
-                                                ><img src={pageLogoUrl} alt="" class="mp-logo" style={pageLogoStyle}
-                                            /></template>
-                                            <span>{previewCompanyOrName}</span>
-                                        </div></template
-                                    >
-                                    <div
-                                        class="pp-custom-header"
-                                        style={pageHeaderStyle}
-                                        data-html-section="header"
-                                        lwc:dom="manual"
-                                    ></div>
-                                    <div class="pp-content" style={pageContentStyle}>
-                                        <template if:true={pageBannerUrl}
-                                            ><img class="pp-banner" src={pageBannerUrl} alt={page.bannerAlt}
-                                        /></template>
-                                        <template if:false={hasCustomWelcome}
-                                            ><h4>{pageTitle}</h4>
-                                            <p class="pp-copy">{pageWelcome}</p></template
-                                        >
-                                        <div data-html-section="welcome" lwc:dom="manual"></div>
-                                        <div class="pp-document">
-                                            <strong>Document ready for signature</strong>
-                                            <p>Review your document and complete the required fields.</p>
-                                            <span class="pp-action" style={pageActionStyle}>Review and sign</span>
-                                        </div>
-                                        <template if:false={hasCustomFooter}
-                                            ><div class="pp-footer">
-                                                <span>{pageFooter}</span
-                                                ><template if:true={pageSupportUrl}
-                                                    ><a href={pageSupportUrl} target="_blank" rel="noopener noreferrer"
-                                                        >Get help</a
-                                                    ></template
-                                                >
-                                            </div></template
-                                        >
-                                        <div data-html-section="footer" lwc:dom="manual"></div>
-                                    </div>
-                                </div>
-                                <details class="completion-preview">
-                                    <summary>Preview completion message</summary>
-                                    <template if:false={hasCustomCompletion}><p>{pageCompletion}</p></template>
-                                    <div data-html-section="completion" lwc:dom="manual"></div>
-                                </details>
-                                <template if:true={htmlNotice}
-                                    ><p class="html-notice" role="status">{htmlNotice}</p></template
+                        <lightning-input
+                            type="search"
+                            label="Search brands"
+                            value={searchTerm}
+                            oninput={handleSearch}
+                            onchange={handleSearch}
+                        ></lightning-input>
+                        <div class="brand-list">
+                            <template for:each={brandRows} for:item="b">
+                                <button
+                                    key={b.id}
+                                    type="button"
+                                    class={b.rowClass}
+                                    data-id={b.id}
+                                    onclick={handleEditRow}
                                 >
-                                <p class="preview-note">
-                                    Content width: {page.contentWidth}px. Preview fits the available space.
-                                </p>
-                                <p class="preview-note">
-                                    Page preview uses sample content. Your existing signing site URL continues to apply.
-                                </p>
-                            </aside>
+                                    <span class="brand-thumbnail" style={b.thumbnailStyle} aria-hidden="true">
+                                        <template if:true={b.thumbnailLogo}
+                                            ><img src={b.thumbnailLogo} alt=""
+                                        /></template>
+                                        <span class="thumbnail-company">{b.thumbnailCompany}</span>
+                                        <span class="thumbnail-title">{b.thumbnailTitle}</span>
+                                        <span class="thumbnail-document"></span>
+                                    </span>
+                                    <span class="brand-meta"
+                                        ><span class="brand-name">{b.name}</span
+                                        ><span class="brand-sub">{b.themeLabel}</span></span
+                                    >
+                                    <span class={b.statusClass}>{b.statusLabel}</span>
+                                </button>
+                            </template>
+                            <template if:false={hasMatchingBrands}
+                                ><p class="library-empty">
+                                    No matching brands. Add a Brand or try another search.
+                                </p></template
+                            >
                         </div>
-                        <lightning-button
-                            variant="brand"
-                            label={saveLabel}
-                            onclick={handleSave}
-                            disabled={saveDisabled}
-                            class="slds-m-right_x-small"
-                        ></lightning-button>
-                        <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
-                    </div>
-                </template>
+                    </aside>
+                    <main class="brand-detail">
+                        <template if:false={showForm}
+                            ><div class="brand-empty">
+                                <lightning-icon icon-name="utility:brush" size="large"></lightning-icon>
+                                <h2>Your signing experience</h2>
+                                <p>Choose a Brand to preview and edit its email and guest signing page.</p>
+                                <p>
+                                    Link a live Salesforce theme to follow its colors, logo, and font. Brand settings
+                                    fill in any missing theme values.
+                                </p>
+                            </div></template
+                        >
+                        <template if:true={showForm}>
+                            <div class="add-form slds-m-top_medium">
+                                <p class="form-title">{formTitle}</p>
+                                <p class="form-context">
+                                    Choose the identity your signers see from the first email through signing. Preview
+                                    your changes before saving.
+                                </p>
+
+                                <div class="brand-editor">
+                                    <div class="brand-fields">
+                                        <h3 class="section-title">Brand identity</h3>
+                                        <lightning-input
+                                            data-field="name"
+                                            type="text"
+                                            label="Brand name"
+                                            value={form.name}
+                                            oninput={handleNameChange}
+                                            onchange={handleNameChange}
+                                            required
+                                            field-level-help="Internal name only — used to pick this brand on a Template. Not shown to signers."
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-input>
+
+                                        <lightning-combobox
+                                            data-field="owaId"
+                                            label="Send emails from"
+                                            value={form.owaId}
+                                            options={owaOptions}
+                                            onchange={handleOwaChange}
+                                            field-level-help="Which Org-Wide Email Address this brand's signature emails send from. Blank falls back to the org-wide Signature Settings default."
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-combobox>
+
+                                        <lightning-input
+                                            data-field="companyName"
+                                            type="text"
+                                            label="Company name"
+                                            value={form.companyName}
+                                            oninput={handleCompanyChange}
+                                            onchange={handleCompanyChange}
+                                            placeholder="Shown when there's no logo"
+                                            field-level-help="Shown in signing page headers and used in emails when no logo is set."
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-input>
+
+                                        <lightning-input
+                                            data-field="logoUrl"
+                                            type="url"
+                                            label="Logo URL"
+                                            value={form.logoUrl}
+                                            oninput={handleLogoChange}
+                                            onchange={handleLogoChange}
+                                            placeholder="https://…/logo.png"
+                                            field-level-help="Must be a PUBLIC image URL — no Salesforce login required to view it. A private/internal file link (e.g. from a file's default 'Copy Link') will show as broken. Pick a Portwood Asset below instead to avoid this."
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-input>
+
+                                        <lightning-combobox
+                                            data-field="logoAssetKey"
+                                            label="…or override with an Asset file"
+                                            value={form.logoAssetKey}
+                                            options={logoAssetOptions}
+                                            onchange={handleLogoAssetChange}
+                                            placeholder="Pick a Shared Asset image…"
+                                            disabled={logoAssetsUnavailable}
+                                            field-level-help="Links the logo to a Shared Asset (Command Hub → Assets): always uses the asset's LATEST image and is always public, so replacing its file updates the logo everywhere — no re-save needed. Typing a URL above unlinks the asset."
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-combobox>
+
+                                        <lightning-input
+                                            data-field="footerText"
+                                            type="text"
+                                            label="Shared footer text"
+                                            value={form.footerText}
+                                            oninput={handleFooterChange}
+                                            onchange={handleFooterChange}
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-input>
+
+                                        <lightning-input
+                                            data-field="brandColor"
+                                            type="color"
+                                            label="Brand color"
+                                            value={form.brandColor}
+                                            onchange={handleColorChange}
+                                            class="slds-p-bottom_x-small"
+                                        ></lightning-input>
+
+                                        <lightning-input
+                                            data-field="isActive"
+                                            type="toggle"
+                                            label="Active"
+                                            checked={form.isActive}
+                                            onchange={handleActiveChange}
+                                            message-toggle-active="On"
+                                            message-toggle-inactive="Off"
+                                            field-level-help="Inactive brands can't be selected on a Template. Pending requests use the org defaults while the brand is inactive."
+                                            class="slds-p-bottom_small"
+                                        ></lightning-input>
+
+                                        <h3 class="section-title signing-section">Signing pages</h3>
+                                        <lightning-combobox
+                                            label="Live Salesforce theme"
+                                            data-config="brandingSetId"
+                                            value={page.brandingSetId}
+                                            options={brandingSetOptions}
+                                            onchange={handleConfigChange}
+                                            field-level-help="Use the branding set for your Experience Cloud site. Supported colors, HTTPS logo, and font are read when a signer opens the page. Missing values use the Brand settings below."
+                                        ></lightning-combobox>
+                                        <template if:true={hasLiveTheme}
+                                            ><p class="theme-note">
+                                                Linked theme values take priority on the guest signing page. Changes to
+                                                that theme appear when the page is opened again.
+                                            </p></template
+                                        >
+                                        <template if:true={themeNotice}
+                                            ><p class="html-notice" role="status">{themeNotice}</p></template
+                                        >
+                                        <p class="form-context">
+                                            Applies automatically to requests from templates using this brand. Leave
+                                            optional fields blank to use the defaults shown in the preview.
+                                        </p>
+                                        <lightning-combobox
+                                            data-config="mode"
+                                            label="Page design mode"
+                                            value={page.mode}
+                                            options={pageModeOptions}
+                                            onchange={handleConfigChange}
+                                            class="slds-p-bottom_small"
+                                        ></lightning-combobox>
+                                        <details class="editor-group" open>
+                                            <summary>Colors and text</summary>
+                                            <lightning-input
+                                                data-field="signingColor"
+                                                type="text"
+                                                label="Button color (optional)"
+                                                value={form.signingColor}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="Inherit brand color"
+                                                pattern="#[a-fA-F0-9]{6}"
+                                                message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
+                                                maxlength="7"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-input
+                                                data-field="signingHeaderColor"
+                                                type="text"
+                                                label="Header color (optional)"
+                                                value={form.signingHeaderColor}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="#FFFFFF"
+                                                pattern="#[a-fA-F0-9]{6}"
+                                                message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
+                                                maxlength="7"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-input
+                                                data-field="signingBackgroundColor"
+                                                type="text"
+                                                label="Page background color (optional)"
+                                                value={form.signingBackgroundColor}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="#F3F2F2"
+                                                pattern="#[a-fA-F0-9]{6}"
+                                                message-when-pattern-mismatch="Enter a six-digit hex color, such as #0176D3."
+                                                maxlength="7"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-input
+                                                data-field="signingTitle"
+                                                type="text"
+                                                label="Page heading"
+                                                value={form.signingTitle}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="Review and sign"
+                                                maxlength="80"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-textarea
+                                                data-field="signingWelcomeText"
+                                                label="Welcome text"
+                                                value={form.signingWelcomeText}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                maxlength="1000"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-textarea>
+                                            <lightning-input
+                                                data-field="signingFooterText"
+                                                type="text"
+                                                label="Page footer (optional)"
+                                                value={form.signingFooterText}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="Inherit shared footer"
+                                                maxlength="255"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-textarea
+                                                data-field="signingCompletionMessage"
+                                                label="Completion message"
+                                                value={form.signingCompletionMessage}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                maxlength="1000"
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-textarea>
+                                            <lightning-input
+                                                data-field="signingSupportUrl"
+                                                type="url"
+                                                label="Support URL (optional)"
+                                                value={form.signingSupportUrl}
+                                                oninput={handlePageChange}
+                                                onchange={handlePageChange}
+                                                placeholder="https://example.com/help"
+                                                pattern="https://.+"
+                                                message-when-pattern-mismatch="Use an absolute HTTPS URL."
+                                                maxlength="255"
+                                                field-level-help="Shown as a Get help link in the signing page footer."
+                                                class="slds-p-bottom_small"
+                                            ></lightning-input>
+                                        </details>
+                                        <details class="editor-group">
+                                            <summary>Images</summary>
+                                            <p class="form-context">
+                                                Use a public image URL or link an image from Shared Assets. Page images
+                                                apply only to signing pages.
+                                            </p>
+                                            <lightning-input
+                                                data-config="logoUrl"
+                                                type="url"
+                                                label="Page logo URL"
+                                                value={page.logoUrl}
+                                                onchange={handleConfigChange}
+                                                placeholder="Inherit the shared brand logo"
+                                                maxlength="8192"
+                                                pattern="https://.+"
+                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-combobox
+                                                data-image="logo"
+                                                label="Page logo from Shared Assets"
+                                                value={page.logoAssetKey}
+                                                options={logoAssetOptions}
+                                                onchange={handlePageAssetChange}
+                                                disabled={logoAssetsUnavailable}
+                                                class="slds-p-bottom_small"
+                                            ></lightning-combobox>
+                                            <div class="control-pair">
+                                                <lightning-input
+                                                    data-config="logoHeight"
+                                                    type="number"
+                                                    label="Logo height (px)"
+                                                    value={page.logoHeight}
+                                                    min="24"
+                                                    max="160"
+                                                    step="1"
+                                                    onchange={handleConfigChange}
+                                                ></lightning-input
+                                                ><lightning-combobox
+                                                    data-config="logoAlignment"
+                                                    label="Logo alignment"
+                                                    value={page.logoAlignment}
+                                                    options={alignmentOptions}
+                                                    onchange={handleConfigChange}
+                                                ></lightning-combobox>
+                                            </div>
+                                            <lightning-input
+                                                data-config="bannerUrl"
+                                                type="url"
+                                                label="Banner image URL"
+                                                value={page.bannerUrl}
+                                                onchange={handleConfigChange}
+                                                placeholder="https://example.com/banner.jpg"
+                                                maxlength="8192"
+                                                pattern="https://.+"
+                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-combobox
+                                                data-image="banner"
+                                                label="Banner image from Shared Assets"
+                                                value={page.bannerAssetKey}
+                                                options={logoAssetOptions}
+                                                onchange={handlePageAssetChange}
+                                                disabled={logoAssetsUnavailable}
+                                                class="slds-p-bottom_small"
+                                            ></lightning-combobox>
+                                            <lightning-input
+                                                data-config="bannerAlt"
+                                                type="text"
+                                                label="Banner image description"
+                                                value={page.bannerAlt}
+                                                maxlength="255"
+                                                onchange={handleConfigChange}
+                                                field-level-help="Describe meaningful banner content for people using a screen reader. Leave blank for a decorative image."
+                                                class="slds-p-bottom_small"
+                                            ></lightning-input>
+                                            <lightning-input
+                                                data-config="backgroundUrl"
+                                                type="url"
+                                                label="Background image URL"
+                                                value={page.backgroundUrl}
+                                                onchange={handleConfigChange}
+                                                placeholder="https://example.com/background.jpg"
+                                                maxlength="8192"
+                                                pattern="https://.+"
+                                                message-when-pattern-mismatch="Use a public HTTPS image URL."
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-input>
+                                            <lightning-combobox
+                                                data-image="background"
+                                                label="Background image from Shared Assets"
+                                                value={page.backgroundAssetKey}
+                                                options={logoAssetOptions}
+                                                onchange={handlePageAssetChange}
+                                                disabled={logoAssetsUnavailable}
+                                                class="slds-p-bottom_small"
+                                            ></lightning-combobox>
+                                        </details>
+                                        <details class="editor-group">
+                                            <summary>Layout and typography</summary>
+                                            <lightning-combobox
+                                                data-config="font"
+                                                label="Page typography"
+                                                value={page.font}
+                                                options={fontOptions}
+                                                onchange={handleConfigChange}
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-combobox>
+                                            <lightning-combobox
+                                                data-config="spacing"
+                                                label="Page spacing"
+                                                value={page.spacing}
+                                                options={spacingOptions}
+                                                onchange={handleConfigChange}
+                                                class="slds-p-bottom_x-small"
+                                            ></lightning-combobox>
+                                            <lightning-input
+                                                data-config="contentWidth"
+                                                type="number"
+                                                label="Content width (px)"
+                                                value={page.contentWidth}
+                                                min="640"
+                                                max="1440"
+                                                step="1"
+                                                onchange={handleConfigChange}
+                                                field-level-help="Maximum width on larger screens. The page fits the available width on phones."
+                                                class="slds-p-bottom_small"
+                                            ></lightning-input>
+                                        </details>
+                                        <template if:true={isAdvanced}>
+                                            <div class="advanced-editor">
+                                                <h4 class="section-title">Custom page sections</h4>
+                                                <p class="form-context">
+                                                    Use HTML for each section and CSS for its classes. Empty sections
+                                                    use the Standard design. Portwood supplies the document and signing
+                                                    controls.
+                                                </p>
+                                                <lightning-button
+                                                    label="Use starter layout"
+                                                    onclick={handleStarterLayout}
+                                                    class="slds-p-bottom_x-small"
+                                                ></lightning-button>
+                                                <p class="preview-note">
+                                                    The starter layout replaces the four HTML sections and CSS in this
+                                                    editor. Save to apply.
+                                                </p>
+                                                <details class="placeholder-guide">
+                                                    <summary>Available fields and supported styling</summary>
+                                                    <p>{placeholderGuide}</p>
+                                                    <p>
+                                                        Use HTML content tags, HTTPS images and links, inline styles,
+                                                        and class selectors. CSS supports typography, colors, spacing,
+                                                        borders, flex/grid layouts, and width-based media queries.
+                                                        Scripts, forms, fixed positioning, and external stylesheets are
+                                                        omitted.
+                                                    </p>
+                                                </details>
+                                                <lightning-textarea
+                                                    data-config="headerHtml"
+                                                    label="Header HTML"
+                                                    value={page.headerHtml}
+                                                    onchange={handleConfigChange}
+                                                    maxlength="12000"
+                                                    class="code-editor slds-p-bottom_small"
+                                                ></lightning-textarea>
+                                                <lightning-textarea
+                                                    data-config="welcomeHtml"
+                                                    label="Welcome HTML"
+                                                    value={page.welcomeHtml}
+                                                    onchange={handleConfigChange}
+                                                    maxlength="12000"
+                                                    class="code-editor slds-p-bottom_small"
+                                                ></lightning-textarea>
+                                                <lightning-textarea
+                                                    data-config="footerHtml"
+                                                    label="Footer HTML"
+                                                    value={page.footerHtml}
+                                                    onchange={handleConfigChange}
+                                                    maxlength="12000"
+                                                    class="code-editor slds-p-bottom_small"
+                                                ></lightning-textarea>
+                                                <lightning-textarea
+                                                    data-config="completionHtml"
+                                                    label="Completion HTML"
+                                                    value={page.completionHtml}
+                                                    onchange={handleConfigChange}
+                                                    maxlength="12000"
+                                                    class="code-editor slds-p-bottom_small"
+                                                ></lightning-textarea>
+                                                <lightning-textarea
+                                                    data-config="customCss"
+                                                    label="Section CSS"
+                                                    value={page.customCss}
+                                                    onchange={handleConfigChange}
+                                                    maxlength="8000"
+                                                    class="code-editor slds-p-bottom_small"
+                                                ></lightning-textarea>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <aside class="brand-previews" aria-label="Brand previews">
+                                        <h3 class="section-title">Email preview</h3>
+                                        <div class="mini-preview">
+                                            <div class="mp-header" style={previewHeaderStyle}>
+                                                <template if:true={previewHasLogo}>
+                                                    <img
+                                                        src={previewLogoUrl}
+                                                        alt={previewCompanyOrName}
+                                                        class="mp-logo"
+                                                    />
+                                                </template>
+                                                <template if:false={previewHasLogo}>
+                                                    <span class="mp-badge">
+                                                        <span>{previewCompanyOrName}</span>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <div class="mp-body">A document is ready for your signature.</div>
+                                            <div class="mp-cta" style={previewCtaStyle}>Review &amp; Sign</div>
+                                        </div>
+
+                                        <h3 class="section-title">Signing page preview</h3>
+                                        <div class="page-preview" style={pagePreviewStyle}>
+                                            <template if:false={hasCustomHeader}
+                                                ><div class="pp-header" style={pageHeaderStyle}>
+                                                    <template if:true={pageHasLogo}
+                                                        ><img
+                                                            src={pageLogoUrl}
+                                                            alt=""
+                                                            class="mp-logo"
+                                                            style={pageLogoStyle}
+                                                    /></template>
+                                                    <span>{previewCompanyOrName}</span>
+                                                </div></template
+                                            >
+                                            <div
+                                                class="pp-custom-header"
+                                                style={pageHeaderStyle}
+                                                data-html-section="header"
+                                                lwc:dom="manual"
+                                            ></div>
+                                            <div class="pp-content" style={pageContentStyle}>
+                                                <template if:true={pageBannerUrl}
+                                                    ><img class="pp-banner" src={pageBannerUrl} alt={page.bannerAlt}
+                                                /></template>
+                                                <template if:false={hasCustomWelcome}
+                                                    ><h4>{pageTitle}</h4>
+                                                    <p class="pp-copy">{pageWelcome}</p></template
+                                                >
+                                                <div data-html-section="welcome" lwc:dom="manual"></div>
+                                                <div class="pp-document">
+                                                    <strong>Document ready for signature</strong>
+                                                    <p>Review your document and complete the required fields.</p>
+                                                    <span class="pp-action" style={pageActionStyle}
+                                                        >Review and sign</span
+                                                    >
+                                                </div>
+                                                <template if:false={hasCustomFooter}
+                                                    ><div class="pp-footer">
+                                                        <span>{pageFooter}</span
+                                                        ><template if:true={pageSupportUrl}
+                                                            ><a
+                                                                href={pageSupportUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                >Get help</a
+                                                            ></template
+                                                        >
+                                                    </div></template
+                                                >
+                                                <div data-html-section="footer" lwc:dom="manual"></div>
+                                            </div>
+                                        </div>
+                                        <details class="completion-preview">
+                                            <summary>Preview completion message</summary>
+                                            <template if:false={hasCustomCompletion}><p>{pageCompletion}</p></template>
+                                            <div data-html-section="completion" lwc:dom="manual"></div>
+                                        </details>
+                                        <template if:true={htmlNotice}
+                                            ><p class="html-notice" role="status">{htmlNotice}</p></template
+                                        >
+                                        <p class="preview-note">
+                                            Content width: {page.contentWidth}px. Preview fits the available space.
+                                        </p>
+                                        <p class="preview-note">
+                                            Page preview uses sample content. Your existing signing site URL continues
+                                            to apply.
+                                        </p>
+                                    </aside>
+                                </div>
+                                <lightning-button
+                                    variant="brand"
+                                    label={saveLabel}
+                                    onclick={handleSave}
+                                    disabled={saveDisabled}
+                                    class="slds-m-right_x-small"
+                                ></lightning-button>
+                                <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+                            </div>
+                        </template>
+                    </main>
+                </div>
             </template>
         </div>
     </lightning-card>

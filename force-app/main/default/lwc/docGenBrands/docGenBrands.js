@@ -3,6 +3,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { loadScript } from 'lightning/platformResourceLoader';
 import brandingResource from '@salesforce/resourceUrl/DocGenSigningBranding';
 import getBrands from '@salesforce/apex/DocGenBrandController.getBrands';
+import getBrandingSets from '@salesforce/apex/DocGenBrandController.getBrandingSets';
 import saveBrand from '@salesforce/apex/DocGenBrandController.saveBrand';
 import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.getOrgWideEmailAddresses';
 import resolveAssetPublicUrl from '@salesforce/apex/DocGenEmailTemplateController.resolveAssetPublicUrl';
@@ -43,6 +44,7 @@ function safeHttps(value) {
 
 const PAGE_DEFAULTS = {
     version: 2,
+    brandingSetId: '',
     mode: 'Standard',
     logoUrl: '',
     logoAssetKey: '',
@@ -102,6 +104,9 @@ export default class DocGenBrands extends LightningElement {
         return this.embedded ? 'embedded-card' : '';
     }
     @track brands = [];
+    @track brandingSets = [];
+    searchTerm = '';
+    themeNotice = '';
     @track isLoading = true;
     @track isSaving = false;
     @track showForm = false;
@@ -126,6 +131,7 @@ export default class DocGenBrands extends LightningElement {
 
     connectedCallback() {
         this.loadBrands();
+        this.loadBrandingSets();
         this.loadLogoAssets();
         this.loadOrgDefaults();
         this.loadContentRenderer();
@@ -256,18 +262,70 @@ export default class DocGenBrands extends LightningElement {
         }
     }
 
+    async loadBrandingSets() {
+        try {
+            this.brandingSets = (await getBrandingSets()) || [];
+            this.themeNotice = '';
+        } catch (_e) {
+            this.themeNotice = 'Salesforce themes could not load. You can still use the Brand colors below.';
+        }
+    }
+    get brandingSetOptions() {
+        const options = [
+            { label: 'Use Brand colors and images', value: '' },
+            ...this.brandingSets.map(({ label, value }) => ({ label, value }))
+        ];
+        if (this.page.brandingSetId && !this.brandingSets.some((set) => set.value === this.page.brandingSetId)) {
+            options.push({ label: 'Previously linked theme (unavailable)', value: this.page.brandingSetId });
+        }
+        return options;
+    }
+    get liveTheme() {
+        return this.brandingSets.find((set) => set.value === this.page.brandingSetId)?.theme || {};
+    }
+    get hasLiveTheme() {
+        return !!this.page.brandingSetId;
+    }
+    handleSearch(event) {
+        this.searchTerm = event.target.value || '';
+    }
+    handleRefresh() {
+        this.loadBrands();
+        this.loadBrandingSets();
+    }
+
+    get hasMatchingBrands() {
+        return this.brandRows.length > 0;
+    }
     get hasBrands() {
         return this.brands.length > 0;
     }
 
     get brandRows() {
-        return this.brands.map((b) => ({
-            ...b,
-            swatchStyle: 'background-color:' + safeColor(b.brandColor, '#c9c9c9'),
-            initials: initialsOf(b.name),
-            statusLabel: b.isActive === false ? 'Inactive' : 'Active',
-            statusClass: b.isActive === false ? 'status-pill inactive' : 'status-pill active'
-        }));
+        const term = this.searchTerm.trim().toLowerCase();
+        return this.brands
+            .filter((b) => [b.name, b.companyName, b.signingTitle].join(' ').toLowerCase().includes(term))
+            .map((b) => {
+                const config = pageConfig(b.signingPageConfig);
+                const theme = this.brandingSets.find((set) => set.value === config.brandingSetId)?.theme || {};
+                return {
+                    ...b,
+                    swatchStyle: 'background-color:' + safeColor(theme.color || b.brandColor, '#c9c9c9'),
+                    rowClass: 'brand-row' + (this.form.id === b.id && this.showForm ? ' selected' : ''),
+                    thumbnailStyle:
+                        'background:' +
+                        safeColor(theme.backgroundColor || b.signingBackgroundColor, '#F3F2F2') +
+                        ';border-top-color:' +
+                        safeColor(theme.color || b.signingColor || b.brandColor, '#5A4FCF'),
+                    thumbnailTitle: b.signingTitle || 'Review and sign',
+                    thumbnailCompany: b.companyName || b.name,
+                    thumbnailLogo: safeHttps(theme.logoUrl) || safeHttps(config.logoUrl) || safeHttps(b.logoUrl),
+                    themeLabel: config.brandingSetId ? 'Live Salesforce theme' : 'Brand colors',
+                    initials: initialsOf(b.name),
+                    statusLabel: b.isActive === false ? 'Inactive' : 'Active',
+                    statusClass: b.isActive === false ? 'status-pill inactive' : 'status-pill active'
+                };
+            });
     }
 
     get formTitle() {
@@ -346,7 +404,7 @@ export default class DocGenBrands extends LightningElement {
         return !!this.customSections.completion;
     }
     get pageLogoUrl() {
-        return safeHttps(this.page.logoUrl) || this.previewLogoUrl;
+        return safeHttps(this.liveTheme.logoUrl) || safeHttps(this.page.logoUrl) || this.previewLogoUrl;
     }
     get pageHasLogo() {
         return !!this.pageLogoUrl;
@@ -356,6 +414,7 @@ export default class DocGenBrands extends LightningElement {
     }
     get pageFont() {
         return (
+            (/^[a-zA-Z0-9 ,"'_-]{1,180}$/.test(this.liveTheme.fontFamily || '') ? this.liveTheme.fontFamily : '') ||
             { Serif: 'Georgia, serif', Humanist: '"Trebuchet MS", Verdana, sans-serif' }[this.page.font] ||
             '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
         );
@@ -370,7 +429,10 @@ export default class DocGenBrands extends LightningElement {
         return 'max-height:' + Math.max(24, Math.min(160, Number(this.page.logoHeight) || 56)) + 'px;';
     }
     get pagePreviewStyle() {
-        const background = safeColor(this.form.signingBackgroundColor, '#F3F2F2');
+        const background = safeColor(
+            this.liveTheme.backgroundColor,
+            safeColor(this.form.signingBackgroundColor, '#F3F2F2')
+        );
         const image = safeHttps(this.page.backgroundUrl);
         const rgb = background
             .slice(1)
@@ -396,7 +458,7 @@ export default class DocGenBrands extends LightningElement {
         );
     }
     get pageHeaderStyle() {
-        const background = safeColor(this.form.signingHeaderColor, '#FFFFFF');
+        const background = safeColor(this.liveTheme.headerColor, safeColor(this.form.signingHeaderColor, '#FFFFFF'));
         return (
             'background:' +
             background +
@@ -409,7 +471,7 @@ export default class DocGenBrands extends LightningElement {
         );
     }
     get pageActionStyle() {
-        const background = safeColor(this.form.signingColor, this.previewColor);
+        const background = safeColor(this.liveTheme.color, safeColor(this.form.signingColor, this.previewColor));
         return 'background:' + background + ';color:' + foreground(background);
     }
     get pageTitle() {

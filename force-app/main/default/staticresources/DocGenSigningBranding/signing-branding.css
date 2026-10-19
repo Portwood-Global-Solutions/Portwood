@@ -114,6 +114,13 @@ body.signing-branded {
 .signing-branded .btn.signing-action.btn-brand:not(:disabled):hover {
     box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.12);
 }
+.signing-branded .role-badge {
+    background: var(--signing-action);
+    color: var(--signing-action-text);
+}
+.signing-branded .spinner {
+    border-top-color: var(--signing-action);
+}
 .signing-branded .signing-action:focus-visible,
 .signing-brand-footer a:focus-visible {
     outline: 2px solid currentColor;

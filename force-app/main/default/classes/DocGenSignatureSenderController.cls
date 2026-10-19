@@ -3297,6 +3297,14 @@ public with sharing class DocGenSignatureSenderController {
             siteUrl = 'https://<CONFIGURE_SITE_URL_IN_SETUP>';
         }
 
+        siteUrl = siteUrl.trim();
+        if (!siteUrl.contains('://'))
+            siteUrl = 'https://' + siteUrl;
+        while (siteUrl.endsWith('/'))
+            siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
+        // Experience Builder's /s entry point is not the Visualforce page prefix.
+        if (siteUrl.endsWith('/s'))
+            siteUrl = siteUrl.substring(0, siteUrl.length() - 2);
         if (siteUrl.endsWith('/')) {
             siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
         }

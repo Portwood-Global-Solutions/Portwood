@@ -108,6 +108,36 @@ public with sharing class DocGenBrandController {
         return dtos;
     }
 
+    @AuraEnabled
+    public static List<Map<String, Object>> getBrandingSets() {
+        if (!FeatureManagement.checkPermission('DocGen_Admin_Access') && !isCurrentUserAdmin()) {
+            throw DocGenService.ahe('Insufficient privileges to manage Portwood Brands.');
+        }
+        List<Map<String, Object>> options = new List<Map<String, Object>>();
+        // Public theme presentation, restricted to authenticated Brand administrators.
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<BrandingSet> themes = [
+            SELECT Id, MasterLabel
+            FROM BrandingSet
+            WITH SYSTEM_MODE
+            ORDER BY MasterLabel
+            LIMIT 100
+        ];
+        Map<Id, Map<String, String>> values = DocGenBrandingSetTheme.resolveAll(
+            new Map<Id, BrandingSet>(themes).keySet()
+        );
+        for (BrandingSet theme : themes) {
+            options.add(
+                new Map<String, Object>{
+                    'value' => theme.Id,
+                    'label' => theme.MasterLabel,
+                    'theme' => values.get(theme.Id)
+                }
+            );
+        }
+        return options;
+    }
+
     /**
      * Creates (no 'id' key/blank) or updates (id set) one Brand. Admin-gated —
      * a brand's identity (sender address, logo, color) is org-wide-visible
