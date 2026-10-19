@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — PR #465 follow-ups
+
+- Word PDF page sizes, margins and header/footer distances use plain decimal CSS lengths, including zero values and first-page overrides. Fractional twip precision is preserved.
+- Word PDFs remove the HTML body's default inset so authored page margins apply directly and full-page cover images fit on page one. Validation: **148/148 renderer tests** pass; live PDF checks cover a full-page image and a distinct cover followed by running headers/footers.
+
+These source changes are pending the next testing beta; **3.60.0.3** below predates them.
+
 ## v3.60.0 — Designer, assets and verified signing (testing beta)
 
 Testing beta **3.60.0.3** · 2026-10-19 · `04tVx000001AX5NIAW` · released ancestor **3.59.0.2**.
