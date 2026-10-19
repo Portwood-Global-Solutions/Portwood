@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Rich-text header/footer images are now durable and deduplicated.** Images
+  inserted into HTML template headers or footers are migrated from temporary
+  Salesforce rich-text URLs into template-owned Files. The same image is
+  identified by its SHA-256 content hash and reused across saves and new
+  template versions; only a newly inserted or changed image creates a new File.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
