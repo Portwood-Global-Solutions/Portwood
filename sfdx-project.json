@@ -9,7 +9,7 @@
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
       "ancestorId": "04tVx0000019Ki5IAE",
-      "versionDescription": "Testing beta for PR #465: reusable document design, Salesforce assets and verified PDF signing. Includes clickable verification certificates, accurate Parallel signer notifications and consistent rich-text File images. For scratch-org and sandbox install testing."
+      "versionDescription": "Testing beta for PR #465: document design, reusable Salesforce assets and verified PDF signing. Includes accurate Word page margins, clickable verification certificates, correct signer notices and consistent rich-text images. For scratch-org and sandbox install testing."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",
@@ -255,6 +255,7 @@
     "Portwood@3.59.0-2": "04tVx0000019Ki5IAE",
     "Portwood@3.60.0-1": "04tVx000001ASiPIAW",
     "Portwood@3.60.0-2": "04tVx000001AWXVIA4",
-    "Portwood@3.60.0-3": "04tVx000001AX5NIAW"
+    "Portwood@3.60.0-3": "04tVx000001AX5NIAW",
+    "Portwood@3.60.0-4": "04tVx000001AXIHIA4"
   }
 }

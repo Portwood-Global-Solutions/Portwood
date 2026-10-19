@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased — PR #465 follow-ups
+## v3.60.0.4 — Word page margins (testing beta)
 
-- Word PDF page sizes, margins and header/footer distances use plain decimal CSS lengths, including zero values and first-page overrides. Fractional twip precision is preserved.
+- Word PDF page sizes, margins and header/footer distances use plain decimal CSS lengths, including zero values and first-page overrides. Fractional twip precision is preserved ([#479](https://github.com/Portwood-Global-Solutions/Portwood/issues/479)).
 - Word PDFs remove the HTML body's default inset so authored page margins apply directly and full-page cover images fit on page one. Validation: **148/148 renderer tests** pass; live PDF checks cover a full-page image and a distinct cover followed by running headers/footers.
 
-These source changes are pending the next testing beta; **3.60.0.3** below predates them.
+Testing beta **3.60.0.4** · 2026-10-19 · `04tVx000001AXIHIA4` · source commit `83e065cc30f735c526b1a4cebe52f790ce0faff1` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4).
+
+Includes all earlier 3.60.0.3 fixes below. This package is unpromoted and validation-skipped for subscriber testing; production release requires a separately validated build. The AI review org is source updated and passes **246/246 tests**, with Einstein still available and the Account starter PDF working. The non-AI review org completes uninstall/reinstall from beta 3.60.0.2, restores both original templates/versions, seven email templates and two permission assignments, and passes **246/246 namespaced tests** plus **8/8 PDF smoke checks**. Both orgs generate identical one-page Word covers with source image pixels preserved.
 
 ## v3.60.0 — Designer, assets and verified signing (testing beta)
 
