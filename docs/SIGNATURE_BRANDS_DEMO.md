@@ -2,13 +2,27 @@
 
 Deployed to `portwood-proposal` on October 18, 2026, on `feat/byod-signature-sender`.
 
-The **original demo URL** still shows Chrome's phishing warning when reloaded.
-A fresh, unsigned PDF request using the server-rendered presentation opens in
-regular Chrome with the normal site-information indicator and no warning. This
-is a URL-specific observation, not proof that the rendering change caused the
-original flag or cleared every signing link. Do not bypass an interstitial.
-The previous PDF request was already signed; it was preserved, and the new
-request sends no email. Current local demo links are in
+**Latest independent retest: the warning is not fixed.** A new fictional Harbor
+Works Account, Brand, Salesforce branding set, inactive HTML template, and two
+unsigned requests were created on the existing Proposal scratch org/Site. The
+new HTML signing link loads normally in regular Chrome, including after reload.
+The new PDF signing link shows **Dangerous site** on first navigation and reload;
+its Details say **recently found phishing**. No warning was bypassed, no document
+was signed, no email was sent, and no Google review was submitted.
+
+Both initial HTTP responses contain the correct Harbor Works branding before
+JavaScript. Changing only the new theme's action color from orange to teal
+updates both responses at the same URLs; the Brand modification timestamp stays
+unchanged. The HTML page also displays the new color after reload, loads its
+document/signing controls, and reports no captured console warnings or errors.
+**56 HTTP/DOM assertions passed** across the initial and updated theme. These
+functional checks do not establish Safe Browsing clearance. Local fixture links,
+response captures and results are in `output/brand-independent-check/`.
+
+The earlier fresh Cedar PDF did open normally in Chrome, but this independent
+retest shows that result was not consistent across new requests. The original
+demo URL also remains unresolved. The earlier signed request was preserved.
+Do not bypass an interstitial. Earlier Cedar links are in
 `output/brand-live-demo/links.json`.
 
 The hostname matches Salesforce's `SiteDetail.SecureUrl`. On October 18, an HTTP
@@ -50,9 +64,10 @@ HTML at the same signing URL without resaving the Brand.
 
 Current validation: **444/444 Apex tests**, **30 live initial HTML/DOM checks**,
 **34 live escaping/Advanced initialization checks**, and **22 provider identity
-and page-initialization checks** passed. Chrome loaded the fresh PDF and its signing controls without
-script errors. The original URL still warns. The prepared Google review has
-**not been submitted**, as requested.
+and page-initialization checks** passed. Chrome previously loaded the fresh Cedar
+PDF and its signing controls without script errors; the independent Harbor Works
+PDF now warns, as described above. The Google review has **not been submitted**,
+as requested.
 
 Open **Portwood → Brands** and search for **Cedar Community - live theme**. The
 library shows a signing-page thumbnail. Select the Brand to edit its identity,
