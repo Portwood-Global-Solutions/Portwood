@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Flow document generation now respects selected record IDs.** Empty record
+  collections fail safely without creating an unscoped all-records job, while
+  populated collections generate documents only for the selected records.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
