@@ -2,8 +2,28 @@
  * This class performs no record lookup and never renders author HTML on the server. */
 public without sharing class DocGenSigningPageView {
     private DocGenSigningBranding.Presentation brand;
+    private String terminalState;
     public DocGenSigningPageView(DocGenSigningBranding.Presentation presentation) {
+        this(presentation, null);
+    }
+    public DocGenSigningPageView(DocGenSigningBranding.Presentation presentation, String completionState) {
         brand = presentation;
+        terminalState = completionState == 'success' || completionState == 'waiting' ? completionState : '';
+    }
+    public String getCompletionState() {
+        return brand == null ? '' : terminalState;
+    }
+    public String getLoadingVisibility() {
+        return String.isBlank(getCompletionState()) ? '' : 'display:none';
+    }
+    public String getSuccessVisibility() {
+        return getCompletionState() == 'success' ? '' : 'display:none';
+    }
+    public String getWaitingVisibility() {
+        return getCompletionState() == 'waiting' ? '' : 'display:none';
+    }
+    public String getIntroVisibility() {
+        return String.isBlank(getCompletionState()) ? getVisibility() : 'display:none';
     }
     public Boolean getValid() {
         return brand != null;

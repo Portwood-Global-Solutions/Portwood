@@ -296,6 +296,14 @@ private class DocGenSignaturePreparationTest {
         );
         System.assertEquals(true, first.success);
         System.assertEquals(false, first.isComplete);
+        DocGenSignatureController.SignatureInitResponse receipt = DocGenSignatureController.validateToken(
+            people[0].Secure_Token__c
+        );
+        System.assertEquals(false, receipt.isValid);
+        System.assertEquals('waiting', receipt.completionState);
+        System.assertNotEquals(null, receipt.branding);
+        System.assertEquals(null, receipt.documentUrl);
+        System.assertEquals(null, receipt.signerEmail);
         completeFields(people[1].Secure_Token__c);
         DocGenSignatureController.SavePdfSignatureResult second = DocGenSignatureController.savePreparedSignedPdf(
             people[1].Secure_Token__c,
@@ -308,6 +316,18 @@ private class DocGenSignaturePreparationTest {
         );
         System.assertEquals(true, second.success);
         System.assertEquals(true, second.isComplete);
+        Integer writes = Limits.getDmlStatements();
+        receipt = DocGenSignatureController.validateToken(people[0].Secure_Token__c);
+        System.assertEquals(false, receipt.isValid);
+        System.assertEquals('success', receipt.completionState);
+        System.assertEquals(
+            'success',
+            DocGenSignatureController.validateToken(people[1].Secure_Token__c).completionState
+        );
+        Test.setCurrentPage(Page.DocGenSignaturePdf);
+        ApexPages.currentPage().getParameters().put('token', people[0].Secure_Token__c);
+        System.assertEquals('success', new DocGenSignatureController().getInitialPage().getCompletionState());
+        System.assertEquals(writes, Limits.getDmlStatements(), 'Completed prepared-PDF reload is read-only.');
         DocGen_Signature_Request__c request = [
             SELECT
                 Status__c,

@@ -332,7 +332,110 @@ private class DocGenSigningBrandingTest {
         DocGen_Signer__c signer = [SELECT Id, Status__c FROM DocGen_Signer__c WHERE Secure_Token__c = :TOKEN];
         signer.Status__c = 'Signed';
         update signer;
-        System.assertEquals(false, initialPage(TOKEN).getValid());
+        request.Expires_At__c = Datetime.now().addHours(-1);
+        update request;
+        System.assertEquals(false, initialPage(TOKEN).getValid(), 'Expired completed links remain unavailable.');
+    }
+
+    @IsTest
+    static void completedSignerHasBrandedReadOnlyConfirmationWithoutPrivateData() {
+        DocGen_Signer__c signer = [
+            SELECT Id, Signature_Request__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :TOKEN
+        ];
+        signer.Status__c = 'Signed';
+        update signer;
+        Integer writes = Limits.getDmlStatements();
+        DocGenSigningPageView view = initialPage(TOKEN);
+        System.assertEquals('Acme', view.getCompanyName());
+        System.assertEquals('waiting', view.getCompletionState());
+        System.assertEquals('', view.getWaitingVisibility());
+        System.assertEquals('display:none', view.getSuccessVisibility());
+        System.assertEquals('display:none', view.getLoadingVisibility());
+        System.assertEquals('display:none', view.getIntroVisibility());
+        DocGenSignatureController.SignatureInitResponse result = DocGenSignatureController.validateToken(TOKEN);
+        System.assertEquals(false, result.isValid, 'A confirmation must not reactivate signing.');
+        System.assertEquals('waiting', result.completionState);
+        System.assertEquals('Acme', result.branding.companyName);
+        System.assertEquals(null, result.signerName);
+        System.assertEquals(null, result.signerEmail);
+        System.assertEquals(null, result.recordId);
+        System.assertEquals(null, result.documentTitle);
+        System.assertEquals(null, result.documentUrl);
+        System.assertEquals(null, result.templateBase64);
+        System.assertEquals(null, result.formFields);
+        System.assertEquals(null, DocGenSignatureController.fetchDocumentData(TOKEN).documentUrl);
+        System.assertEquals(writes, Limits.getDmlStatements(), 'Confirmation performs no DML or publication.');
+        update new DocGen_Signature_Request__c(Id = signer.Signature_Request__c, Status__c = 'Signed');
+        view = initialPage(TOKEN);
+        System.assertEquals('success', view.getCompletionState());
+        System.assertEquals('', view.getSuccessVisibility());
+        System.assertEquals('display:none', view.getWaitingVisibility());
+        System.assertEquals('Thank you from Acme.', view.getCompletionMessage());
+        System.assertEquals(false, DocGenSignatureController.validateToken(TOKEN).isValid);
+    }
+
+    @IsTest
+    static void completedLegacyLinkRetainsBrandingWithoutReopeningDocument() {
+        DocGen_Signature_Request__c request = [
+            SELECT Id
+            FROM DocGen_Signature_Request__c
+            WHERE Secure_Token__c = :LEGACY_TOKEN
+        ];
+        request.Status__c = 'Signed';
+        update request;
+        Integer writes = Limits.getDmlStatements();
+        DocGenSignatureController.SignatureInitResponse result = DocGenSignatureController.validateToken(LEGACY_TOKEN);
+        System.assertEquals(false, result.isValid);
+        System.assertEquals('success', result.completionState);
+        System.assertEquals('Org identity', result.branding.companyName);
+        System.assertEquals('success', initialPage(LEGACY_TOKEN).getCompletionState());
+        System.assertEquals(null, DocGenSignatureController.fetchDocumentData(LEGACY_TOKEN).documentUrl);
+        System.assertEquals(writes, Limits.getDmlStatements());
+    }
+
+    @IsTest
+    static void completedSignerCannotRevealCancelledDeclinedDraftOrExpiredPresentation() {
+        DocGen_Signer__c signer = [
+            SELECT Id, Signature_Request__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :TOKEN
+        ];
+        signer.Status__c = 'Signed';
+        update signer;
+        for (String status : new List<String>{ 'Cancelled', 'Declined', 'Draft' }) {
+            update new DocGen_Signature_Request__c(Id = signer.Signature_Request__c, Status__c = status);
+            DocGenSignatureController.SignatureInitResponse result = DocGenSignatureController.validateToken(TOKEN);
+            System.assertEquals(false, result.isValid);
+            System.assertEquals(null, result.completionState);
+            System.assertEquals(null, result.branding);
+            System.assertEquals('', initialPage(TOKEN).getCompletionState());
+        }
+        update new DocGen_Signature_Request__c(
+            Id = signer.Signature_Request__c,
+            Status__c = 'Signed',
+            Expires_At__c = System.now().addHours(-1)
+        );
+        System.assertEquals(null, DocGenSignatureController.validateToken(TOKEN).branding);
+        System.assertEquals('', initialPage(TOKEN).getCompletionState());
+    }
+
+    @IsTest
+    static void completedConfirmationIsAvailableToGuestWithoutWrites() {
+        DocGen_Signer__c signer = [SELECT Id FROM DocGen_Signer__c WHERE Secure_Token__c = :TOKEN];
+        signer.Status__c = 'Signed';
+        update signer;
+        List<User> guests = [SELECT Id FROM User WHERE UserType = 'Guest' AND IsActive = TRUE LIMIT 1];
+        if (guests.isEmpty())
+            return;
+        System.runAs(guests[0]) {
+            Integer writes = Limits.getDmlStatements();
+            System.assertEquals('Acme', initialPage(TOKEN).getCompanyName());
+            System.assertEquals('waiting', initialPage(TOKEN).getCompletionState());
+            System.assertEquals(false, DocGenSignatureController.validateToken(TOKEN).isValid);
+            System.assertEquals(writes, Limits.getDmlStatements());
+        }
     }
 
     @IsTest

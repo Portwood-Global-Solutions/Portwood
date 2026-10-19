@@ -591,7 +591,11 @@
             <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
             <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
-        <body class="{!initialPage.bodyClass}" style="{!initialPage.bodyStyle}">
+        <body
+            class="{!initialPage.bodyClass}"
+            style="{!initialPage.bodyStyle}"
+            data-signing-completion="{!initialPage.completionState}"
+        >
             <div class="signing-service" aria-label="Signing service">
                 <span id="signing-service-context"><apex:outputText value="{!initialPage.serviceContext}" /></span>
                 <a href="https://portwood.dev/" target="_blank" rel="noopener noreferrer">Portwood DocGen</a>
@@ -614,7 +618,7 @@
                     id="signing-brand-intro"
                     class="signing-brand-intro"
                     aria-labelledby="signing-brand-title"
-                    style="{!initialPage.visibility}"
+                    style="{!initialPage.introVisibility}"
                 >
                     <img
                         id="signing-brand-banner"
@@ -630,7 +634,7 @@
                 </section>
 
                 <!-- STATE: Loading -->
-                <div id="state-loading">
+                <div id="state-loading" style="{!initialPage.loadingVisibility}">
                     <div class="spinner-container"><div class="spinner"></div></div>
                 </div>
 
@@ -894,7 +898,7 @@
                 </div>
 
                 <!-- STATE: Success -->
-                <div id="state-success" style="display: none">
+                <div id="state-success" style="{!initialPage.successVisibility}">
                     <div class="success-card">
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
@@ -906,7 +910,7 @@
                 </div>
 
                 <!-- STATE: Waiting -->
-                <div id="state-waiting" style="display: none">
+                <div id="state-waiting" style="{!initialPage.waitingVisibility}">
                     <div class="waiting-card">
                         <div class="waiting-icon">&#10003;</div>
                         <h2>Signature Recorded</h2>
@@ -1004,6 +1008,14 @@
                         }
                     }
 
+                    // Completed links render a read-only confirmation on the server.
+                    // Do not reload documents, collect IPs or re-enter signing.
+                    var completionState = document.body.getAttribute('data-signing-completion');
+                    if (completionState === 'success' || completionState === 'waiting') {
+                        showState(completionState);
+                        return;
+                    }
+
                     // ===== TOKEN FROM URL =====
                     var urlParams = new URLSearchParams(window.location.search);
                     var token = urlParams.get('token');
@@ -1048,6 +1060,15 @@
                         '{!$RemoteAction.DocGenSignatureController.validateToken}',
                         token,
                         function (result, event) {
+                            // The signature may have completed in another tab after render.
+                            if (
+                                event.status &&
+                                result &&
+                                (result.completionState === 'success' || result.completionState === 'waiting')
+                            ) {
+                                showState(result.completionState);
+                                return;
+                            }
                             if (event.status && result && result.isValid) {
                                 signerData = result;
                                 if (result.requiresPin) {

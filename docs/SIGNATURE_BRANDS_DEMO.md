@@ -52,8 +52,9 @@ validated CSS variables. The getter shares the existing token, expiry, request
 status and prepared-PDF signing-order gates, but performs no Viewed updates or
 public document-link creation. Only the public branding projection is embedded;
 signer names, emails, tokens, document data and internal theme associations are
-not included. Invalid, expired, cancelled and already-signed tokens receive a
-neutral page.
+not included. Invalid, expired and cancelled tokens receive a neutral page.
+Recognized, unexpired completed links retain public branding and render a
+read-only confirmation, as described below.
 
 The remoting callback no longer applies branding. Advanced author HTML remains
 in script-safe JSON and is sanitized synchronously before its section becomes
@@ -62,12 +63,44 @@ Portwood provider identity remains visible throughout. The live theme still
 updates on the next page load: changing its action color changed the initial
 HTML at the same signing URL without resaving the Brand.
 
-Current validation: **444/444 Apex tests**, **30 live initial HTML/DOM checks**,
+Current validation: **448/448 Apex tests**, **30 live initial HTML/DOM checks**,
 **34 live escaping/Advanced initialization checks**, and **22 provider identity
 and page-initialization checks** passed. Chrome previously loaded the fresh Cedar
 PDF and its signing controls without script errors; the independent Harbor Works
 PDF now warns, as described above. The Google review has **not been submitted**,
 as requested.
+
+## Completed-link reload behavior
+
+`DocGenSignaturePdf` and `DocGenSignature` now retain the current Brand/theme
+after signing, while the token remains unexpired. The initial response renders
+**Signature Complete**, or **Signature Recorded** while other recipients are
+pending. The signing validation result remains `isValid=false`; only the public
+presentation and completion state are returned. It contains no signer identity,
+document URL, record identifier or form data, and the confirmation performs no
+Viewed update or document publication. Cancelled, declined, draft and expired
+completed requests do not receive this presentation.
+
+The completed page skips token remoting, document loading, verification and IP
+capture. It also handles completion in another tab between render and validation
+by switching to the confirmation instead of showing an error. This changes the
+post-signing experience without re-enabling signing or changing its write gates.
+
+Validation: **448 Apex tests** passed, including actual sequential prepared-PDF
+completion, guest confirmation and rejection of unavailable links; **92 page
+script assertions** cover both pages' initial confirmation and concurrent-tab
+completion. **59 live HTTP/DOM checks** cover synthetic completed/waiting fixtures
+on both endpoints and the existing signed Cedar PDF request. Synthetic fixtures
+set test statuses only; no new document was signed and no email was sent. Their
+links and captures are local in `output/signing-completion/`.
+
+Regular Chrome loaded the synthetic completed **DocGenSignaturePdf** page with
+its branding and **Signature Complete** message on initial navigation and reload,
+with normal site information and no captured console warnings/errors. The
+previously flagged, unsigned Harbor Works **DocGenSignaturePdf** URL was also
+rechecked after deployment and still shows **Dangerous site**. No warning was
+bypassed. These results do not establish the cause of, or clearance from, Safe
+Browsing's classification.
 
 Open **Portwood → Brands** and search for **Cedar Community - live theme**. The
 library shows a signing-page thumbnail. Select the Brand to edit its identity,
@@ -99,6 +132,7 @@ node scripts/qa/brand-library-browser-check.mjs portwood-proposal
 node scripts/qa/preparation-brand-browser-check.mjs portwood-proposal
 node scripts/qa/signing-first-paint-check.mjs
 node scripts/qa/signing-first-paint-security-check.mjs portwood-proposal
+node scripts/qa/signing-completion-check.mjs
 ```
 
 The first command creates new fictional requests. To repeat the color-change

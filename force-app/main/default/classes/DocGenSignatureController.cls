@@ -17,7 +17,7 @@ public without sharing class DocGenSignatureController {
                 );
                 response = new SignatureInitResponse();
             }
-            initialPage = new DocGenSigningPageView(response.isValid == true ? response.branding : null);
+            initialPage = new DocGenSigningPageView(response.branding, response.completionState);
         }
         return initialPage;
     }
@@ -131,6 +131,8 @@ public without sharing class DocGenSignatureController {
         public DocGenSigningBranding.Presentation branding;
         @AuraEnabled
         public Boolean isValid;
+        @AuraEnabled
+        public String completionState;
         @AuraEnabled
         public String errorMessage;
         @AuraEnabled
@@ -443,7 +445,7 @@ public without sharing class DocGenSignatureController {
                 return res;
             }
             res = validateSignerToken(signers[0], presentationOnly);
-            if (res.isValid)
+            if (res.isValid || String.isNotBlank(res.completionState))
                 res.branding = DocGenSigningBranding.forRequest(signers[0].Signature_Request__c);
             return res;
         }
@@ -488,7 +490,7 @@ public without sharing class DocGenSignatureController {
         }
 
         res = validateLegacyRequest(requests[0], presentationOnly);
-        if (res.isValid)
+        if (res.isValid || String.isNotBlank(res.completionState))
             res.branding = DocGenSigningBranding.forRequest(requests[0].Id);
         return res;
     }
@@ -793,6 +795,11 @@ public without sharing class DocGenSignatureController {
 
         if (signer.Status__c == 'Signed') {
             res.errorMessage = 'You have already signed this document.';
+            // Signing stays invalid. A recognized, unexpired participant may
+            // still see public branding and a receipt, without document or PII.
+            String requestStatus = signer.Signature_Request__r.Status__c;
+            if (new Set<String>{ 'Sent', 'Viewed', 'In Progress', 'Signed' }.contains(requestStatus))
+                res.completionState = requestStatus == 'Signed' ? 'success' : 'waiting';
             return res;
         }
 
@@ -917,6 +924,7 @@ public without sharing class DocGenSignatureController {
 
         if (req.Status__c == 'Signed') {
             res.errorMessage = 'This document has already been signed.';
+            res.completionState = 'success';
             return res;
         }
         if (req.Status__c == 'Cancelled') {
