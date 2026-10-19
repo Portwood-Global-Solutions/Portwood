@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Legacy Designer preserves authored HTML and CSS when switching between Source and Visual
+  modes (#464).** Custom `<style>` blocks, including `@page`, font, spacing, and layout rules, are
+  no longer stripped during editor round trips. Conditional tags still appear as editor-only pills
+  in Visual mode, but their green pill styling and other preview chrome are removed from saved HTML
+  and generated PDF input.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,

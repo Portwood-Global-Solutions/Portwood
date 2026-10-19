@@ -74,9 +74,7 @@ function unpillifyTags(root) {
 function sanitizeStagedHtml(html) {
     if (
         !html ||
-        (html.indexOf('data-dg-tag') === -1 &&
-            html.indexOf('dg-pv') === -1 &&
-            html.indexOf('dg-drop-marker') === -1)
+        (html.indexOf('data-dg-tag') === -1 && html.indexOf('dg-pv') === -1 && html.indexOf('dg-drop-marker') === -1)
     ) {
         return html;
     }
