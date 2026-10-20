@@ -6,6 +6,20 @@ const source = await readFile(
     'utf8'
 );
 const model = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const utilsSource = await readFile(
+    new URL('../../force-app/main/default/lwc/docGenUtils/docGenUtils.js', import.meta.url),
+    'utf8'
+);
+const authoringSource = (
+    await readFile(
+        new URL('../../force-app/main/default/lwc/docGenAuthoringKit/docGenAuthoringKit.js', import.meta.url),
+        'utf8'
+    )
+).replace(
+    "'c/docGenUtils'",
+    JSON.stringify('data:text/javascript;base64,' + Buffer.from(utilsSource).toString('base64'))
+);
+const authoring = await import('data:text/javascript;base64,' + Buffer.from(authoringSource).toString('base64'));
 let passed = 0;
 const test = (name, fn) => {
     fn();
@@ -329,6 +343,7 @@ const productionMethod = (name, args, document, dependencies = {}) => {
         'previewStarterDraft',
         'insertFragment',
         'editTableGrid',
+        'salesforceResourceHtml',
         'return (' + method + ');'
     )(
         model.tableGrid,
@@ -340,7 +355,17 @@ const productionMethod = (name, args, document, dependencies = {}) => {
         dependencies.previewDraftPdf,
         dependencies.previewStarterDraft,
         model.insertFragment,
-        model.editTableGrid
+        model.editTableGrid,
+        (html) => {
+            const previous = { document: globalThis.document, window: globalThis.window };
+            globalThis.document = document;
+            globalThis.window = document.defaultView;
+            try {
+                return authoring.salesforceResourceHtml(html);
+            } finally {
+                Object.assign(globalThis, previous);
+            }
+        }
     );
 };
 test('actual Designer tag cleanup retains a styled field and its pinned font without an undefined-variable failure', () => {

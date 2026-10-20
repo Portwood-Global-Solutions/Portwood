@@ -34,10 +34,11 @@ a {
     color: #285e63;
     text-decoration: underline;
 }
-.pages {
+iframe {
+    display: block;
     width: 100%;
-    padding: 24px;
-    box-sizing: border-box;
+    min-height: 300px;
+    border: 0;
 }
 .status,
 .error {
@@ -49,29 +50,4 @@ a {
     border-left: 3px solid #a35727;
     padding: 15px;
     background: white;
-}
-.pages .pdf-page {
-    width: max-content;
-    max-width: 100%;
-    margin: 0 auto 26px;
-}
-.pages canvas {
-    display: block;
-    max-width: 100%;
-    height: auto;
-    background: white;
-    box-shadow: 0 1px 5px #18345230;
-}
-.pages .pdf-page-label {
-    color: #617181;
-    padding: 9px 0;
-    text-align: center;
-    font-size: 11px;
-}
-.pages .pdf-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
 }

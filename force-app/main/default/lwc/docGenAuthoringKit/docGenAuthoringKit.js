@@ -943,7 +943,10 @@ export function salesforceAssetUrl(value) {
             if (url.hostname.endsWith('.content.force.com') && /^\/servlet\/rtaImage/i.test(url.pathname))
                 return url.href;
             const org = identity(current.hostname);
-            return org && org === identity(url.hostname) ? url.href : '';
+            if (!org || org !== identity(url.hostname)) return '';
+            // Static resources are available on Lightning itself. Crossing to the
+            // org domain loses the browser's resource context (notably for fonts).
+            return /^\/resource\//i.test(url.pathname) ? url.pathname + url.search : url.href;
         }
         // A native route is always requested from the current Salesforce host,
         // even if someone pastes an unrelated hostname in front of that route.
@@ -964,11 +967,34 @@ export function salesforceResourceCss(css) {
     return /(?:image|image-set|cross-fade|expression)\s*\(/i.test(text) ? '' : text;
 }
 
+/** Keep merge boundaries between table rows/cells out of HTML foster parenting. */
+export function protectTableMergeTags(html) {
+    const tables = [];
+    return String(html || '').replace(
+        /<!--[\s\S]*?-->|<style\b[^>]*>[\s\S]*?<\/style\s*>|<script\b[^>]*>[\s\S]*?<\/script\s*>|<\/?([a-z][\w:-]*)\b[^>]*>|(\{(?:[#^/~][^{}]+|:else(?:\s[^{}]*)?)\})/gi,
+        (text, element, tag) => {
+            if (element) {
+                const name = element.toLowerCase();
+                const closing = text.startsWith('</');
+                if (name === 'table') {
+                    if (closing) tables.pop();
+                    else tables.push(false);
+                } else if (tables.length && ['td', 'th', 'caption'].includes(name)) {
+                    tables[tables.length - 1] = !closing;
+                }
+            }
+            // Comments remain at their exact position on every DOM round trip.
+            // The merge engine evaluates their tags before the PDF parses HTML.
+            return tag && tables.length && !tables[tables.length - 1] ? '<!--' + tag + '-->' : text;
+        }
+    );
+}
+
 /** An inert parse removes resource loads before markup reaches a live surface. */
 export function salesforceResourceHtml(html) {
     const template = document.createElement('template');
     // eslint-disable-next-line @lwc/lwc/no-inner-html -- Inert template; resource URLs are filtered before any live DOM insertion.
-    template.innerHTML = html || '';
+    template.innerHTML = protectTableMergeTags(html);
     for (const node of template.content.querySelectorAll(
         'script,link,iframe,object,embed,base,meta,video,audio,source,foreignObject,animate,animateTransform,animateMotion,animateColor,set,discard,math,template,noscript,form'
     ))

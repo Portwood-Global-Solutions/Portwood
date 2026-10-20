@@ -573,6 +573,8 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
+The next testing beta, **3.60.0.6**, adds Designer font loading, table-loop preservation and faster image-heavy PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). Its managed build and subscriber verification are pending; the current validated install remains .5 below.
+
 **3.60.0.5** (`04tVx000001AY4fIAG`) includes the Designer/Assets work, prepared-PDF verification links, Parallel signer notification names, HTML rich-text File images, Word cover-page margins and the fix for opening existing published Files in Designer. Built from source commit `259f512e6127c59aa6d7f9a38cdbc4fa86acf6ec` with released ancestor **3.59.0.2**.
 
 [Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG)

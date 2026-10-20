@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.60.0 Beta — Open existing templates in Designer",
+      "versionName": "v3.60.0 Beta — Clearer and faster Designer previews",
       "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
@@ -9,7 +9,7 @@
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
       "ancestorId": "04tVx0000019Ki5IAE",
-      "versionDescription": "Testing beta for PR #465: existing HTML and Canvas templates open in the Designer without renaming their Salesforce Files. Keeps unpublished Designer edits and published File revisions intact. Includes earlier document design, asset, Word margin and verified signing fixes."
+      "versionDescription": "Testing beta for PR #465: custom fonts load in Designer, table loops keep their line items, and native PDF previews open faster. Includes existing-template loading and earlier document design, reusable asset, Word margin and verified signing fixes."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",

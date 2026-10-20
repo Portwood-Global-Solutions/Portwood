@@ -1054,6 +1054,36 @@ private class DocGenHtmlTemplateTest {
     // Designer live PDF preview: draft HTML replaces the saved body for the
     // merge, renders through the real pipeline, and never touches versions.
     @IsTest
+    static void designerTableCommentsPreserveNestedRowBoundaries() {
+        String html =
+            '<table><thead><tr><!--{#IF ShowPrice}--><th>Price</th><!--{/IF}--></tr></thead>' +
+            '<tbody><!--{#Items}--><!--{#IF Heading}--><tr><td>{Heading}</td></tr><!--{/IF}-->' +
+            '<tr><td>{Name}</td><td>{Price}</td></tr><!--{/Items}--></tbody></table>';
+        Map<String, Object> data = new Map<String, Object>{
+            'ShowPrice' => true,
+            'Items' => new List<Object>{
+                new Map<String, Object>{ 'Heading' => 'Bundle A', 'Name' => 'First item', 'Price' => 12 },
+                new Map<String, Object>{ 'Name' => 'Second item', 'Price' => 24 }
+            }
+        };
+        String rendered = DocGenService.processXmlForTest(html, data, 'HTML').replace('<!---->', '');
+        System.assertEquals(
+            '<table><thead><tr><th>Price</th></tr></thead><tbody>' +
+                '<tr><td>Bundle A</td></tr><tr><td>First item</td><td>12</td></tr>' +
+                '<tr><td>Second item</td><td>24</td></tr></tbody></table>',
+            rendered,
+            'Designer-preserved controls must repeat both rows without commenting out merged data'
+        );
+        data.put('ShowPrice', false);
+        data.put('Items', new List<Object>());
+        System.assertEquals(
+            '<table><thead><tr></tr></thead><tbody></tbody></table>',
+            DocGenService.processXmlForTest(html, data, 'HTML').replace('<!---->', ''),
+            'False conditions and empty child lists must remove their complete structural blocks'
+        );
+    }
+
+    @IsTest
     static void previewDraftPdfRendersDraftHtmlNotSavedBody() {
         Account acct = [SELECT Id FROM Account LIMIT 1];
         Id tmplId = createHtmlTemplate(null, null, '<html><body><p>SAVED BODY {Name}</p></body></html>');
