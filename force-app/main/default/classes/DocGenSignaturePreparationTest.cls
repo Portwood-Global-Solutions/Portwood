@@ -1,10 +1,5 @@
 @IsTest
 private class DocGenSignaturePreparationTest {
-    @TestSetup
-    static void setupPermissions() {
-        TestDataFactory.assignAdminPermissionSet();
-    }
-
     private static final String PDF = EncodingUtil.base64Encode(
         Blob.valueOf('%PDF-1.4\nunit transport fixture\n%%EOF')
     );
@@ -92,6 +87,7 @@ private class DocGenSignaturePreparationTest {
 
     @IsTest
     static void selectedBrandPersistsAndRejectsInactiveBrand() {
+        TestDataFactory.assignAdminPermissionSet();
         System.runAs(new User(Id = UserInfo.getUserId())) {
             Account record = account();
             Map<String, Object> draft = draft(record.Id);
