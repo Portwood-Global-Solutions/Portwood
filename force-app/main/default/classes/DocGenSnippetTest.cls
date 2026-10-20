@@ -213,7 +213,10 @@ private class DocGenSnippetTest {
             FirstPublishLocationId = t.Id
         );
         insert cv;
-        insert new DocGen_Template_Version__c(Template__c = t.Id, Content_Version_Id__c = cv.Id, Is_Active__c = true);
+        Database.insert(
+            new DocGen_Template_Version__c(Template__c = t.Id, Content_Version_Id__c = cv.Id, Is_Active__c = true),
+            AccessLevel.SYSTEM_MODE
+        );
         Test.startTest();
         Map<String, Object> pdf = DocGenService.generatePdfBlob(t.Id, a.Id);
         Test.stopTest();
