@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.60.0 Beta — Customer-branded signing pages",
+      "versionName": "v3.60.0 Beta — Merge PDFs in Flow",
       "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
@@ -9,7 +9,7 @@
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
       "ancestorId": "04tVx0000019Ki5IAE",
-      "versionDescription": "Testing beta for PR #465: signing pages use your company branding without a Portwood attribution or link. Includes Designer font loading, table-loop preservation, faster PDF previews and all earlier 3.60 testing fixes."
+      "versionDescription": "Testing beta for PRs #465 and #466: merge uploaded PDFs directly in Flow and save the combined Salesforce File. Includes customer-branded signing pages, Designer font loading, preserved table loops, faster PDF previews and earlier 3.60 testing fixes."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",

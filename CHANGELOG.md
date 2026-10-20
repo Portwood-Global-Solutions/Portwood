@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.60.0.8 — Merge PDFs in Flow (testing beta)
+
+Adds [PR #466](https://github.com/Portwood-Global-Solutions/Portwood/pull/466) to the 3.60 testing branch, including all 3.60.0.7 branding and earlier fixes.
+
+### Added
+
+- **Portwood: Merge PDFs** Flow action accepts an ordered Text collection of
+  ContentVersion IDs or a single Text value of comma/semicolon/whitespace-separated
+  IDs and creates a merged Salesforce File, with optional record attachment
+  and duplex padding. Returns the new ContentVersion/ContentDocument IDs and a
+  per-request success/error result. Reads and writes enforce user permissions;
+  metadata size checks precede blob loading, and successful outputs use one bulk
+  insert. No external service, browser, or additional Salesforce license. Includes
+  a draft **Portwood: PDF Merge Demo** Screen Flow and a script that creates its
+  one-page welcome letter and two-page project brief.
+- Native PDF merger now reads active cross-reference chains, compressed object
+  and cross-reference streams (FlateDecode, including PNG prediction), nonzero
+  generations, and inherited page attributes. Ordinary AcroForm values and
+  appearances survive under per-document field namespaces. Encrypted, signed,
+  XFA, and scripted/calculation forms are rejected. Flow input budgets: 384 KiB
+  synchronous / 768 KiB asynchronous, subject to available heap.
+
+Validation: **138/138 namespaced Apex tests** pass across the PDF parser, merge action, existing bulk merge and signing branding. The merger has **95%** scoped coverage, PDF reader **82%**, and Flow action **91%**. Focused PMD Security/AppExchange analysis reports zero violations; Graph Engine encountered internal analyzer exceptions and is not counted as passing. Formatting and whitespace checks pass; the offline metadata audit retains 51 existing findings.
+
+The namespaced Flow action is discoverable and produces five independently verified saved PDFs using collection/text inputs, forms, mixed cross-reference formats, duplex padding and historical File revisions. All **81 independent PDF checks** pass for syntax, page order/text, dimensions, images and form values; encrypted input is rejected, record attachment and checksums are verified, and both form pages render correctly.
+
+Package creation, fresh managed-install checks and full Salesforce package validation are pending. Existing beta org installations remain deferred.
+
 ## v3.60.0.7 — Customer-branded signing pages (testing beta)
 
 - HTML and PDF signing pages omit the Portwood provider strip and website link. Browser tab titles use the customer's company name and “Document signing”, with a neutral title for invalid links.
@@ -73,24 +101,6 @@ This is an unpromoted, validation-skipped testing beta for [PR #465](https://git
 Validation: **390 scoped signature tests** and **78 HTML/image tests** pass. The actual runner retains the source image pixels in Download, Save to Record and Save & Download; the asset-tag control also passes as a non-owner Standard User. The BYOD certificate check validates its real PDF link annotation. Fresh non-AI subscriber installation succeeds with **98/98 namespaced regression tests** and **8/8 functional PDF smoke checks**. The offline metadata audit retains **51 existing findings**. The exact Bentley asset/scheduled-only case and the image-aging report in #467 remain unconfirmed.
 
 A production release requires a separately validated build; full release validation, promotion and released-package upgrade checks remain outstanding. Feature review and earlier validation are recorded in `docs/FEATURE_REVIEW.md`.
-
-### Added
-
-- **Portwood: Merge PDFs** Flow action accepts an ordered Text collection of
-  ContentVersion IDs or a single Text value of comma/semicolon/whitespace-separated
-  IDs and creates a merged Salesforce File, with optional record attachment
-  and duplex padding. Returns the new ContentVersion/ContentDocument IDs and a
-  per-request success/error result. Reads and writes enforce user permissions;
-  metadata size checks precede blob loading, and successful outputs use one bulk
-  insert. No external service, browser, or additional Salesforce license. Includes
-  a draft **Portwood: PDF Merge Demo** Screen Flow and a script that creates its
-  one-page welcome letter and two-page project brief.
-- Native PDF merger now reads active cross-reference chains, compressed object
-  and cross-reference streams (FlateDecode, including PNG prediction), nonzero
-  generations, and inherited page attributes. Ordinary AcroForm values and
-  appearances survive under per-document field namespaces. Encrypted, signed,
-  XFA, and scripted/calculation forms are rejected. Flow input budgets: 384 KiB
-  synchronous / 768 KiB asynchronous, subject to available heap.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
