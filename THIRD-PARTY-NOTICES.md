@@ -24,9 +24,12 @@ when versions change, and disclose it in AppExchange security materials.
   serves them with a JavaScript MIME type, and the viewer dynamic-imports the module.
 - The Designer also ships a classic-script adapter of these same pinned bytes in
   `DocGenPdfPreview`. It removes the final ESM export and wraps the webpack locals
-  for Lightning's `loadScript`; license comments remain intact. Its local worker
-  handler supports main-thread rendering under Lightning Web Security. Rebuild or
-  verify it with `node scripts/build-designer-pdf-viewer.mjs [--check]`.
+  for classic script loading; license comments remain intact. A first-party viewer
+  page uses the adapter and its local worker handler inside a Salesforce resource
+  iframe, avoiding Lightning Web Security's image-decoding overhead. The parent
+  supplies permission-checked PDF bytes through an origin/source/session-checked
+  message channel. Rebuild or verify the pinned adapter with
+  `node scripts/build-designer-pdf-viewer.mjs [--check]`.
 - These libraries make **no network requests** and have **no external runtime
   dependency** — they operate only on PDF bytes already in the browser.
 

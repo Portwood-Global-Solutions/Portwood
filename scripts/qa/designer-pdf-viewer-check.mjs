@@ -107,7 +107,7 @@ try {
                 canvas
                     .getContext('2d')
                     .getImageData(0, 0, canvas.width, canvas.height)
-                    .data.some((v, i) => i % 4 !== 3 && v < 128)
+                    .data.some((v, i, pixels) => i % 4 === 0 && pixels[i + 3] > 0 && v < 128)
             ),
         'PDF text must actually paint on the canvas'
     );
