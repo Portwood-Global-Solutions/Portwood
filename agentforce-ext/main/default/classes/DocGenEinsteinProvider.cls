@@ -42,10 +42,107 @@
  *    rejected with "Application Name is a required field providing existing
  *    registered ai applicaton".
  *  - This is NOT an HTTP callout — Limits.getCallouts() stays 0 — which is what
- *    keeps DocGen's "no external services" guarantee true.
+ *    avoids a separate Portwood-hosted AI integration. Salesforce routes the
+ *    request to the model configured by the org administrator.
  *  - Budget 10-25 seconds for a 5KB document.
  */
-global with sharing class DocGenEinsteinProvider implements DocGenAiProvider {
+global with sharing class DocGenEinsteinProvider implements DocGenAiProvider, Callable {
+    /** Optional capability seam; preserves the shipped DocGenAiProvider interface. */
+    global Object call(String action, Map<String, Object> args) {
+        if (action == 'capabilities')
+            return new Map<String, Object>{ 'fileReferences' => true, 'queryPlanning' => true };
+        if (action == 'planQuery')
+            return planQuery((String) args.get('prompt'), (Id) args.get('documentId'));
+        if (action != 'generateWithReference')
+            throw new DocGenAiException('Unsupported Agentforce authoring action.');
+        String prompt = (String) args.get('prompt');
+        Id documentId = (Id) args.get('documentId');
+        if (String.isBlank(prompt) || documentId == null)
+            throw new DocGenAiException('Choose an example and describe the document before generating.');
+        // Files stay private. Resolve by the calling user's access; never fetch arbitrary file bytes in system mode.
+        List<ContentDocument> files = [
+            SELECT Id, FileExtension, ContentSize
+            FROM ContentDocument
+            WHERE Id = :documentId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (files.isEmpty() || files[0].FileExtension != 'pdf' || files[0].ContentSize > 15 * 1024 * 1024)
+            throw new DocGenAiException('Choose an accessible PDF example up to the 15 MB Agentforce file budget.');
+        ConnectApi.EinsteinPromptTemplateGenerationsInput input = new ConnectApi.EinsteinPromptTemplateGenerationsInput();
+        input.isPreview = false;
+        ConnectApi.EinsteinLlmAdditionalConfigInput cfg = new ConnectApi.EinsteinLlmAdditionalConfigInput();
+        cfg.applicationName = APPLICATION_NAME;
+        input.additionalConfig = cfg;
+        ConnectApi.WrappedValue instructions = new ConnectApi.WrappedValue();
+        instructions.value = prompt;
+        ConnectApi.WrappedValue example = new ConnectApi.WrappedValue();
+        example.value = new Map<String, Object>{ 'id' => documentId };
+        input.inputParams = new Map<String, ConnectApi.WrappedValue>{
+            INPUT_KEY => instructions,
+            'Input:ExampleFile' => example
+        };
+        try {
+            ConnectApi.EinsteinPromptTemplateGenerationsRepresentation response = ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate(
+                'DocGen_HTML_Reference',
+                input
+            );
+            if (response == null || response.generations == null || response.generations.isEmpty())
+                throw new DocGenAiException(
+                    'Agentforce returned no document. Confirm DocGen HTML Reference is active in Prompt Builder.'
+                );
+            return response.generations[0].text;
+        } catch (Exception e) {
+            throw new DocGenAiException(
+                'Agentforce could not read the example. Check that DocGen HTML Reference is active, its model supports PDF inputs, and you can execute prompt templates. ' +
+                e.getMessage()
+            );
+        }
+    }
+
+    private String planQuery(String prompt, Id documentId) {
+        if (String.isBlank(prompt) || prompt.length() > 120000)
+            throw new DocGenAiException('The planning request is empty or exceeds the Agentforce authoring context.');
+        String templateName = documentId == null ? 'DocGen_Query_Plan' : 'DocGen_Query_Reference';
+        ConnectApi.EinsteinPromptTemplateGenerationsInput input = new ConnectApi.EinsteinPromptTemplateGenerationsInput();
+        input.isPreview = false;
+        ConnectApi.EinsteinLlmAdditionalConfigInput cfg = new ConnectApi.EinsteinLlmAdditionalConfigInput();
+        cfg.applicationName = APPLICATION_NAME;
+        input.additionalConfig = cfg;
+        ConnectApi.WrappedValue instructions = new ConnectApi.WrappedValue();
+        instructions.value = prompt;
+        input.inputParams = new Map<String, ConnectApi.WrappedValue>{ INPUT_KEY => instructions };
+        if (documentId != null) {
+            List<ContentDocument> files = [
+                SELECT Id, FileExtension, ContentSize
+                FROM ContentDocument
+                WHERE Id = :documentId
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            if (files.isEmpty() || files[0].FileExtension != 'pdf' || files[0].ContentSize > 15 * 1024 * 1024)
+                throw new DocGenAiException('Choose an accessible PDF example within the 15 MB Agentforce budget.');
+            ConnectApi.WrappedValue example = new ConnectApi.WrappedValue();
+            example.value = new Map<String, Object>{ 'id' => documentId };
+            input.inputParams.put('Input:ExampleFile', example);
+        }
+        try {
+            ConnectApi.EinsteinPromptTemplateGenerationsRepresentation response = ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate(
+                templateName,
+                input
+            );
+            if (response == null || response.generations == null || response.generations.isEmpty())
+                throw new DocGenAiException('Agentforce returned no planning reply.');
+            return response.generations[0].text;
+        } catch (Exception e) {
+            throw new DocGenAiException(
+                'Agentforce could not continue the conversation. Check that ' +
+                    templateName +
+                    ' is active in Prompt Builder and your model has available usage. ' +
+                    e.getMessage()
+            );
+        }
+    }
 
     /** Free Text input on the Flex template. Both 'Input:X' and 'Input.X' work. */
     private static final String INPUT_KEY = 'Input:Instructions';

@@ -1,15 +1,15 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.59.0",
-      "versionNumber": "3.59.0.NEXT",
+      "versionName": "v3.60.0 Beta — Merge PDFs in Flow",
+      "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
       "definitionFile": "config/build-def.json",
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
-      "ancestorVersion": "3.58.0",
-      "versionDescription": "Turn any Salesforce record into a finished document — quotes, invoices, contracts, certificates, letters, statements and reports. Build your template in Word, Excel or PowerPoint, or design one right in your browser, then drop in the fields you want and Portwood fills them in. Tables grow with your data, charts draw themselves, and images, barcodes and QR codes come along too. Send a document for signature and track it to completion. Generate one from a record, thousands at once, or let a Flow do it automatically overnight. Everything runs inside your own Salesforce org — no external services and no data leaving the platform. Free for every user."
+      "ancestorId": "04tVx0000019Ki5IAE",
+      "versionDescription": "Testing beta for PRs #465 and #466: merge uploaded PDFs directly in Flow and save the combined Salesforce File. Includes customer-branded signing pages, Designer font loading, preserved table loops, faster PDF previews and earlier 3.60 testing fixes."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",
@@ -252,6 +252,14 @@
     "Portwood@3.57.0-2": "04tVx0000015OKTIA2",
     "Portwood@3.58.0-1": "04tVx0000017QurIAE",
     "Portwood@3.59.0-1": "04tVx0000019KRxIAM",
-    "Portwood@3.59.0-2": "04tVx0000019Ki5IAE"
+    "Portwood@3.59.0-2": "04tVx0000019Ki5IAE",
+    "Portwood@3.60.0-1": "04tVx000001ASiPIAW",
+    "Portwood@3.60.0-2": "04tVx000001AWXVIA4",
+    "Portwood@3.60.0-3": "04tVx000001AX5NIAW",
+    "Portwood@3.60.0-4": "04tVx000001AXIHIA4",
+    "Portwood@3.60.0-5": "04tVx000001AY4fIAG",
+    "Portwood@3.60.0-6": "04tVx000001AYB7IAO",
+    "Portwood@3.60.0-7": "04tVx000001AdNhIAK",
+    "Portwood@3.60.0-8": "04tVx000001AeWfIAK"
   }
 }

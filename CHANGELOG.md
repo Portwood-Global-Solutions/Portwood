@@ -1,6 +1,111 @@
 # Changelog
 
-## Unreleased
+## v3.60.0.8 — Merge PDFs in Flow (testing beta)
+
+Adds [PR #466](https://github.com/Portwood-Global-Solutions/Portwood/pull/466) to the 3.60 testing branch, including all 3.60.0.7 branding and earlier fixes.
+
+### Added
+
+- **Portwood: Merge PDFs** Flow action accepts an ordered Text collection of
+  ContentVersion IDs or a single Text value of comma/semicolon/whitespace-separated
+  IDs and creates a merged Salesforce File, with optional record attachment
+  and duplex padding. Returns the new ContentVersion/ContentDocument IDs and a
+  per-request success/error result. Reads and writes enforce user permissions;
+  metadata size checks precede blob loading, and successful outputs use one bulk
+  insert. No external service, browser, or additional Salesforce license. Includes
+  a draft **Portwood: PDF Merge Demo** Screen Flow and a script that creates its
+  one-page welcome letter and two-page project brief.
+- Native PDF merger now reads active cross-reference chains, compressed object
+  and cross-reference streams (FlateDecode, including PNG prediction), nonzero
+  generations, and inherited page attributes. Ordinary AcroForm values and
+  appearances survive under per-document field namespaces. Encrypted, signed,
+  XFA, and scripted/calculation forms are rejected. Flow input budgets: 384 KiB
+  synchronous / 768 KiB asynchronous, subject to available heap.
+
+Validation: **138/138 namespaced Apex tests** pass across the PDF parser, merge action, existing bulk merge and signing branding. The merger has **95%** scoped coverage, PDF reader **82%**, and Flow action **91%**. Focused PMD Security/AppExchange analysis reports zero violations; Graph Engine encountered internal analyzer exceptions and is not counted as passing. Formatting and whitespace checks pass; the offline metadata audit retains 51 existing findings.
+
+The namespaced Flow action is discoverable and produces five independently verified saved PDFs using collection/text inputs, forms, mixed cross-reference formats, duplex padding and historical File revisions. All **81 independent PDF checks** pass for syntax, page order/text, dimensions, images and form values; encrypted input is rejected, record attachment and checksums are verified, and both form pages render correctly.
+
+The exact managed beta installs in a fresh non-AI subscriber and passes **138/138 scoped Apex tests**. Both namespaced-source and managed-subscriber Screen Flows succeed with Text and Text Collection inputs, with independently verified three-page PDFs and correct File links. The two orgs pass **208 independent saved-PDF checks** in total, including page order/text, image pixels, dimensions, form values/appearances, duplex padding and historical revisions.
+
+Testing beta **3.60.0.8** · 2026-10-20 · `04tVx000001AeWfIAK` · source commit `af631bc` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK).
+
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. This beta remains unpromoted. Existing beta org installations remain deferred.
+
+## v3.60.0.7 — Customer-branded signing pages (testing beta)
+
+- HTML and PDF signing pages omit the Portwood provider strip and website link. Browser tab titles use the customer's company name and “Document signing”, with a neutral title for invalid links.
+- Customer logos, colours, welcome text, footers, support links and advanced layouts retain their existing behaviour. The shared client-side branding code no longer recreates the provider attribution.
+- Validation: **17/17 Apex branding tests**, **256 focused signing checks** across offline DOM, desktop/mobile browser, completion and live guest first-paint checks pass. Focused Apex Security/AppExchange analysis reports zero violations; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings.
+
+Testing beta **3.60.0.7** · 2026-10-20 · `04tVx000001AdNhIAK` · source commit `9f52ec8` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK).
+
+Includes all 3.60.0.6 fixes below. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. The package remains unpromoted for testing. Installation into existing beta orgs is deferred.
+
+## v3.60.0.6 — Clearer and faster Designer previews (testing beta)
+
+- Designer loads same-org Static Resource fonts from the current Salesforce origin, avoiding cross-domain CORS/404 errors ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)).
+- Table loop and conditional boundaries retain their position through visual editing. Browser table parsing no longer moves those tags ahead of the table and removes line items from the PDF draft.
+- Native PDF pages render in a local Salesforce resource viewer using the same generated bytes and permission-checked File reader. This removes image-decoding overhead from Lightning Web Security; a representative four-page quote PDF opens in approximately 4 seconds in source QA versus 45 seconds before the change.
+- Browser verification covers five custom font faces and all eight expected product, component and option lines in a four-page quote PDF.
+- Validation: **65 HTML tests** pass in both source and namespaced source orgs; **136 scoped tests** pass in a fresh managed subscriber, and **338 packaged regressions** plus **53 integration tests** pass in a configured subscriber. Three existing HTML quote designs show all eight line items with working images and 3–4 second native previews; the custom-font design loads and embeds all five faces without failed font requests. All six signed-request verification pages pass as a guest. The 45 resource/table checks, 57 editing scenarios and PDF-viewer browser checks pass; focused JavaScript Security analysis reports zero violations. Full Salesforce package validation passed with **81% Apex coverage**. The offline metadata audit retains 51 existing findings.
+
+Testing beta **3.60.0.6** · 2026-10-19 · `04tVx000001AYB7IAO` · source commit `3870b8f` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO).
+
+Includes the earlier 3.60.0.5 fixes. Validation was not skipped; the package remains unpromoted for testing.
+
+## v3.60.0.5 — Open existing templates in Designer (testing beta)
+
+- Existing HTML and Canvas templates open their published document bodies in the Designer even when their Salesforce Files have descriptive titles. The Designer keeps newer unpublished edits and reads the exact File revision pinned by the active template version ([#480](https://github.com/Portwood-Global-Solutions/Portwood/issues/480)).
+- File titles, document contents and published version references remain unchanged. Templates without an active version still open empty; unrelated or inactive Files are not guessed as a replacement.
+- Package validation tests explicitly use the appropriate administrator and reader contexts. Font-management authorization remains enforced; the packaging fixes only correct test permissions and fixture creation.
+- Validation: **131/131 affected tests** pass in a namespaced source org, **70/70 permission/signing tests** pass in a fresh managed subscriber, and a managed subscriber passes **337/337 packaged regressions** plus **53/53 integration tests**. Three existing HTML quote designs load their published bodies and images in Designer with descriptive File titles. The initial PDF smoke check verified that the preview opened; the later font, line-item and performance fixes are tracked in #481. Focused PMD Security reports **zero violations**; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings (4 major, 47 minor).
+
+Testing beta **3.60.0.5** · 2026-10-19 · `04tVx000001AY4fIAG` · source commit `259f512` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG).
+
+Includes all 3.60.0.4 fixes below. Use this exact package ID: earlier .5 builds are superseded. The package remains unpromoted. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped.
+
+## v3.60.0.4 — Word page margins (testing beta)
+
+- Word PDF page sizes, margins and header/footer distances use plain decimal CSS lengths, including zero values and first-page overrides. Fractional twip precision is preserved ([#479](https://github.com/Portwood-Global-Solutions/Portwood/issues/479)).
+- Word PDFs remove the HTML body's default inset so authored page margins apply directly and full-page cover images fit on page one. Validation: **148/148 renderer tests** pass; live PDF checks cover a full-page image and a distinct cover followed by running headers/footers.
+
+Testing beta **3.60.0.4** · 2026-10-19 · `04tVx000001AXIHIA4` · source commit `83e065cc30f735c526b1a4cebe52f790ce0faff1` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4).
+
+Includes all earlier 3.60.0.3 fixes below. This package is unpromoted and validation-skipped for subscriber testing; production release requires a separately validated build. The AI review org is source updated and passes **246/246 tests**, with Einstein still available and the Account starter PDF working. The non-AI review org completes uninstall/reinstall from beta 3.60.0.2, restores both original templates/versions, seven email templates and two permission assignments, and passes **246/246 namespaced tests** plus **8/8 PDF smoke checks**. Both orgs generate identical one-page Word covers with source image pixels preserved.
+
+## v3.60.0 — Designer, assets and verified signing (testing beta)
+
+Testing beta **3.60.0.3** · 2026-10-19 · `04tVx000001AX5NIAW` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AX5NIAW).
+
+### Added
+
+- Reusable terms and HTML snippet assets with stable `{%snippet:key}` tags, private Salesforce File revision history, visual/source editing and Designer insertion. Normal and giant-query HTML/Canvas PDFs expand shared content before record merging.
+- A document-first Designer workspace with contextual inserts, field selection, table editing, page settings, precise placement and native PDF preview. Advanced users can switch directly between Visual and HTML, format source, and preview unsaved changes.
+- Salesforce Files font assets shared by Designer, Canvas and HTML font tags. Fonts retain their licensed source revision, require native PDF review and expose format, glyph and script limitations before use.
+- Record-page preparation of uploaded or existing PDFs for signatures, including recipients, positioned fields, resumable drafts, sequential signing and protection of sent originals.
+- Guided Quote, Opportunity and Account document starters, plus three authoring routes: existing templates, Designer/Canvas and Agentforce generation. AI authoring can use PDF/DOCX references and discover a validated, record-scoped data plan conversationally.
+
+### Fixed
+
+- Prepared PDF signatures follow the shared verification flow, with normalized site URLs and a clickable verification link on the completion certificate ([#476](https://github.com/Portwood-Global-Solutions/Portwood/issues/476)).
+- Parallel completion emails name the person who caused each event, including out-of-order signing and batched events, instead of choosing the highest sort-order signed person ([#477](https://github.com/Portwood-Global-Solutions/Portwood/issues/477)).
+- HTML rich-text images using approved absolute Salesforce File URLs use relative PDF paths, so Download renders the image consistently with Save to Record ([#478](https://github.com/Portwood-Global-Solutions/Portwood/issues/478)).
+- Asset and rich-text images in native Word headers and footers resolve in PDF and DOCX output. Reusing one Salesforce File at different sizes preserves each authored size in PDFs.
+- Registered-font PDF previews accept ordinary `!important` colour and layout rules while preserving the exact approved font face.
+- Signature source changes remain inside the request composer, and the font library scrolls within its list rather than extending the entire workspace.
+
+This is an unpromoted, validation-skipped testing beta for [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465), covering scratch-org and sandbox installation, uninstallation and reinstallation. Built from source commit `52bc9a3b53d30da3fdcdd76ee4e4871fe8f1e271`.
+
+Validation: **390 scoped signature tests** and **78 HTML/image tests** pass. The actual runner retains the source image pixels in Download, Save to Record and Save & Download; the asset-tag control also passes as a non-owner Standard User. The BYOD certificate check validates its real PDF link annotation. Fresh non-AI subscriber installation succeeds with **98/98 namespaced regression tests** and **8/8 functional PDF smoke checks**. The offline metadata audit retains **51 existing findings**. The exact Bentley asset/scheduled-only case and the image-aging report in #467 remain unconfirmed.
+
+A production release requires a separately validated build; full release validation, promotion and released-package upgrade checks remain outstanding. Feature review and earlier validation are recorded in `docs/FEATURE_REVIEW.md`.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

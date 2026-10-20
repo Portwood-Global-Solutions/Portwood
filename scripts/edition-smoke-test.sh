@@ -107,11 +107,11 @@ check "Template body ContentVersion created" "true"
 
 echo "==> 3. Creating the template + active version"
 template_id="$(sf data create record --target-org "$ORG" -s portwoodglobal__DocGen_Template__c \
-    -v "Name='Portwood Edition Smoke' portwoodglobal__Base_Object_API__c=Account portwoodglobal__Type__c=HTML portwoodglobal__Output_Format__c=PDF portwoodglobal__Is_Active__c=true" --json \
+    -v "Name='Portwood Edition Smoke' portwoodglobal__Base_Object_API__c=Account portwoodglobal__Query_Config__c='Id,Name,Industry' portwoodglobal__Type__c=HTML portwoodglobal__Output_Format__c=PDF portwoodglobal__Is_Active__c=true" --json \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["id"])')"
 
 version_id="$(sf data create record --target-org "$ORG" -s portwoodglobal__DocGen_Template_Version__c \
-    -v "portwoodglobal__Template__c=$template_id portwoodglobal__Content_Version_Id__c=$cv_id portwoodglobal__Base_Object_API__c=Account portwoodglobal__Type__c=HTML portwoodglobal__Output_Format__c=PDF portwoodglobal__Is_Active__c=true" --json \
+    -v "portwoodglobal__Template__c=$template_id portwoodglobal__Content_Version_Id__c=$cv_id portwoodglobal__Base_Object_API__c=Account portwoodglobal__Query_Config__c='Id,Name,Industry' portwoodglobal__Type__c=HTML portwoodglobal__Output_Format__c=PDF portwoodglobal__Is_Active__c=true" --json \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["id"])')"
 check "Template + version records created" "true"
 
@@ -120,11 +120,13 @@ cat > "$tmp_dir/action.json" <<JSON
 {"inputs":[{"templateId":"${template_id}","recordId":"${account_id}","saveToRecord":true,"documentTitle":"Portwood Edition Smoke Output"}]}
 JSON
 
-action_out="$(sf api request rest \
+# Keep CLI warnings on stderr out of the JSON consumed by the assertions.
+if ! sf api request rest \
     "/services/data/v${api_version}/actions/custom/apex/portwoodglobal__DocGenFlowAction" \
-    --target-org "$ORG" --method POST --body "@$tmp_dir/action.json" 2>&1 || true)"
-
-echo "$action_out" > "$tmp_dir/action-out.json"
+    --target-org "$ORG" --method POST --body "@$tmp_dir/action.json" \
+    > "$tmp_dir/action-out.json" 2> "$tmp_dir/action-stderr.log"; then
+    cat "$tmp_dir/action-stderr.log" >&2
+fi
 
 gen_cv_id="$(python3 - "$tmp_dir/action-out.json" <<'PY' || true
 import json, sys
@@ -132,7 +134,7 @@ try:
     d = json.load(open(sys.argv[1]))
 except Exception:
     sys.exit(0)
-if isinstance(d, list) and d and d[0].get("isSuccess"):
+if isinstance(d, list) and d and d[0].get("isSuccess") and (d[0].get("outputValues") or {}).get("success"):
     print(d[0]["outputValues"].get("contentVersionId") or "")
 PY
 )"
@@ -140,7 +142,7 @@ PY
 if [[ -z "$gen_cv_id" ]]; then
     check "Invocable action returned a generated document" "false" "see $tmp_dir/action-out.json"
     echo "  --- action response ---"
-    echo "$action_out" | head -30
+    head -30 "$tmp_dir/action-out.json"
 else
     check "Invocable action returned a generated document" "true"
 
@@ -151,8 +153,10 @@ else
         | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]["records"][0]; print(r["ContentSize"], r["FileType"], r["Title"])')"
     echo "  generated: $size"
 
-    sf api request rest "/services/data/v${api_version}/sobjects/ContentVersion/${gen_cv_id}/VersionData" \
-        --target-org "$ORG" > "$tmp_dir/out.pdf" 2>/dev/null || true
+    if ! sf api request rest "/services/data/v${api_version}/sobjects/ContentVersion/${gen_cv_id}/VersionData" \
+        --target-org "$ORG" --stream-to-file "$tmp_dir/out.pdf" > "$tmp_dir/download.log" 2>&1; then
+        cat "$tmp_dir/download.log" >&2
+    fi
 
     head_bytes="$(head -c 5 "$tmp_dir/out.pdf" 2>/dev/null || echo "")"
     [[ "$head_bytes" == "%PDF-" ]] \

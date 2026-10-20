@@ -838,6 +838,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Full ZIP decompression path — used for DOCX/PPTX/XLSX output or when pre-decomposed parts are unavailable
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
 
         // Excel two-pass: worksheets collected here, processed after shared strings are read
         Map<String, String> pendingExcelSheets = new Map<String, String>();
@@ -1092,6 +1093,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // Restore original path: word__document.xml → word/document.xml
                 String originalPath = key.replace('__', '/');
                 currentTemplateType = mr.templateType;
+                currentEntryName = originalPath;
                 String xml = mergeRunsInTags(rawXml);
                 xml = processXml(xml, recordDataMap);
                 mr.processedXmlEntries.put(originalPath, xml);
@@ -1142,29 +1144,46 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
 
-        if (mr.relsXml != null) {
-            for (Map<String, Object> img : pendingImages) {
-                // PowerPoint images live in ppt/slides/_rels/slideN.xml.rels,
-                // not the presentation-level rels — postProcessPowerPointSlides
-                // owns that wiring. Skip them here.
-                if (img.get('pptHandled') == true) {
-                    continue;
+        for (Map<String, Object> img : pendingImages) {
+            // PowerPoint images live in ppt/slides/_rels/slideN.xml.rels,
+            // not the presentation-level rels — postProcessPowerPointSlides
+            // owns that wiring. Skip them here.
+            if (img.get('pptHandled') == true) {
+                continue;
+            }
+            String relId = (String) img.get('relId');
+            String fName = (String) img.get('fileName');
+            String newRel =
+                '<Relationship Id="' +
+                relId +
+                '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
+                fName +
+                '"/>';
+            String partName = (String) img.get('wordPart');
+            if (String.isNotBlank(partName)) {
+                // Relationships belong to the part containing the drawing. Adding a
+                // header image to document.xml.rels leaves native DOCX images broken.
+                String relsPath = 'word/_rels/' + partName.substringAfterLast('/') + '.rels';
+                Blob existing = mr.passthroughEntries.get(relsPath);
+                String rels = existing == null
+                    ? '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+                    : existing.toString();
+                if (rels.trim().endsWith('/>')) {
+                    // An empty .rels root is commonly written as <Relationships/>.
+                    rels = rels.substring(0, rels.lastIndexOf('/>')) + '></Relationships>';
                 }
-                String relId = (String) img.get('relId');
-                String fName = (String) img.get('fileName');
-                String newRel =
-                    '<Relationship Id="' +
-                    relId +
-                    '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
-                    fName +
-                    '"/>';
+                mr.passthroughEntries.put(
+                    relsPath,
+                    Blob.valueOf(rels.replace('</Relationships>', newRel + '</Relationships>'))
+                );
+            } else if (mr.relsXml != null) {
                 mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
             }
         }
 
         if (collectRenderMaps) {
             for (Map<String, Object> img : pendingImages) {
-                String relId = (String) img.get('relId');
+                String relId = pendingImageRenderRelId(img);
                 if (img.containsKey('blob')) {
                     Blob imgBlob = (Blob) img.get('blob');
                     mr.imageBase64ByRelId.put(relId, EncodingUtil.base64Encode(imgBlob));
@@ -1177,6 +1196,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 }
             }
         }
+    }
+
+    /** Remember the Word part before later merges change currentEntryName. */
+    private static void registerPendingImage(Map<String, Object> image) {
+        if (
+            currentTemplateType == 'Word' &&
+            currentEntryName != null &&
+            (currentEntryName.startsWith('word/header') || currentEntryName.startsWith('word/footer')) &&
+            currentEntryName.endsWith('.xml')
+        ) {
+            image.put('wordPart', currentEntryName);
+        }
+        pendingImages.add(image);
+    }
+
+    /** Match combineXmlWithHeadersFooters' part-prefixed drawing references. */
+    private static String pendingImageRenderRelId(Map<String, Object> image) {
+        String partName = (String) image.get('wordPart');
+        String relId = (String) image.get('relId');
+        return String.isBlank(partName)
+            ? relId
+            : partName.substringAfterLast('/').substringBefore('.xml') + '_' + relId;
     }
 
     /**
@@ -1585,6 +1626,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
         String rawDocumentXml = null;
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
@@ -1600,6 +1642,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     (name.startsWith('word/header') && name.endsWith('.xml')) ||
                     (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
+                    currentEntryName = name;
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
                     mr.processedXmlEntries.put(name, xml);
@@ -1624,6 +1667,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Process remaining merge tags (parent-level fields, other loops)
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         mr.documentXml = processedXml;
         mr.processedXmlEntries.put('word/document.xml', processedXml);
@@ -1913,6 +1957,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             } else {
                 String originalPath = key.replace('__', '/');
                 if (originalPath.startsWith('word/header') || originalPath.startsWith('word/footer')) {
+                    currentEntryName = originalPath;
                     rawXml = mergeRunsInTags(rawXml);
                     rawXml = processXml(rawXml, recordDataMap);
                     mr.processedXmlEntries.put(originalPath, rawXml);
@@ -1932,6 +1977,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         loopParts = null;
 
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         rawDocumentXml = null;
         recordDataMap = null;
@@ -1940,7 +1986,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Handle images
         for (Map<String, Object> img : pendingImages) {
-            String relId = (String) img.get('relId');
+            String relId = pendingImageRenderRelId(img);
             if (img.containsKey('url')) {
                 mr.imageUrlByRelId.put(relId, (String) img.get('url'));
             }
@@ -2216,6 +2262,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Blob templateBlob = cvs[0].VersionData;
         cvs = null; // release the SObject wrapper, keep just the Blob
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
 
         // Determine paths based on template type
         String relsPath;
@@ -2847,7 +2894,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 String.isNotBlank(mr.documentXml))
                 ? mr.documentXml
                 : '<html><body><p>Test PDF</p></body></html>';
-            return Blob.toPdf(lastRenderedHtml);
+            return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(lastRenderedHtml));
         }
 
         // Orientation override drives canonical letter dimensions in the
@@ -2873,7 +2920,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 String htmlDoc = DocGenHtmlRenderer.injectAdminWatermarkIntoHtml(mr.documentXml);
                 ensureTemplateAssetImageAccessForPdf(templateId, recordId, htmlDoc);
                 lastRenderedHtml = htmlDoc;
-                Blob htmlPdf = Blob.toPdf(htmlDoc);
+                Blob htmlPdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(htmlDoc));
                 removeTemplateImageLinksAfterRender(templateId, recordId, htmlDoc);
                 return htmlPdf;
             }
@@ -2889,7 +2936,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             ensureTemplateAssetImageAccessForPdf(templateId, recordId, html);
             lastRenderedHtml = html;
 
-            Blob docxPdf = Blob.toPdf(html);
+            Blob docxPdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
             removeTemplateImageLinksAfterRender(templateId, recordId, html);
             return docxPdf;
         } finally {
@@ -3731,7 +3778,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * closing tag admits no whitespace.
      */
     @TestVisible
-    private static void collectTextRunBodies(
+    public static void collectTextRunBodies(
         String xml,
         List<Integer> contentStarts,
         List<Integer> contentEnds,
@@ -4024,6 +4071,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             rootDataContext = data;
         }
         try {
+            if (ownsRootTagPass && xml != null && xml.toLowerCase().contains('{%snippet:')) {
+                if (!isHtmlBacked(currentTemplateType))
+                    throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
+                xml = DocGenSnippetService.expand(xml);
+            }
             return processXmlInner(xml, data, ownsRootTagPass);
         } finally {
             if (ownsRootTagPass) {
@@ -4162,7 +4214,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // wrap layer via @page CSS counter() rules. Flying Saucer can only
                 // resolve counter(page)/counter(pages) inside @page context, so the
                 // tokens have to survive processXml intact for wrapHtmlForPdf to see.
-                if ('PageNumber'.equalsIgnoreCase(tagContent) || 'TotalPages'.equalsIgnoreCase(tagContent)) {
+                if (
+                    'PageNumber'.equalsIgnoreCase(tagContent) ||
+                    'TotalPages'.equalsIgnoreCase(tagContent) ||
+                    tagContent.startsWithIgnoreCase('%font:')
+                ) {
                     output += '{' + rawTag + '}';
                     cursor = tagClose + 1;
                     continue;
@@ -4297,7 +4353,17 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         // HTML template type (v1.61+): mirror the DOCX auto-expand behavior
                         // for <tr> rows and <li> list items. Only considered when the merge
                         // engine is running in HTML context — leaves DOCX paths untouched.
-                        if (currentTemplateType == 'HTML' && !skipContainerExpand) {
+                        Object htmlSectionValue = currentTemplateType == 'HTML' && !skipContainerExpand
+                            ? resolveValue(data, key)
+                            : null;
+                        Boolean htmlRepeatsRecords =
+                            htmlSectionValue instanceof List<Object> ||
+                            (htmlSectionValue instanceof Map<String, Object> &&
+                            ((Map<String, Object>) htmlSectionValue).get('records') instanceof List<Object>);
+                        // Scalar truthy sections (e.g. {#Description}) remain inline.
+                        // Expanding one to its parent row inside an outer list loop
+                        // consumes sibling cells and can leave unmatched tbody tags.
+                        if (currentTemplateType == 'HTML' && !skipContainerExpand && htmlRepeatsRecords) {
                             // Candidate: HTML <tr> row
                             Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', cursor);
                             if (htmlTrStart != -1) {
@@ -5483,7 +5549,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * ({#, {/, {^, {%, {@, {:) are excluded by shape, so this never shadows a real tag.
      */
     @TestVisible
-    private static Boolean isOoxmlGuidToken(String tagContent) {
+    public static Boolean isOoxmlGuidToken(String tagContent) {
         if (String.isBlank(tagContent) || tagContent.length() != 36) {
             return false;
         }
@@ -7146,6 +7212,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return null;
         }
         String src = imgTag.substring(srcIdx, srcEnd).replace('&amp;', '&');
+        if (!src.startsWith('data:') && DocGenAssetPolicy.assetUrl(src) == null)
+            throw new DocGenException('Use Salesforce-hosted images from Assets in rich text.');
 
         // Extract optional width/height. Two storage forms exist in rich text HTML:
         //   1. width="200" height="150" attributes — set by older editors
@@ -7339,9 +7407,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             if (!src.startsWith('data:')) {
                 imgData.put('url', src);
             }
-            pendingImages.add(imgData);
+            registerPendingImage(imgData);
         } else if (String.isNotBlank(src) && !src.startsWith('data:')) {
-            pendingImages.add(new Map<String, Object>{ 'relId' => relId, 'fileName' => fileName, 'url' => src });
+            registerPendingImage(new Map<String, Object>{ 'relId' => relId, 'fileName' => fileName, 'url' => src });
         } else {
             return null; // Can't resolve image at all
         }
@@ -7452,8 +7520,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     /**
      * Returns the <img> tag with src rewritten for HTML-template output, or
      * empty string when the image can't be rendered (data URI, unresolvable).
-     * Already-relative /sfc/ URLs and arbitrary http(s) URLs pass through
-     * unchanged.
+     * Salesforce File URLs use relative paths for the PDF renderer, matching
+     * buildPdfImageMap on the Word path. Other URLs pass through unchanged.
      */
     private static String rewriteRichTextImgForHtml(String imgTag) {
         Integer srcIdx = imgTag.indexOfIgnoreCase('src=');
@@ -7483,6 +7551,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         if (src.toLowerCase().startsWith('/sfc/')) {
             return imgTag;
+        }
+        String approvedSrc = DocGenAssetPolicy.assetUrl(src);
+        if (approvedSrc != null && new Url(approvedSrc).getPath().startsWithIgnoreCase('/sfc/servlet.shepherd/')) {
+            // Absolute File URLs can render as a broken-image placeholder in
+            // synchronous Aura downloads even when the queued save succeeds.
+            // Validate the host before removing it; external URLs must never
+            // become trusted local paths. Preserve query parameters and sizing.
+            String relativeSrc = approvedSrc.substring(approvedSrc.indexOf('/', 8));
+            return imgTag.substring(0, valStart) + relativeSrc.escapeHtml4() + imgTag.substring(valEnd);
         }
         if (src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
             Integer refStart = src.toLowerCase().indexOf('refid=') + 6;
@@ -7810,7 +7887,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             } else if (spec.sourceUrl != null) {
                 imgEntry.put('url', spec.sourceUrl);
             }
-            pendingImages.add(imgEntry);
+            registerPendingImage(imgEntry);
 
             // Compute image dimensions in EMU with intrinsic size detection and scaling.
             //
@@ -8848,7 +8925,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             assetCvCache.put(key, null);
         }
 
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c', 'Is_Active__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Asset__c.sObjectType,
+            new Set<String>{ 'Asset_Key__c', 'Is_Active__c', 'Asset_Type__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Asset__c> assets = [
             SELECT
@@ -8860,7 +8940,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE
+            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE AND Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
         ];
 
@@ -9526,7 +9606,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         public List<SObject> query(String soql, Id recordId) {
             // recordId is bound via the :recordId reference inside soql.
             /* code-analyzer-suppress ApexFlsViolation */
-            return Database.query(soql); // NOPMD — title field read, package-internal, sharing-bypassed by design
+            return Database.query(DocGenSignatureIpContext.publicQuery(soql)); // NOPMD — title field read, package-internal, sharing-bypassed by design
         }
     }
 
@@ -9599,7 +9679,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Default: pull Name + try common parent relationship fields. Best-effort.
         try {
             String objType = String.valueOf(recordId.getSObjectType());
-            List<SObject> rows = Database.query('SELECT Id, Name FROM ' + objType + ' WHERE Id = :recordId LIMIT 1');
+            List<SObject> rows = Database.query(
+                DocGenSignatureIpContext.publicQuery(
+                    'SELECT Id, Name FROM ' + objType + ' WHERE Id = :recordId LIMIT 1'
+                )
+            );
             Map<String, Object> out = new Map<String, Object>();
             if (!rows.isEmpty()) {
                 out.put('Name', rows[0].get('Name'));
@@ -9838,6 +9922,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Merge runs first so we find complete tags
         String xml = mergeRunsInTags(templateXml);
+        if (xml != null && xml.toLowerCase().contains('{%snippet:')) {
+            if (xml.contains('<w:'))
+                throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
+            xml = DocGenSnippetService.expand(xml);
+        }
 
         // Find the opening tag {#relationshipName}
         String openTag = '{#' + relationshipName + '}';
@@ -9998,6 +10087,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return renderLoopBodyForRecords(innerXml, relationshipName, records, fieldNames, 0);
     }
 
+    /** Preserve the source/output context in fresh giant-query batch transactions. */
+    public static String renderLoopBodyForRecords(
+        String innerXml,
+        String relationshipName,
+        List<SObject> records,
+        List<String> fields,
+        Integer rowOffset,
+        String templateType,
+        String outputFormat
+    ) {
+        String previousType = currentTemplateType;
+        String previousOutput = currentOutputFormat;
+        currentTemplateType = templateType;
+        currentOutputFormat = outputFormat;
+        try {
+            return renderLoopBodyForRecords(innerXml, relationshipName, records, fields, rowOffset);
+        } finally {
+            currentTemplateType = previousType;
+            currentOutputFormat = previousOutput;
+        }
+    }
+
     /**
      * As above, continuing {RowNumber} from a running offset.
      *
@@ -10122,6 +10233,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Decode template ZIP to get the raw document XML
         Blob templateBlob = EncodingUtil.base64Decode(base64File);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+        DocGenAssetPolicy.assertOfficeResources(reader);
         String rawDocumentXml = null;
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
@@ -10137,6 +10249,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     (name.startsWith('word/header') && name.endsWith('.xml')) ||
                     (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
+                    currentEntryName = name;
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
                     mr.processedXmlEntries.put(name, xml);
@@ -10165,6 +10278,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Now process remaining merge tags (parent-level fields, other loops)
+        currentEntryName = 'word/document.xml';
         String processedXml = processXml(rawDocumentXml, recordDataMap);
         mr.documentXml = processedXml;
         mr.processedXmlEntries.put('word/document.xml', processedXml);
@@ -10175,47 +10289,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             mr.docTitle = (String) resolveValue(recordDataMap, 'Name');
         }
 
-        // Handle pending images
-        if (!pendingImages.isEmpty()) {
-            if (mr.contentTypesXml != null) {
-                if (!mr.contentTypesXml.contains('Extension="png"')) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace(
-                        '</Types>',
-                        '<Default Extension="png" ContentType="image/png"/></Types>'
-                    );
-                }
-                if (
-                    !mr.contentTypesXml.contains('Extension="jpeg"') && !mr.contentTypesXml.contains('Extension="jpg"')
-                ) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace(
-                        '</Types>',
-                        '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>'
-                    );
-                }
-            }
-            if (mr.relsXml != null) {
-                for (Map<String, Object> img : pendingImages) {
-                    String relId = (String) img.get('relId');
-                    String fName = (String) img.get('fileName');
-                    String newRel =
-                        '<Relationship Id="' +
-                        relId +
-                        '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
-                        fName +
-                        '"/>';
-                    mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
-                }
-            }
-            for (Map<String, Object> img : pendingImages) {
-                String relId = (String) img.get('relId');
-                if (img.containsKey('blob')) {
-                    mr.imageBase64ByRelId.put(relId, EncodingUtil.base64Encode((Blob) img.get('blob')));
-                }
-                if (img.containsKey('url')) {
-                    mr.imageUrlByRelId.put(relId, (String) img.get('url'));
-                }
-            }
-        }
+        // Share part-scoped image relationships and render IDs with normal merges.
+        applyPendingImages(mr, true);
 
         // Render to final format
         if (outputFormat == 'PDF' && templateType == 'Word') {
@@ -10464,8 +10539,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // stray text by silently discarding the author's CSS.
         bodyContent = stripStyleAndScriptBlocks(bodyContent);
 
-        String headerSrc = String.isBlank(headerHtml) ? null : decodeBraceEntities(headerHtml);
-        String footerSrc = String.isBlank(footerHtml) ? null : decodeBraceEntities(footerHtml);
+        String headerSrc = String.isBlank(headerHtml)
+            ? null
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(headerHtml)));
+        String footerSrc = String.isBlank(footerHtml)
+            ? null
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(footerHtml)));
         if (String.isNotBlank(headerSrc)) {
             sourceStyles += '\n' + extractHtmlStyleBlocks(headerSrc);
             headerSrc = stripStyleAndScriptBlocks(headerSrc);
@@ -10785,6 +10864,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
+        html = DocGenSnippetService.expand(decodeBraceEntities(html));
+        html = DocGenFontService.expandTags(html);
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
         if (bodyOpen == -1) {
@@ -10803,9 +10884,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         Integer bodyClose = lower.lastIndexOf('</body>');
         if (bodyClose == -1 || bodyClose <= openEnd) {
-            return html.substring(openEnd + 1);
+            return DocGenFontService.retainBodyFont(html.substring(bodyOpen, openEnd + 1), html.substring(openEnd + 1));
         }
-        return html.substring(openEnd + 1, bodyClose);
+        return DocGenFontService.retainBodyFont(
+            html.substring(bodyOpen, openEnd + 1),
+            html.substring(openEnd + 1, bodyClose)
+        );
     }
 
     /**
@@ -10853,8 +10937,33 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * which preserves arbitrary HTML.
      */
     public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        return wrapHtmlForPdf(body, sourceStyles, header, footer, true);
+    }
+    /** Giant-query rows must be inserted before validating glyphs and pinning their font faces. */
+    public static String wrapHtmlForPdf(
+        String body,
+        String sourceStyles,
+        String header,
+        String footer,
+        Boolean prepareFonts
+    ) {
+        DocGenAssetPolicy.assertHtmlResources(body);
+        DocGenAssetPolicy.assertHtmlResources(header);
+        DocGenAssetPolicy.assertHtmlResources(footer);
+        DocGenAssetPolicy.assertCss(sourceStyles);
+        body = DocGenFontService.expandTags(body);
+        header = DocGenFontService.expandTags(header);
+        footer = DocGenFontService.expandTags(footer);
+        sourceStyles = DocGenFontService.expandTags(sourceStyles);
         Boolean headerHasCounters = hasPageCounterTokens(header);
         Boolean footerHasCounters = hasPageCounterTokens(footer);
+        if (
+            headerHasCounters && header.contains('-pw-font-face') ||
+            footerHasCounters && footer.contains('-pw-font-face')
+        )
+            throw new DocGenException(
+                'Custom fonts in HTML headers or footers cannot share that section with page-counter tags. Use custom fonts in a section without counters.'
+            );
         // v1.90 — when the source HTML already declares @page, suppress the engine's
         // size/margin so author CSS wins cleanly. Header/footer margin-box rules are
         // still emitted because the source @page can't supply them on its own.
@@ -11015,7 +11124,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
-        return html;
+        return prepareFonts ? DocGenFontService.prepare(html) : html;
     }
 
     private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
@@ -11411,6 +11520,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private static String wrapNonLatinGlyphs(String s) {
         if (String.isBlank(s))
             return s;
+        if (s.contains('-pw-font-face')) {
+            DocGenFontService.ProtectedRuns protectedRuns = DocGenFontService.protect(s);
+            String result = wrapNonLatinGlyphs(protectedRuns.masked);
+            for (String token : protectedRuns.runs.keySet())
+                result = result.replace(token, protectedRuns.runs.get(token));
+            return result;
+        }
         s = decodeHighCodepointEntities(s);
         s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();

@@ -435,7 +435,7 @@ public with sharing class DocGenButtonController {
             d.getName() +
             ' WHERE Id = :recordId LIMIT 1';
         /* code-analyzer-suppress ApexFlsViolation */
-        List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE);
+        List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE);
         if (rows.isEmpty()) {
             return out;
         }
@@ -572,7 +572,9 @@ public with sharing class DocGenButtonController {
         // documented above.
         /* code-analyzer-suppress ApexFlsViolation */
         List<SObject> rows = Database.query(
-            'SELECT RecordType.DeveloperName FROM ' + d.getName() + ' WHERE Id = :recordId LIMIT 1',
+            DocGenSignatureIpContext.publicQuery(
+                'SELECT RecordType.DeveloperName FROM ' + d.getName() + ' WHERE Id = :recordId LIMIT 1'
+            ),
             AccessLevel.USER_MODE
         );
         if (rows.isEmpty()) {

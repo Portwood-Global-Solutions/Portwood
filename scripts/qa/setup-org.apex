@@ -33,6 +33,7 @@ if (cfg.Signature_Expiration_Days__c == null) {
 // up as flake in suites that count records.
 cfg.Signature_Reminder_Enabled__c = false;
 upsert cfg;
+DocGenSignatureIpContext.initialize();
 System.debug('SETUP settings: skipEmailVerification=' + cfg.Signature_Skip_Email_Verification__c);
 
 // ── 2. A record for the UI suites to open ────────────────────────────────────

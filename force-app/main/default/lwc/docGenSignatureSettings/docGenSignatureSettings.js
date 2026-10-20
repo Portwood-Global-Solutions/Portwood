@@ -1,4 +1,4 @@
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import getSettingsFresh from '@salesforce/apex/DocGenSetupController.getSettingsFresh';
 import saveSettings from '@salesforce/apex/DocGenSetupController.saveSettings';
 import saveSignatureSettings from '@salesforce/apex/DocGenSetupController.saveSignatureSettings';
@@ -9,6 +9,16 @@ import saveVerificationSettings from '@salesforce/apex/DocGenSetupController.sav
 import saveDeclineSettings from '@salesforce/apex/DocGenSetupController.saveDeclineSettings';
 
 export default class DocGenSignatureSettings extends LightningElement {
+    @api embedded = false;
+    get cardTitle() {
+        return this.embedded ? null : 'Signature Settings';
+    }
+    get cardIcon() {
+        return this.embedded ? null : 'standard:signature_request';
+    }
+    get cardClass() {
+        return this.embedded ? 'embedded-card' : '';
+    }
     @track isLoaded = false;
     @track isSaving = false;
     @track saveMessage = '';

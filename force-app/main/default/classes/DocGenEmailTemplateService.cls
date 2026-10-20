@@ -189,6 +189,7 @@ global with sharing class DocGenEmailTemplateService {
         if (String.isBlank(logo)) {
             logo = settings.Signature_Email_Logo_Url__c;
         }
+        logo = DocGenAssetPolicy.assetUrl(logo);
         String footer = String.isNotBlank(def.footerTextOverride)
             ? def.footerTextOverride
             : (activeBrand != null && String.isNotBlank(activeBrand.Footer_Text__c))
@@ -227,6 +228,8 @@ global with sharing class DocGenEmailTemplateService {
         } else {
             out.htmlBody = wrapChrome(bodyInner, brand, logo, company, footer, def.logoHeight);
         }
+
+        DocGenAssetPolicy.assertHtmlResources(out.htmlBody);
 
         // Plain part: explicit override if provided, else derive from the body.
         if (String.isNotBlank(def.bodyPlain)) {
@@ -324,7 +327,7 @@ global with sharing class DocGenEmailTemplateService {
                         LIMIT 1
                     )
                 FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey
+                WHERE Asset_Key__c = :assetKey AND Asset_Type__c = 'Image'
                 WITH SYSTEM_MODE
                 LIMIT 1
             ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
@@ -604,8 +607,7 @@ global with sharing class DocGenEmailTemplateService {
      * Returns the public download URL of the asset's latest file, or null when
      * anything is missing so the caller falls back to the stored URL.
      */
-    @TestVisible
-    private static String resolveAssetPublicUrlByKey(String assetKey) {
+    public static String resolveAssetPublicUrlByKey(String assetKey) {
         try {
             // Stored keys are canonical slugs (underscores → hyphens, lowercased);
             // normalize the lookup the same way the {%asset:} tag resolver does.
@@ -667,7 +669,10 @@ global with sharing class DocGenEmailTemplateService {
             // read here from guest / Automated Process contexts; a throwing guard
             // silently dropped the logo from those emails (#390). Reads go through
             // the `without sharing` TemplateReader for the same reason.
-            DocGenFlsGuard.advisoryAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
+            DocGenFlsGuard.advisoryAssertAccessible(
+                DocGen_Asset__c.sObjectType,
+                new Set<String>{ 'Asset_Key__c', 'Asset_Type__c' }
+            );
             List<DocGen_Asset__c> assets = new TemplateReader().readAssetByKey(assetKey);
             if (assets.isEmpty() || assets[0].ContentDocumentLinks.isEmpty()) {
                 return null;

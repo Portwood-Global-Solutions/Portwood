@@ -129,7 +129,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             snippets = null; // free heap before Blob.toPdf
 
             // Render one merged PDF
-            Blob pdfBlob = Blob.toPdf(fullHtml);
+            Blob pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(fullHtml));
             String fileName = String.isNotBlank(job.Label__c) ? job.Label__c : 'Bulk Generation ' + job.Name;
 
             // Save merged PDF linked to the Job record

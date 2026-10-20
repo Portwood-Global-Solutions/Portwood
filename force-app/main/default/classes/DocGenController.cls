@@ -559,6 +559,91 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Native Word source metadata, without bringing the archive into Apex heap. */
+    public static Map<String, Object> getNativeWordTemplateSource(Id templateId, Id recordId) {
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Type__c', 'Base_Object_API__c', 'Query_Config__c', 'Document_Title_Format__c' }
+        );
+        List<DocGen_Template__c> templates = [
+            SELECT Type__c, Base_Object_API__c, Query_Config__c, Document_Title_Format__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (templates.isEmpty())
+            throw new DocGenException('Template not found or access denied.');
+        DocGen_Template__c template = templates[0];
+        if (template.Type__c != 'Word')
+            return null;
+        Map<String, Object> data = DocGenDataRetriever.getRecordData(
+            recordId,
+            template.Base_Object_API__c,
+            template.Query_Config__c
+        );
+        DocGen_Template_Version__c snapshot = loadActiveVersionSnapshot(templateId);
+        String format = snapshot != null &&
+            snapshot.Document_Title_Format__c != null
+            ? snapshot.Document_Title_Format__c
+            : template.Document_Title_Format__c;
+        String title = DocGenService.generateDocTitle(format, data);
+        if (title == null)
+            title = (String) data.get('Name');
+        return new Map<String, Object>{
+            'contentVersionId' => DocGenTemplateManager.getTemplateFileVersionId(templateId),
+            'title' => title
+        };
+    }
+
+    @AuraEnabled
+    public static Id prepareNativeWordDocument(Id templateId, Id recordId, Boolean saveToRecord) {
+        Map<String, Object> source = getNativeWordTemplateSource(templateId, recordId);
+        if (source == null)
+            return null;
+        return System.enqueueJob(
+            new DocGenNativeWordQueueable(
+                (Id) source.get('contentVersionId'),
+                saveToRecord == true ? recordId : null,
+                (String) source.get('title')
+            )
+        );
+    }
+
+    @AuraEnabled
+    public static Map<String, Object> getNativeWordDocumentStatus(Id jobId) {
+        Id caller = UserInfo.getUserId();
+        List<AsyncApexJob> jobs = [
+            SELECT Status, ExtendedStatus
+            FROM AsyncApexJob
+            WHERE Id = :jobId AND CreatedById = :caller AND ApexClass.Name = 'DocGenNativeWordQueueable'
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (jobs.isEmpty())
+            throw new DocGenException('Document generation job not found or access denied.');
+        Map<String, Object> result = new Map<String, Object>{
+            'status' => jobs[0].Status,
+            'error' => jobs[0].ExtendedStatus
+        };
+        if (jobs[0].Status == 'Completed') {
+            String path = DocGenNativeWordQueueable.outputPath(jobId);
+            List<ContentVersion> files = [
+                SELECT Id, Title
+                FROM ContentVersion
+                WHERE PathOnClient = :path AND CreatedById = :caller AND IsLatest = TRUE
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            result.put('requiresMerge', files.isEmpty());
+            if (!files.isEmpty()) {
+                result.put('contentVersionId', files[0].Id);
+                result.put('title', files[0].Title);
+            }
+        }
+        return result;
+    }
+
     /**
      * Returns merged document parts for client-side DOCX assembly.
      * Server merges the XML (lightweight). Client fetches the shell ZIP and images
@@ -1153,12 +1238,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (String.isBlank(imageUrl)) {
             return null;
         }
-        // Security: only allow Salesforce-hosted URLs
-        String lower = imageUrl.toLowerCase();
-        Boolean isSafe = imageUrl.startsWith('/') || lower.contains('.salesforce.com') || lower.contains('.force.com');
-        if (!isSafe) {
+        imageUrl = DocGenAssetPolicy.assetUrl(imageUrl);
+        if (imageUrl == null)
             return null;
-        }
         if (Test.isRunningTest()) {
             return EncodingUtil.base64Encode(Blob.valueOf('test-pdf'));
         }
@@ -1178,7 +1260,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 '" />' +
                 '<p>End wrapper.</p>' +
                 '</body></html>';
-            Blob pdf = Blob.toPdf(html);
+            Blob pdf = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
             return EncodingUtil.base64Encode(pdf);
         } catch (Exception e) {
             String noop = e.getMessage(); // NOPMD UnusedLocalVariable
@@ -1972,7 +2054,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         query += ' ORDER BY Id LIMIT :pageSize';
 
         // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() validation + escapeSingleQuotes + USER_MODE
-        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
+        List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
 
         List<Map<String, Object>> recordMaps = new List<Map<String, Object>>();
         for (SObject rec : records) {
@@ -2087,7 +2169,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         List<Id> sortedIds = new List<Id>();
         // CxSAST: SOQL injection mitigated by Schema allowlist validation on object, lookupField, ORDER BY fields, WHERE fields + keyword blocklist + USER_MODE
-        for (SObject rec : Database.query(query, AccessLevel.USER_MODE)) {
+        for (SObject rec : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             // NOPMD ApexSOQLInjection — all dynamic elements validated against Schema.describeSObjects() field map; USER_MODE enforced
             sortedIds.add(rec.Id);
         }
@@ -2161,7 +2243,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ' WHERE Id IN :recordIds';
 
         // CxSAST: SOQL injection mitigated by Schema allowlist validation on object and all field names + USER_MODE
-        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+        List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
 
         // Re-order to match input ID sequence
         Map<Id, SObject> byId = new Map<Id, SObject>();
@@ -2484,7 +2566,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     safeClause +
                     ') LIMIT 1';
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-                List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized via DocGenDataRetriever.sanitizeWhereClause; object name escaped; Id param bound
+                List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized via DocGenDataRetriever.sanitizeWhereClause; object name escaped; Id param bound
                 matched = !rows.isEmpty();
             }
         } catch (Exception e) {
@@ -2559,7 +2641,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 safeClause +
                 ') LIMIT 1';
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized, object escaped, Id bound
+            List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — clause sanitized, object escaped, Id bound
             result.put('matched', !rows.isEmpty());
         } catch (DocGenException e) {
             result.put('error', e.getMessage());
@@ -3710,6 +3792,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static Map<String, Object> saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent) {
+        DocGenAssetPolicy.assertHtmlResources(htmlContent);
         if (templateId == null) {
             throw new DocGenException('Template ID is required.');
         }
@@ -4090,8 +4173,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * HTML template body read-back for the admin editor (paste-back surface).
      *
-     * Returns the most recent docgen_html_body_* ContentVersion attached to
-     * the template, or null when no body has been uploaded yet. The CV read
+     * Returns the most recent Designer body attached to the template, falling
+     * back to the active version's exact source File for legacy/API uploads
+     * whose titles do not follow the Designer naming convention. The CV read
      * runs WITH SYSTEM_MODE after an explicit FLS/CRUD gate on the template —
      * template-internal CVs can carry Visibility=InternalUsers ContentDocumentLinks,
      * which USER_MODE reads silently drop (the #114 quirk).
@@ -4142,10 +4226,28 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             templateId,
             'docgen_html_body_'
         );
-        if (cvs.isEmpty()) {
-            return null;
+        if (!cvs.isEmpty()) {
+            return cvs[0].VersionData.toString();
         }
-        return cvs[0].VersionData.toString();
+
+        // Keep an unpublished Designer body above the published source. Older
+        // integrations can publish a perfectly valid HTML File with any title;
+        // use the same pinned ContentVersion as generation rather than guessing
+        // from other linked Files or silently opening an empty document.
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template_Version__c.sObjectType,
+            new Set<String>{ 'Template__c', 'Is_Active__c', 'Content_Version_Id__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> active = [
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC, Id DESC
+            LIMIT 1
+        ];
+        return active.isEmpty() ? null : getVersionBody(active[0].Id);
     }
 
     /**
@@ -5122,7 +5224,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedOptions = new List<Option>();
         for (Schema.SObjectType sobj : Schema.getGlobalDescribe().values()) {
             Schema.DescribeSObjectResult describe = sobj.getDescribe();
-            if (describe.isQueryable() && !describe.isDeprecatedAndHidden()) {
+            if (
+                describe.isQueryable() &&
+                !describe.isDeprecatedAndHidden() &&
+                !DocGenSignatureIpContext.isPrivateObject(describe.getName())
+            ) {
                 sortedOptions.add(
                     new Option(describe.getLabel() + ' (' + describe.getName() + ')', describe.getName())
                 );
@@ -5155,7 +5261,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         query += ' ORDER BY Name LIMIT 50';
 
-        for (ApexClass cls : Database.query(query, AccessLevel.USER_MODE)) {
+        for (ApexClass cls : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             // Try to instantiate and check interface
             Type t = Type.forName(cls.Name);
             if (t != null) {
@@ -5226,7 +5332,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedFields = new List<Option>();
         Map<String, String> fieldTypes = new Map<String, String>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5264,7 +5370,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<Option> sortedFields = new List<Option>();
         Map<String, String> fieldTypes = new Map<String, String>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5299,7 +5405,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     public static List<Map<String, String>> getChildRelationships(String objectName) {
         List<Option> sortedRels = new List<Option>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5340,7 +5446,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     public static List<Map<String, String>> getParentRelationships(String objectName) {
         List<Option> sortedParents = new List<Option>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
+        if (objType == null || DocGenSignatureIpContext.isPrivateObject(objectName)) {
             return new List<Map<String, String>>();
         }
 
@@ -5739,7 +5845,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<SObject> childRecords;
         try {
             // CxSAST: SOQL injection mitigated by Schema allowlist validation on all dynamic elements (object, lookupField, displayField, filterClause fields) + USER_MODE
-            childRecords = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
+            childRecords = Database.query(DocGenSignatureIpContext.publicQuery(childQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error querying child records');
         }
@@ -5820,7 +5926,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         query += ' ORDER BY Name LIMIT 50';
 
         List<Map<String, String>> results = new List<Map<String, String>>();
-        for (Report r : Database.query(query, AccessLevel.USER_MODE)) {
+        for (Report r : Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE)) {
             results.add(new Map<String, String>{ 'id' => r.Id, 'name' => r.Name, 'folder' => r.FolderName });
         }
         return results;
@@ -8485,6 +8591,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
+            WHERE Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
             ORDER BY Name ASC
         ];
@@ -8680,6 +8787,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (assetId.getSObjectType() != DocGen_Asset__c.sObjectType) {
             throw DocGenService.ahe('Expected a Portwood Asset Id.');
         }
+        assertImageAsset(assetId);
+        DocGenFlsGuard.assertUpdateable(new DocGen_Asset__c(Id = assetId), new Set<String>());
         try {
             // Confirm the RUNNING USER can see this ContentVersion under their own
             // sharing BEFORE the SYSTEM_MODE plumbing publishes it AllUsers. Without
@@ -8899,6 +9008,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Image uploads/public delivery and deletion must never consume font or private snippet sources. */
+    private static void assertImageAsset(Id assetId) {
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Type__c' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Asset__c> assets = [
+            SELECT Id
+            FROM DocGen_Asset__c
+            WHERE Id = :assetId AND Asset_Type__c = 'Image'
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (assets.isEmpty())
+            throw DocGenService.ahe('Choose an image asset. Edit fonts and shared content in their own Assets tabs.');
+    }
+
     /**
      * Permanently deletes a shared asset AND its linked image files. Any
      * template still referencing {%asset:<key>} renders the missing-asset
@@ -8912,6 +9036,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (!Schema.sObjectType.DocGen_Asset__c.isDeletable()) {
             throw DocGenService.ahe('Insufficient access to delete assets.');
         }
+        assertImageAsset(assetId);
         try {
             Set<Id> docIds = new Set<Id>();
             /* code-analyzer-suppress ApexFlsViolation */

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata"><fullName>Revision_Key__c</fullName><description
+    >SHA256 of font bytes and license digest. Immutable dependency key saved in template bodies.</description><label
+    >Revision key</label><length>64</length><type>Text</type><unique>true</unique><caseSensitive
+    >false</caseSensitive><externalId>true</externalId></CustomField>

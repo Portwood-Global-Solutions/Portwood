@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata"><apiVersion>66.0</apiVersion><description
+    >QA only: genuine one-minute scheduled path, using the same subflow as the manual control.</description><interviewLabel
+    >QA Scheduled Asset Probe</interviewLabel><label>QA Scheduled Asset Probe</label><processType
+    >AutoLaunchedFlow</processType><start><locationX>0</locationX><locationY>0</locationY><filterLogic
+        >and</filterLogic><filters><field>Name</field><operator>EqualTo</operator><value><stringValue
+                >QA Scheduled Asset Probe</stringValue></value></filters><object>Account</object><recordTriggerType
+        >Create</recordTriggerType><scheduledPaths><name>After_One_Minute</name><connector><targetReference
+                >Run_Probe</targetReference></connector><label>After One Minute</label><offsetNumber
+            >1</offsetNumber><offsetUnit>Minutes</offsetUnit><timeSource
+            >RecordTriggerEvent</timeSource></scheduledPaths><triggerType>RecordAfterSave</triggerType></start><status
+    >Active</status><subflows><name>Run_Probe</name><label>Run Probe</label><locationX>0</locationX><locationY
+        >0</locationY><flowName>QA_Asset_Probe</flowName><inputAssignments><name>recordId</name><value><elementReference
+                >$Record.Id</elementReference></value></inputAssignments><inputAssignments><name
+            >contextLabel</name><value><stringValue
+                >scheduled-path</stringValue></value></inputAssignments></subflows></Flow>

@@ -25,6 +25,8 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     // repeat-header row ({RepeatHeader} / Word's tblHeader). Reproduced in each chunk-break
     // table so the column headers reprint at the top of every page.
     private String theadHtml = '';
+    private String tableSectionOpenTag = '';
+    private String tableSectionCloseTag = '';
 
     public DocGenGiantQueryAssembler(Id jobId, Id templateId, Id recordId, String giantRelationshipName) {
         this(jobId, templateId, recordId, giantRelationshipName, null, null, null);
@@ -129,9 +131,17 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // 200% width, so the real cells packed into the left half (see #134 follow-up).
         // Each chunk-break table reproduces the authored <table …> tag + colgroup so
         // every page renders at the same authored width as the first table.
-        allRows = insertTableBreaks(allRows, ROWS_PER_PDF_CHUNK, this.tableOpenTag, this.colGroupHtml, this.theadHtml);
+        allRows = insertTableBreaks(
+            allRows,
+            ROWS_PER_PDF_CHUNK,
+            this.tableOpenTag,
+            this.colGroupHtml,
+            this.theadHtml,
+            this.tableSectionOpenTag,
+            this.tableSectionCloseTag
+        );
 
-        String html = injectRowsIntoTemplate(htmlTemplate, allRows);
+        String html = DocGenFontService.prepare(injectRowsIntoTemplate(htmlTemplate, allRows));
         allRows = null;
         htmlTemplate = null;
         DocGenService.ensureTemplateAssetImageAccessForPdf(templateId, recordId, html);
@@ -151,7 +161,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         Blob pdfBlob;
         try {
-            pdfBlob = Blob.toPdf(html);
+            pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
         } catch (Exception pdfErr) {
             // Flying Saucer stack overflow — fall back to multi-part PDF approach
             pdfBlob = null;
@@ -436,6 +446,15 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             return;
         }
         this.tableOpenTag = htmlWithPlaceholder.substring(tblStart, tblOpenEnd + 1);
+        for (String name : new List<String>{ 'tbody', 'tfoot' }) {
+            Integer section = htmlWithPlaceholder.lastIndexOf('<' + name, idx);
+            Integer close = htmlWithPlaceholder.lastIndexOf('</' + name + '>', idx);
+            if (section > tblStart && section > close) {
+                Integer sectionEnd = htmlWithPlaceholder.indexOf('>', section);
+                this.tableSectionOpenTag = htmlWithPlaceholder.substring(section, sectionEnd + 1);
+                this.tableSectionCloseTag = '</' + name + '>';
+            }
+        }
 
         // Authored colgroup, if any, sits between the table tag and {ROWS}.
         Integer cgStart = htmlWithPlaceholder.indexOf('<colgroup', tblStart);
@@ -471,6 +490,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * In that shape, close the header block before injecting rows; otherwise the
      * assembler drops </thead> and Flying Saucer cannot repeat the real headers.
      */
+    @TestVisible
     private static String replaceGiantLoopTableTail(
         String html,
         Integer openIdx,
@@ -488,7 +508,14 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         if (loopInsideThead) {
             prefix += '</thead>';
         }
-        return prefix + '{ROWS}' + html.substring(tableEnd);
+        String sectionClose = '';
+        for (String name : new List<String>{ 'tbody', 'tfoot' }) {
+            Integer section = html.lastIndexOf('<' + name, loopTrStart);
+            Integer previousClose = html.lastIndexOf('</' + name + '>', loopTrStart);
+            if (section != -1 && section > previousClose)
+                sectionClose = '</' + name + '>';
+        }
+        return prefix + '{ROWS}' + sectionClose + html.substring(tableEnd);
     }
 
     /**
@@ -533,7 +560,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         String sourceStyles = DocGenService.extractHtmlStyleBlocks(rawHtml);
         // #245 appends the cell wrap rule here too — this is the HTML-backed giant-query
         // path, which never passes through DocGenHtmlRenderer's stylesheet.
-        sourceStyles += '<style>table { border-collapse: collapse; border-spacing: 0; -fs-table-paginate: paginate; } thead { display: table-header-group; } td, th { word-wrap: break-word; overflow-wrap: break-word; }</style>';
+        sourceStyles += 'table { border-collapse: collapse; border-spacing: 0; -fs-table-paginate: paginate; } thead { display: table-header-group; } td, th { word-wrap: break-word; overflow-wrap: break-word; }';
         String bodyContent = DocGenService.extractHtmlBodyContent(rawHtml);
 
         // Resolve parent-level merge tags (outside the loop) and grand-total
@@ -603,7 +630,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // table) so chunk-break tables reproduce the author's own width / columns.
         captureTableShell(bodyContent);
 
-        return DocGenService.wrapHtmlForPdf(bodyContent, sourceStyles, mergedHeader, mergedFooter);
+        return DocGenService.wrapHtmlForPdf(bodyContent, sourceStyles, mergedHeader, mergedFooter, false);
     }
 
     /**
@@ -703,7 +730,10 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * Aggregate tags ({SUM:...}, {COUNT:...}, etc.) are handled separately by
      * resolveGiantAggregateTags and are skipped here.
      */
+    @TestVisible
     private String resolveParentMergeTags(String html) {
+        // Expand before the guarded field resolver; missing legal content must fail loudly.
+        html = DocGenSnippetService.expand(html);
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Base_Object_API__c' });
             /* code-analyzer-suppress ApexFlsViolation */
@@ -798,7 +828,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                 ' FROM ' +
                 String.escapeSingleQuotes(baseObj) +
                 ' WHERE Id = :recordId LIMIT 1';
-            List<SObject> recs = Database.query(soql, AccessLevel.USER_MODE);
+            List<SObject> recs = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE);
             if (recs.isEmpty()) {
                 return html;
             }
@@ -1258,7 +1288,10 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         AggregateResult agg;
         try {
-            List<AggregateResult> results = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — child object + fields validated against Schema + declared template fields; lookup and where re-use the same sanitized clauses as row queries
+            List<AggregateResult> results = Database.query(
+                DocGenSignatureIpContext.publicQuery(soql),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection — child object + fields validated against Schema + declared template fields; lookup and where re-use the same sanitized clauses as row queries
             if (results.isEmpty()) {
                 return html;
             }
@@ -1388,7 +1421,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         List<AggregateResult> groups;
         try {
-            groups = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — field names resolved through the child Schema describe; lookup and where reuse the same sanitized clauses as row queries
+            groups = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — field names resolved through the child Schema describe; lookup and where reuse the same sanitized clauses as row queries
         } catch (Exception qErr) {
             // Grouped read failed — leave these tags to the caller's ungrouped path rather
             // than blocking the render. Same non-fatal posture as the surrounding method.
@@ -1538,7 +1571,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                         ' FROM ' +
                         String.escapeSingleQuotes(String.valueOf(parentType)) +
                         ' WHERE Id = :recordId LIMIT 1';
-                    List<SObject> rows = Database.query(q, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — source field validated against parent Schema field map; object name from describe; parameterized Id
+                    List<SObject> rows = Database.query(DocGenSignatureIpContext.publicQuery(q), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — source field validated against parent Schema field map; object name from describe; parameterized Id
                     if (!rows.isEmpty()) {
                         Object v = rows[0].get(sourceField);
                         String s = v == null ? null : String.valueOf(v).trim();
@@ -1768,7 +1801,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
             List<AggregateResult> rows;
             try {
-                rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup/pivot validated against Schema; whereCls + chartWhere pre-sanitized
+                rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup/pivot validated against Schema; whereCls + chartWhere pre-sanitized
             } catch (Exception qErr) {
                 String noop = qErr.getMessage(); // NOPMD — non-fatal
                 continue;
@@ -1886,12 +1919,15 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * This resets Flying Saucer's DOM tree depth without splitting into
      * separate PDF files, keeping the output as one continuous document.
      */
+    @TestVisible
     private static String insertTableBreaks(
         String allRows,
         Integer rowsPerBreak,
         String tableOpenTag,
         String colGroupHtml,
-        String theadHtml
+        String theadHtml,
+        String sectionOpen,
+        String sectionClose
     ) {
         if (String.isBlank(allRows)) {
             return allRows;
@@ -1934,7 +1970,13 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // Reproduce the authored <table …> tag (captured from the snapshot) so each
         // chunk renders at the same authored width / layout as the first table — and
         // reprint the captured <thead> so column headers repeat on every page.
-        final String TABLE_BREAK = '</table>' + openTag + colGroup + theadBlock;
+        final String TABLE_BREAK =
+            (sectionClose == null ? '' : sectionClose) +
+            '</table>' +
+            openTag +
+            colGroup +
+            theadBlock +
+            (sectionOpen == null ? '' : sectionOpen);
 
         // Build result with table breaks inserted at row boundaries.
         // Use List<String> + join instead of string concatenation for heap efficiency.

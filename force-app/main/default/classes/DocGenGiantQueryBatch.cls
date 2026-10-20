@@ -163,7 +163,10 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                 sortQuery += ' LIMIT ' + limitClause;
             }
 
-            List<SObject> sortedRecords = Database.query(sortQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object/field validated by Schema.getGlobalDescribe; orderBy sanitized by sanitizeOrderByClause(); runs with USER_MODE
+            List<SObject> sortedRecords = Database.query(
+                DocGenSignatureIpContext.publicQuery(sortQuery),
+                AccessLevel.USER_MODE
+            ); // NOPMD ApexSOQLInjection — object/field validated by Schema.getGlobalDescribe; orderBy sanitized by sanitizeOrderByClause(); runs with USER_MODE
 
             Integer totalChildren = sortedRecords.size();
             update new DocGen_Job__c(Id = jobId, Status__c = 'Harvesting', Total_Records__c = totalChildren); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
@@ -250,7 +253,10 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                     String.escapeSingleQuotes(childObjectName) +
                     ' WHERE Id IN :idChunk';
 
-                List<SObject> unordered = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object/fields validated by Schema; Id chunk from pre-query; runs with USER_MODE
+                List<SObject> unordered = Database.query(
+                    DocGenSignatureIpContext.publicQuery(query),
+                    AccessLevel.USER_MODE
+                ); // NOPMD ApexSOQLInjection — object/fields validated by Schema; Id chunk from pre-query; runs with USER_MODE
 
                 // Re-order to match the pre-sorted Id sequence
                 Map<Id, SObject> byId = new Map<Id, SObject>();
@@ -282,7 +288,7 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                 }
                 query += ' ORDER BY Id LIMIT :batchSize';
 
-                records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — validated by Schema.getGlobalDescribe; USER_MODE enforced
+                records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — validated by Schema.getGlobalDescribe; USER_MODE enforced
                 if (!records.isEmpty()) {
                     lastCursorId = records[records.size() - 1].Id;
                 }
@@ -302,7 +308,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                 relationshipName,
                 records,
                 allFields,
-                rowNumberOffset
+                rowNumberOffset,
+                isHtmlSource ? 'HTML' : 'Word',
+                outputFormat
             );
             rowNumberOffset += records.size();
 

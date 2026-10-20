@@ -1,6 +1,7 @@
 import { LightningElement, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { refreshApex } from '@salesforce/apex';
+import getReadiness from '@salesforce/apex/DocGenGettingStartedController.getReadiness';
 
 // Apex — Workstream A (DocGenController) builds these in parallel.
 // Imported against the exact names/signatures in the approved plan (#185 A6).
@@ -95,7 +96,38 @@ const ACCEPTED_FORMATS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 
 export default class DocGenAssets extends LightningElement {
     @track assets = [];
-    columns = COLUMNS;
+    canCreateAssets = false;
+    canEditAssets = false;
+    canDeleteAssets = false;
+    @wire(getReadiness)
+    wiredAccess({ data }) {
+        if (data) {
+            this.canCreateAssets = data.canCreateAssets;
+            this.canEditAssets = data.canEditAssets;
+            this.canDeleteAssets = data.canDeleteAssets;
+        }
+    }
+    get emptyHint() {
+        return this.canCreateAssets
+            ? 'Create an image asset to share a logo or footer across your templates.'
+            : 'Ask your Portwood admin to add a logo or footer. Shared image tags will be available here.';
+    }
+    get columns() {
+        return COLUMNS.map((column) =>
+            column.type !== 'action'
+                ? column
+                : {
+                      ...column,
+                      typeAttributes: {
+                          rowActions: column.typeAttributes.rowActions.filter(
+                              (action) =>
+                                  action.name === 'preview' ||
+                                  (action.name === 'delete' ? this.canDeleteAssets : this.canEditAssets)
+                          )
+                      }
+                  }
+        );
+    }
     acceptedFormats = ACCEPTED_FORMATS;
     wiredAssetsResult;
 

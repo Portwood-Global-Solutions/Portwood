@@ -843,7 +843,7 @@ public with sharing class DocGenChartBucketResolver {
 
         List<AggregateResult> rows;
         try {
-            rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup validated against Schema; parentId bound via :variable
+            rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; child/field/lookup validated against Schema; parentId bound via :variable
             chartSoqlBudget--;
         } catch (Exception qErr) {
             // Same silent-empty-chart outcome as the advanced path below.
@@ -1097,7 +1097,7 @@ public with sharing class DocGenChartBucketResolver {
 
         List<AggregateResult> rows;
         try {
-            rows = Database.query(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; lookup, group, and field validated against Schema; whereClause sanitized; parentId bound via :variable
+            rows = Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — identifier-only interpolation; lookup, group, and field validated against Schema; whereClause sanitized; parentId bound via :variable
             chartSoqlBudget--;
         } catch (Exception qErr) {
             // A failed aggregate renders an EMPTY chart, not an error — the

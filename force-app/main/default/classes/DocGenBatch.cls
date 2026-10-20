@@ -235,7 +235,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         // Bulk data pre-cache for V3 configs
         buildDataCache(query, sanitizedCondition);
 
-        return Database.getQueryLocator(query);
+        return Database.getQueryLocator(DocGenSignatureIpContext.publicQuery(query));
     }
 
     /**
@@ -257,7 +257,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             idQuery += ' LIMIT 50000';
 
             Set<Id> recordIds = new Set<Id>();
-            for (SObject rec : Database.query(idQuery, AccessLevel.USER_MODE)) {
+            for (SObject rec : Database.query(DocGenSignatureIpContext.publicQuery(idQuery), AccessLevel.USER_MODE)) {
                 // NOPMD ApexSOQLInjection - baseObject validated by Schema.getGlobalDescribe() above; condition sanitized
                 recordIds.add(rec.Id);
             }

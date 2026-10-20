@@ -14,6 +14,9 @@
 // Same security model as DocGenSignatureController (also without sharing): the
 // capability is the validated signing token upstream, not record sharing.
 public without sharing class DocGenSignatureEmailService {
+    @TestVisible
+    private static List<Messaging.SingleEmailMessage> senderNotificationMessages;
+
     /**
      * Data wrapper for each signer email to send.
      */
@@ -138,6 +141,24 @@ public without sharing class DocGenSignatureEmailService {
         return reqs.isEmpty() ? null : reqs[0].Expires_At__c;
     }
 
+    // Internal previews never deliver invitations, reminders, or completion notices.
+    private static Boolean isInternalPreview(Id requestId) {
+        if (requestId == null)
+            return false;
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signature_Request__c.sObjectType,
+            new Set<String>{ 'PDF_Internal_Preview__c' }
+        );
+        List<DocGen_Signature_Request__c> rows = [
+            SELECT PDF_Internal_Preview__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :requestId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        return !rows.isEmpty() && rows[0].PDF_Internal_Preview__c == true;
+    }
+
     private static void sendRequestLikeEmails(
         List<SignerEmail> signers,
         String documentTitle,
@@ -146,7 +167,7 @@ public without sharing class DocGenSignatureEmailService {
         String templateType,
         String subjectOverride
     ) {
-        if (signers == null || signers.isEmpty()) {
+        if (signers == null || signers.isEmpty() || isInternalPreview(requestId)) {
             return;
         }
 
@@ -368,6 +389,8 @@ public without sharing class DocGenSignatureEmailService {
         Map<String, String> tokens,
         Messaging.EmailFileAttachment attachment
     ) {
+        if (isInternalPreview(requestId))
+            return;
         try {
             DocGenFlsGuard.guestAssertAccessible(
                 DocGen_Signature_Request__c.sObjectType,
@@ -420,6 +443,9 @@ public without sharing class DocGenSignatureEmailService {
                 email.setOrgWideEmailAddressId(owaId);
             }
 
+            if (senderNotificationMessages != null) {
+                senderNotificationMessages.add(email);
+            }
             Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email }, false);
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'Portwood: Sender notification failed: ' + e.getMessage());
@@ -448,6 +474,8 @@ public without sharing class DocGenSignatureEmailService {
      * attachment cap) sends the plain confirmation.
      */
     public static void sendSignerCompletionEmails(Id requestId, Blob signedPdf, String fileName) {
+        if (isInternalPreview(requestId))
+            return;
         Messaging.EmailFileAttachment attachment = buildPdfAttachment(signedPdf, fileName);
         try {
             DocGenFlsGuard.guestAssertAccessible(

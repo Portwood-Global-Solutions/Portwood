@@ -323,6 +323,102 @@ private class DocGenHtmlTemplateTest {
     }
 
     @IsTest
+    static void getHtmlTemplateBodyReadsLegacyPublishedFileWithoutRenaming() {
+        String html = '<html><body><h1>Legacy proposal</h1><p>{Name}</p></body></html>';
+        Id templateId = createHtmlTemplate(null, null, html);
+        DocGen_Template_Version__c version = [
+            SELECT Id, Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+        ];
+        ContentVersion source = [SELECT Title FROM ContentVersion WHERE Id = :version.Content_Version_Id__c];
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(html, actual, 'The Designer must read the same published body as generation');
+        System.assertEquals(source.Title, [SELECT Title FROM ContentVersion WHERE Id = :source.Id].Title);
+        System.assertEquals(
+            version.Content_Version_Id__c,
+            [SELECT Content_Version_Id__c FROM DocGen_Template_Version__c WHERE Id = :version.Id].Content_Version_Id__c,
+            'Reading must preserve the published File reference'
+        );
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyReadsLegacyCanvasFile() {
+        String html = '<html><body><div data-canvas="true">Canvas source</div></body></html>';
+        Id templateId = createHtmlTemplate(null, null, html);
+        update new DocGen_Template__c(Id = templateId, Type__c = 'Canvas');
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(html, actual, 'Canvas also uses an HTML-backed published source');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyKeepsUnpublishedDesignerBody() {
+        Id templateId = createHtmlTemplate(null, null, '<html><body>Published legacy body</body></html>');
+        String draft = '<html><body>Newer unpublished Designer edits</body></html>';
+        DocGenController.saveHtmlTemplateBody(templateId, 'draft.html', draft);
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(draft, actual, 'The active version fallback must not overwrite staged Designer edits');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyUsesExactPublishedFileVersion() {
+        String published = '<html><body>Published revision</body></html>';
+        Id templateId = createHtmlTemplate(null, null, published);
+        DocGen_Template_Version__c version = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+        ];
+        ContentVersion source = [
+            SELECT ContentDocumentId
+            FROM ContentVersion
+            WHERE Id = :version.Content_Version_Id__c
+        ];
+        insert new ContentVersion(
+            ContentDocumentId = source.ContentDocumentId,
+            Title = 'Unpublished File revision',
+            PathOnClient = 'revised.html',
+            VersionData = Blob.valueOf('<html><body>Not published</body></html>')
+        );
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(published, actual, 'A newer File revision must not replace the pinned published source');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyDoesNotUseInactiveVersion() {
+        Id templateId = createHtmlTemplate(null, null, '<html><body>Inactive source</body></html>');
+        DocGen_Template_Version__c version = [
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId
+        ];
+        version.Is_Active__c = false;
+        update version;
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(null, actual, 'An inactive legacy File must not become the current Designer body');
+    }
+
+    @IsTest
     static void getHtmlTemplateBodyRejectsNonHtmlTemplate() {
         DocGen_Template__c tmpl = new DocGen_Template__c(
             Name = 'WordRead ' + Datetime.now().getTime(),
@@ -777,6 +873,35 @@ private class DocGenHtmlTemplateTest {
         System.assert(result.contains('Before') && result.contains('After'), 'Surrounding HTML preserved: ' + result);
     }
 
+    @IsTest
+    static void richTextAbsoluteFileUrlUsesRelativePdfPath() {
+        String path = '/sfc/servlet.shepherd/version/download/068000000000001';
+        String suffix = '?operationContext=S1&amp;dgsz=128x150';
+        String attributes = ' width="128" height="150" alt="Related image"/>';
+        String relativeTag = '<img src="' + path + suffix + '"' + attributes;
+        String absoluteTag = '<img src="' + URL.getOrgDomainUrl().toExternalForm() + path + suffix + '"' + attributes;
+
+        System.assertEquals(
+            '<p>Before ' + relativeTag + ' After</p>',
+            DocGenService.convertRichTextToHtml('<p>Before ' + absoluteTag + ' After</p>'),
+            'HTML rich-text File images need the same relative PDF URL as Word images, preserving size and query'
+        );
+        System.assertEquals(relativeTag, DocGenService.convertRichTextToHtml(relativeTag));
+    }
+
+    @IsTest
+    static void richTextExternalFileUrlDoesNotBecomeLocal() {
+        String html = '<img src="https://untrusted.example/sfc/servlet.shepherd/version/download/068000000000001"/>';
+        String converted = DocGenService.convertRichTextToHtml(html);
+        System.assertEquals(html, converted, 'Do not turn a foreign File-shaped URL into a trusted local resource');
+        try {
+            DocGenAssetPolicy.assertHtmlResources(converted);
+            System.assert(false, 'The existing asset policy must still reject the foreign host');
+        } catch (DocGenException expected) {
+            System.assert(expected.getMessage().contains('Salesforce-hosted assets'));
+        }
+    }
+
     // Lightning inline rich-text images use ContentReference IDs (0EM prefix),
     // which aren't queryable as ContentVersion/ContentDocument. We can't rewrite
     // those to /sfc/, so leave the original absolute rtaImage URL — Blob.toPdf
@@ -928,6 +1053,36 @@ private class DocGenHtmlTemplateTest {
 
     // Designer live PDF preview: draft HTML replaces the saved body for the
     // merge, renders through the real pipeline, and never touches versions.
+    @IsTest
+    static void designerTableCommentsPreserveNestedRowBoundaries() {
+        String html =
+            '<table><thead><tr><!--{#IF ShowPrice}--><th>Price</th><!--{/IF}--></tr></thead>' +
+            '<tbody><!--{#Items}--><!--{#IF Heading}--><tr><td>{Heading}</td></tr><!--{/IF}-->' +
+            '<tr><td>{Name}</td><td>{Price}</td></tr><!--{/Items}--></tbody></table>';
+        Map<String, Object> data = new Map<String, Object>{
+            'ShowPrice' => true,
+            'Items' => new List<Object>{
+                new Map<String, Object>{ 'Heading' => 'Bundle A', 'Name' => 'First item', 'Price' => 12 },
+                new Map<String, Object>{ 'Name' => 'Second item', 'Price' => 24 }
+            }
+        };
+        String rendered = DocGenService.processXmlForTest(html, data, 'HTML').replace('<!---->', '');
+        System.assertEquals(
+            '<table><thead><tr><th>Price</th></tr></thead><tbody>' +
+                '<tr><td>Bundle A</td></tr><tr><td>First item</td><td>12</td></tr>' +
+                '<tr><td>Second item</td><td>24</td></tr></tbody></table>',
+            rendered,
+            'Designer-preserved controls must repeat both rows without commenting out merged data'
+        );
+        data.put('ShowPrice', false);
+        data.put('Items', new List<Object>());
+        System.assertEquals(
+            '<table><thead><tr></tr></thead><tbody></tbody></table>',
+            DocGenService.processXmlForTest(html, data, 'HTML').replace('<!---->', ''),
+            'False conditions and empty child lists must remove their complete structural blocks'
+        );
+    }
+
     @IsTest
     static void previewDraftPdfRendersDraftHtmlNotSavedBody() {
         Account acct = [SELECT Id FROM Account LIMIT 1];
@@ -1212,7 +1367,7 @@ private class DocGenHtmlTemplateTest {
         // the image file and nothing server-side can read it without loading the blob
         // (which the zero-heap PDF path exists to avoid). Assuming square is a floor,
         // wrong only in the safe direction for anything wider than it is tall.
-        Decimal h = DocGenService.estimateChromeHeightIn('<img style="width:200px;height:auto" src="x">');
+        Decimal h = DocGenService.estimateChromeHeightIn('<img style="width:200px;height:auto" src="/resource/local">');
         System.assertEquals(
             Decimal.valueOf(200) / 96,
             h,
@@ -1235,7 +1390,7 @@ private class DocGenHtmlTemplateTest {
         System.assertEquals(h1, twoCells, 'Cells in one row do not stack');
         // A tall image in a row makes that row tall.
         Decimal withImg = DocGenService.estimateChromeHeightIn(
-            '<table><tr><td><img style="height:1in" src="x"></td></tr></table>'
+            '<table><tr><td><img style="height:1in" src="/resource/local"></td></tr></table>'
         );
         System.assert(withImg > 1, 'A 1in image in a row must make the row at least that tall: ' + withImg);
     }
@@ -1245,7 +1400,7 @@ private class DocGenHtmlTemplateTest {
         // The end-to-end contract: a header table pushes the body down instead of
         // being overlapped by it.
         String hdr =
-            '<table><tr><td><img style="height:0.8in" src="x"></td></tr>' +
+            '<table><tr><td><img style="height:0.8in" src="/resource/local"></td></tr>' +
             '<tr><td>row two</td></tr><tr><td>row three</td></tr></table>';
         String src = '@page { size: Letter portrait; margin: 0.75in; }';
         String outp = DocGenService.wrapHtmlForPdf('<p>body</p>', src, hdr, null);
@@ -1276,7 +1431,7 @@ private class DocGenHtmlTemplateTest {
         // Logo left, address right — side by side, so the height is the taller of
         // the two, not their sum.
         Decimal imageWins = DocGenService.estimateChromeHeightIn(
-            '<div><img style="height:1in" src="x"><p>a</p><p>b</p></div>'
+            '<div><img style="height:1in" src="/resource/local"><p>a</p><p>b</p></div>'
         );
         System.assertEquals(1, imageWins, 'A 1in image beats two short lines');
         Decimal textWins = DocGenService.estimateChromeHeightIn(
@@ -1345,5 +1500,26 @@ private class DocGenHtmlTemplateTest {
         String src = '<h1>Title</h1><p>Text with {Name} in it.</p>';
         System.assertEquals(src, DocGenService.stripStyleAndScriptBlocks(src), 'unchanged');
         System.assertEquals(null, DocGenService.stripStyleAndScriptBlocks(null), 'null in, null out');
+    }
+
+    @IsTest
+    static void scalarConditionInsideRepeatingHtmlRowKeepsEveryCellAndBalancedMarkup() {
+        String html = '<table><thead><tr><th>Product</th><th>Qty</th></tr></thead><tbody><tr><td>{#Lines}{Name}{#Description}<br/>{Description}{/Description}</td><td>{Quantity}{/Lines}</td></tr></tbody></table>';
+        Map<String, Object> data = new Map<String, Object>{
+            'Lines' => new Map<String, Object>{
+                'records' => new List<Object>{
+                    new Map<String, Object>{ 'Name' => 'Workshop', 'Description' => 'Plan together', 'Quantity' => 1 },
+                    new Map<String, Object>{ 'Name' => 'Support', 'Description' => '', 'Quantity' => 3 }
+                }
+            }
+        };
+        String rendered = DocGenService.processXmlForTest(html, data, 'HTML');
+        System.assertEquals(3, rendered.countMatches('<tr>'), rendered);
+        System.assertEquals(3, rendered.countMatches('</tr>'), rendered);
+        System.assertEquals(1, rendered.countMatches('<tbody>'), rendered);
+        System.assertEquals(1, rendered.countMatches('</tbody>'), rendered);
+        System.assert(rendered.contains('Workshop<br/>Plan together</td><td>1</td>'), rendered);
+        System.assert(rendered.contains('Support</td><td>3</td>'), rendered);
+        System.assert(!rendered.contains('{#'), rendered);
     }
 }

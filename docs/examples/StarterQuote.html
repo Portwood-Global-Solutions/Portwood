@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Quote</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.55in;
+                @bottom-right {
+                    content: 'Page ' counter(page);
+                    font: 8pt Helvetica;
+                    color: #526475;
+                }
+            }
+            body {
+                font:
+                    10pt Helvetica,
+                    Arial,
+                    sans-serif;
+                color: #183452;
+                line-height: 1.45;
+            }
+            h1 {
+                font-size: 27pt;
+                line-height: 1.15;
+                margin: 16pt 0 8pt;
+            }
+            h2 {
+                font-size: 14pt;
+                margin: 24pt 0 8pt;
+                color: #206b72;
+            }
+            p {
+                margin: 5pt 0;
+            }
+            .mast {
+                border-bottom: 3pt solid #206b72;
+                padding-bottom: 10pt;
+                font-size: 11pt;
+            }
+            .mast span {
+                color: #526475;
+            }
+            .intro {
+                color: #526475;
+                margin-bottom: 16pt;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th {
+                background: #183452;
+                color: white;
+                font-size: 9pt;
+                padding: 8pt;
+                text-align: left;
+            }
+            td {
+                padding: 8pt;
+                border-bottom: 0.6pt solid #d8e1ea;
+                vertical-align: top;
+            }
+            .num {
+                text-align: right;
+            }
+            .summary {
+                margin: 16pt 0;
+                background: #edf5f5;
+            }
+            .summary td {
+                padding: 14pt;
+                border: 0;
+            }
+            .summary strong {
+                display: block;
+                font-size: 19pt;
+                color: #206b72;
+            }
+            .label {
+                font-size: 9pt;
+                color: #526475;
+            }
+            .note {
+                padding: 10pt;
+                background: #f3f6f9;
+                color: #526475;
+                margin-top: 14pt;
+                font-size: 9pt;
+            }
+            .total td {
+                background: #edf5f5;
+                font-weight: bold;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+            thead {
+                display: table-header-group;
+            }
+            body {
+                font-size: 9.5pt;
+                line-height: 1.35;
+            }
+            h2 {
+                margin-top: 20pt;
+            }
+            .summary td {
+                padding: 12pt;
+            }
+            td {
+                padding: 7pt;
+            }
+            .quote-lines {
+                -fs-table-paginate: paginate;
+            }
+            .quote-totals {
+                width: 65%;
+                margin: 10pt 0 0 auto;
+                page-break-inside: avoid;
+            }
+            .quote-totals td {
+                padding: 5pt 7pt;
+            }
+            .note {
+                page-break-inside: avoid;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="mast"><b>Portwood</b><span> / Quote</span></div>
+        <h1>{Name}</h1>
+        <p class="intro">Quote {QuoteNumber} / Prepared for {Account.Name}</p>
+        <table class="summary">
+            <tr>
+                <td><span class="label">Grand total</span><strong>{GrandTotal:currency}</strong></td>
+                <td><span class="label">Valid through</span><strong>{ExpirationDate:MMM dd, yyyy}</strong></td>
+            </tr>
+        </table>
+        <table>
+            <tr>
+                <td>
+                    <b>Customer</b>
+                    <p>{Account.Name}</p>
+                    <p>{Account.BillingCity}, {Account.BillingState}</p>
+                </td>
+                <td>
+                    <b>Quote details</b>
+                    <p>{Status}</p>
+                    <p>{COUNT:QuoteLineItems} products or services</p>
+                </td>
+            </tr>
+        </table>
+        <h2>Products and services</h2>
+        <table class="quote-lines">
+            <thead>
+                <tr>
+                    <th style="width: 38%">Product or service</th>
+                    <th class="num">Qty</th>
+                    <th class="num">Unit price</th>
+                    <th class="num">Discount %</th>
+                    <th class="num">Line total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        {#QuoteLineItems}<b>{Product2.Name}</b>
+                        <p>{Description}</p>
+                    </td>
+                    <td class="num">{Quantity:#,##0.00}</td>
+                    <td class="num">{UnitPrice:currency}</td>
+                    <td class="num">{Discount:#,##0.00}</td>
+                    <td class="num">{TotalPrice:currency}{/QuoteLineItems}</td>
+                </tr>
+            </tbody>
+        </table>
+        {^QuoteLineItems.records}
+        <p class="note">
+            No products have been added to this quote. Add quote line items, then generate this document again.
+        </p>
+        {/QuoteLineItems.records}
+        <table class="quote-totals">
+            <tr>
+                <td>Subtotal before line discounts</td>
+                <td class="num">{Subtotal:currency}</td>
+            </tr>
+            <tr>
+                <td>Products after line discounts</td>
+                <td class="num">{TotalPrice:currency}</td>
+            </tr>
+            <tr>
+                <td>Tax</td>
+                <td class="num">{Tax:currency}</td>
+            </tr>
+            <tr>
+                <td>Shipping and handling</td>
+                <td class="num">{ShippingHandling:currency}</td>
+            </tr>
+            <tr class="total">
+                <td>Grand total</td>
+                <td class="num">{GrandTotal:currency}</td>
+            </tr>
+        </table>
+        <p class="note">
+            Pricing and totals come from this Salesforce quote. Tax and shipping are the saved quote amounts; Portwood
+            does not calculate or add charges. Confirm pricing, validity, and terms with your account team before
+            sharing.
+        </p>
+    </body>
+</html>

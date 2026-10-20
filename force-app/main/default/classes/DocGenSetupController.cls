@@ -82,6 +82,7 @@ public with sharing class DocGenSetupController {
         try {
             /* code-analyzer-suppress ApexFlsViolation */
             Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+            DocGenSignatureIpContext.initialize();
         } catch (DmlException e) {
             throw DocGenService.dmlAhe(e, DocGen_Settings__c.sObjectType);
         }
@@ -310,6 +311,8 @@ public with sharing class DocGenSetupController {
         }
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
         settings.Signature_Email_Brand_Color__c = brandColor;
+        if (String.isNotBlank(logoUrl) && DocGenAssetPolicy.assetUrl(logoUrl) == null)
+            throw DocGenService.ahe('Choose a Salesforce-hosted logo from Assets.');
         settings.Signature_Email_Logo_Url__c = logoUrl;
         settings.Signature_Email_Subject__c = emailSubject;
         settings.Signature_Email_Message__c = emailMessage;
@@ -331,6 +334,7 @@ public with sharing class DocGenSetupController {
         try {
             /* code-analyzer-suppress ApexFlsViolation */
             Database.upsert(settings, AccessLevel.SYSTEM_MODE);
+            DocGenSignatureIpContext.initialize();
         } catch (DmlException e) {
             throw DocGenService.dmlAhe(e, DocGen_Settings__c.sObjectType);
         }

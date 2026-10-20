@@ -1,0 +1,204 @@
+<template>
+    <section class="library" aria-label="Terms and HTML snippets">
+        <div class="toolbar">
+            <div>
+                <h2>Write once. Reuse everywhere.</h2>
+                <p>
+                    Keep terms, payment instructions and other repeatable sections in one place. Insert a tag to include
+                    the full formatted content in any HTML or Canvas template.
+                </p>
+            </div>
+            <lightning-button
+                label="New shared content"
+                variant="brand"
+                disabled={canNew}
+                onclick={handleNew}
+            ></lightning-button>
+        </div>
+        <template if:true={error}><div class="notice error" role="alert">{error}</div></template>
+        <template if:true={status}><div class="notice" role="status">{status}</div></template>
+        <div class="workspace">
+            <aside class="browser" aria-label="Shared content library">
+                <div class="filters">
+                    <lightning-input
+                        type="search"
+                        label="Find shared content"
+                        value={search}
+                        onchange={handleSearch}
+                    ></lightning-input>
+                </div>
+                <div class="entries">
+                    <template for:each={rows} for:item="row"
+                        ><button
+                            key={row.id}
+                            class={row.cssClass}
+                            data-id={row.id}
+                            onclick={handleSelect}
+                            disabled={busy}
+                        >
+                            <c-doc-gen-snippet-preview
+                                asset-id={row.id}
+                                revision={previewRevision}
+                                image-urls={imageUrls}
+                                aria-hidden="true"
+                            ></c-doc-gen-snippet-preview>
+                            <strong>{row.name}</strong><small>{row.categoryLabel} · {row.state}</small>
+                        </button></template
+                    ><template if:false={hasRows}
+                        ><p class="empty">
+                            No shared content found. Create your first reusable section to get started.
+                        </p></template
+                    >
+                </div>
+            </aside>
+            <div class="detail">
+                <template if:true={busy}
+                    ><lightning-spinner alternative-text="Loading shared content" size="small"></lightning-spinner
+                ></template>
+                <template if:true={editing}>
+                    <div class="detail-toolbar">
+                        <div>
+                            <strong>{revisionLabel}</strong>
+                            <p>Edits affect future documents. Generated files stay as they were.</p>
+                        </div>
+                        <lightning-button
+                            label={saveLabel}
+                            variant="brand"
+                            disabled={saveDisabled}
+                            onclick={handleSave}
+                        ></lightning-button>
+                    </div>
+                    <div class="metadata">
+                        <lightning-input
+                            label="Name"
+                            data-field="name"
+                            value={draft.name}
+                            onchange={handleField}
+                            maxlength="80"
+                            required
+                            disabled={readOnly}
+                        ></lightning-input
+                        ><lightning-input
+                            label="Category"
+                            data-field="category"
+                            value={draft.category}
+                            onchange={handleField}
+                            maxlength="80"
+                            disabled={readOnly}
+                        ></lightning-input
+                        ><lightning-input
+                            label="Tag key"
+                            data-field="assetKey"
+                            value={draft.assetKey}
+                            onchange={handleField}
+                            disabled={keyDisabled}
+                            maxlength="40"
+                            field-level-help="A permanent key. Renaming the content will not break its tag."
+                        ></lightning-input
+                        ><lightning-input
+                            type="checkbox"
+                            label="Active for document generation"
+                            data-field="isActive"
+                            checked={draft.isActive}
+                            onchange={handleField}
+                            disabled={readOnly}
+                        ></lightning-input>
+                    </div>
+                    <div class="tag">
+                        <code>{tag}</code><lightning-button label="Copy tag" onclick={handleCopy}></lightning-button>
+                    </div>
+                    <div class="editor-toolbar">
+                        <lightning-button-group
+                            ><lightning-button
+                                label="Write"
+                                data-mode="visual"
+                                variant={visualVariant}
+                                onclick={handleMode}
+                            ></lightning-button
+                            ><lightning-button
+                                label="HTML source"
+                                data-mode="source"
+                                variant={sourceVariant}
+                                onclick={handleMode}
+                            ></lightning-button
+                            ><lightning-button
+                                label="Preview"
+                                data-mode="preview"
+                                variant={previewVariant}
+                                onclick={handleMode}
+                            ></lightning-button></lightning-button-group
+                        ><template if:true={hasHistory}
+                            ><lightning-combobox
+                                label="Revision history"
+                                variant="label-hidden"
+                                value={draft.versionId}
+                                options={historyOptions}
+                                onchange={handleRevision}
+                                disabled={busy}
+                            ></lightning-combobox
+                        ></template>
+                    </div>
+                    <template if:true={isOldRevision}
+                        ><div class="notice">
+                            You are viewing an earlier revision.
+                            <lightning-button
+                                label="Restore as new revision"
+                                onclick={handleRestore}
+                                disabled={readOnly}
+                            ></lightning-button></div
+                    ></template>
+                    <div class="editor">
+                        <template if:true={isVisual}
+                            ><lightning-input-rich-text
+                                label="Shared content"
+                                label-visible
+                                value={draft.html}
+                                onchange={handleHtml}
+                                formats={formats}
+                                disabled={readOnly}
+                            ></lightning-input-rich-text>
+                            <p class="hint">
+                                Use HTML source for exact styles, tables and registered font tags. The visual editor
+                                supports common text formatting.
+                            </p></template
+                        >
+                        <template if:true={isSource}
+                            ><lightning-textarea
+                                label="HTML fragment"
+                                data-field="html"
+                                value={draft.html}
+                                onchange={handleField}
+                                disabled={readOnly}
+                            ></lightning-textarea>
+                            <p class="hint">
+                                Use inline styles and a body fragment. Record fields, loops, image assets, registered
+                                fonts and other snippet tags are supported. Add any record fields used here to the
+                                template’s query.
+                            </p></template
+                        >
+                        <template if:true={isPreview}
+                            ><lightning-formatted-rich-text value={draft.html}></lightning-formatted-rich-text>
+                            <p class="hint">
+                                This is a browser preview. Use the Designer’s PDF preview to check page layout, fonts
+                                and merged record data.
+                            </p></template
+                        >
+                    </div>
+                </template>
+                <template if:false={editing}
+                    ><div class="welcome">
+                        <lightning-icon icon-name="utility:snippet" size="large"></lightning-icon>
+                        <h3>Your reusable document sections</h3>
+                        <p>
+                            Select a section to edit it, or create shared content. Copy its tag into a template to bring
+                            in the whole section automatically.
+                        </p>
+                        <p>
+                            Great for terms &amp; conditions, payment details, disclaimers, and standard introductions.
+                        </p>
+                    </div></template
+                >
+            </div>
+        </div>
+    </section>
+</template>

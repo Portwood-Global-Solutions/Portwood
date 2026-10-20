@@ -1,0 +1,21 @@
+<template>
+    <section class="preview" aria-label="Native PDF preview">
+        <div class="preview-tools">
+            <button onclick={handleClose}>← Back to editing</button><span>{pageSummary}</span
+            ><a href={downloadUrl} target="_blank" rel="noopener">Download PDF</a>
+        </div>
+        <template if:true={loading}><p class="status" role="status">{status}</p></template>
+        <template if:true={error}
+            ><div class="error" role="alert">
+                <strong>Preview could not open</strong>
+                <p>Your edits are still here. Generate the preview again, or download the PDF.</p>
+                <details>
+                    <summary>Technical details</summary>
+                    <p>{error}</p>
+                </details>
+                <a href={downloadUrl} target="_blank" rel="noopener">Download the generated PDF</a>
+            </div></template
+        >
+        <iframe src={viewerUrl} title="Generated PDF pages"></iframe>
+    </section>
+</template>

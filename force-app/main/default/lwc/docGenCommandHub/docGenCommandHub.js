@@ -1,4 +1,5 @@
 import { LightningElement, track, wire } from 'lwc';
+import { refreshApex } from '@salesforce/apex';
 import getAllTemplates from '@salesforce/apex/DocGenController.getAllTemplates';
 import getOrgId from '@salesforce/apex/DocGenController.getOrgId';
 import canManageButtons from '@salesforce/apex/DocGenButtonAdminController.canManageButtons';
@@ -10,7 +11,9 @@ export default class DocGenCommandHub extends LightningElement {
     communityOrgId = '';
     @track showBanner = false;
     @track bannerDismissed = false;
-    @track activeSection = 'templates';
+    @track activeSection = 'start';
+    pendingTemplateId;
+    pendingTemplateRecordId;
     @track isLoaded = false;
     // The Buttons tab is shown only to users who have the DocGen_Button_Manager
     // permission set (needed to call canManageButtons at all) AND the platform
@@ -65,6 +68,38 @@ export default class DocGenCommandHub extends LightningElement {
             : 'Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint from any record.';
     }
 
+    get hideStart() {
+        return !this.isStart;
+    }
+    get isStart() {
+        return this.activeSection === 'start';
+    }
+    get startTabClass() {
+        return this.isStart ? 'tab-active' : '';
+    }
+    handleShowStart() {
+        this.activeSection = 'start';
+    }
+    handleJourneyNavigate(event) {
+        this.activeSection = event.detail.section;
+    }
+    handleStarterCreated() {
+        if (this._wiredTemplates) refreshApex(this._wiredTemplates);
+    }
+    handleCustomizeStarter(event) {
+        this.pendingTemplateId = event.detail.templateId;
+        this.pendingTemplateRecordId = event.detail.recordId;
+        this.activeSection = 'templates';
+    }
+    renderedCallback() {
+        const admin = this.template.querySelector('c-doc-gen-admin');
+        if (admin && this.pendingTemplateId) {
+            const id = this.pendingTemplateId;
+            this.pendingTemplateId = null;
+            admin.openTemplateById(id, this.pendingTemplateRecordId);
+            this.pendingTemplateRecordId = undefined;
+        }
+    }
     get isTemplates() {
         return this.activeSection === 'templates';
     }

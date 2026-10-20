@@ -1,0 +1,6 @@
+html, body { margin: 0; background: #e9eef2; color: #223548; font-family: Arial, sans-serif; }
+main { padding: 24px; }
+.pdf-page { width: max-content; max-width: 100%; margin: 0 auto 26px; }
+canvas { display: block; max-width: 100%; height: auto; background: white; box-shadow: 0 1px 5px #18345230; }
+.pdf-page-label { color: #617181; padding: 9px 0; text-align: center; font-size: 11px; }
+.pdf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }

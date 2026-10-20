@@ -1351,7 +1351,7 @@ public with sharing class DocGenBulkController {
         recQuery += ' LIMIT 2000';
 
         Set<Id> recordIds = new Set<Id>();
-        for (SObject rec : Database.query(recQuery, AccessLevel.USER_MODE)) {
+        for (SObject rec : Database.query(DocGenSignatureIpContext.publicQuery(recQuery), AccessLevel.USER_MODE)) {
             recordIds.add(rec.Id);
         }
 

@@ -6,6 +6,7 @@
  */
 @IsTest
 private class DocGenEmailTemplateTest {
+    private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     // ---- Service: built-in defaults render for every type with no records ----
     @IsTest
     static void builtInDefaults_renderForAllTypes() {
@@ -90,7 +91,7 @@ private class DocGenEmailTemplateTest {
     // ---- Long logo URLs (Logo_Url_Extended__c beats the 255-capped Url field) ----
     @IsTest
     static void controller_save_longLogoUrl_roundTripsAndRenders() {
-        String longUrl = 'https://files.example.com/sfc/dist/version/download/' + 'x'.repeat(400) + '/logo.png';
+        String longUrl = ASSET_BASE + 'sfc/dist/version/download/' + 'x'.repeat(400) + '/logo.png';
         Map<String, Object> data = new Map<String, Object>{
             'type' => DocGenEmailTemplateService.TYPE_REQUEST,
             'subject' => 'Hi',
@@ -130,7 +131,7 @@ private class DocGenEmailTemplateTest {
             'type' => DocGenEmailTemplateService.TYPE_PIN,
             'subject' => 'Hi',
             'bodyHtml' => '<p>{VerificationCode}</p>',
-            'logoUrl' => 'https://example.com/logo.png'
+            'logoUrl' => 'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE)
         };
         Id recId = DocGenEmailTemplateController.saveTemplate(data);
         DocGen_Email_Template__c saved = [
@@ -138,9 +139,12 @@ private class DocGenEmailTemplateTest {
             FROM DocGen_Email_Template__c
             WHERE Id = :recId
         ];
-        System.assertEquals('https://example.com/logo.png', saved.Logo_Url_Extended__c);
         System.assertEquals(
-            'https://example.com/logo.png',
+            'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE),
+            saved.Logo_Url_Extended__c
+        );
+        System.assertEquals(
+            'https://example.com/logo.png'.replace('https://example.com/', ASSET_BASE),
             saved.Logo_Url__c,
             'Short URLs mirror into the legacy field for anything still reading it'
         );
@@ -212,7 +216,7 @@ private class DocGenEmailTemplateTest {
             Subject__c = 'Hi',
             Body_Html__c = '<html><body><img src="{LogoUrl}" style="height:60px"/>{ActionButton}</body></html>',
             Layout_Mode__c = DocGenEmailTemplateService.MODE_FULL_HTML,
-            Logo_Url_Extended__c = 'https://cdn.example.com/brand/logo-v2.png',
+            Logo_Url_Extended__c = ASSET_BASE + 'brand/logo-v2.png',
             Is_Active__c = true
         );
         DocGenEmailTemplateService.clearCache();
@@ -221,7 +225,7 @@ private class DocGenEmailTemplateTest {
             sampleTokens(DocGenEmailTemplateService.TYPE_REQUEST)
         );
         System.assert(
-            r.htmlBody.contains('src="https://cdn.example.com/brand/logo-v2.png"'),
+            r.htmlBody.contains('src="' + ASSET_BASE + 'brand/logo-v2.png"'),
             '{LogoUrl} resolves to the effective logo in full custom HTML: ' + r.htmlBody.left(300)
         );
     }
@@ -233,7 +237,7 @@ private class DocGenEmailTemplateTest {
             Type__c = DocGenEmailTemplateService.TYPE_REQUEST,
             Subject__c = 'Hi',
             Body_Html__c = '<p>x {ActionButton}</p>',
-            Logo_Url_Extended__c = 'https://cdn.example.com/logo.png',
+            Logo_Url_Extended__c = ASSET_BASE + 'logo.png',
             Logo_Height__c = 96,
             Is_Active__c = true
         );
@@ -470,7 +474,7 @@ private class DocGenEmailTemplateTest {
             'type' => DocGenEmailTemplateService.TYPE_REQUEST,
             'subject' => 'Hi',
             'bodyHtml' => '<p>x</p>',
-            'logoUrl' => 'https://example.com/' + 'a'.repeat(33000)
+            'logoUrl' => ASSET_BASE + 'a'.repeat(33000)
         };
         Boolean caught = false;
         String message;

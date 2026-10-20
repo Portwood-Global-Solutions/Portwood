@@ -115,7 +115,7 @@ public with sharing class DocGenDocxTemplateLinter {
             }
             String between = xml.substring(open + 1, close);
             if (between.indexOf('<') != -1 || between.indexOf('>') != -1) {
-                String visible = between.replaceAll('<[^>]+>', '');
+                String visible = stripMarkup(between);
                 String reconstructed = '{' + visible + '}';
                 addFinding(
                     findings,
@@ -150,33 +150,60 @@ public with sharing class DocGenDocxTemplateLinter {
 
     private static VisibleStream buildVisibleText(String xml) {
         VisibleStream vs = new VisibleStream();
-        Matcher m = Pattern.compile('<[wa]:t(?:\\s[^>]*)?>([^<]*)</[wa]:t>').matcher(xml);
-        List<String> buf = new List<String>();
-        while (m.find()) {
-            String text = m.group(1);
-            Integer contentStart = xml.indexOf('>', m.start()) + 1;
-            for (Integer k = 0; k < text.length(); k++) {
-                buf.add(text.substring(k, k + 1));
-                vs.mapping.add(contentStart + k);
-            }
+        List<Integer> ends = new List<Integer>();
+        List<String> contents = new List<String>();
+        // Share the merge engine's linear scanner. A whole-document Matcher can
+        // throw an uncatchable LimitException even when this report is advisory.
+        DocGenService.collectTextRunBodies(xml, vs.xmlStarts, ends, contents);
+        Integer offset = 0;
+        for (String text : contents) {
+            vs.visibleStarts.add(offset);
+            offset += text.length();
         }
-        vs.text = String.join(buf, '');
+        vs.text = String.join(contents, '');
         return vs;
     }
 
     private static List<RawTag> tagsFromVisibleText(VisibleStream vs) {
         List<RawTag> tags = new List<RawTag>();
-        Matcher m = Pattern.compile('\\{[^{}]+\\}').matcher(vs.text);
-        while (m.find()) {
+        Integer scan = 0;
+        while (scan < vs.text.length()) {
+            Integer start = vs.text.indexOf('{', scan);
+            if (start == -1)
+                break;
+            Integer endIdx = vs.text.indexOf('}', start + 1);
+            if (endIdx == -1)
+                break;
+            Integer nested = vs.text.indexOf('{', start + 1);
+            if (nested != -1 && nested < endIdx) {
+                scan = nested;
+                continue;
+            }
+            scan = endIdx + 1;
+            if (endIdx == start + 1)
+                continue;
             RawTag t = new RawTag();
-            t.raw = m.group(0);
-            t.visStart = m.start();
-            t.visEnd = m.end();
-            t.xmlStart = vs.mapping[m.start()];
-            t.xmlEnd = vs.mapping[m.end() - 1] + 1;
+            t.raw = vs.text.substring(start, endIdx + 1);
+            t.visStart = start;
+            t.visEnd = endIdx + 1;
+            t.xmlStart = visibleXmlOffset(vs, start);
+            t.xmlEnd = visibleXmlOffset(vs, endIdx) + 1;
             tags.add(t);
         }
         return tags;
+    }
+
+    private static Integer visibleXmlOffset(VisibleStream vs, Integer offset) {
+        Integer low = 0;
+        Integer high = vs.visibleStarts.size() - 1;
+        while (low < high) {
+            Integer mid = (low + high + 1) / 2;
+            if (vs.visibleStarts[mid] <= offset)
+                low = mid;
+            else
+                high = mid - 1;
+        }
+        return vs.xmlStarts[low] + offset - vs.visibleStarts[low];
     }
 
     // -----------------------------------------------------------------------
@@ -311,14 +338,24 @@ public with sharing class DocGenDocxTemplateLinter {
     private static Integer[] findEnclosingRow(String xml, Integer openOffset, Integer closeEnd) {
         List<Integer[]> ranges = new List<Integer[]>();
         List<Integer> stack = new List<Integer>();
-        Matcher m = Pattern.compile('<(/)?(w:tr|a:tr)(?=[\\s>])').matcher(xml);
-        while (m.find()) {
-            if (m.group(1) == null) {
-                stack.add(m.start());
+        Integer scan = 0;
+        while (scan < xml.length()) {
+            Integer start = xml.indexOf('<', scan);
+            if (start == -1)
+                break;
+            Boolean closing = xml.indexOf('</', start) == start;
+            Integer nameStart = start + (closing ? 2 : 1);
+            scan = start + 1;
+            if (nameStart + 4 >= xml.length())
+                continue;
+            String name = xml.substring(nameStart, nameStart + 4);
+            if ((!name.equals('w:tr') && !name.equals('a:tr')) || !isTagBoundary(xml.charAt(nameStart + 4)))
+                continue;
+            if (!closing) {
+                stack.add(start);
             } else if (!stack.isEmpty()) {
-                Integer start = stack.remove(stack.size() - 1);
-                Integer endIdx = m.start() + ('</' + m.group(2) + '>').length();
-                ranges.add(new List<Integer>{ start, endIdx });
+                Integer rowStart = stack.remove(stack.size() - 1);
+                ranges.add(new List<Integer>{ rowStart, nameStart + 5 });
             }
         }
         Integer[] best = null;
@@ -353,9 +390,41 @@ public with sharing class DocGenDocxTemplateLinter {
     }
 
     private static Integer countOpenMinusClose(String s, String tag) {
-        Integer open = countMatches(s, Pattern.compile('<' + tag + '(?=[\\s>])'));
-        Integer close = countMatches(s, Pattern.compile('</' + tag + '>'));
+        Integer open = 0;
+        Integer scan = 0;
+        String prefix = '<' + tag;
+        while (scan < s.length()) {
+            Integer hit = s.indexOf(prefix, scan);
+            if (hit == -1)
+                break;
+            Integer after = hit + prefix.length();
+            if (after < s.length() && isTagBoundary(s.charAt(after)))
+                open++;
+            scan = after;
+        }
+        Integer close = s.countMatches('</' + tag + '>');
         return open - close;
+    }
+
+    private static Boolean isTagBoundary(Integer c) {
+        return c == 62 || c == 32 || c == 9 || c == 10 || c == 11 || c == 12 || c == 13;
+    }
+
+    private static String stripMarkup(String text) {
+        List<String> parts = new List<String>();
+        Integer scan = 0;
+        while (scan < text.length()) {
+            Integer start = text.indexOf('<', scan);
+            if (start == -1)
+                break;
+            Integer endIdx = text.indexOf('>', start + 1);
+            if (endIdx == -1)
+                break;
+            parts.add(text.substring(scan, start));
+            scan = endIdx + 1;
+        }
+        parts.add(text.substring(scan));
+        return String.join(parts, '');
     }
 
     // -----------------------------------------------------------------------
@@ -465,9 +534,26 @@ public with sharing class DocGenDocxTemplateLinter {
     // -----------------------------------------------------------------------
 
     private static void checkEntityEncodedIf(String xml, List<DocGenAiHtmlValidator.Finding> findings) {
-        Matcher m = Pattern.compile('\\{#[Ii][Ff]\\s+[^}]*?(&gt;|&lt;)[^}]*?\\}').matcher(xml);
-        while (m.find()) {
-            String entity = m.group(1);
+        Integer scan = 0;
+        while (scan < xml.length()) {
+            Integer start = xml.indexOf('{#', scan);
+            if (start == -1)
+                break;
+            scan = start + 2;
+            if (start + 4 >= xml.length() || !xml.substring(start + 2, start + 4).equalsIgnoreCase('IF'))
+                continue;
+            Integer c = xml.charAt(start + 4);
+            if (c != 32 && c != 9 && c != 10 && c != 11 && c != 12 && c != 13)
+                continue;
+            Integer endIdx = xml.indexOf('}', start + 5);
+            if (endIdx == -1)
+                break;
+            String raw = xml.substring(start, endIdx + 1);
+            Integer gt = raw.indexOf('&gt;');
+            Integer lt = raw.indexOf('&lt;');
+            if (gt == -1 && lt == -1)
+                continue;
+            String entity = gt != -1 && (lt == -1 || gt < lt) ? '&gt;' : '&lt;';
             String decoded = entity == '&gt;' ? '>' : '<';
             addFinding(
                 findings,
@@ -477,7 +563,7 @@ public with sharing class DocGenDocxTemplateLinter {
                     '\' which is HTML-encoded as \'' +
                     entity +
                     '\' in the file — the IF parser does not decode entities before parsing operators, so this expression will always evaluate false: ' +
-                    m.group(0) +
+                    raw +
                     '. Rewrite the condition using \'!=\' or \'=\' (which are not HTML-encoded). Example: instead of {#IF Field > 0}, use {#IF Field != 0}.',
                 1
             );
@@ -536,15 +622,6 @@ public with sharing class DocGenDocxTemplateLinter {
         findings.add(new DocGenAiHtmlValidator.Finding('warning', rule, occurrences, detail));
     }
 
-    private static Integer countMatches(String s, Pattern p) {
-        Integer n = 0;
-        Matcher m = p.matcher(s);
-        while (m.find()) {
-            n++;
-        }
-        return n;
-    }
-
     // -----------------------------------------------------------------------
     // Inner records
     // -----------------------------------------------------------------------
@@ -588,6 +665,7 @@ public with sharing class DocGenDocxTemplateLinter {
 
     private class VisibleStream {
         String text;
-        List<Integer> mapping = new List<Integer>();
+        List<Integer> xmlStarts = new List<Integer>();
+        List<Integer> visibleStarts = new List<Integer>();
     }
 }

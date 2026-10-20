@@ -55,6 +55,22 @@ reason).
 
 ## Fonts and symbols
 
+This branch supports custom static TrueType fonts through Assets → Fonts. Use only
+verified, revision-pinned faces in Designer, Canvas or HTML inline font tags. The source
+font remains in Salesforce Files; do not author arbitrary @font-face rules or create font
+Static Resources. An outer font tag provides inheritance, and bold/italic changes need
+an approved matching face. Ordinary colour, sizing and layout rules may use !important;
+the renderer protects only the selected family, weight and style.
+
+Coverage depends on the actual face, not whether a character is multibyte. Missing
+glyphs fail clearly. Supplementary characters above U+FFFF are rejected on the custom
+font PDF path; complex scripts such as Arabic need shaping/layout preparation, and
+colour palettes are not preserved. Use the prepared Arabic example for fixed copy,
+never claim it adds automatic shaping of merge values. Static TTF only, up to 9 MiB
+per upload and 16 distinct faces per PDF. See UserGuide §14.2 and scripts/fonts/README.txt.
+
+The following guidance describes the **built-in** font fallback path.
+
 The base font families resolve to the base-14 PDF fonts (Helvetica / Times / Courier,
 WinAnsi). **Anything outside Latin-1 renders as nothing** — not a box, not a fallback,
 absent. Checkmarks, arrows, CJK, Greek, Cyrillic all disappear.
@@ -62,10 +78,10 @@ absent. Checkmarks, arrows, CJK, Greek, Cyrillic all disappear.
 `'Arial Unicode MS'` is the one family that draws them, embedding as a subsetted CID
 font. The trade-off is real and worth knowing:
 
-|                      | Symbols / CJK | Bold                                                   |
-| -------------------- | ------------- | ------------------------------------------------------ |
-| `'Arial Unicode MS'` | ✅            | ❌ — no bold face; `font-weight: bold` renders regular |
-| every other family   | ❌            | ✅                                                     |
+|                         | Symbols / CJK | Bold                                                   |
+| ----------------------- | ------------- | ------------------------------------------------------ |
+| `'Arial Unicode MS'`    | ✅            | ❌ — no bold face; `font-weight: bold` renders regular |
+| other built-in families | ❌            | ✅                                                     |
 
 So a symbol-heavy document gives up bold. Build hierarchy from **size, colour and fill
 bands** instead — reversed white-on-dark headers, tinted totals rows, a solid band

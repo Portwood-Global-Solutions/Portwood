@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Portwood HTML Font Tags</title>
+        <style>
+            @page {
+                size: letter;
+                margin: 0.65in;
+            }
+            body {
+                color: #183452;
+            }
+            h1 {
+                margin: 10pt 0 12pt;
+                line-height: 1.12;
+            }
+            p {
+                margin: 0 0 12pt;
+            }
+            .eyebrow {
+                color: #206b72;
+                letter-spacing: 1.5pt;
+            }
+            .intro {
+                color: #526475;
+            }
+            .band {
+                background: #edf5f3;
+                border-left: 4pt solid #206b72;
+                padding: 14pt 16pt;
+                margin: 18pt 0;
+            }
+            .section-title {
+                margin: 18pt 0 9pt;
+                color: #206b72;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 8pt 0 18pt;
+            }
+            td,
+            th {
+                text-align: left;
+                padding: 9pt;
+                border-bottom: 1pt solid #d8e1ea;
+            }
+            th {
+                background: #f4f7fa;
+            }
+            .signoff {
+                margin: 18pt 0 3pt;
+                color: #206b72;
+            }
+            .footer {
+                border-top: 1pt solid #d8e1ea;
+                padding-top: 10pt;
+                margin-top: 20pt;
+                color: #526475;
+            }
+        </style>
+    </head>
+    <body style="{%font:barlow:179138cb809b03a1};font-size:12pt;line-height:1.45">
+        <p class="eyebrow" style="{%font:barlowcondensed:127b06330968f16b};font-size:13pt">PORTWOOD / HTML + ASSETS</p>
+        <h1 style="{%font:dmserifdisplay:e9aebbe084a2e036};font-size:34pt">Your HTML. Your fonts.</h1>
+        <p class="intro">
+            Use a font merge tag to bring your brand into an HTML template. The same verified font assets work in Canvas
+            and the final PDF.
+        </p>
+        <div class="band">
+            <p style="{%font:barlow:fcb466c546218b46};font-size:10pt;color:#206b72">MERGED FOR</p>
+            <p style="font-size: 22pt; margin: 0">{Name}</p>
+        </div>
+        <p class="section-title" style="{%font:barlowcondensed:127b06330968f16b};font-size:20pt">
+            Five faces. One HTML document.
+        </p>
+        <table>
+            <tr>
+                <th style="{%font:barlow:fcb466c546218b46}">Font asset</th>
+                <th style="{%font:barlow:fcb466c546218b46}">Native, selectable PDF text</th>
+            </tr>
+            <tr>
+                <td>Barlow Regular</td>
+                <td>Şahin Şirket / Ş ş / 0123456789</td>
+            </tr>
+            <tr>
+                <td>Barlow Bold</td>
+                <td style="{%font:barlow:fcb466c546218b46}">A separate face for real bold text</td>
+            </tr>
+            <tr>
+                <td>Barlow Condensed ExtraBold</td>
+                <td style="{%font:barlowcondensed:127b06330968f16b};font-size:14pt">CLEAR, CONFIDENT HEADINGS</td>
+            </tr>
+            <tr>
+                <td>DM Serif Display</td>
+                <td style="{%font:dmserifdisplay:e9aebbe084a2e036};font-size:15pt">A distinctive editorial voice</td>
+            </tr>
+            <tr>
+                <td>Parisienne</td>
+                <td style="{%font:parisienne:9fff65b95e9ec9fa};font-size:21pt">A personal finishing touch</td>
+            </tr>
+        </table>
+        <p>
+            Each tag selects one verified font revision. Applying it to a container carries the face into its child
+            elements; a nested tag switches to another face.
+        </p>
+        <p class="signoff" style="{%font:parisienne:9fff65b95e9ec9fa};font-size:27pt">Made for your brand</p>
+        <p class="footer" style="font-size: 9pt">
+            Rendered natively in Salesforce. Font files stay in Assets; the PDF embeds only the glyphs it uses.
+        </p>
+    </body>
+</html>

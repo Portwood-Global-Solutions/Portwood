@@ -222,15 +222,18 @@ Amount:   {Amount:currency}
 
 ### PDF Merger
 
-Five ways to combine PDFs:
+Six ways to combine PDFs:
 
-| Mode                  | What It Does                                                               |
-| --------------------- | -------------------------------------------------------------------------- |
-| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                  |
-| **Document Packets**  | Generate from multiple templates, merge into one PDF                       |
-| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering            |
-| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account) |
-| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download          |
+| Mode                  | What It Does                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                             |
+| **Document Packets**  | Generate from multiple templates, merge into one PDF                                  |
+| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering                       |
+| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account)            |
+| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download                     |
+| **Flow Action**       | Merge uploaded PDFs server-side using ContentVersion IDs as Text or a Text collection |
+
+**Portwood: Merge PDFs** runs entirely in Apex and returns the new File IDs. It supports modern compressed PDFs and ordinary forms, with optional record attachment and duplex padding. Apex file-size limits and PDF restrictions apply; see [the Flow recipe](UserGuide.md#11101-merge-existing-pdfs-entirely-in-flow).
 
 ### Giant Query Engine
 
@@ -338,21 +341,21 @@ Bulk generation runs the same templates across thousands of records: enter a fil
 
 ## What Works in PDF vs DOCX
 
-| Feature                                        | PDF                          | DOCX                           |
-| ---------------------------------------------- | ---------------------------- | ------------------------------ |
-| All merge tags and formatting                  | Yes                          | Yes                            |
-| Bold, italic, underline, colors, font sizes    | Yes                          | Yes                            |
-| Tables with borders, shading, column widths    | Yes                          | Yes                            |
-| Template-embedded images                       | Yes                          | Yes                            |
-| Dynamic images from record fields (`{%Field}`) | Yes                          | Yes                            |
-| Rich text field formatting                     | Yes                          | Yes                            |
-| Rich text images                               | Yes                          | No — use `{%Field}` image tags |
-| Barcodes and QR codes                          | Yes                          | Yes                            |
-| Charts (`{Chart:…}`)                           | Yes                          | Yes                            |
-| Clickable hyperlinks                           | Yes (v1.1.3+)                | Yes                            |
-| Page numbers in headers/footers                | Yes                          | N/A (Word handles natively)    |
-| Cover page (no header on page 1)               | Yes                          | N/A (Word handles natively)    |
-| Custom fonts (Calibri, branded, etc.)          | No — falls back to Helvetica | Yes — preserves original fonts |
+| Feature                                        | PDF                                                                         | DOCX                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------- |
+| All merge tags and formatting                  | Yes                                                                         | Yes                                 |
+| Bold, italic, underline, colors, font sizes    | Yes                                                                         | Yes                                 |
+| Tables with borders, shading, column widths    | Yes                                                                         | Yes                                 |
+| Template-embedded images                       | Yes                                                                         | Yes                                 |
+| Dynamic images from record fields (`{%Field}`) | Yes                                                                         | Yes                                 |
+| Rich text field formatting                     | Yes                                                                         | Yes                                 |
+| Rich text images                               | Yes                                                                         | No — use `{%Field}` image tags      |
+| Barcodes and QR codes                          | Yes                                                                         | Yes                                 |
+| Charts (`{Chart:…}`)                           | Yes                                                                         | Yes                                 |
+| Clickable hyperlinks                           | Yes (v1.1.3+)                                                               | Yes                                 |
+| Page numbers in headers/footers                | Yes                                                                         | N/A (Word handles natively)         |
+| Cover page (no header on page 1)               | Yes                                                                         | N/A (Word handles natively)         |
+| Custom fonts                                   | HTML/Canvas: verified font assets in this branch; Word font names fall back | Yes — preserves original font names |
 
 ---
 
@@ -369,7 +372,11 @@ Salesforce's PDF engine supports these fonts:
 
 Custom fonts from your Word template (Calibri, Cambria, branded typefaces) **fall back to Helvetica** in PDF output. If custom fonts matter, generate as DOCX — Word preserves the original fonts.
 
-### Symbols and non-Latin text need Arial Unicode MS — by name
+**Reusable terms and sections on this branch:** Assets now includes **Terms & snippets**. A tag such as `{%snippet:standard-terms}` brings the entire latest active HTML section into an HTML/Canvas document, including its formatting and record merge fields. Designer offers **Insert → Shared content**; private Salesforce File revisions support history and restoration. See the [working sample and customer journey](docs/SHARED_CONTENT_ASSETS.md).
+
+**Unreleased on this review branch:** HTML and Canvas PDFs can use custom static TrueType fonts through **Assets → Fonts**. Upload the licensed original to Salesforce Files, review its native PDF specimen, then select the verified face in Designer/Canvas or copy its HTML font tag. Registered fonts can include multibyte characters when the face contains the required glyphs. Weight/style availability, supplementary Unicode, complex-script shaping and colour palettes have explicit limits; see [UserGuide §14.2](UserGuide.md#142-pdf-font-limitations). This does not change automatic font handling for Word-source templates or embed fonts in DOCX.
+
+### Built-in fonts: symbols and non-Latin text use Arial Unicode MS
 
 This one is worth knowing before it costs you an afternoon. Characters like ✓ ✔ ☑ ☐ ✗ ● ★ → √ ≤ ≥, and any Chinese, Japanese, Korean, Greek, Cyrillic or Hebrew text, render as **nothing at all** under the default fonts — no glyph, no empty box, no warning. The paragraph simply comes out short.
 
@@ -387,20 +394,20 @@ The Canvas designer's **Symbols** control inserts them with the font already att
 
 These are Salesforce platform limitations, not Portwood bugs:
 
-| Not Supported            | Why                                                                                                  | Workaround                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Custom fonts             | `Blob.toPdf()` only has 4 built-in fonts                                                             | Generate as DOCX                                                            |
-| `@font-face` CSS         | Not supported by the PDF renderer                                                                    | Generate as DOCX                                                            |
-| Text boxes and shapes    | Word drawing objects aren't converted to HTML                                                        | Use tables for layout                                                       |
-| SmartArt, Word charts    | Word's own graphics aren't rendered in the HTML conversion                                           | Use Portwood's `{Chart:…}` tag, or insert as an image                       |
-| Wingdings / symbol fonts | Not among the engine's fonts — glyphs render as empty boxes                                          | Checkbox glyphs auto-translate; use Unicode symbols in `'Arial Unicode MS'` |
-| CSS Grid / Flexbox       | The PDF renderer supports CSS 2.1 only                                                               | Use tables                                                                  |
-| JavaScript               | Ignored by the renderer                                                                              | N/A                                                                         |
-| Even/odd page headers    | Not currently supported                                                                              | Same header on all pages                                                    |
-| Multiple section headers | One header/footer set per document                                                                   | Use page breaks, not section-specific headers                               |
-| Multi-column layouts     | CSS columns not supported by the PDF engine                                                          | Use tables for column layouts                                               |
-| PowerPoint → PDF         | The platform can't convert `.pptx` to PDF                                                            | Render PPTX natively, or author the deck in Word/HTML                       |
-| E-signatures (QES)       | SES signatures are built-in; Qualified Electronic Signatures (EU eIDAS) require a certified provider | Use built-in SES for most use cases                                         |
+| Not Supported                               | Why                                                                                                  | Workaround                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Variable/CFF/WOFF font uploads              | The new Assets pipeline accepts static TrueType outlines                                             | Use a licensed static TTF and review its native specimen                    |
+| Authored `@font-face` with registered fonts | Registered templates pin reviewed font revisions                                                     | Use Assets font tags in inline styles                                       |
+| Text boxes and shapes                       | Word drawing objects aren't converted to HTML                                                        | Use tables for layout                                                       |
+| SmartArt, Word charts                       | Word's own graphics aren't rendered in the HTML conversion                                           | Use Portwood's `{Chart:…}` tag, or insert as an image                       |
+| Wingdings / symbol fonts                    | Not among the engine's fonts — glyphs render as empty boxes                                          | Checkbox glyphs auto-translate; use Unicode symbols in `'Arial Unicode MS'` |
+| CSS Grid / Flexbox                          | The PDF renderer supports CSS 2.1 only                                                               | Use tables                                                                  |
+| JavaScript                                  | Ignored by the renderer                                                                              | N/A                                                                         |
+| Even/odd page headers                       | Not currently supported                                                                              | Same header on all pages                                                    |
+| Multiple section headers                    | One header/footer set per document                                                                   | Use page breaks, not section-specific headers                               |
+| Multi-column layouts                        | CSS columns not supported by the PDF engine                                                          | Use tables for column layouts                                               |
+| PowerPoint → PDF                            | The platform can't convert `.pptx` to PDF                                                            | Render PPTX natively, or author the deck in Word/HTML                       |
+| E-signatures (QES)                          | SES signatures are built-in; Qualified Electronic Signatures (EU eIDAS) require a certified provider | Use built-in SES for most use cases                                         |
 
 ---
 
@@ -567,12 +574,29 @@ No user can access Portwood data without an explicitly assigned permission set. 
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
+## PR #465 testing beta
+
+**3.60.0.8** (`04tVx000001AeWfIAK`) adds [PR #466](https://github.com/Portwood-Global-Solutions/Portwood/pull/466): **Portwood: Merge PDFs**, a native Flow action for existing uploaded Salesforce PDFs. Supply an ordered Text collection of ContentVersion IDs or a single delimited Text value; the action saves a merged File and returns its IDs, with optional record attachment and duplex padding. Modern compressed PDFs and ordinary form values/appearances are supported. The [Flow recipe](UserGuide.md#11101-merge-existing-pdfs-entirely-in-flow) covers the 384 KiB synchronous / 768 KiB asynchronous input budgets and PDF restrictions.
+
+Includes all .7 customer-branding and earlier Designer/font/table-loop/preview fixes. Built from source commit `af631bc3ed9d215e41fa3f65300569726c25f307` with released ancestor **3.59.0.2**.
+
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK)
+
+```bash
+sf package install --package 04tVx000001AeWfIAK --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+```
+
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. **138/138 namespaced-source tests** and **138/138 managed-subscriber tests** pass across PDF parsing, the merge action, bulk merging and signing branding. Both Screen Flow input modes produce independently verified PDFs in both orgs; **208 saved-PDF checks** pass for syntax, page order/text, dimensions, images, form values, duplex padding and historical revisions. PMD Security/AppExchange reports zero violations; Graph Engine hit internal analyzer exceptions and is not counted as passing. Formatting/whitespace checks pass; the offline metadata audit retains 51 existing findings.
+
+This beta is unpromoted and intended for install, uninstall and reinstall testing. Existing demo/review org installations are deferred. Installed betas require uninstall/reinstall to move to another version. Preserve needed test data/configuration, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
+
 ## Version History
 
 The optional **Portwood Agentforce Extension** versions independently: **v1.1.0** `04tVx000000zxUbIAI` (latest, free, no installation key), v1.0.0 `04tVx000000s80bIAA`.
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
+| v3.60.0 | Testing beta 3.60.0.8 — PR #465         | `04tVx000001AeWfIAK` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |

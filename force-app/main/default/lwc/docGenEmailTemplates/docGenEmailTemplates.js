@@ -1,4 +1,5 @@
-import { LightningElement, track, wire } from 'lwc';
+import { salesforceResourceHtml } from 'c/docGenAuthoringKit';
+import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getTemplates from '@salesforce/apex/DocGenEmailTemplateController.getTemplates';
 import saveTemplate from '@salesforce/apex/DocGenEmailTemplateController.saveTemplate';
@@ -13,6 +14,16 @@ import saveBrand from '@salesforce/apex/DocGenBrandController.saveBrand';
 import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.getOrgWideEmailAddresses';
 
 export default class DocGenEmailTemplates extends LightningElement {
+    @api embedded = false;
+    get cardTitle() {
+        return this.embedded ? null : 'Email Templates';
+    }
+    get cardIcon() {
+        return this.embedded ? null : 'utility:email';
+    }
+    get cardClass() {
+        return this.embedded ? 'embedded-card' : '';
+    }
     @track rows = [];
     @track selectedType;
     @track isLoading = true;
@@ -28,6 +39,10 @@ export default class DocGenEmailTemplates extends LightningElement {
     @track footerText = '';
     @track layoutMode = 'Managed';
     @track isActive = true;
+    tokenHelp =
+        'Type a token, such as {SignerName}, into the subject or body. {ActionButton}, {DocumentInfo}, {SecurityNote}, and {VerificationCode} render as branded blocks.';
+    fullHtmlHelp =
+        'Full HTML mode uses your markup as the entire email. Portwood adds no header or footer. Use {CompanyName} and {BrandColor} to include your org values.';
     @track tokens = [];
 
     @track testEmail = '';
@@ -431,7 +446,7 @@ export default class DocGenEmailTemplates extends LightningElement {
             // LWC-native way to render arbitrary table+inline-style markup otherwise.
             // See code-analyzer.yml + DocGen_False_Positive_Report.md.
             // eslint-disable-next-line @lwc/lwc/no-inner-html
-            surface.innerHTML = this.previewHtml || '';
+            surface.innerHTML = salesforceResourceHtml(this.previewHtml || '');
             this._previewDirty = false;
         }
     }

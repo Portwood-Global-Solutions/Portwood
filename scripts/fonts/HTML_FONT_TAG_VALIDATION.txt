@@ -1,0 +1,37 @@
+Historical Static Resource validation. Superseded by the Salesforce Files workflow; see FILE_FONT_VALIDATION.txt.
+
+HTML font merge tags - scratch validation, 15 October 2026
+
+Tag syntax: {%font:<asset-key>:<revision-prefix>}, used as a CSS declaration inside a
+quoted inline style attribute. Assets generates a canonical 16-character revision prefix;
+longer prefixes through the full 64-character key are accepted. Resolution requires one
+unambiguous verified or retired face. It never chooses a mutable latest-family revision.
+
+Implemented through the shared HTML extractor and PDF wrapper. Body-level inheritance is
+retained; nested tags choose another exact face. Fonts remain pinned in the versioned source
+on save/reopen. Running headers and footers are supported without page-counter tags. A section
+combining custom fonts with page counters fails explicitly because that rendering path
+flattens markup into unbound CSS content. Font tags are not stylesheet macros or image URLs.
+
+Assets exposes each verified active face's tag, a Copy font tag button, and an HTML example.
+The live control and successful copy message were verified in Chrome. No browser security
+settings were changed. Existing image tags and the Canvas font-binding contract remain intact.
+
+Apex: 140 scoped tests passed (font, HTML, Canvas save, giant query; 707Ru00002H85P0).
+After parser hardening: 79 font/HTML tests passed (707Ru00002H8agr).
+A focused misuse test also passed with explicit family, synthetic-bold and shorthand overrides.
+E2E syntax6: 9 passed, 0 failed, including row-parser preservation and shared giant-body extraction.
+Giant parent resolution is also exercised directly by a unit test.
+Node: HTML example resolves all 12 directives to the five real manifest revisions; Canvas
+font-binding checks passed. Prettier and git diff --check passed.
+Offline QA: 525/586 passed; same 61 existing failures, no new failures.
+Code Analyzer reported no findings, with known Graph Engine limitations on custom FLS guards.
+
+Live demo: HTML Fonts - Merge Tag Showcase (HTML template, Account Name merge).
+Source: docs/examples/HtmlFontTagsShowcase.html
+Native PDF: one letter page, five embedded subset CID TrueType / Identity-H fonts.
+Actual live glyph spans verified for Barlow Regular (Ş/ş), Barlow Bold, Barlow Condensed
+ExtraBold, DM Serif Display, and Parisienne. Rendered page visually inspected.
+Demo source retains copyable revision-pinned tags, not renderer CSS or font file payloads.
+
+Scratch deployment only; no production release or emails.

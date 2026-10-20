@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signing_Color__c</fullName>
+    <description>Optional button color on signing pages. Blank uses the shared brand color.</description>
+    <label>Signing Action Color</label>
+    <length>7</length>
+    <required>false</required>
+    <type>Text</type>
+</CustomField>

@@ -1,6 +1,7 @@
 <!-- CxSAST: without sharing required for guest user signing context; access gated by cryptographic token -->
 <apex:page
     controller="DocGenSignatureController"
+    cache="false"
     showHeader="false"
     sidebar="false"
     standardStylesheets="false"
@@ -14,7 +15,7 @@
             <!-- Allow pinch-to-zoom so signers can inspect images, QR codes, and fine print
          at full fidelity on mobile instead of us shrinking the document to fit. -->
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Document Signature</title>
+            <title><apex:outputText value="{!initialPage.documentTitle}" /></title>
             <apex:slds />
             <!-- PDF.js (legacy UMD build) — client-side render + text layer for
                  sign-spot positioning. Bundled as a static resource (no callout). -->
@@ -633,11 +634,51 @@
                     }
                 }
             </style>
+            <apex:stylesheet value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.css')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'purify.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
-        <body>
+        <body
+            class="{!initialPage.bodyClass}"
+            style="{!initialPage.bodyStyle}"
+            data-signing-completion="{!initialPage.completionState}"
+        >
+            <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
+            <header id="signing-brand-header" class="signing-brand-header" style="{!initialPage.visibility}">
+                <img
+                    id="signing-brand-logo"
+                    class="signing-brand-logo"
+                    src="{!initialPage.logoUrl}"
+                    alt=""
+                    referrerpolicy="no-referrer"
+                    style="{!initialPage.logoVisibility}"
+                />
+                <span id="signing-brand-company"><apex:outputText value="{!initialPage.companyName}" /></span>
+            </header>
+
             <div class="page-wrapper" id="page-wrapper">
+                <section
+                    id="signing-brand-intro"
+                    class="signing-brand-intro"
+                    aria-labelledby="signing-brand-title"
+                    style="{!initialPage.introVisibility}"
+                >
+                    <img
+                        id="signing-brand-banner"
+                        class="signing-brand-banner"
+                        src="{!initialPage.bannerUrl}"
+                        alt="{!initialPage.bannerAlt}"
+                        referrerpolicy="no-referrer"
+                        style="{!initialPage.bannerVisibility}"
+                    />
+                    <h1 id="signing-brand-title"><apex:outputText value="{!initialPage.title}" /></h1>
+                    <p id="signing-brand-welcome"><apex:outputText value="{!initialPage.welcomeText}" /></p>
+                    <div id="signing-custom-welcome" hidden="hidden"></div>
+                </section>
+
                 <!-- STATE: Loading -->
-                <div id="state-loading">
+                <div id="state-loading" style="{!initialPage.loadingVisibility}">
                     <div class="spinner-container"><div class="spinner"></div></div>
                 </div>
 
@@ -678,13 +719,15 @@
                                         inputmode="numeric"
                                         pattern="[0-9]{6}"
                                     />
-                                    <button id="btn-verify-pin" class="btn btn-brand" type="button">Verify</button>
+                                    <button id="btn-verify-pin" class="btn btn-brand signing-action" type="button">
+                                        Verify
+                                    </button>
                                 </div>
                             </div>
                             <p id="resend-link" class="resend-link disabled">Resend code</p>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-send-pin" class="btn btn-brand" type="button">
+                            <button id="btn-send-pin" class="btn btn-brand signing-action" type="button">
                                 Send Verification Code
                             </button>
                         </div>
@@ -710,7 +753,9 @@
                                 <span id="pdf-progress-info" style="display: none"></span>
                             </div>
                             <button id="btn-decline" class="btn btn-destructive" type="button">Decline</button>
-                            <button id="btn-open-sign" class="btn btn-brand btn-lg" type="button">Sign Document</button>
+                            <button id="btn-open-sign" class="btn btn-brand signing-action btn-lg" type="button">
+                                Sign Document
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -725,16 +770,19 @@
                 </div>
 
                 <!-- STATE: Success -->
-                <div id="state-success" style="display: none">
+                <div id="state-success" style="{!initialPage.successVisibility}">
                     <div class="success-card">
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
-                        <p>Your document has been signed and processed securely. You may close this window.</p>
+                        <p id="signing-completion-message">
+                            <apex:outputText value="{!initialPage.completionMessage}" />
+                        </p>
+                        <div id="signing-custom-completion" hidden="hidden"></div>
                     </div>
                 </div>
 
                 <!-- STATE: Waiting -->
-                <div id="state-waiting" style="display: none">
+                <div id="state-waiting" style="{!initialPage.waitingVisibility}">
                     <div class="waiting-card">
                         <div class="waiting-icon">&#10003;</div>
                         <h2>Signature Recorded</h2>
@@ -835,7 +883,12 @@
                     </div>
                     <div class="modal-footer">
                         <button id="modal-cancel" class="btn" type="button">Cancel</button>
-                        <button id="btn-sign-submit" class="btn btn-brand" type="button" disabled="disabled">
+                        <button
+                            id="btn-sign-submit"
+                            class="btn btn-brand signing-action"
+                            type="button"
+                            disabled="disabled"
+                        >
                             Sign
                         </button>
                         <!-- Guided per-field capture only: "Save & Next" saves and opens the
@@ -843,7 +896,7 @@
                              to the next field without opening it. Hidden in final/fields modes. -->
                         <button
                             id="btn-sign-submit-next"
-                            class="btn btn-brand"
+                            class="btn btn-brand signing-action"
                             type="button"
                             style="display: none"
                             disabled="disabled"
@@ -881,6 +934,37 @@
                 swap is mechanical because the contract above is the entire boundary.
                 ============================================================================
             -->
+            <div id="signing-custom-footer" class="signing-custom-footer" hidden="hidden"></div>
+            <footer id="signing-brand-footer" class="signing-brand-footer" style="{!initialPage.footerVisibility}">
+                <p id="signing-brand-footer-text"><apex:outputText value="{!initialPage.footerText}" /></p>
+                <a
+                    id="signing-brand-support"
+                    href="{!HTMLENCODE(initialPage.supportUrl)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="{!initialPage.supportVisibility}"
+                    >Get help</a
+                >
+            </footer>
+
+            <script id="signing-initial-brand" type="application/json">
+                <apex:outputText value="{!initialPage.json}" escape="false" />
+            </script>
+            <script>
+                // Standard presentation is already in the response. Sanitize optional
+                // Advanced sections before revealing them; no remoting brand swap.
+                try {
+                    PortwoodSigningBranding.initialize(
+                        JSON.parse(document.getElementById('signing-initial-brand').textContent)
+                    );
+                } catch (error) {
+                    // The server-rendered Standard presentation remains usable if
+                    // optional custom content cannot initialize.
+                } finally {
+                    document.body.classList.remove('signing-brand-pending');
+                }
+            </script>
+
             <script>
                 var DocGenPdfViewer = (function () {
                     // ============================================================
@@ -1176,8 +1260,9 @@
                             chip.className = 'spot-chip' + (cssClass ? ' ' + cssClass : '');
                             chip.style.left = hit.box.x + 'px';
                             chip.style.top = hit.box.y + 'px';
-                            chip.style.width = Math.max(hit.box.w, 48) + 'px';
-                            chip.style.height = Math.max(hit.box.h, 20) + 'px';
+                            chip.style.width = (hit.pdfRect ? hit.box.w : Math.max(hit.box.w, 48)) + 'px';
+                            chip.style.height = (hit.pdfRect ? hit.box.h : Math.max(hit.box.h, 20)) + 'px';
+                            if (hit.pdfRect) chip.style.overflow = 'hidden';
                             if (label) {
                                 var tab = document.createElement('span');
                                 tab.className = 'tab';
@@ -1200,7 +1285,35 @@
                         //   pageIndex : 0-based index for pdf-lib getPages()
                         //   x, yBottom: bottom-left of the sentinel, in points
                         //   w, h      : sentinel box size, in points
+                        coordinateHit: function (placement) {
+                            var rect = placement.pdfRect;
+                            for (var i = 0; i < pages.length; i++) {
+                                var page = pages[i];
+                                if (page.pageNum !== Number(placement.pdfPage)) continue;
+                                var box = page.viewport.convertToViewportRectangle([
+                                    rect.x,
+                                    rect.yBottom,
+                                    rect.x + rect.w,
+                                    rect.yBottom + rect.h
+                                ]);
+                                return {
+                                    needle: placement.tagText,
+                                    page: page.pageNum,
+                                    wrapEl: page.wrapEl,
+                                    pdfRect: rect,
+                                    box: {
+                                        x: Math.min(box[0], box[2]),
+                                        y: Math.min(box[1], box[3]),
+                                        w: Math.abs(box[2] - box[0]),
+                                        h: Math.abs(box[3] - box[1])
+                                    }
+                                };
+                            }
+                            return null;
+                        },
+
                         hitToPdfRect: function (hit) {
+                            if (hit.pdfRect) return hit.pdfRect;
                             for (var i = 0; i < pages.length; i++) {
                                 if (pages[i].pageNum !== hit.page) {
                                     continue;
@@ -1256,6 +1369,14 @@
                             : '';
                     }
 
+                    // Completed links render a read-only confirmation on the server.
+                    // Do not reload documents, collect IPs or re-enter signing.
+                    var completionState = document.body.getAttribute('data-signing-completion');
+                    if (completionState === 'success' || completionState === 'waiting') {
+                        showState(completionState);
+                        return;
+                    }
+
                     // ===== TOKEN FROM URL =====
                     var urlParams = new URLSearchParams(window.location.search);
                     var token = urlParams.get('token');
@@ -1268,7 +1389,8 @@
                     var signerData = null;
                     var isMultiSigner = false;
                     var resendTimer = null;
-                    var capturedIp = '';
+                    var capturedIp = '{!JSENCODE(nativeIpAddress)}';
+                    var ipCaptureContext = '{!JSENCODE(nativeIpProof)}';
                     // Guided-signing state (null = no placements → fall back to the
                     // single-modal flow). spots[] are the located, ordered sign-spots.
                     var guided = null;
@@ -1288,36 +1410,32 @@
                     // The source PDF bytes (base64), kept so we can composite signatures
                     // onto them client-side with pdf-lib at finish (#163).
                     var sourcePdfBase64 = null;
+                    var sourcePdfRevision = null;
 
-                    // ===== CLIENT-SIDE IP CAPTURE =====
-                    // The signing page is hosted on a Salesforce Site, so signers are Guest users.
-                    // Auth.SessionManagement.getCurrentSession() is blocked for Guest, and
-                    // X-Forwarded-For headers aren't always set by Salesforce's edge for VF requests.
-                    // Asking the browser to fetch its own public IP is the most reliable path —
-                    // the third-party service only sees the signer's IP (which they'd see anyway
-                    // by virtue of the request), no other PII flows. Server-side resolveClientIp()
-                    // falls back to header inspection if this fetch fails.
-                    try {
-                        fetch('https://api.ipify.org?format=json', { cache: 'no-store' })
-                            .then(function (r) {
-                                return r.ok ? r.json() : null;
-                            })
-                            .then(function (j) {
-                                if (j && j.ip) capturedIp = j.ip;
-                            })
-                            .catch(function () {
-                                /* fallback to server-side capture */
-                            });
-                    } catch (e) {
-                        /* fetch unavailable — fall back to server-side capture */
-                    }
+                    // IP audit capture uses Salesforce request/session information only.
+                    // Never send a signer's browser to an external IP lookup service.
 
                     // ===== STEP 1: VALIDATE TOKEN =====
                     Visualforce.remoting.Manager.invokeAction(
                         '{!$RemoteAction.DocGenSignatureController.validateToken}',
                         token,
                         function (result, event) {
+                            // The signature may have completed in another tab after render.
+                            if (
+                                event.status &&
+                                result &&
+                                (result.completionState === 'success' || result.completionState === 'waiting')
+                            ) {
+                                showState(result.completionState);
+                                return;
+                            }
                             if (event.status && result && result.isValid) {
+                                if (!ipCaptureContext) {
+                                    showError(
+                                        'We could not prepare secure signing. Reload this page or contact the sender.'
+                                    );
+                                    return;
+                                }
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);
@@ -1516,6 +1634,7 @@
                                 if (event.status && result && result.base64) {
                                     // Keep the bytes for client-side compositing at finish.
                                     sourcePdfBase64 = result.base64;
+                                    sourcePdfRevision = result.pdfRevision != null ? Number(result.pdfRevision) : null;
                                     // The viewer module owns rendering — the page never touches
                                     // blobs/iframes/PDF.js directly. Once painted, try to set up
                                     // the guided sign-spot overlay (no-op when there are no
@@ -1573,8 +1692,14 @@
                         // duplicate anchors map to their Nth located occurrence in order.
                         var byNeedle = {};
                         var needles = [];
+                        var coordinateHits = [];
                         for (var i = 0; i < placements.length; i++) {
                             var p = placements[i];
+                            if (p.pdfRect) {
+                                p.tagText = '@@COORD-' + p.id + '@@';
+                                var coordinateHit = DocGenPdfViewer.coordinateHit(p);
+                                if (coordinateHit) coordinateHits.push(coordinateHit);
+                            }
                             if (!p.tagText) continue;
                             if (!byNeedle[p.tagText]) {
                                 byNeedle[p.tagText] = [];
@@ -1590,7 +1715,11 @@
                             return;
                         }
 
-                        var hits = DocGenPdfViewer.locateAnchors(needles);
+                        var hits = DocGenPdfViewer.locateAnchors(
+                            needles.filter(function (needle) {
+                                return !byNeedle[needle][0].pdfRect;
+                            })
+                        ).concat(coordinateHits);
                         // Bucket hits by needle in document order (locateAnchors already
                         // returns them page-ascending, then left-to-right within a page).
                         var hitsByNeedle = {};
@@ -2150,6 +2279,7 @@
                             // whoever has to check the document. drawWrappedText returns
                             // the y AFTER the last line it drew, so the sentence below
                             // moves down instead of landing on top of a two-line URL.
+                            var verifyTop = y + 8;
                             y = drawWrappedText(page, String(cert.verifyUrl), {
                                 x: 54,
                                 y: y,
@@ -2158,6 +2288,19 @@
                                 color: brand,
                                 lineHeight: 10
                             });
+                            // A wrapped URL is not reliably auto-linked by PDF readers.
+                            // Keep the complete destination on one clickable annotation.
+                            page.node.addAnnot(
+                                doc.context.register(
+                                    doc.context.obj({
+                                        Type: 'Annot',
+                                        Subtype: 'Link',
+                                        Rect: [CERT_LEFT, y + 8, CERT_LEFT + CERT_LINE_WIDTH, verifyTop],
+                                        Border: [0, 0, 0],
+                                        A: { S: 'URI', URI: PDFLib.PDFString.of(String(cert.verifyUrl)) }
+                                    })
+                                )
+                            );
                             y -= 2;
                             page.drawText('Drop the PDF you received at that link to confirm its integrity.', {
                                 x: 54,
@@ -2371,12 +2514,82 @@
                                             });
                                             return cardW;
                                         }
+                                        // Uploaded PDF fields stay strictly inside the sender's saved rectangle.
+                                        // Rotation is applied in PDF user space, keeping ink upright on rotated pages.
+                                        function drawPreparedMark(page, ink, rect) {
+                                            var angle = Number(rect.rotation || 0),
+                                                radians = (angle * Math.PI) / 180;
+                                            var ux = Math.cos(radians),
+                                                uy = Math.sin(radians),
+                                                vx = -uy,
+                                                vy = ux;
+                                            var sideways = angle === 90 || angle === 270;
+                                            var width = sideways ? rect.h : rect.w,
+                                                height = sideways ? rect.w : rect.h;
+                                            var ox = rect.x + (angle === 90 || angle === 180 ? rect.w : 0);
+                                            var oy = rect.yBottom + (angle === 180 || angle === 270 ? rect.h : 0);
+                                            var pad = 3,
+                                                w,
+                                                h;
+                                            if (ink.png) {
+                                                var factor = Math.min(
+                                                    (width - 2 * pad) / ink.png.width,
+                                                    (height - 2 * pad) / ink.png.height
+                                                );
+                                                w = ink.png.width * factor;
+                                                h = ink.png.height * factor;
+                                                var dx = (width - w) / 2,
+                                                    dy = (height - h) / 2;
+                                                page.drawImage(ink.png, {
+                                                    x: ox + ux * dx + vx * dy,
+                                                    y: oy + uy * dx + vy * dy,
+                                                    width: w,
+                                                    height: h,
+                                                    rotate: PDFLib.degrees(angle)
+                                                });
+                                            } else {
+                                                var text = String(ink.text || ''),
+                                                    font = rect.date ? helv : oblique;
+                                                var size = Math.min(
+                                                    rect.date ? 12 : 24,
+                                                    height - 2 * pad,
+                                                    (width - 2 * pad) / Math.max(font.widthOfTextAtSize(text, 1), 0.1)
+                                                );
+                                                var baseline = Math.max(pad, (height - size) / 2 + size * 0.2);
+                                                page.drawText(text, {
+                                                    x: ox + ux * pad + vx * baseline,
+                                                    y: oy + uy * pad + vy * baseline,
+                                                    size: size,
+                                                    font: font,
+                                                    rotate: PDFLib.degrees(angle),
+                                                    color: rgb(0.07, 0.11, 0.25)
+                                                });
+                                            }
+                                        }
                                         var chain = Promise.resolve();
                                         guided.spots.forEach(function (spot) {
                                             chain = chain.then(function () {
                                                 var rect = DocGenPdfViewer.hitToPdfRect(spot.hit);
                                                 if (!rect || !pages[rect.pageIndex]) return;
                                                 var page = pages[rect.pageIndex];
+                                                if (rect.coordinate) {
+                                                    rect.date =
+                                                        spot.placement.type === 'Date' ||
+                                                        spot.placement.type === 'DatePick';
+                                                    if (spot.imageData) {
+                                                        return doc
+                                                            .embedPng(dataUrlToBytes(spot.imageData))
+                                                            .then(function (png) {
+                                                                drawPreparedMark(page, { png: png }, rect);
+                                                            });
+                                                    }
+                                                    drawPreparedMark(
+                                                        page,
+                                                        { text: spot.value || spot.placement.signedValue || '' },
+                                                        rect
+                                                    );
+                                                    return Promise.resolve();
+                                                }
                                                 var markW = 0;
                                                 var p;
                                                 var who =
@@ -2528,14 +2741,19 @@
                                 var outB64 = bytesToB64(outBytes);
                                 var ua = navigator.userAgent || 'Unknown';
                                 return new Promise(function (resolve, reject) {
-                                    Visualforce.remoting.Manager.invokeAction(
-                                        '{!$RemoteAction.DocGenSignatureController.saveCompositedSignedPdf}',
+                                    var saveArguments = [
+                                        sourcePdfRevision == null
+                                            ? '{!$RemoteAction.DocGenSignatureController.saveCompositedSignedPdf}'
+                                            : '{!$RemoteAction.DocGenSignatureController.savePreparedSignedPdf}',
                                         token,
                                         outB64,
                                         consentGiven,
-                                        capturedIp,
+                                        ipCaptureContext,
                                         ua,
-                                        formFieldJson != null ? formFieldJson : '{}',
+                                        formFieldJson != null ? formFieldJson : '{}'
+                                    ];
+                                    if (sourcePdfRevision != null) saveArguments.push(sourcePdfRevision);
+                                    saveArguments.push(
                                         function (result, event) {
                                             if (!event.status || !result || result.success === false) {
                                                 reject(
@@ -2548,6 +2766,10 @@
                                             resolve(result);
                                         },
                                         { escape: false, buffer: false, timeout: 120000 }
+                                    );
+                                    Visualforce.remoting.Manager.invokeAction.apply(
+                                        Visualforce.remoting.Manager,
+                                        saveArguments
                                     );
                                 });
                             });
@@ -2575,13 +2797,13 @@
                         var nextBtn = document.getElementById('btn-sign-submit-next');
                         if (type === 'Date') {
                             // forceModal error fallback — single confirm button, no "next" variant.
-                            saveBtn.className = 'btn btn-brand';
+                            saveBtn.className = 'btn btn-brand signing-action';
                             saveBtn.textContent = 'Add Date';
                             nextBtn.style.display = 'none';
                         } else {
                             saveBtn.className = 'btn';
                             saveBtn.textContent = 'Save';
-                            nextBtn.className = 'btn btn-brand';
+                            nextBtn.className = 'btn btn-brand signing-action';
                             nextBtn.textContent = 'Save & Next';
                             nextBtn.style.display = '';
                         }
@@ -2663,7 +2885,7 @@
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').checked = false;
                         var finalBtn = document.getElementById('btn-sign-submit');
-                        finalBtn.className = 'btn btn-brand';
+                        finalBtn.className = 'btn btn-brand signing-action';
                         finalBtn.textContent = 'Finish & Submit';
                         document.getElementById('btn-sign-submit-next').style.display = 'none';
                         // Form fields were collected up front (before signing) — not here.
@@ -2894,7 +3116,7 @@
                         var c = document.getElementById('modal-form-fields');
                         if (c) c.style.display = '';
                         var fieldsBtn = document.getElementById('btn-sign-submit');
-                        fieldsBtn.className = 'btn btn-brand';
+                        fieldsBtn.className = 'btn btn-brand signing-action';
                         fieldsBtn.textContent = 'Continue';
                         document.getElementById('btn-sign-submit-next').style.display = 'none';
                         showModalMsg('', 'info');
@@ -3043,7 +3265,7 @@
                         btn.disabled = true;
                         btn.textContent = 'Signing...';
 
-                        // Capture IP (browser fetch above; server resolveClientIp falls back).
+                        // Salesforce captures the request IP when it writes the audit.
                         var userAgent = navigator.userAgent || 'Unknown';
 
                         Visualforce.remoting.Manager.invokeAction(
@@ -3051,7 +3273,7 @@
                             token,
                             typedName,
                             consentGiven,
-                            capturedIp,
+                            ipCaptureContext,
                             userAgent,
                             collectedFormFieldJson,
                             function (result, event) {
@@ -3232,7 +3454,7 @@
                             token,
                             typedName,
                             consentGiven,
-                            capturedIp,
+                            ipCaptureContext,
                             userAgent,
                             formFieldJson,
                             function (result, event) {
@@ -3275,7 +3497,7 @@
                             '{!$RemoteAction.DocGenSignatureController.declineSignature}',
                             token,
                             reason,
-                            capturedIp,
+                            ipCaptureContext,
                             ua,
                             function (result, event) {
                                 btn.disabled = false;

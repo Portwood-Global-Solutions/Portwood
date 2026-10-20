@@ -1,6 +1,7 @@
 <!-- CxSAST: without sharing required for guest user signing context; access gated by cryptographic token -->
 <apex:page
     controller="DocGenSignatureController"
+    cache="false"
     showHeader="false"
     sidebar="false"
     standardStylesheets="false"
@@ -14,7 +15,7 @@
             <!-- Allow pinch-to-zoom so signers can inspect images, QR codes, and fine print
          at full fidelity on mobile instead of us shrinking the document to fit. -->
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Document Signature</title>
+            <title><apex:outputText value="{!initialPage.documentTitle}" /></title>
             <apex:slds />
 
             <style>
@@ -585,11 +586,51 @@
                     }
                 }
             </style>
+            <apex:stylesheet value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.css')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'purify.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'branding-content.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenSigningBranding, 'signing-branding.js')}" />
         </head>
-        <body>
+        <body
+            class="{!initialPage.bodyClass}"
+            style="{!initialPage.bodyStyle}"
+            data-signing-completion="{!initialPage.completionState}"
+        >
+            <div id="signing-custom-header" class="signing-custom-header" hidden="hidden"></div>
+            <header id="signing-brand-header" class="signing-brand-header" style="{!initialPage.visibility}">
+                <img
+                    id="signing-brand-logo"
+                    class="signing-brand-logo"
+                    src="{!initialPage.logoUrl}"
+                    alt=""
+                    referrerpolicy="no-referrer"
+                    style="{!initialPage.logoVisibility}"
+                />
+                <span id="signing-brand-company"><apex:outputText value="{!initialPage.companyName}" /></span>
+            </header>
+
             <div class="page-wrapper" id="page-wrapper">
+                <section
+                    id="signing-brand-intro"
+                    class="signing-brand-intro"
+                    aria-labelledby="signing-brand-title"
+                    style="{!initialPage.introVisibility}"
+                >
+                    <img
+                        id="signing-brand-banner"
+                        class="signing-brand-banner"
+                        src="{!initialPage.bannerUrl}"
+                        alt="{!initialPage.bannerAlt}"
+                        referrerpolicy="no-referrer"
+                        style="{!initialPage.bannerVisibility}"
+                    />
+                    <h1 id="signing-brand-title"><apex:outputText value="{!initialPage.title}" /></h1>
+                    <p id="signing-brand-welcome"><apex:outputText value="{!initialPage.welcomeText}" /></p>
+                    <div id="signing-custom-welcome" hidden="hidden"></div>
+                </section>
+
                 <!-- STATE: Loading -->
-                <div id="state-loading">
+                <div id="state-loading" style="{!initialPage.loadingVisibility}">
                     <div class="spinner-container"><div class="spinner"></div></div>
                 </div>
 
@@ -630,13 +671,15 @@
                                         inputmode="numeric"
                                         pattern="[0-9]{6}"
                                     />
-                                    <button id="btn-verify-pin" class="btn btn-brand" type="button">Verify</button>
+                                    <button id="btn-verify-pin" class="btn btn-brand signing-action" type="button">
+                                        Verify
+                                    </button>
                                 </div>
                             </div>
                             <p id="resend-link" class="resend-link disabled">Resend code</p>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-send-pin" class="btn btn-brand" type="button">
+                            <button id="btn-send-pin" class="btn btn-brand signing-action" type="button">
                                 Send Verification Code
                             </button>
                         </div>
@@ -675,7 +718,12 @@
                                         placeholder="Type your full name"
                                     />
                                 </div>
-                                <button id="btn-confirm-step" class="btn btn-brand" type="button" disabled="disabled">
+                                <button
+                                    id="btn-confirm-step"
+                                    class="btn btn-brand signing-action"
+                                    type="button"
+                                    disabled="disabled"
+                                >
                                     Confirm
                                 </button>
                             </div>
@@ -697,7 +745,7 @@
                                 </button>
                                 <button
                                     id="btn-complete-signing"
-                                    class="btn btn-brand"
+                                    class="btn btn-brand signing-action"
                                     type="button"
                                     disabled="disabled"
                                 >
@@ -824,7 +872,12 @@
                             </label>
                         </div>
                         <div class="btn-row">
-                            <button id="btn-submit" class="btn btn-brand" type="button" disabled="disabled">
+                            <button
+                                id="btn-submit"
+                                class="btn btn-brand signing-action"
+                                type="button"
+                                disabled="disabled"
+                            >
                                 Sign Document
                             </button>
                         </div>
@@ -841,16 +894,19 @@
                 </div>
 
                 <!-- STATE: Success -->
-                <div id="state-success" style="display: none">
+                <div id="state-success" style="{!initialPage.successVisibility}">
                     <div class="success-card">
                         <div class="success-icon">&#10003;</div>
                         <h2>Signature Complete</h2>
-                        <p>Your document has been signed and processed securely. You may close this window.</p>
+                        <p id="signing-completion-message">
+                            <apex:outputText value="{!initialPage.completionMessage}" />
+                        </p>
+                        <div id="signing-custom-completion" hidden="hidden"></div>
                     </div>
                 </div>
 
                 <!-- STATE: Waiting -->
-                <div id="state-waiting" style="display: none">
+                <div id="state-waiting" style="{!initialPage.waitingVisibility}">
                     <div class="waiting-card">
                         <div class="waiting-icon">&#10003;</div>
                         <h2>Signature Recorded</h2>
@@ -860,6 +916,37 @@
                     </div>
                 </div>
             </div>
+
+            <div id="signing-custom-footer" class="signing-custom-footer" hidden="hidden"></div>
+            <footer id="signing-brand-footer" class="signing-brand-footer" style="{!initialPage.footerVisibility}">
+                <p id="signing-brand-footer-text"><apex:outputText value="{!initialPage.footerText}" /></p>
+                <a
+                    id="signing-brand-support"
+                    href="{!HTMLENCODE(initialPage.supportUrl)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="{!initialPage.supportVisibility}"
+                    >Get help</a
+                >
+            </footer>
+
+            <script id="signing-initial-brand" type="application/json">
+                <apex:outputText value="{!initialPage.json}" escape="false" />
+            </script>
+            <script>
+                // Standard presentation is already in the response. Sanitize optional
+                // Advanced sections before revealing them; no remoting brand swap.
+                try {
+                    PortwoodSigningBranding.initialize(
+                        JSON.parse(document.getElementById('signing-initial-brand').textContent)
+                    );
+                } catch (error) {
+                    // The server-rendered Standard presentation remains usable if
+                    // optional custom content cannot initialize.
+                } finally {
+                    document.body.classList.remove('signing-brand-pending');
+                }
+            </script>
 
             <script>
                 (function () {
@@ -917,6 +1004,14 @@
                         }
                     }
 
+                    // Completed links render a read-only confirmation on the server.
+                    // Do not reload documents, collect IPs or re-enter signing.
+                    var completionState = document.body.getAttribute('data-signing-completion');
+                    if (completionState === 'success' || completionState === 'waiting') {
+                        showState(completionState);
+                        return;
+                    }
+
                     // ===== TOKEN FROM URL =====
                     var urlParams = new URLSearchParams(window.location.search);
                     var token = urlParams.get('token');
@@ -931,37 +1026,33 @@
                     var resendTimer = null;
                     var placements = [];
                     var currentStepIndex = 0;
-                    var capturedIp = '';
+                    var capturedIp = '{!JSENCODE(nativeIpAddress)}';
+                    var ipCaptureContext = '{!JSENCODE(nativeIpProof)}';
 
-                    // ===== CLIENT-SIDE IP CAPTURE =====
-                    // The signing page is hosted on a Salesforce Site, so signers are Guest users.
-                    // Auth.SessionManagement.getCurrentSession() is blocked for Guest, and
-                    // X-Forwarded-For headers aren't always set by Salesforce's edge for VF requests.
-                    // Asking the browser to fetch its own public IP is the most reliable path —
-                    // the third-party service only sees the signer's IP (which they'd see anyway
-                    // by virtue of the request), no other PII flows. Server-side resolveClientIp()
-                    // falls back to header inspection if this fetch fails.
-                    try {
-                        fetch('https://api.ipify.org?format=json', { cache: 'no-store' })
-                            .then(function (r) {
-                                return r.ok ? r.json() : null;
-                            })
-                            .then(function (j) {
-                                if (j && j.ip) capturedIp = j.ip;
-                            })
-                            .catch(function () {
-                                /* fallback to server-side capture */
-                            });
-                    } catch (e) {
-                        /* fetch unavailable — fall back to server-side capture */
-                    }
+                    // IP audit capture uses Salesforce request/session information only.
+                    // Never send a signer's browser to an external IP lookup service.
 
                     // ===== STEP 1: VALIDATE TOKEN =====
                     Visualforce.remoting.Manager.invokeAction(
                         '{!$RemoteAction.DocGenSignatureController.validateToken}',
                         token,
                         function (result, event) {
+                            // The signature may have completed in another tab after render.
+                            if (
+                                event.status &&
+                                result &&
+                                (result.completionState === 'success' || result.completionState === 'waiting')
+                            ) {
+                                showState(result.completionState);
+                                return;
+                            }
                             if (event.status && result && result.isValid) {
+                                if (!ipCaptureContext) {
+                                    showError(
+                                        'We could not prepare secure signing. Reload this page or contact the sender.'
+                                    );
+                                    return;
+                                }
                                 signerData = result;
                                 if (result.requiresPin) {
                                     initVerifyScreen(result);
@@ -1445,7 +1536,7 @@
                             token,
                             typedName,
                             true,
-                            capturedIp,
+                            ipCaptureContext,
                             userAgent,
                             // formFieldJson. This page has no signer form-field UI —
                             // that lives only on DocGenSignaturePdf.page — so it always
@@ -1497,7 +1588,7 @@
                             '{!$RemoteAction.DocGenSignatureController.declineSignature}',
                             token,
                             reason,
-                            capturedIp,
+                            ipCaptureContext,
                             ua,
                             function (result, event) {
                                 btn.disabled = false;
@@ -1593,7 +1684,7 @@
                                 token,
                                 typedName,
                                 consentGiven,
-                                capturedIp,
+                                ipCaptureContext,
                                 userAgent,
                                 // formFieldJson — see the note on the other call site.
                                 '{}',

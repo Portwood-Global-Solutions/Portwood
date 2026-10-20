@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Logo_Url_Extended__c</fullName>
     <description
-    >Long-form logo URL override. Supersedes Logo_Url__c (a platform Url field, hard-capped at 255 characters and type-locked in the managed package) so Salesforce Files public-delivery URLs and other long links fit. When set, the renderer prefers this over Logo_Url__c.</description>
+    >Long-form logo URL override. Supersedes Logo_Url__c (a platform Url field, hard-capped at 255 characters and type-locked in the managed package) so Salesforce Files public-delivery URLs and other long links fit. When set, the renderer prefers this over Logo_Url__c. Only Salesforce-hosted image assets are supported; choose an image from Shared Assets. External image URLs are rejected.</description>
     <externalId>false</externalId>
     <label>Logo URL Override (Long)</label>
     <length>32768</length>

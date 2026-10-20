@@ -12,8 +12,6 @@
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <title>Portwood User Guide</title>
-            <meta http-equiv="refresh" content="0; url=https://portwood.dev/guide" />
-            <link rel="canonical" href="https://portwood.dev/guide" />
             <style>
                 body {
                     margin: 0;

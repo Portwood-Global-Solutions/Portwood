@@ -1,0 +1,121 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { JSDOM, VirtualConsole } from 'jsdom';
+import { signingPageFixture } from './lib/signing-page-fixture.mjs';
+const base = new URL('../../force-app/main/default/', import.meta.url);
+const read = (path) => readFileSync(new URL(path, base), 'utf8');
+let checks = 0;
+for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
+    const source = read(`pages/${name}.page`);
+    const dom = new JSDOM(signingPageFixture(source), {
+        url: 'https://signing.test/',
+        runScripts: 'outside-only'
+    });
+    const { window } = dom;
+    const doc = window.document;
+    for (const file of ['purify.min.js', 'branding-content.js', 'signing-branding.js'])
+        window.eval(read('staticresources/DocGenSigningBranding/' + file));
+    assert.equal(doc.querySelector('.signing-service'), null);
+    checks++;
+    assert.equal(doc.querySelector('a[href="https://portwood.dev/"]'), null);
+    checks++;
+    assert.equal(doc.title, 'Document signing');
+    checks++;
+    const brand = {
+        companyName: 'Cedar Community',
+        title: 'Welcome',
+        color: '#227548',
+        footerText: 'Our footer',
+        supportUrl: 'https://customer.test/help',
+        page: { mode: 'Standard' }
+    };
+    window.PortwoodSigningBranding.apply(brand);
+    assert.equal(doc.querySelector('#signing-brand-company').textContent, brand.companyName);
+    checks++;
+    assert.equal(doc.querySelector('#signing-brand-footer-text').textContent, brand.footerText);
+    checks++;
+    assert.equal(doc.querySelector('#signing-brand-support').href, brand.supportUrl);
+    checks++;
+    assert.equal(doc.title, 'Cedar Community | Document signing');
+    checks++;
+    assert.equal(doc.body.textContent.includes('Portwood DocGen'), false);
+    checks++;
+    window.PortwoodSigningBranding.apply({ ...brand, companyName: '<img src=x onerror="alert(1)">' });
+    assert.equal(doc.querySelectorAll('#signing-brand-company img').length, 0);
+    checks++;
+    window.PortwoodSigningBranding.apply({
+        ...brand,
+        page: {
+            mode: 'Advanced',
+            headerHtml: '<h2>Custom heading</h2>',
+            footerHtml: '<p>Custom footer</p>'
+        }
+    });
+    assert.equal(doc.querySelector('.signing-service'), null);
+    checks++;
+    assert.equal(doc.querySelector('#signing-custom-header h2').textContent, 'Custom heading');
+    checks++;
+    assert.equal(doc.querySelector('#signing-custom-footer p').textContent, 'Custom footer');
+    checks++;
+    dom.window.close();
+}
+// Exercise the actual page initialization: a later remoting response must not
+// overwrite the identity already emitted by the server.
+const sharedScripts = ['purify.min.js', 'branding-content.js', 'signing-branding.js']
+    .map((file) => '<script>' + read('staticresources/DocGenSigningBranding/' + file) + '</script>')
+    .join('');
+for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
+    const brand = {
+        companyName: 'Initial Brand',
+        color: '#227548',
+        title: 'Original heading',
+        page: { mode: 'Standard' }
+    };
+    const markup = signingPageFixture(read(`pages/${name}.page`), brand).replace('</head>', sharedScripts + '</head>');
+    const errors = [];
+    const network = [];
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on('jsdomError', (error) => errors.push(error.message));
+    const dom = new JSDOM(markup, {
+        url: 'https://branding.test/?token=' + 'a'.repeat(64),
+        runScripts: 'dangerously',
+        virtualConsole,
+        beforeParse(window) {
+            window.fetch = (url) => {
+                network.push(url);
+                throw new Error('Signing initialization must not make browser fetch requests.');
+            };
+            window.Visualforce = {
+                remoting: {
+                    Manager: {
+                        invokeAction(action, ...args) {
+                            const callback = args.find((arg) => typeof arg === 'function');
+                            if (action.includes('validateToken'))
+                                callback(
+                                    {
+                                        isValid: true,
+                                        requiresPin: true,
+                                        documentTitle: 'Test agreement',
+                                        branding: { companyName: 'Later Brand', color: '#FF0000' }
+                                    },
+                                    { status: true }
+                                );
+                        }
+                    }
+                }
+            };
+        }
+    });
+    assert.equal(dom.window.document.querySelector('#signing-brand-company').textContent, 'Initial Brand');
+    checks++;
+    assert.equal(dom.window.document.body.style.getPropertyValue('--signing-action'), '#227548');
+    checks++;
+    assert.equal(dom.window.document.querySelector('#state-verify').style.display, '');
+    checks++;
+    assert.deepEqual(errors, []);
+    checks++;
+    assert.deepEqual(network, [], 'Signing must not contact an IP lookup or another external service.');
+    checks++;
+    dom.window.close();
+}
+console.log(`PASS: ${checks} customer branding and initial-page checks for HTML/PDF signing pages.`);

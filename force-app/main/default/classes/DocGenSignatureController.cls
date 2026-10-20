@@ -1,4 +1,41 @@
 public without sharing class DocGenSignatureController {
+    private static Boolean preparedPdfSave = false;
+    private transient String nativeIpProof = '';
+    private transient String nativeIpAddress = '';
+    public String getNativeIpProof() {
+        getInitialPage();
+        return nativeIpProof;
+    }
+    public String getNativeIpAddress() {
+        getInitialPage();
+        return DocGenSignatureIpContext.validIp(nativeIpAddress) ? nativeIpAddress : '';
+    }
+
+    private transient DocGenSigningPageView initialPage;
+
+    /** Initial branding is a read-only, token-authorized public projection. */
+    public DocGenSigningPageView getInitialPage() {
+        if (initialPage == null) {
+            SignatureInitResponse response;
+            try {
+                String token = ApexPages.currentPage().getParameters().get('token')?.escapeHtml4();
+                response = initializeToken(token, true);
+                if (response.isValid == true) {
+                    nativeIpAddress = captureClientIp();
+                    nativeIpProof = DocGenSignatureIpContext.issue(token, nativeIpAddress);
+                }
+            } catch (Exception ex) {
+                // Fail closed: the existing remoting flow displays the signing error.
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: initial signing presentation unavailable (' + ex.getTypeName() + ').'
+                );
+                response = new SignatureInitResponse();
+            }
+            initialPage = new DocGenSigningPageView(response.branding, response.completionState);
+        }
+        return initialPage;
+    }
     private static final String INCOMPLETE_SIGNATURE_FIELDS_MESSAGE =
         'Signing cannot be completed because one or more required signature fields are incomplete. ' +
         'Please complete all required fields and try again.';
@@ -106,7 +143,11 @@ public without sharing class DocGenSignatureController {
 
     public class SignatureInitResponse {
         @AuraEnabled
+        public DocGenSigningBranding.Presentation branding;
+        @AuraEnabled
         public Boolean isValid;
+        @AuraEnabled
+        public String completionState;
         @AuraEnabled
         public String errorMessage;
         @AuraEnabled
@@ -178,31 +219,25 @@ public without sharing class DocGenSignatureController {
         public Integer remaining;
     }
 
-    /**
-     * Prefers the client-supplied IP (browser fetched it from a public service)
-     * over header inspection. The client path is more reliable for guest signers
-     * because Sites/Site CDNs don't always set X-Forwarded-For consistently.
-     * Validates input is a sane IPv4/IPv6 string before trusting it; falls back
-     * to captureClientIp() otherwise.
-     */
+    /** Current Salesforce request IP, then a signer-bound page observation.
+     * Plain IP hints remain a compatibility fallback for authenticated callers only. */
     @TestVisible
     private static String resolveClientIp(String supplied) {
-        // SECURITY (audit integrity): prefer the server-observed IP and never let
-        // the client-supplied `ipAddress` argument override it. Previously the
-        // caller-passed value won unconditionally, so a signer could forge the IP
-        // recorded on their own tamper-evident audit / certificate. The client
-        // hint is now used ONLY as a last resort when the server has no IP at all
-        // (e.g. a guest LWR context with no infrastructure header) — recorded as
-        // best-effort, not authoritative.
-        // NOTE: captureClientIp() still reads X-Forwarded-For, whose leftmost hop
-        // can be client-influenced behind some proxy configs. Validating the
-        // trusted-hop selection requires a live Experience Cloud guest test before
-        // hardening further.
+        return resolveClientIp(supplied, null);
+    }
+    @TestVisible
+    private static String resolveClientIp(String supplied, String token) {
         String serverIp = captureClientIp();
         if (String.isNotBlank(serverIp) && serverIp != 'Unknown') {
             return serverIp;
         }
-        if (String.isNotBlank(supplied)) {
+        if (DocGenSignatureIpContext.isContext(supplied)) {
+            String observed = DocGenSignatureIpContext.verify(token, supplied);
+            if (observed == null)
+                throw DocGenService.ahe('Reload this signing page to refresh its secure network context.');
+            return observed;
+        }
+        if (UserInfo.getUserType() != 'Guest' && String.isNotBlank(supplied)) {
             String trimmed = supplied.trim();
             // Cheap sanity: length cap + only chars valid in IPv4/IPv6.
             // (Not a strict parse — just rejects obvious garbage/injection.)
@@ -210,6 +245,8 @@ public without sharing class DocGenSignatureController {
                 return trimmed;
             }
         }
+        if (UserInfo.getUserType() == 'Guest')
+            throw DocGenService.ahe('We could not prepare secure signing. Reload this page or contact the sender.');
         return 'Unknown';
     }
 
@@ -276,8 +313,9 @@ public without sharing class DocGenSignatureController {
 
     /**
      * Captures the client IP address from the current request context.
-     * Checks X-Forwarded-For (load balancer/proxy) first, falls back to
-     * Salesforce session info, then to True-Client-IP.
+     * Prefer Salesforce's platform header. Forwarding headers are best-effort
+     * fallbacks for other hosting/proxy configurations; authenticated sessions
+     * can supply SourceIp when request headers are unavailable.
      */
     private static String captureClientIp() {
         // Try VF page request headers first
@@ -285,7 +323,12 @@ public without sharing class DocGenSignatureController {
             PageReference pr = ApexPages.currentPage();
             if (pr != null) {
                 Map<String, String> headers = pr.getHeaders();
-                // X-Forwarded-For contains the original client IP when behind a proxy/LB
+                // Salesforce overwrites this platform header on the native Site.
+                // Prefer it to caller-influenced forwarding chains (live spoof test).
+                String platformIp = headers.get('X-Salesforce-SIP');
+                if (DocGenSignatureIpContext.validIp(platformIp))
+                    return platformIp.trim();
+                // Compatibility for contexts that expose only forwarding headers.
                 String forwarded = headers.get('X-Forwarded-For');
                 if (String.isNotBlank(forwarded)) {
                     // May contain comma-separated list — first is the real client
@@ -321,6 +364,10 @@ public without sharing class DocGenSignatureController {
     @AuraEnabled
     @RemoteAction
     public static SignatureInitResponse validateToken(String token) {
+        return initializeToken(token, false);
+    }
+
+    private static SignatureInitResponse initializeToken(String token, Boolean presentationOnly) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
@@ -385,6 +432,8 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Require_Email_Verification__c,
                 Signature_Request__r.Prefill_Signer_Email__c,
                 Signature_Request__r.Source_Document_Id__c,
+                Signature_Request__r.Original_Document_CV_Id__c,
+                Signature_Request__r.Document_Title_Format__c,
                 Signature_Request__r.Related_Record_Id__c,
                 Signature_Request__r.Expires_At__c,
                 Signature_Request__r.Template__c,
@@ -398,13 +447,24 @@ public without sharing class DocGenSignatureController {
         ];
 
         if (!signers.isEmpty()) {
+            if (String.isNotBlank(signers[0].Signature_Request__r.Original_Document_CV_Id__c)) {
+                try {
+                    assertPreparedPdfSigner(token, false);
+                } catch (AuraHandledException ex) {
+                    res.errorMessage = 'This request is unavailable or waiting for a previous recipient to sign.';
+                    return res;
+                }
+            }
             if (
                 DocGenSignatureExpiry.isExpired(signers[0].Signature_Request__r.Expires_At__c, signers[0].CreatedDate)
             ) {
                 res.errorMessage = 'This signature link has expired. Please request a new one.';
                 return res;
             }
-            return validateSignerToken(signers[0]);
+            res = validateSignerToken(signers[0], presentationOnly);
+            if (res.isValid || String.isNotBlank(res.completionState))
+                res.branding = DocGenSigningBranding.forRequest(signers[0].Signature_Request__c);
+            return res;
         }
 
         // Legacy fallback: single-signer on DocGen_Signature_Request__c
@@ -446,7 +506,10 @@ public without sharing class DocGenSignatureController {
             return res;
         }
 
-        return validateLegacyRequest(requests[0]);
+        res = validateLegacyRequest(requests[0], presentationOnly);
+        if (res.isValid || String.isNotBlank(res.completionState))
+            res.branding = DocGenSigningBranding.forRequest(requests[0].Id);
+        return res;
     }
 
     /**
@@ -743,18 +806,28 @@ public without sharing class DocGenSignatureController {
         return null;
     }
 
-    private static SignatureInitResponse validateSignerToken(DocGen_Signer__c signer) {
+    private static SignatureInitResponse validateSignerToken(DocGen_Signer__c signer, Boolean presentationOnly) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
         if (signer.Status__c == 'Signed') {
             res.errorMessage = 'You have already signed this document.';
+            // Signing stays invalid. A recognized, unexpired participant may
+            // still see public branding and a receipt, without document or PII.
+            String requestStatus = signer.Signature_Request__r.Status__c;
+            if (new Set<String>{ 'Sent', 'Viewed', 'In Progress', 'Signed' }.contains(requestStatus))
+                res.completionState = requestStatus == 'Signed' ? 'success' : 'waiting';
             return res;
         }
 
         DocGen_Signature_Request__c parentReq = signer.Signature_Request__r;
         if (parentReq.Status__c == 'Signed' || parentReq.Status__c == 'Cancelled') {
             res.errorMessage = 'This signature request is no longer active.';
+            return res;
+        }
+
+        if (presentationOnly) {
+            res.isValid = true;
             return res;
         }
 
@@ -815,7 +888,11 @@ public without sharing class DocGenSignatureController {
         res.signedCount = signed;
 
         // Get document metadata — template name or source document title
-        if (parentReq.Template__c != null) {
+        if (String.isNotBlank(parentReq.Original_Document_CV_Id__c)) {
+            // Prepared PDFs are served only through the token-bound base64 endpoint.
+            // Never create a public ContentDistribution for the retained original.
+            res.documentTitle = parentReq.Document_Title_Format__c;
+        } else if (parentReq.Template__c != null) {
             res.documentTitle = parentReq.Template__r.Name;
             // No public link needed — preview is rendered from template merge
         } else {
@@ -855,16 +932,25 @@ public without sharing class DocGenSignatureController {
         return res;
     }
 
-    private static SignatureInitResponse validateLegacyRequest(DocGen_Signature_Request__c req) {
+    private static SignatureInitResponse validateLegacyRequest(
+        DocGen_Signature_Request__c req,
+        Boolean presentationOnly
+    ) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
         if (req.Status__c == 'Signed') {
             res.errorMessage = 'This document has already been signed.';
+            res.completionState = 'success';
             return res;
         }
         if (req.Status__c == 'Cancelled') {
             res.errorMessage = 'This signature request has been cancelled.';
+            return res;
+        }
+
+        if (presentationOnly) {
+            res.isValid = true;
             return res;
         }
 
@@ -1149,6 +1235,7 @@ public without sharing class DocGenSignatureController {
 
     @TestVisible
     private static String prepareSigningPreviewHtml(String html) {
+        DocGenAssetPolicy.assertHtmlResources(html);
         if (String.isBlank(html) || !containsRtlText(html) || html.contains('docgen-signing-preview-rtl')) {
             return html;
         }
@@ -1231,6 +1318,7 @@ public without sharing class DocGenSignatureController {
         String userAgent,
         String formFieldJson
     ) {
+        rejectPreparedLegacySave(token);
         SaveSignatureResult result = new SaveSignatureResult();
         result.success = false;
 
@@ -1336,7 +1424,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -1409,6 +1497,7 @@ public without sharing class DocGenSignatureController {
         try {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
+            pdfEvent.Signer_Id__c = signer.Id;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             EventBus.publish(pdfEvent);
         } catch (Exception e) {
@@ -1513,6 +1602,7 @@ public without sharing class DocGenSignatureController {
     @AuraEnabled
     @RemoteAction
     public static void saveLegacySignature(String token, String typedName) {
+        rejectPreparedLegacySave(token);
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
             throw new AuraHandledException('Invalid security token.');
         }
@@ -1691,7 +1781,9 @@ public without sharing class DocGenSignatureController {
      */
     public static Blob convertSignatureRequestToPdf(Id requestId) {
         if (Test.isRunningTest()) {
-            return Blob.toPdf('<html><body><p>Test PDF - Signed Document</p></body></html>');
+            return Blob.toPdf(
+                DocGenAssetPolicy.assertHtmlResources('<html><body><p>Test PDF - Signed Document</p></body></html>')
+            );
         }
 
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
@@ -1788,7 +1880,7 @@ public without sharing class DocGenSignatureController {
         }
 
         String html = DocGenHtmlRenderer.convertToHtml(documentXml, imageUrlMap);
-        return Blob.toPdf(html);
+        return Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
     }
 
     /**
@@ -2057,7 +2149,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = false;
         // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Create").
@@ -2084,6 +2176,7 @@ public without sharing class DocGenSignatureController {
         try {
             DocGen_Signature_PDF__e notifyEvent = new DocGen_Signature_PDF__e();
             notifyEvent.Request_Id__c = signer.Signature_Request__c;
+            notifyEvent.Signer_Id__c = signer.Id;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             EventBus.publish(notifyEvent);
         } catch (Exception e) {
@@ -2110,6 +2203,8 @@ public without sharing class DocGenSignatureController {
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
             throw new AuraHandledException('Invalid security token.');
         }
+
+        assertPreparedPdfSigner(token, false);
 
         // Guest CRUD/FLS gate — read scope (DocGen_Signer__c, DocGen_Signature_Placement__c).
         DocGenSignatureGuestSecurity.assertSignerReadable(token);
@@ -2148,6 +2243,12 @@ public without sharing class DocGenSignatureController {
                 'Signed_At__c',
                 'Section_Context__c',
                 'Tag_Text__c',
+                'PDF_Page__c',
+                'PDF_X__c',
+                'PDF_Y__c',
+                'PDF_Width__c',
+                'PDF_Height__c',
+                'PDF_Rotation__c',
                 'Document_Index__c',
                 'Signer__c'
             }
@@ -2164,7 +2265,13 @@ public without sharing class DocGenSignatureController {
                 Signed_At__c,
                 Section_Context__c,
                 Tag_Text__c,
-                Document_Index__c
+                Document_Index__c,
+                PDF_Page__c,
+                PDF_X__c,
+                PDF_Y__c,
+                PDF_Width__c,
+                PDF_Height__c,
+                PDF_Rotation__c
             FROM DocGen_Signature_Placement__c
             WHERE Signer__c = :signer.Id
             WITH SYSTEM_MODE
@@ -2184,6 +2291,21 @@ public without sharing class DocGenSignatureController {
             m.put('sectionContext', plc.Section_Context__c);
             m.put('tagText', plc.Tag_Text__c);
             m.put('documentIndex', plc.Document_Index__c);
+            if (plc.PDF_Page__c != null) {
+                m.put('pdfPage', plc.PDF_Page__c);
+                m.put(
+                    'pdfRect',
+                    new Map<String, Object>{
+                        'pageIndex' => plc.PDF_Page__c - 1,
+                        'x' => plc.PDF_X__c,
+                        'yBottom' => plc.PDF_Y__c,
+                        'w' => plc.PDF_Width__c,
+                        'h' => plc.PDF_Height__c,
+                        'rotation' => plc.PDF_Rotation__c,
+                        'coordinate' => true
+                    }
+                );
+            }
             result.add(m);
         }
         return result;
@@ -2199,6 +2321,8 @@ public without sharing class DocGenSignatureController {
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
             throw new AuraHandledException('Invalid security token.');
         }
+
+        assertPreparedPdfSigner(token, true);
 
         // Guest CRUD/FLS gate — write allowlist on DocGen_Signature_Placement__c
         // (Status__c, Signed_At__c, Signed_Value__c).
@@ -2487,6 +2611,8 @@ public without sharing class DocGenSignatureController {
             return result;
         }
 
+        assertPreparedPdfSigner(token, false);
+
         // Guest CRUD/FLS gate — read scope on DocGen_Signer__c + token-scoped
         // request lookup. The CV served is bound to this token's request, so
         // no client-supplied CV id (and thus no IDOR check) is needed here.
@@ -2498,7 +2624,13 @@ public without sharing class DocGenSignatureController {
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
-            SELECT Id, CreatedDate, Signature_Request__r.Source_Document_Id__c, Signature_Request__r.Expires_At__c
+            SELECT
+                Id,
+                CreatedDate,
+                Signature_Request__r.Source_Document_Id__c,
+                Signature_Request__r.Expires_At__c,
+                Signature_Request__r.Original_Document_CV_Id__c,
+                Signature_Request__r.PDF_Revision__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -2537,6 +2669,9 @@ public without sharing class DocGenSignatureController {
             result.put('base64', EncodingUtil.base64Encode(cv.VersionData));
             result.put('fileName', String.isNotBlank(cv.Title) ? cv.Title : 'Document');
             result.put('mimeType', 'application/pdf');
+            if (String.isNotBlank(signers[0].Signature_Request__r.Original_Document_CV_Id__c)) {
+                result.put('pdfRevision', String.valueOf(signers[0].Signature_Request__r.PDF_Revision__c));
+            }
         } catch (Exception e) {
             result.put('error', 'Document not found');
         }
@@ -2565,6 +2700,7 @@ public without sharing class DocGenSignatureController {
         String userAgent,
         String formFieldJson
     ) {
+        rejectPreparedLegacySave(token);
         SavePdfSignatureResult result = new SavePdfSignatureResult();
         result.success = false;
 
@@ -2670,7 +2806,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -2766,6 +2902,7 @@ public without sharing class DocGenSignatureController {
         if (snapshotBacked || !result.isComplete) {
             DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
             pdfEvent.Request_Id__c = signer.Signature_Request__c;
+            pdfEvent.Signer_Id__c = signer.Id;
             EventBus.publish(pdfEvent);
         }
 
@@ -2838,6 +2975,7 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Related_Record_Id__c,
                 Signature_Request__r.Template__r.Name,
                 Signature_Request__r.Document_Title_Format__c,
+                Signature_Request__r.Original_Document_CV_Id__c,
                 Signature_Request__r.Expires_At__c,
                 Role_Name__c,
                 Contact__c,
@@ -2854,6 +2992,9 @@ public without sharing class DocGenSignatureController {
         }
 
         DocGen_Signer__c signer = signers[0];
+        if (String.isNotBlank(signer.Signature_Request__r.Original_Document_CV_Id__c) && !preparedPdfSave) {
+            throw new AuraHandledException('Reopen this prepared PDF before completing your signature.');
+        }
         if (DocGenSignatureExpiry.isExpired(signer.Signature_Request__r.Expires_At__c, signer.CreatedDate)) {
             throw new AuraHandledException('This signature link has expired.');
         }
@@ -2895,7 +3036,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.IP_Address__c = resolveClientIp(ipAddress, token);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -3028,11 +3169,14 @@ public without sharing class DocGenSignatureController {
         Set<String> reqUpd = new Set<String>{ 'Status__c' };
         if (result.isComplete) {
             parentReq.Protected_Signed_Content_Document_Id__c = String.valueOf(savedContentDocumentId);
+            reqUpd.add('Protected_Signed_Content_Document_Id__c');
         }
-        if (!result.isComplete) {
-            // Point the next signer's viewer at the just-composited PDF.
+        if (!result.isComplete || String.isNotBlank(signer.Signature_Request__r.Original_Document_CV_Id__c)) {
+            // Prepared requests also point at the final PDF after completion.
             parentReq.Source_Document_Id__c = cv.Id;
             reqUpd.add('Source_Document_Id__c');
+        }
+        if (!result.isComplete) {
             // Share this intermediate composited PDF with the next signer (often a
             // guest) so their viewer's getSourcePdfBase64 can read it. Without the
             // link the next signer sees a blank preview and the signing page falls
@@ -3130,6 +3274,7 @@ public without sharing class DocGenSignatureController {
             try {
                 DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
                 pdfEvent.Request_Id__c = signer.Signature_Request__c;
+                pdfEvent.Signer_Id__c = signer.Id;
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 EventBus.publish(pdfEvent);
             } catch (Exception seqEx) {
@@ -3142,6 +3287,116 @@ public without sharing class DocGenSignatureController {
 
         result.success = true;
         return result;
+    }
+
+    /** Prepared PDFs serialize finalization against the exact working revision. */
+    @RemoteAction
+    public static SavePdfSignatureResult savePreparedSignedPdf(
+        String token,
+        String base64Pdf,
+        Boolean consentGiven,
+        String ipAddress,
+        String userAgent,
+        String formFieldJson,
+        Integer expectedRevision
+    ) {
+        DocGen_Signer__c signer = assertPreparedPdfSigner(token, true);
+        if (signer == null)
+            throw new AuraHandledException('This is not a prepared PDF request.');
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Signature_Request__c.sObjectType,
+            new Set<String>{ 'PDF_Revision__c', 'Status__c' }
+        );
+        DocGen_Signature_Request__c request = [
+            SELECT Id, PDF_Revision__c, Status__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :signer.Signature_Request__c
+            WITH SYSTEM_MODE
+            FOR UPDATE
+        ];
+        if (expectedRevision == null || request.PDF_Revision__c != expectedRevision)
+            throw new AuraHandledException('This document changed in another session. Reload it before signing.');
+        if (String.isBlank(base64Pdf) || base64Pdf.length() > 4000000 || !base64Pdf.startsWith('JVBERi0'))
+            throw new AuraHandledException('The completed PDF is invalid or too large. Contact the sender.');
+        SavePdfSignatureResult result;
+        preparedPdfSave = true;
+        try {
+            result = saveCompositedSignedPdf(token, base64Pdf, consentGiven, ipAddress, userAgent, formFieldJson);
+        } finally {
+            preparedPdfSave = false;
+        }
+        if (result.success == true) {
+            DocGen_Signature_Request__c revision = new DocGen_Signature_Request__c(
+                Id = request.Id,
+                PDF_Revision__c = request.PDF_Revision__c + 1
+            );
+            DocGenFlsGuard.guestAssertUpdateable(revision, new Set<String>{ 'PDF_Revision__c' });
+            Database.update(revision, AccessLevel.SYSTEM_MODE);
+        }
+        return result;
+    }
+
+    private static void rejectPreparedLegacySave(String token) {
+        if (!DocGenSignatureGuestSecurity.isValidTokenShape(token))
+            return;
+        if (
+            [
+                SELECT COUNT()
+                FROM DocGen_Signer__c
+                WHERE Secure_Token__c = :token AND Signature_Request__r.Original_Document_CV_Id__c != NULL
+                WITH SYSTEM_MODE
+            ] > 0
+        )
+            throw new AuraHandledException('Complete this prepared PDF in its signing page.');
+    }
+
+    private static DocGen_Signer__c assertPreparedPdfSigner(String token, Boolean writing) {
+        if (!DocGenSignatureGuestSecurity.isValidTokenShape(token))
+            throw new AuraHandledException('Invalid security token.');
+        DocGenSignatureGuestSecurity.assertSignerReadable(token);
+        List<DocGen_Signer__c> people = [
+            SELECT
+                Id,
+                Signature_Request__c,
+                Status__c,
+                Sort_Order__c,
+                CreatedDate,
+                Signature_Request__r.Original_Document_CV_Id__c,
+                Signature_Request__r.Status__c,
+                Signature_Request__r.Expires_At__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (people.isEmpty())
+            throw new AuraHandledException('Signer not found.');
+        DocGen_Signer__c signer = people[0];
+        if (String.isBlank(signer.Signature_Request__r.Original_Document_CV_Id__c))
+            return null;
+        String status = signer.Signature_Request__r.Status__c;
+        if (
+            status == 'Cancelled' ||
+            status == 'Declined' ||
+            status == 'Draft' ||
+            (writing && (status == 'Signed' || signer.Status__c == 'Signed'))
+        )
+            throw new AuraHandledException('This signature request is no longer available.');
+        if (DocGenSignatureExpiry.isExpired(signer.Signature_Request__r.Expires_At__c, signer.CreatedDate))
+            throw new AuraHandledException('This signature link has expired.');
+        if (
+            [
+                SELECT COUNT()
+                FROM DocGen_Signer__c
+                WHERE
+                    Signature_Request__c = :signer.Signature_Request__c
+                    AND Sort_Order__c < :signer.Sort_Order__c
+                    AND Status__c != 'Signed'
+                WITH SYSTEM_MODE
+            ] > 0
+        )
+            throw new AuraHandledException('A previous recipient must sign before you can continue.');
+        return signer;
     }
 
     /**
@@ -3166,7 +3421,12 @@ public without sharing class DocGenSignatureController {
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> me = [
-            SELECT Id, Signature_Request__c, Signature_Request__r.Template__r.Name
+            SELECT
+                Id,
+                Signature_Request__c,
+                Signature_Request__r.Template__r.Name,
+                Signature_Request__r.Original_Document_CV_Id__c,
+                Signature_Request__r.Document_Title_Format__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -3181,6 +3441,8 @@ public without sharing class DocGenSignatureController {
             me[0].Signature_Request__r.Template__r != null)
             ? me[0].Signature_Request__r.Template__r.Name
             : 'Document';
+        if (String.isNotBlank(me[0].Signature_Request__r.Original_Document_CV_Id__c))
+            docTitle = me[0].Signature_Request__r.Document_Title_Format__c;
 
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Signer__c.sObjectType,

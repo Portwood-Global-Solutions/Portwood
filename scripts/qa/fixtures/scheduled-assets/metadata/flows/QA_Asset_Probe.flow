@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata"><actionCalls><name>HTML_PDF</name><label
+        >HTML_PDF</label><locationX>0</locationX><locationY>0</locationY><actionName
+        >portwoodglobal__DocGenGiantQueryFlowAction</actionName><actionType>apex</actionType><connector><targetReference
+            >Word_PDF</targetReference></connector><inputParameters><name>templateId</name><value><elementReference
+                >HTML_Template.Id</elementReference></value></inputParameters><inputParameters><name
+            >recordId</name><value><elementReference
+                >recordId</elementReference></value></inputParameters><inputParameters><name>saveToRecord</name><value
+            ><booleanValue>true</booleanValue></value></inputParameters><storeOutputAutomatically
+        >true</storeOutputAutomatically></actionCalls><actionCalls><name>Word_PDF</name><label
+        >Word_PDF</label><locationX>0</locationX><locationY>0</locationY><actionName
+        >portwoodglobal__DocGenGiantQueryFlowAction</actionName><actionType>apex</actionType><connector><targetReference
+            >Save_Result</targetReference></connector><inputParameters><name>templateId</name><value><elementReference
+                >Word_Template.Id</elementReference></value></inputParameters><inputParameters><name
+            >recordId</name><value><elementReference
+                >recordId</elementReference></value></inputParameters><inputParameters><name>saveToRecord</name><value
+            ><booleanValue>true</booleanValue></value></inputParameters><storeOutputAutomatically
+        >true</storeOutputAutomatically></actionCalls><apiVersion>66.0</apiVersion><description
+    >QA only. Same asset, template, record and action for manual and scheduled execution.</description><formulas><name
+        >resultSummary</name><dataType>String</dataType><expression
+        >contextLabel &amp; "|user=" &amp; $User.Id &amp; "|html=" &amp; HTML_PDF.contentVersionId &amp; "|word=" &amp; Word_PDF.contentVersionId &amp; "|htmlSuccess=" &amp; IF(HTML_PDF.success,"true","false") &amp; "|wordSuccess=" &amp; IF(Word_PDF.success,"true","false") &amp; "|htmlError=" &amp; HTML_PDF.errorMessage &amp; "|wordError=" &amp; Word_PDF.errorMessage</expression></formulas><interviewLabel
+    >QA Assets Probe</interviewLabel><label>QA Assets Probe</label><processType
+    >AutoLaunchedFlow</processType><recordLookups><name>HTML_Template</name><label>HTML_Template</label><locationX
+        >0</locationX><locationY>0</locationY><connector><targetReference
+            >Word_Template</targetReference></connector><filterLogic>and</filterLogic><filters><field
+            >Name</field><operator>EqualTo</operator><value><stringValue
+                >QA Asset HTML</stringValue></value></filters><getFirstRecordOnly>true</getFirstRecordOnly><object
+        >portwoodglobal__DocGen_Template__c</object><storeOutputAutomatically
+        >true</storeOutputAutomatically></recordLookups><recordLookups><name>Word_Template</name><label
+        >Word_Template</label><locationX>0</locationX><locationY>0</locationY><connector><targetReference
+            >HTML_PDF</targetReference></connector><filterLogic>and</filterLogic><filters><field>Name</field><operator
+            >EqualTo</operator><value><stringValue>QA Asset Word</stringValue></value></filters><getFirstRecordOnly
+        >true</getFirstRecordOnly><object>portwoodglobal__DocGen_Template__c</object><storeOutputAutomatically
+        >true</storeOutputAutomatically></recordLookups><recordUpdates><name>Save_Result</name><label
+        >Save Result</label><locationX>0</locationX><locationY>0</locationY><filterLogic>and</filterLogic><filters
+        ><field>Id</field><operator>EqualTo</operator><value><elementReference
+                >recordId</elementReference></value></filters><inputAssignments><field>Description</field><value
+            ><elementReference>resultSummary</elementReference></value></inputAssignments><object
+        >Account</object></recordUpdates><start><locationX>0</locationX><locationY>0</locationY><connector
+        ><targetReference>HTML_Template</targetReference></connector></start><status>Active</status><variables><name
+        >recordId</name><dataType>String</dataType><isCollection>false</isCollection><isInput>true</isInput><isOutput
+        >false</isOutput></variables><variables><name>contextLabel</name><dataType>String</dataType><isCollection
+        >false</isCollection><isInput>true</isInput><isOutput>false</isOutput></variables></Flow>

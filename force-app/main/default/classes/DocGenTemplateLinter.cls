@@ -146,10 +146,17 @@ public with sharing class DocGenTemplateLinter {
             Integer n = 0;
             String example = null;
             while (styles.find()) {
-                Matcher rules = Pattern.compile('([^{}]+)\\{').matcher(styles.group(1));
-                while (rules.find()) {
-                    String selector = rules.group(1).trim();
-                    if (Pattern.compile('(?i)\\btbody\\b').matcher(selector).find()) {
+                String css = styles.group(1);
+                // Walk delimiters once. An unanchored ([^{}]+) followed by an
+                // opening brace retries every suffix of each declaration block
+                // before its closing brace. Ordinary multi-page stylesheets can
+                // exhaust Apex's regex budget, which cannot be caught below.
+                Matcher braces = Pattern.compile('[{}]').matcher(css);
+                Integer selectorStart = 0;
+                while (braces.find()) {
+                    String selector = css.substring(selectorStart, braces.start()).trim();
+                    selectorStart = braces.end();
+                    if (braces.group() == '{' && Pattern.compile('(?i)\\btbody\\b').matcher(selector).find()) {
                         n++;
                         if (example == null) {
                             example = selector;

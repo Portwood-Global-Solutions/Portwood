@@ -198,6 +198,10 @@ public with sharing class DocGenEmailTemplateController {
     /** Upserts a template from editor values. Returns the saved record Id. */
     @AuraEnabled
     public static Id saveTemplate(Map<String, Object> data) {
+        DocGenAssetPolicy.assertHtmlResources((String) data.get('bodyHtml'));
+        String image = (String) data.get('logoUrl');
+        if (String.isNotBlank(image) && DocGenAssetPolicy.assetUrl(image) == null)
+            throw DocGenService.ahe('Choose a Salesforce-hosted logo from Assets.');
         String type = (String) data.get('type');
         if (String.isBlank(type) || !TYPE_LABELS.containsKey(type)) {
             throw new AuraHandledException('Unknown email template type.');
@@ -324,7 +328,7 @@ public with sharing class DocGenEmailTemplateController {
         if (assetId == null) {
             throw DocGenService.ahe('An asset Id is required.');
         }
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Name' });
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Name', 'Asset_Type__c' });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Asset__c> assets = [
             SELECT
@@ -337,7 +341,7 @@ public with sharing class DocGenEmailTemplateController {
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Id = :assetId
+            WHERE Id = :assetId AND Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
             LIMIT 1
         ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets

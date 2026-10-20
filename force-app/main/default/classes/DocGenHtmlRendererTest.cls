@@ -2052,7 +2052,7 @@ private class DocGenHtmlRendererTest {
                 '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
                 '<w:body><w:p><w:r><w:t>FontTest</w:t></w:r></w:p></w:body></w:document>';
 
-            String fontCss = '@font-face { font-family: "Custom"; src: url("data:;base64,abc"); }';
+            String fontCss = '@font-face { font-family: "Custom"; src: url("data:font/ttf;base64,abc"); }';
             String html = DocGenHtmlRenderer.convertToHtml(xml, new Map<String, String>(), fontCss);
 
             System.assert(html.contains('@font-face'), 'Should inject font-face CSS');
@@ -2968,6 +2968,97 @@ private class DocGenHtmlRendererTest {
         System.assert(
             !html.contains('margin: 1in 1in 1in 1in;'),
             'DOCX header height should define the body start so there is no unused gap below the header: ' + html
+        );
+    }
+
+    @IsTest
+    static void testZeroPageMarginsUsePlainCssLengths() {
+        String xml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<w:p><w:r><w:t>Full bleed cover</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="14400"/>' +
+            '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0"/>' +
+            '</w:sectPr></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+        System.assert(
+            html.contains('@page { size: 8.5in 10in; margin: 0in 0in 0in 0in;'),
+            'Zero margins and whole-number page sizes must be valid CSS lengths, without scientific notation: ' + html
+        );
+        System.assert(
+            html.contains('body { margin: 0;'),
+            'Word page margins must not acquire the HTML body default inset, which overflows a full-page cover: ' + html
+        );
+    }
+
+    @IsTest
+    static void testZeroFirstPageMarginsUsePlainCssLengths() {
+        String xml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr><w:p><w:r><w:t>Default header</w:t></w:r></w:p></w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<!-- DOCGEN_FOOTER_START --><w:ftr><w:p><w:r><w:t>Default footer</w:t></w:r></w:p></w:ftr><!-- DOCGEN_FOOTER_END -->' +
+            '<w:p><w:r><w:t>Cover without header or footer</w:t></w:r></w:p>' +
+            '<w:sectPr><w:titlePg/><w:pgSz w:w="12240" w:h="15840"/>' +
+            '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0"/>' +
+            '</w:sectPr></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+        System.assert(
+            html.contains('@page :first { margin: 0in 0in 0in 0in;'),
+            'The cover must retain zero margins when later pages reserve space for running headers and footers: ' + html
+        );
+    }
+
+    @IsTest
+    static void testZeroHeaderFooterDistancesUsePlainCssLengths() {
+        String xml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<!-- DOCGEN_FOOTER_START --><w:ftr><w:p><w:r><w:t>Footer</w:t></w:r></w:p></w:ftr><!-- DOCGEN_FOOTER_END -->' +
+            '<!-- DOCGEN_HEADER_FIRST_START --><w:hdr><w:p><w:r><w:t>First header</w:t></w:r></w:p></w:hdr><!-- DOCGEN_HEADER_FIRST_END -->' +
+            '<!-- DOCGEN_FOOTER_FIRST_START --><w:ftr><w:p><w:r><w:t>First footer</w:t></w:r></w:p></w:ftr><!-- DOCGEN_FOOTER_FIRST_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:titlePg/><w:pgSz w:w="12240" w:h="15840"/>' +
+            '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="0" w:footer="0"/>' +
+            '</w:sectPr></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+        for (String region : new List<String>{ 'header', 'header-first', 'footer', 'footer-first' }) {
+            String padding = region.startsWith('header') ? 'top' : 'bottom';
+            System.assert(
+                html.contains(
+                    'element(docgen-running-' +
+                        region +
+                        '); vertical-align: ' +
+                        padding +
+                        '; padding-' +
+                        padding +
+                        ': 0in;'
+                ),
+                'Word zero distance must remain a valid CSS length for ' + region + ': ' + html
+            );
+        }
+    }
+
+    @IsTest
+    static void testFractionalPageMarginsRetainTwipPrecision() {
+        String xml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<w:p><w:r><w:t>Asymmetric margins</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+            '<w:pgMar w:top="1" w:right="792" w:bottom="1440" w:left="0"/>' +
+            '</w:sectPr></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+        System.assert(html.contains('margin: 0.000694444'), 'A one-twip margin must not be rounded away: ' + html);
+        System.assert(html.contains('in 0.55in 1in 0in;'), 'Fractional, whole and zero margins must coexist: ' + html);
+        System.assert(
+            html.contains('size: 8.268055555'),
+            'Page dimensions must retain their original precision: ' + html
         );
     }
 

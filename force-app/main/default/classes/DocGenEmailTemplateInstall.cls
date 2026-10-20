@@ -15,6 +15,7 @@
  */
 global with sharing class DocGenEmailTemplateInstall implements InstallHandler {
     global void onInstall(InstallContext context) {
+        DocGenSignatureIpContext.initialize();
         seedDefaults();
     }
 

@@ -516,20 +516,22 @@ public with sharing class DocGenHtmlRenderer {
         // CSS and Flying Saucer falls back to default 8.5×11 portrait. Keep
         // the explicit-dimension form: width > height implicitly produces
         // landscape orientation through the engine's MediaBox derivation.
+        // Decimal division can emit scientific notation (zero twips → 0E+1).
+        // CSS lengths must use plain decimal strings, including zero margins.
         String dynamicPageCss =
             '@page { size: ' +
-            pageDims.get('pageWidth') +
+            pageDims.get('pageWidth').toPlainString() +
             'in ' +
-            pageDims.get('pageHeight') +
+            pageDims.get('pageHeight').toPlainString() +
             'in; ' +
             'margin: ' +
-            pageDims.get('marginTop') +
+            pageDims.get('marginTop').toPlainString() +
             'in ' +
-            pageDims.get('marginRight') +
+            pageDims.get('marginRight').toPlainString() +
             'in ' +
-            pageDims.get('marginBottom') +
+            pageDims.get('marginBottom').toPlainString() +
             'in ' +
-            pageDims.get('marginLeft') +
+            pageDims.get('marginLeft').toPlainString() +
             'in;';
         if (String.isNotBlank(watermarkPageBgCss)) {
             dynamicPageCss += ' ' + watermarkPageBgCss;
@@ -537,13 +539,13 @@ public with sharing class DocGenHtmlRenderer {
         if (hasHeader) {
             dynamicPageCss +=
                 ' @top-center { content: element(docgen-running-header); vertical-align: top; padding-top: ' +
-                headerDistance +
+                headerDistance.toPlainString() +
                 'in; }';
         }
         if (hasFooter) {
             dynamicPageCss +=
                 ' @bottom-center { content: element(docgen-running-footer); vertical-align: bottom; padding-bottom: ' +
-                footerDistance +
+                footerDistance.toPlainString() +
                 'in; }';
         }
         dynamicPageCss += ' }';
@@ -558,19 +560,19 @@ public with sharing class DocGenHtmlRenderer {
             if (firstPageReservation != null && firstPageReservation.hasOverrides == true) {
                 firstPageCss +=
                     'margin: ' +
-                    firstPageReservation.marginTop +
+                    firstPageReservation.marginTop.toPlainString() +
                     'in ' +
-                    pageDims.get('marginRight') +
+                    pageDims.get('marginRight').toPlainString() +
                     'in ' +
-                    firstPageReservation.marginBottom +
+                    firstPageReservation.marginBottom.toPlainString() +
                     'in ' +
-                    pageDims.get('marginLeft') +
+                    pageDims.get('marginLeft').toPlainString() +
                     'in; ';
             }
             if (hasHeaderFirst) {
                 firstPageCss +=
                     '@top-center { content: element(docgen-running-header-first); vertical-align: top; padding-top: ' +
-                    headerDistance +
+                    headerDistance.toPlainString() +
                     'in; }';
             } else if (hasHeader) {
                 firstPageCss += '@top-center { content: normal; }';
@@ -578,7 +580,7 @@ public with sharing class DocGenHtmlRenderer {
             if (hasFooterFirst) {
                 firstPageCss +=
                     '@bottom-center { content: element(docgen-running-footer-first); vertical-align: bottom; padding-bottom: ' +
-                    footerDistance +
+                    footerDistance.toPlainString() +
                     'in; }';
             } else if (hasFooter) {
                 firstPageCss += '@bottom-center { content: normal; }';
@@ -616,7 +618,9 @@ public with sharing class DocGenHtmlRenderer {
         String dynamicCss =
             dynamicPageCss +
             runningCss +
-            'body { font-family: ' +
+            // Word's page margins are already applied by @page. The browser's
+            // default body inset would add to them and overflow full-page covers.
+            'body { margin: 0; font-family: ' +
             bodyFont +
             '; font-size: 11pt; line-height: 1.15; color: #000;' +
             rtlBodyCss +
@@ -715,7 +719,7 @@ public with sharing class DocGenHtmlRenderer {
         // emerged here as <p>__DGTXBX_OPEN_...__</p> / <p>__DGTXBX_CLOSE__</p>.
         bodyHtml = postProcessTextboxMarkers(bodyHtml, pageDims);
 
-        return dynamicPrefix + wrapNonLatinGlyphs(bodyHtml) + HTML_SUFFIX;
+        return DocGenAssetPolicy.assertHtmlResources(dynamicPrefix + wrapNonLatinGlyphs(bodyHtml) + HTML_SUFFIX);
     }
 
     /**
@@ -4729,6 +4733,19 @@ public with sharing class DocGenHtmlRenderer {
         String imageValue = images.get(relId);
         if (imageValue == null) {
             return '';
+        }
+        if (imageValue.startsWith('/sfc/servlet.shepherd/version/download/')) {
+            // The PDF engine caches a mutable scaled image by URL. Reusing one
+            // File for a small header and a larger body image otherwise makes
+            // both take the same size. Give each authored size its own cache
+            // entry while still serving the original relative Salesforce URL.
+            imageValue +=
+                (imageValue.contains('?') ? '&amp;' : '?') +
+                'docgenSize=' +
+                (drawingXml.contains('DOCGEN_AUTOSIZE') ? 'auto' : 'fixed') +
+                widthPx +
+                'x' +
+                heightPx;
         }
 
         // Sizing strategy: default to exact width/height from wp:extent — that's

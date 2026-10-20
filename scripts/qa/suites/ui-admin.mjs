@@ -509,7 +509,7 @@ export async function run({ org, headed }) {
         const shell = await until(
             page,
             `const tabs = (__dgFind('[role="tab"]', true) || []).map((t) => __deep(t));
-       const want = ['Create New', 'Your Templates', 'Designer'];
+       const want = ['Create template', 'Your templates', 'Designer'];
        return want.every((w) => tabs.some((t) => t.indexOf(w) !== -1)) ? { tabs } : null;`,
             40000,
             1500
@@ -518,13 +518,15 @@ export async function run({ org, headed }) {
             check(
                 'admin app mounts with its three main tabs',
                 !!shell,
-                shell ? shell.tabs.slice(0, 6).join(' | ') : 'Create New / Your Templates / Designer never rendered',
+                shell
+                    ? shell.tabs.slice(0, 6).join(' | ')
+                    : 'Create template / Your templates / Designer never rendered',
                 SEVERITY.BLOCKER
             )
         );
         if (!shell) return suiteResult('ui-admin', 'Admin UI', C);
 
-        for (const label of ['Create New', 'Your Templates', 'Designer']) {
+        for (const label of ['Create template', 'Your templates', 'Designer']) {
             const verdict = await ev(
                 page,
                 `const t = (__dgFind('[role="tab"]', true) || []).find((x) => __deep(x).indexOf(${JSON.stringify(label)}) !== -1);
@@ -545,8 +547,8 @@ export async function run({ org, headed }) {
         // Behaviour, not layout: the tab must swap in its own content, and the
         // marker must be VISIBLE — lightning-tabset keeps loaded panels in the DOM.
         for (const [label, marker] of [
-            ['Your Templates', 'lightning-datatable'],
-            ['Create New', '.dg-authoring-card']
+            ['Your templates', 'lightning-datatable'],
+            ['Create template', '.dg-authoring-card']
         ]) {
             await clickByText(page, '[role="tab"]', label);
             await wait(3000);
@@ -564,22 +566,27 @@ export async function run({ org, headed }) {
         /* ============================================================ *
          * 2. CREATE NEW WIZARD
          * ============================================================ */
-        await clickByText(page, '[role="tab"]', 'Create New');
+        await clickByText(page, '[role="tab"]', 'Create template');
         await wait(2500);
         await drainToasts(page);
 
         step('wizard: authoring cards');
         // 2a. Authoring cards — each must select AND reveal its own path.
-        // v3.54 retired 'starter', 'ai' and 'scratch' from the wizard — see
-        // docGenAdmin.authoringCards. Templates already created those ways still open
-        // and edit, but the wizard offers two paths now, and asserting on three cards
-        // that were deliberately deleted reported six failures for working software.
+        // Three top-level paths; Designer and Canvas remain separate editors inside design.
         const cardPaths = [
             { mode: 'file', marker: 'Output Format', text: true, what: 'the Type / Output Format pickers' },
-            // "Create & Open Canvas", not "…Designer" — the canvas path has its own
-            // button label, and Output Format is not shown at all because a Canvas
-            // template can only be PDF.
-            { mode: 'canvas', marker: 'Create & Open Canvas', text: true, what: 'the Canvas setup fields' }
+            {
+                mode: 'design',
+                marker: 'Create & Open Canvas',
+                text: true,
+                what: 'the editor choice and Canvas setup fields'
+            },
+            {
+                mode: 'ai',
+                marker: 'Next: Describe your document',
+                text: true,
+                what: 'the Agentforce authoring entry point'
+            }
         ];
         for (const cp of cardPaths) {
             const verdict = await hittable(page, `[data-mode="${cp.mode}"]`);
@@ -626,15 +633,23 @@ export async function run({ org, headed }) {
         // canvas IS the replacement — so there is no gallery probe to write here.
 
         // 2c. The advanced-options disclosure must actually disclose.
-        const advBefore = await ev(page, `return __vis(__dgFind('lightning-radio-group'));`, false);
+        const advBefore = await ev(
+            page,
+            BOX_FROM + `return !!(__field('API Name') && __vis(__field('API Name').inner));`,
+            false
+        );
         await clickByText(page, 'lightning-button', 'Advanced options');
         await wait(1400);
-        const advAfter = await ev(page, `return __vis(__dgFind('lightning-radio-group'));`, false);
+        const advAfter = await ev(
+            page,
+            BOX_FROM + `return !!(__field('API Name') && __vis(__field('API Name').inner));`,
+            false
+        );
         add(
             check(
                 'Advanced options discloses the power-user fields',
                 advBefore === false && advAfter === true,
-                `Data Source radio group visible before=${advBefore} after=${advAfter}`,
+                `API name field visible before=${advBefore} after=${advAfter}`,
                 SEVERITY.MAJOR
             )
         );
@@ -644,7 +659,7 @@ export async function run({ org, headed }) {
         step('wizard: validation');
         // 2d. REQUIRED-FIELD VALIDATION — an empty submit must complain out loud
         //     and must not leave a half-made record behind.
-        await mouseClick(page, '[data-mode="canvas"]');
+        await mouseClick(page, '[data-mode="design"]');
         await wait(1000);
         await typeField(page, 'Template Name', '');
         await drainToasts(page);
@@ -804,12 +819,12 @@ export async function run({ org, headed }) {
         // that is no longer the card screen — so the canvas card was never clicked and
         // the whole phase reported three blockers for a path that works. Verified by
         // hand: this sequence creates the record and types it Canvas.
-        await clickByText(page, '[role="tab"]', 'Your Templates');
+        await clickByText(page, '[role="tab"]', 'Your templates');
         await wait(1500);
-        await clickByText(page, '[role="tab"]', 'Create New');
+        await clickByText(page, '[role="tab"]', 'Create template');
         await wait(2500);
         await drainToasts(page);
-        await mouseClick(page, '[data-mode="canvas"]');
+        await mouseClick(page, '[data-mode="design"]');
         await wait(1500);
         await typeField(page, 'Template Name', NAME_STARTER);
         await wait(800);
@@ -1032,7 +1047,7 @@ export async function run({ org, headed }) {
          * ============================================================ */
         step('template list');
         await openTab(page, base, APP, 9000);
-        await clickByText(page, '[role="tab"]', 'Your Templates');
+        await clickByText(page, '[role="tab"]', 'Your templates');
         await wait(4000);
 
         const READ_ROWS = `
@@ -1155,13 +1170,13 @@ export async function run({ org, headed }) {
             const toWizard = await ev(page, `return __vis(__dgFind('.dg-authoring-card'));`, false);
             add(
                 check(
-                    '"New Template" switches to the Create New wizard',
+                    '"New Template" switches to the Create template wizard',
                     toWizard === true,
                     toWizard === true ? '' : 'the wizard did not become visible',
                     SEVERITY.MAJOR
                 )
             );
-            await clickByText(page, '[role="tab"]', 'Your Templates');
+            await clickByText(page, '[role="tab"]', 'Your templates');
             await wait(3000);
         }
 
@@ -1307,7 +1322,7 @@ export async function run({ org, headed }) {
                 const dir = mkdtempSync(join(tmpdir(), 'dgqa-import-'));
                 const p = join(dir, 'roundtrip.docgen.json');
                 writeFileSync(p, JSON.stringify(exportJson), 'utf8');
-                await clickByText(page, '[role="tab"]', 'Your Templates');
+                await clickByText(page, '[role="tab"]', 'Your templates');
                 await wait(2000);
                 await drainToasts(page);
                 await page.locator('input[data-id="importFileInput"]').setInputFiles(p);
@@ -1335,7 +1350,7 @@ export async function run({ org, headed }) {
         step('row action: Clone');
         // CLONE → a copy exists and opens for editing.
         try {
-            await clickByText(page, '[role="tab"]', 'Your Templates');
+            await clickByText(page, '[role="tab"]', 'Your templates');
             await wait(3000);
             await drainToasts(page);
             await rowAction(NAME_FILE, 'Clone');
@@ -1367,7 +1382,7 @@ export async function run({ org, headed }) {
         // DELETE → does it destroy the record, and does it ask first? Losing a
         // template to one un-confirmed menu click is the data-loss case here.
         try {
-            await clickByText(page, '[role="tab"]', 'Your Templates');
+            await clickByText(page, '[role="tab"]', 'Your templates');
             await wait(3000);
             const cloneName = `${NAME_FILE} (Copy)`;
             const exists = (await probeTemplates(org)).some((r) => r.name === cloneName);
@@ -1434,7 +1449,7 @@ export async function run({ org, headed }) {
         step('row action: Design');
         // DESIGN → opens the designer on that template.
         try {
-            await clickByText(page, '[role="tab"]', 'Your Templates');
+            await clickByText(page, '[role="tab"]', 'Your templates');
             await wait(3000);
             await rowAction(NAME_STARTER, 'Design');
             // NAME_STARTER is a Canvas template now, and Canvas opens the ARTBOARD, not
@@ -1467,7 +1482,7 @@ export async function run({ org, headed }) {
          * ============================================================ */
         step('edit modal');
         await openTab(page, base, APP, 9000);
-        await clickByText(page, '[role="tab"]', 'Your Templates');
+        await clickByText(page, '[role="tab"]', 'Your templates');
         await wait(4000);
 
         let modalOpen = false;
@@ -1810,7 +1825,7 @@ export async function run({ org, headed }) {
 
             // 5e. CLOSING WITHOUT SAVING must not silently bin the work.
             try {
-                await clickByText(page, '[role="tab"]', 'Your Templates');
+                await clickByText(page, '[role="tab"]', 'Your templates');
                 await wait(2500);
                 await rowAction(NAME_STARTER, 'Edit');
                 await wait(5000);
