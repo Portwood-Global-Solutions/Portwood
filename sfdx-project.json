@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.60.0 Beta — Designer, assets and verified signing",
+      "versionName": "v3.60.0 Beta — Open existing templates in Designer",
       "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
@@ -9,7 +9,7 @@
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
       "ancestorId": "04tVx0000019Ki5IAE",
-      "versionDescription": "Testing beta for PR #465: document design, reusable Salesforce assets and verified PDF signing. Includes accurate Word page margins, clickable verification certificates, correct signer notices and consistent rich-text images. For scratch-org and sandbox install testing."
+      "versionDescription": "Testing beta for PR #465: existing HTML and Canvas templates open in the Designer without renaming their Salesforce Files. Keeps unpublished Designer edits and published File revisions intact. Includes earlier document design, asset, Word margin and verified signing fixes."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",

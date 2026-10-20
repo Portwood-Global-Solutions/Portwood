@@ -323,6 +323,102 @@ private class DocGenHtmlTemplateTest {
     }
 
     @IsTest
+    static void getHtmlTemplateBodyReadsLegacyPublishedFileWithoutRenaming() {
+        String html = '<html><body><h1>Legacy proposal</h1><p>{Name}</p></body></html>';
+        Id templateId = createHtmlTemplate(null, null, html);
+        DocGen_Template_Version__c version = [
+            SELECT Id, Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+        ];
+        ContentVersion source = [SELECT Title FROM ContentVersion WHERE Id = :version.Content_Version_Id__c];
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(html, actual, 'The Designer must read the same published body as generation');
+        System.assertEquals(source.Title, [SELECT Title FROM ContentVersion WHERE Id = :source.Id].Title);
+        System.assertEquals(
+            version.Content_Version_Id__c,
+            [SELECT Content_Version_Id__c FROM DocGen_Template_Version__c WHERE Id = :version.Id].Content_Version_Id__c,
+            'Reading must preserve the published File reference'
+        );
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyReadsLegacyCanvasFile() {
+        String html = '<html><body><div data-canvas="true">Canvas source</div></body></html>';
+        Id templateId = createHtmlTemplate(null, null, html);
+        update new DocGen_Template__c(Id = templateId, Type__c = 'Canvas');
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(html, actual, 'Canvas also uses an HTML-backed published source');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyKeepsUnpublishedDesignerBody() {
+        Id templateId = createHtmlTemplate(null, null, '<html><body>Published legacy body</body></html>');
+        String draft = '<html><body>Newer unpublished Designer edits</body></html>';
+        DocGenController.saveHtmlTemplateBody(templateId, 'draft.html', draft);
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(draft, actual, 'The active version fallback must not overwrite staged Designer edits');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyUsesExactPublishedFileVersion() {
+        String published = '<html><body>Published revision</body></html>';
+        Id templateId = createHtmlTemplate(null, null, published);
+        DocGen_Template_Version__c version = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+        ];
+        ContentVersion source = [
+            SELECT ContentDocumentId
+            FROM ContentVersion
+            WHERE Id = :version.Content_Version_Id__c
+        ];
+        insert new ContentVersion(
+            ContentDocumentId = source.ContentDocumentId,
+            Title = 'Unpublished File revision',
+            PathOnClient = 'revised.html',
+            VersionData = Blob.valueOf('<html><body>Not published</body></html>')
+        );
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(published, actual, 'A newer File revision must not replace the pinned published source');
+    }
+
+    @IsTest
+    static void getHtmlTemplateBodyDoesNotUseInactiveVersion() {
+        Id templateId = createHtmlTemplate(null, null, '<html><body>Inactive source</body></html>');
+        DocGen_Template_Version__c version = [
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId
+        ];
+        version.Is_Active__c = false;
+        update version;
+
+        Test.startTest();
+        String actual = DocGenController.getHtmlTemplateBody(templateId);
+        Test.stopTest();
+
+        System.assertEquals(null, actual, 'An inactive legacy File must not become the current Designer body');
+    }
+
+    @IsTest
     static void getHtmlTemplateBodyRejectsNonHtmlTemplate() {
         DocGen_Template__c tmpl = new DocGen_Template__c(
             Name = 'WordRead ' + Datetime.now().getTime(),

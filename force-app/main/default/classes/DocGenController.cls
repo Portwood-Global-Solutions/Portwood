@@ -4173,8 +4173,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * HTML template body read-back for the admin editor (paste-back surface).
      *
-     * Returns the most recent docgen_html_body_* ContentVersion attached to
-     * the template, or null when no body has been uploaded yet. The CV read
+     * Returns the most recent Designer body attached to the template, falling
+     * back to the active version's exact source File for legacy/API uploads
+     * whose titles do not follow the Designer naming convention. The CV read
      * runs WITH SYSTEM_MODE after an explicit FLS/CRUD gate on the template —
      * template-internal CVs can carry Visibility=InternalUsers ContentDocumentLinks,
      * which USER_MODE reads silently drop (the #114 quirk).
@@ -4225,10 +4226,28 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             templateId,
             'docgen_html_body_'
         );
-        if (cvs.isEmpty()) {
-            return null;
+        if (!cvs.isEmpty()) {
+            return cvs[0].VersionData.toString();
         }
-        return cvs[0].VersionData.toString();
+
+        // Keep an unpublished Designer body above the published source. Older
+        // integrations can publish a perfectly valid HTML File with any title;
+        // use the same pinned ContentVersion as generation rather than guessing
+        // from other linked Files or silently opening an empty document.
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template_Version__c.sObjectType,
+            new Set<String>{ 'Template__c', 'Is_Active__c', 'Content_Version_Id__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> active = [
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC, Id DESC
+            LIMIT 1
+        ];
+        return active.isEmpty() ? null : getVersionBody(active[0].Id);
     }
 
     /**
