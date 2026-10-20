@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.60.0 Beta — Clearer and faster Designer previews",
+      "versionName": "v3.60.0 Beta — Customer-branded signing pages",
       "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
@@ -9,7 +9,7 @@
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
       "ancestorId": "04tVx0000019Ki5IAE",
-      "versionDescription": "Testing beta for PR #465: custom fonts load in Designer, table loops keep their line items, and native PDF previews open faster. Includes existing-template loading and earlier document design, reusable asset, Word margin and verified signing fixes."
+      "versionDescription": "Testing beta for PR #465: signing pages use your company branding without a Portwood attribution or link. Includes Designer font loading, table-loop preservation, faster PDF previews and all earlier 3.60 testing fixes."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",

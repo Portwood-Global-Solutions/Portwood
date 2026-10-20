@@ -75,14 +75,10 @@ public without sharing class DocGenSigningPageView {
             : '';
     }
     public String getDocumentTitle() {
-        return brand == null
-            ? 'Portwood DocGen | Document signing'
-            : getCompanyName() + ' | Signing with Portwood DocGen';
+        return brand == null ? 'Document signing' : getCompanyName() + ' | Document signing';
     }
     public String getServiceContext() {
-        return brand == null
-            ? 'Document signing provided by'
-            : 'Document signing for ' + getCompanyName() + ' provided by';
+        return brand == null ? 'Document signing' : 'Document signing for ' + getCompanyName();
     }
     public String getBodyClass() {
         if (brand == null)

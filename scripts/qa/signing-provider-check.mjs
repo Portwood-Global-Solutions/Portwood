@@ -15,40 +15,47 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
     const doc = window.document;
     for (const file of ['purify.min.js', 'branding-content.js', 'signing-branding.js'])
         window.eval(read('staticresources/DocGenSigningBranding/' + file));
-    assert.equal(doc.querySelector('.signing-service a').href, 'https://portwood.dev/');
+    assert.equal(doc.querySelector('.signing-service'), null);
     checks++;
-    assert.equal(doc.querySelector('#signing-service-context').textContent, 'Document signing provided by');
+    assert.equal(doc.querySelector('a[href="https://portwood.dev/"]'), null);
+    checks++;
+    assert.equal(doc.title, 'Document signing');
     checks++;
     const brand = {
         companyName: 'Cedar Community',
         title: 'Welcome',
         color: '#227548',
         footerText: 'Our footer',
+        supportUrl: 'https://customer.test/help',
         page: { mode: 'Standard' }
     };
     window.PortwoodSigningBranding.apply(brand);
-    assert.equal(
-        doc.querySelector('#signing-service-context').textContent,
-        'Document signing for Cedar Community provided by'
-    );
+    assert.equal(doc.querySelector('#signing-brand-company').textContent, brand.companyName);
     checks++;
-    assert.equal(doc.title, 'Cedar Community | Signing with Portwood DocGen');
+    assert.equal(doc.querySelector('#signing-brand-footer-text').textContent, brand.footerText);
+    checks++;
+    assert.equal(doc.querySelector('#signing-brand-support').href, brand.supportUrl);
+    checks++;
+    assert.equal(doc.title, 'Cedar Community | Document signing');
+    checks++;
+    assert.equal(doc.body.textContent.includes('Portwood DocGen'), false);
     checks++;
     window.PortwoodSigningBranding.apply({ ...brand, companyName: '<img src=x onerror="alert(1)">' });
-    assert.equal(doc.querySelectorAll('#signing-service-context img').length, 0);
+    assert.equal(doc.querySelectorAll('#signing-brand-company img').length, 0);
     checks++;
     window.PortwoodSigningBranding.apply({
         ...brand,
         page: {
             mode: 'Advanced',
             headerHtml: '<h2>Custom heading</h2>',
-            footerHtml: '<p>Custom footer</p>',
-            customCss: '.signing-service { display:none; }'
+            footerHtml: '<p>Custom footer</p>'
         }
     });
-    assert.equal(doc.querySelector('.signing-service').hidden, false);
+    assert.equal(doc.querySelector('.signing-service'), null);
     checks++;
-    assert.equal(doc.querySelector('.signing-service').getRootNode(), doc);
+    assert.equal(doc.querySelector('#signing-custom-header h2').textContent, 'Custom heading');
+    checks++;
+    assert.equal(doc.querySelector('#signing-custom-footer p').textContent, 'Custom footer');
     checks++;
     dom.window.close();
 }
@@ -111,4 +118,4 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
     checks++;
     dom.window.close();
 }
-console.log(`PASS: ${checks} provider identity and initial-page checks for HTML/PDF signing pages.`);
+console.log(`PASS: ${checks} customer branding and initial-page checks for HTML/PDF signing pages.`);

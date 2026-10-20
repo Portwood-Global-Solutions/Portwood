@@ -5,8 +5,7 @@ const resource = new URL('../../../force-app/main/default/staticresources/DocGen
 // presentation here; Apex and live HTTP checks verify the actual server path.
 export function signingPageFixture(source, brand = null, completionState = '') {
     const defaults = {
-        documentTitle: 'Portwood DocGen | Document signing',
-        serviceContext: 'Document signing provided by',
+        documentTitle: 'Document signing',
         bodyClass: '',
         bodyStyle: '',
         visibility: 'display:none',

@@ -263,7 +263,7 @@ private class DocGenSigningBrandingTest {
         Integer queries = Limits.getQueries();
         System.assertEquals(true, view.getValid());
         System.assertEquals('Acme', view.getCompanyName());
-        System.assertEquals('Acme | Signing with Portwood DocGen', view.getDocumentTitle());
+        System.assertEquals('Acme | Document signing', view.getDocumentTitle());
         System.assert(view.getBodyStyle().contains('--signing-action:#FFFF00;--signing-action-text:#000000'));
         System.assert(view.getBodyStyle().contains('--signing-header:#113355;--signing-header-text:#FFFFFF'));
         System.assertEquals(
@@ -322,8 +322,8 @@ private class DocGenSigningBrandingTest {
             System.assertEquals('display:none', view.getLogoVisibility());
             System.assertEquals('display:none', view.getFooterVisibility());
             System.assertEquals('display:none', view.getSupportVisibility());
-            System.assertEquals('Portwood DocGen | Document signing', view.getDocumentTitle());
-            System.assertEquals('Document signing provided by', view.getServiceContext());
+            System.assertEquals('Document signing', view.getDocumentTitle());
+            System.assertEquals('Document signing', view.getServiceContext());
         }
         DocGen_Signature_Request__c request = [
             SELECT Id, Status__c

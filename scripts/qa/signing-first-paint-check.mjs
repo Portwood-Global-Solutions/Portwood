@@ -17,7 +17,7 @@ for (const [name, url] of [
     const { window } = dom;
     const doc = window.document;
     const brand = JSON.parse(doc.querySelector('#signing-initial-brand').textContent);
-    assert.equal(doc.title, 'Cedar Community | Signing with Portwood DocGen');
+    assert.equal(doc.title, 'Cedar Community | Document signing');
     checks++;
     assert.equal(doc.querySelector('#signing-brand-company').textContent, 'Cedar Community');
     checks++;

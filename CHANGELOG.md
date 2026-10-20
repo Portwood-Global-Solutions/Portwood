@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.60.0.7 — Customer-branded signing pages (testing beta)
+
+- HTML and PDF signing pages omit the Portwood provider strip and website link. Browser tab titles use the customer's company name and “Document signing”, with a neutral title for invalid links.
+- Customer logos, colours, welcome text, footers, support links and advanced layouts retain their existing behaviour. The shared client-side branding code no longer recreates the provider attribution.
+- Validation: **17/17 Apex branding tests**, **256 focused signing checks** across offline DOM, desktop/mobile browser, completion and live guest first-paint checks pass. Focused Apex Security/AppExchange analysis reports zero violations; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings.
+
+Includes all 3.60.0.6 fixes below. Package creation and full Salesforce package validation are pending; this beta will remain unpromoted for testing.
+
 ## v3.60.0.6 — Clearer and faster Designer previews (testing beta)
 
 - Designer loads same-org Static Resource fonts from the current Salesforce origin, avoiding cross-domain CORS/404 errors ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)).

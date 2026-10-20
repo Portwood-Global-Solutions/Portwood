@@ -77,7 +77,7 @@ try {
             'Cedar <img src=x onerror=alert(1)> & Partners'
         );
         checks++;
-        assert.equal(d.querySelector('.signing-service').hidden, false);
+        assert.equal(d.querySelector('.signing-service'), null);
         checks++;
         assert.equal(window.pwned, undefined);
         checks++;

@@ -59,7 +59,7 @@ for (const name of ['DocGenSignature', 'DocGenSignaturePdf']) {
         equal(doc.querySelector(name === 'DocGenSignature' ? '#state-guided' : '#state-pdf').style.display, 'none');
         equal(doc.querySelector('#signing-brand-company').textContent, brand.companyName);
         equal(doc.body.style.getPropertyValue('--signing-action'), brand.color);
-        equal(doc.title, brand.companyName + ' | Signing with Portwood DocGen');
+        equal(doc.title, brand.companyName + ' | Document signing');
         equal(calls, []);
         equal(errors, []);
         dom.window.close();

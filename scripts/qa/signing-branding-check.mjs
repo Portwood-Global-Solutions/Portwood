@@ -15,7 +15,7 @@ const output = new URL('output/signing-branding/', root);
 await mkdir(output, { recursive: true });
 const brand = {
     companyName: 'Cedar Community',
-    logoUrl: 'https://branding.test/logo.svg',
+    logoUrl: 'https://branding.test/resource/SigningBrand/logo.svg',
     color: '#FFFF00',
     headerColor: '#163E35',
     backgroundColor: '#EDF4F1',
@@ -94,7 +94,7 @@ try {
         );
         await page.goto('https://branding.test/sign?token=' + 'a'.repeat(64));
         await page.locator('#signing-brand-header').waitFor({ state: 'visible' });
-        checked('equal', await page.title(), 'Cedar Community | Signing with Portwood DocGen');
+        checked('equal', await page.title(), 'Cedar Community | Document signing');
         checked('equal', await page.locator('#signing-brand-title').textContent(), brand.title);
         checked('equal', await page.locator('#signing-brand-welcome').textContent(), brand.welcomeText);
         checked('equal', await page.locator('#signing-brand-support').getAttribute('href'), brand.supportUrl);
@@ -157,12 +157,12 @@ try {
         // Standard image/layout controls apply on the actual public-page markup.
         const pageSettings = {
             mode: 'Standard',
-            logoUrl: 'https://branding.test/logo.svg',
+            logoUrl: 'https://branding.test/resource/SigningBrand/logo.svg',
             logoHeight: 88,
             logoAlignment: 'Center',
-            bannerUrl: 'https://branding.test/logo.svg',
+            bannerUrl: 'https://branding.test/resource/SigningBrand/logo.svg',
             bannerAlt: 'Community garden',
-            backgroundUrl: 'https://branding.test/logo.svg',
+            backgroundUrl: 'https://branding.test/resource/SigningBrand/logo.svg',
             font: 'Serif',
             spacing: 'Spacious',
             contentWidth: 1200

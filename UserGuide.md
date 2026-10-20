@@ -3007,6 +3007,8 @@ As of **v3.42+** the **Sign In Person** button is also available on the **Previo
 
 Guided, mobile-friendly. States: PIN verify → signing → review → submit.
 
+**Customer branding (v3.60 testing beta).** Both signing pages use the request's brand, with org-wide settings as fallback. Customers control the logo, colours, welcome text, footer, support link and advanced layout. The browser title uses the company name and “Document signing”; no Portwood provider attribution or website link is added to the page.
+
 - Full document HTML renders inline.
 - A sticky action bar at the bottom shows progress (e.g., "2 of 5 signatures").
 - An arrow points to the current placement.
@@ -3257,7 +3259,7 @@ _New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point
 
 **Per-brand OWA setup.** Each brand's **Send emails from** address needs the same production setup as the org-wide one (§13.2): a verified Org-Wide Email Address with **Allow All Profiles** enabled, on a DKIM-authenticated sending domain. Until then that brand's emails fall back to the org-wide sender.
 
-**Signing page and certificate.** The public signing page and the verification-certificate PDF stay on the org-wide branding — a brand controls the **emails**, not the guest-facing signing experience.
+**Signing page and certificate.** The public signing page uses the request's selected brand, with org-wide settings as fallback (§10.7). The verification-certificate PDF continues to use the org-wide branding.
 
 ---
 
