@@ -39,7 +39,7 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 
 [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Support](https://portwood.dev/support) · [Expert Services](https://portwood.dev/services)
 
-> **PR #465 testing beta:** beta **3.60.0.5** (`04tVx000001AY4fIAG`) is for install, uninstall and reinstall testing. It includes the earlier signing/image/Word-margin fixes and opens existing published Files in Designer even with descriptive titles. Use this exact package ID; earlier .5 builds are superseded. See the [beta testing instructions](README.md#pr-465-testing-beta) for installation and validation status. The package remains unpromoted.
+> **PR #465 testing beta:** beta **3.60.0.6** (`04tVx000001AYB7IAO`) is for install, uninstall and reinstall testing. It adds Designer font loading, table-loop preservation and faster native PDF previews, alongside the earlier signing, image, Word-margin and existing-template fixes. See the [beta testing instructions](README.md#pr-465-testing-beta) for installation and validation status. The package remains unpromoted.
 
 ---
 

@@ -573,17 +573,15 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
-The next testing beta, **3.60.0.6**, adds Designer font loading, table-loop preservation and faster image-heavy PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). Its managed build and subscriber verification are pending; the current validated install remains .5 below.
+**3.60.0.6** (`04tVx000001AYB7IAO`) adds same-origin Designer font loading, table-loop preservation and faster native PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). It includes the earlier Designer/Assets, signing, rich-text File-image, Word-margin and existing-template loading fixes. Built from source commit `3870b8fd916addb2d64c532f279d60a8e1c6d211` with released ancestor **3.59.0.2**.
 
-**3.60.0.5** (`04tVx000001AY4fIAG`) includes the Designer/Assets work, prepared-PDF verification links, Parallel signer notification names, HTML rich-text File images, Word cover-page margins and the fix for opening existing published Files in Designer. Built from source commit `259f512e6127c59aa6d7f9a38cdbc4fa86acf6ec` with released ancestor **3.59.0.2**.
-
-[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG)
+[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO)
 
 ```bash
-sf package install --package 04tVx000001AY4fIAG --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+sf package install --package 04tVx000001AYB7IAO --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
 ```
 
-Use this exact package ID; earlier .5 builds are superseded. Current source passes **131/131 affected tests in a namespaced org**; the exact managed package passes **70/70 permission/signing tests** in a fresh subscriber. A managed subscriber passes **337/337 packaged regressions** and **53/53 integration tests**. Three existing HTML quote designs open with descriptive File titles and working Designer images. The initial PDF smoke check verified that the preview opened; later font, line-item and performance fixes are tracked in #481. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped.
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. Source and namespaced-source orgs pass **65 HTML tests**. A representative four-page quote PDF displays in approximately **3–4 seconds**, compared with 45 seconds before. A fresh managed subscriber passes **136 scoped checks**; a configured subscriber passes **338 packaged regressions** and **53 integration tests**. Three existing HTML quote designs show all eight line items with working images and 3–4 second native previews. The custom-font design loads and embeds all five faces without failed font requests; all six signed-request verification pages pass as a guest.
 
 This beta is for subscriber installation, uninstallation and reinstallation testing. It is unpromoted; production release checks remain outstanding. Installed betas require uninstall/reinstall to move to another version. Preserve any test data/configuration you need, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
 
@@ -593,7 +591,7 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | Testing beta 3.60.0.5 — PR #465         | `04tVx000001AY4fIAG` |
+| v3.60.0 | Testing beta 3.60.0.6 — PR #465         | `04tVx000001AYB7IAO` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |
