@@ -1,13 +1,16 @@
 # Changelog
 
-## v3.60.0.5 — Open existing templates in Designer (testing beta, preparing)
+## v3.60.0.5 — Open existing templates in Designer (testing beta)
 
-- Existing HTML and Canvas templates open their published document bodies in the Designer even when their Salesforce Files have descriptive titles. The Designer keeps newer unpublished edits and reads the exact File revision pinned by the active template version.
+- Existing HTML and Canvas templates open their published document bodies in the Designer even when their Salesforce Files have descriptive titles. The Designer keeps newer unpublished edits and reads the exact File revision pinned by the active template version ([#480](https://github.com/Portwood-Global-Solutions/Portwood/issues/480)).
 - File titles, document contents and published version references remain unchanged. Templates without an active version still open empty; unrelated or inactive Files are not guessed as a replacement.
 - Package validation tests explicitly use the appropriate administrator and reader contexts. Font-management authorization remains enforced; the packaging fixes only correct test permissions and fixture creation.
-- Validation: **65/65 HTML-template Apex tests** pass, including five new regressions. Focused PMD Security reports **zero violations**; repository formatting and whitespace checks pass. The baseline offline metadata audit still reports 51 existing failures (4 major, 47 minor).
+- Validation: **131/131 affected tests** pass in a namespaced source org, **70/70 permission/signing tests** pass in a fresh managed subscriber, and RevenueMate passes **337/337 packaged regressions** plus **53/53 integration tests**. Its three original Quote designs load their published bodies and images in Designer with their original descriptive File titles; Atelier generates a five-page native PDF. Focused PMD Security reports **zero violations**; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings (4 major, 47 minor).
 
-Includes all 3.60.0.4 fixes below. This is an unpromoted testing beta; its package ID and subscriber results will be recorded after the build and installation complete.
+Testing beta **3.60.0.5** · 2026-10-19 · `04tVx000001AY4fIAG` · source commit `259f512` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG).
+
+Includes all 3.60.0.4 fixes below. Use this exact package ID: earlier .5 builds are superseded. The package remains unpromoted. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped.
 
 ## v3.60.0.4 — Word page margins (testing beta)
 

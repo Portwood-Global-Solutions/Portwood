@@ -573,17 +573,17 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
-**3.60.0.4** (`04tVx000001AXIHIA4`) includes the Designer/Assets work and fixes for prepared-PDF verification links, Parallel signer notification names, HTML rich-text File images and Word cover-page margins. Built from source commit `83e065cc30f735c526b1a4cebe52f790ce0faff1` with released ancestor **3.59.0.2**.
+**3.60.0.5** (`04tVx000001AY4fIAG`) includes the Designer/Assets work, prepared-PDF verification links, Parallel signer notification names, HTML rich-text File images, Word cover-page margins and the fix for opening existing published Files in Designer. Built from source commit `259f512e6127c59aa6d7f9a38cdbc4fa86acf6ec` with released ancestor **3.59.0.2**.
 
-[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AXIHIA4)
+[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AY4fIAG)
 
 ```bash
-sf package install --package 04tVx000001AXIHIA4 --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+sf package install --package 04tVx000001AY4fIAG --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
 ```
 
-Validation: the AI review org passes **246/246 source regressions** and retains its Einstein provider and Account starter PDF. The non-AI review org successfully uninstalls beta 3.60.0.2, installs this exact 3.60.0.4 beta, restores its original templates/email settings/permissions, and passes **246/246 namespaced regressions** plus **8/8 functional PDF smoke checks**. Actual Word generation produces identical one-page cover PDFs in both orgs, preserving the source image pixels.
+Use this exact package ID; earlier .5 builds are superseded. Current source passes **131/131 affected tests in a namespaced org**; the exact managed package passes **70/70 permission/signing tests** in a fresh subscriber. RevenueMate passes **337/337 packaged regressions** and **53/53 integration tests**. All three original Quote designs open with their original File titles and working Designer images; Atelier renders a five-page native PDF. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped.
 
-This beta is for scratch-org and sandbox subscriber installation, uninstallation and reinstallation testing. It is unpromoted and validation-skipped; production release checks and a separately validated build remain outstanding. An installed beta must be uninstalled before installing another version; preserve test data/configuration and remove package permission assignments first. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
+This beta is for subscriber installation, uninstallation and reinstallation testing. It is unpromoted; production release checks remain outstanding. Installed betas require uninstall/reinstall to move to another version. Preserve any test data/configuration you need, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
 
 ## Version History
 
@@ -591,7 +591,7 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | Testing beta 3.60.0.4 — PR #465         | `04tVx000001AXIHIA4` |
+| v3.60.0 | Testing beta 3.60.0.5 — PR #465         | `04tVx000001AY4fIAG` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |
