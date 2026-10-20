@@ -573,15 +573,15 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
-**3.60.0.6** (`04tVx000001AYB7IAO`) adds same-origin Designer font loading, table-loop preservation and faster native PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). It includes the earlier Designer/Assets, signing, rich-text File-image, Word-margin and existing-template loading fixes. Built from source commit `3870b8fd916addb2d64c532f279d60a8e1c6d211` with released ancestor **3.59.0.2**.
+**3.60.0.7** (`04tVx000001AdNhIAK`) removes the Portwood provider strip and website link from both signing pages. Browser titles use the customer's company name and “Document signing”. Customer logos, colours, copy, footers, support links and advanced layouts retain their existing behaviour. It includes all earlier 3.60.0.6 fixes, including Designer font loading, table-loop preservation and faster native PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). Built from source commit `9f52ec83094f40337b053c6adfea8efacc1ab2fb` with released ancestor **3.59.0.2**.
 
-[Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AYB7IAO)
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK)
 
 ```bash
-sf package install --package 04tVx000001AYB7IAO --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+sf package install --package 04tVx000001AdNhIAK --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
 ```
 
-Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. Source and namespaced-source orgs pass **65 HTML tests**. A representative four-page quote PDF displays in approximately **3–4 seconds**, compared with 45 seconds before. A fresh managed subscriber passes **136 scoped checks**; a configured subscriber passes **338 packaged regressions** and **53 integration tests**. Three existing HTML quote designs show all eight line items with working images and 3–4 second native previews. The custom-font design loads and embeds all five faces without failed font requests; all six signed-request verification pages pass as a guest.
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. **17/17 source Apex branding tests** and **256 focused signing checks** pass across offline DOM, desktop/mobile browser, completed-link and live guest first-paint checks. Focused Apex Security/AppExchange analysis reports zero violations; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings. Earlier managed-subscriber validation is recorded in the [3.60.0.6 changelog](CHANGELOG.md#v36006--clearer-and-faster-designer-previews-testing-beta); existing beta orgs have not yet been reinstalled on .7.
 
 This beta is for subscriber installation, uninstallation and reinstallation testing. It is unpromoted; production release checks remain outstanding. Installed betas require uninstall/reinstall to move to another version. Preserve any test data/configuration you need, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
 
@@ -591,7 +591,7 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | Testing beta 3.60.0.6 — PR #465         | `04tVx000001AYB7IAO` |
+| v3.60.0 | Testing beta 3.60.0.7 — PR #465         | `04tVx000001AdNhIAK` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |

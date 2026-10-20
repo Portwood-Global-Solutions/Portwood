@@ -6,7 +6,10 @@
 - Customer logos, colours, welcome text, footers, support links and advanced layouts retain their existing behaviour. The shared client-side branding code no longer recreates the provider attribution.
 - Validation: **17/17 Apex branding tests**, **256 focused signing checks** across offline DOM, desktop/mobile browser, completion and live guest first-paint checks pass. Focused Apex Security/AppExchange analysis reports zero violations; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings.
 
-Includes all 3.60.0.6 fixes below. Package creation and full Salesforce package validation are pending; this beta will remain unpromoted for testing.
+Testing beta **3.60.0.7** · 2026-10-20 · `04tVx000001AdNhIAK` · source commit `9f52ec8` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK).
+
+Includes all 3.60.0.6 fixes below. Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. The package remains unpromoted for testing. Installation into existing beta orgs is deferred.
 
 ## v3.60.0.6 — Clearer and faster Designer previews (testing beta)
 
