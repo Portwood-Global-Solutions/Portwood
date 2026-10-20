@@ -1,5 +1,10 @@
 @IsTest
 private class DocGenSignaturePreparationTest {
+    @TestSetup
+    static void setupPermissions() {
+        TestDataFactory.assignAdminPermissionSet();
+    }
+
     private static final String PDF = EncodingUtil.base64Encode(
         Blob.valueOf('%PDF-1.4\nunit transport fixture\n%%EOF')
     );
@@ -87,37 +92,49 @@ private class DocGenSignaturePreparationTest {
 
     @IsTest
     static void selectedBrandPersistsAndRejectsInactiveBrand() {
-        Account record = account();
-        Map<String, Object> draft = draft(record.Id);
-        DocGen_Brand__c brand = new DocGen_Brand__c(Name = 'PDF signing brand', Is_Active__c = true);
-        insert brand;
-        Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(preparation(draft));
-        config.put('brandId', brand.Id);
-        DocGenSignaturePreparationController.saveDraft(record.Id, (Id) draft.get('draftId'), 0, JSON.serialize(config));
-        System.assertEquals(
-            brand.Id,
-            [SELECT Brand__c FROM DocGen_Signature_Request__c WHERE Id = :(Id) draft.get('draftId')].Brand__c
-        );
-        brand.Is_Active__c = false;
-        update brand;
-        Boolean rejected = false;
-        try {
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            Account record = account();
+            Map<String, Object> draft = draft(record.Id);
+            DocGen_Brand__c brand = new DocGen_Brand__c(Name = 'PDF signing brand', Is_Active__c = true);
+            insert brand;
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(preparation(draft));
+            config.put('brandId', brand.Id);
+            DocGenSignaturePreparationController.saveDraft(
+                record.Id,
+                (Id) draft.get('draftId'),
+                0,
+                JSON.serialize(config)
+            );
+            System.assertEquals(
+                brand.Id,
+                [SELECT Brand__c FROM DocGen_Signature_Request__c WHERE Id = :(Id) draft.get('draftId')].Brand__c
+            );
+            brand.Is_Active__c = false;
+            update brand;
+            Boolean rejected = false;
+            try {
+                DocGenSignaturePreparationController.saveDraft(
+                    record.Id,
+                    (Id) draft.get('draftId'),
+                    1,
+                    JSON.serialize(config)
+                );
+            } catch (Exception ex) {
+                rejected = true;
+            }
+            System.assert(rejected, 'An inactive Brand cannot be assigned by a forged request.');
+            config.put('brandId', '');
             DocGenSignaturePreparationController.saveDraft(
                 record.Id,
                 (Id) draft.get('draftId'),
                 1,
                 JSON.serialize(config)
             );
-        } catch (Exception ex) {
-            rejected = true;
+            System.assertEquals(
+                null,
+                [SELECT Brand__c FROM DocGen_Signature_Request__c WHERE Id = :(Id) draft.get('draftId')].Brand__c
+            );
         }
-        System.assert(rejected, 'An inactive Brand cannot be assigned by a forged request.');
-        config.put('brandId', '');
-        DocGenSignaturePreparationController.saveDraft(record.Id, (Id) draft.get('draftId'), 1, JSON.serialize(config));
-        System.assertEquals(
-            null,
-            [SELECT Brand__c FROM DocGen_Signature_Request__c WHERE Id = :(Id) draft.get('draftId')].Brand__c
-        );
     }
 
     @IsTest

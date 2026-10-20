@@ -1,5 +1,10 @@
 @IsTest
 private class DocGenBrandingSetThemeTest {
+    @TestSetup
+    static void setupPermissions() {
+        TestDataFactory.assignAdminPermissionSet();
+    }
+
     private static final String ASSET_BASE = URL.getOrgDomainUrl().toExternalForm() + '/resource/';
     @IsTest
     static void mapsOnlySupportedSafePresentation() {
@@ -57,12 +62,12 @@ private class DocGenBrandingSetThemeTest {
                     JSON.serialize(new Map<String, Object>{ 'brandingSetId' => themeId })
                 )
             );
-            insert brand;
+            Database.insert(brand, AccessLevel.SYSTEM_MODE);
             DocGen_Signature_Request__c request = new DocGen_Signature_Request__c(
                 Brand__c = brand.Id,
                 Status__c = 'Sent'
             );
-            insert request;
+            Database.insert(request, AccessLevel.SYSTEM_MODE);
             System.assertEquals('#2574A9', DocGenSigningBranding.forRequest(request.Id).color);
             color.PropertyValue = '#227548';
             DocGenBrandingSetTheme.testProperties = new List<BrandingSetProperty>{ color };

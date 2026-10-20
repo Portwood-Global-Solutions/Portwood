@@ -1,5 +1,10 @@
 @IsTest
 private class DocGenSnippetTest {
+    @TestSetup
+    static void setupPermissions() {
+        TestDataFactory.assignAdminPermissionSet();
+    }
+
     private static Map<String, Object> create(String key, String html) {
         return DocGenSnippetController.saveSnippet(null, key, key, 'Terms & Conditions', html, null, true);
     }
@@ -167,7 +172,7 @@ private class DocGenSnippetTest {
             Type__c = 'HTML',
             Base_Object_API__c = 'Account'
         );
-        insert t;
+        Database.insert(t, AccessLevel.SYSTEM_MODE);
         create('parent', '<p>{Name}</p>');
         DocGenGiantQueryAssembler assembler = new DocGenGiantQueryAssembler(null, t.Id, account.Id, 'Contacts');
         System.assertEquals('<p>Shared customer</p>', assembler.resolveParentMergeTags('{%snippet:parent}'));
@@ -198,7 +203,7 @@ private class DocGenSnippetTest {
             Header_Html__c = '{%snippet:header-clause}',
             Footer_Html__c = '{%snippet:footer-clause}'
         );
-        insert t;
+        Database.insert(t, AccessLevel.SYSTEM_MODE);
         ContentVersion cv = new ContentVersion(
             Title = 'Snippet pipeline',
             PathOnClient = 'template.html',

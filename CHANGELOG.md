@@ -4,6 +4,7 @@
 
 - Existing HTML and Canvas templates open their published document bodies in the Designer even when their Salesforce Files have descriptive titles. The Designer keeps newer unpublished edits and reads the exact File revision pinned by the active template version.
 - File titles, document contents and published version references remain unchanged. Templates without an active version still open empty; unrelated or inactive Files are not guessed as a replacement.
+- Package validation tests explicitly use the appropriate administrator and reader contexts. Font-management authorization remains enforced; the packaging fixes only correct test permissions and fixture creation.
 - Validation: **65/65 HTML-template Apex tests** pass, including five new regressions. Focused PMD Security reports **zero violations**; repository formatting and whitespace checks pass. The baseline offline metadata audit still reports 51 existing failures (4 major, 47 minor).
 
 Includes all 3.60.0.4 fixes below. This is an unpromoted testing beta; its package ID and subscriber results will be recorded after the build and installation complete.
