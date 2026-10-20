@@ -26,7 +26,12 @@ Validation: **138/138 namespaced Apex tests** pass across the PDF parser, merge 
 
 The namespaced Flow action is discoverable and produces five independently verified saved PDFs using collection/text inputs, forms, mixed cross-reference formats, duplex padding and historical File revisions. All **81 independent PDF checks** pass for syntax, page order/text, dimensions, images and form values; encrypted input is rejected, record attachment and checksums are verified, and both form pages render correctly.
 
-Package creation, fresh managed-install checks and full Salesforce package validation are pending. Existing beta org installations remain deferred.
+The exact managed beta installs in a fresh non-AI subscriber and passes **138/138 scoped Apex tests**. Both namespaced-source and managed-subscriber Screen Flows succeed with Text and Text Collection inputs, with independently verified three-page PDFs and correct File links. The two orgs pass **208 independent saved-PDF checks** in total, including page order/text, image pixels, dimensions, form values/appearances, duplex padding and historical revisions.
+
+Testing beta **3.60.0.8** · 2026-10-20 · `04tVx000001AeWfIAK` · source commit `af631bc` · released ancestor **3.59.0.2**.
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK).
+
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. This beta remains unpromoted. Existing beta org installations remain deferred.
 
 ## v3.60.0.7 — Customer-branded signing pages (testing beta)
 

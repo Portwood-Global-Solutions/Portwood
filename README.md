@@ -576,17 +576,19 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 ## PR #465 testing beta
 
-**3.60.0.7** (`04tVx000001AdNhIAK`) removes the Portwood provider strip and website link from both signing pages. Browser titles use the customer's company name and “Document signing”. Customer logos, colours, copy, footers, support links and advanced layouts retain their existing behaviour. It includes all earlier 3.60.0.6 fixes, including Designer font loading, table-loop preservation and faster native PDF previews ([#481](https://github.com/Portwood-Global-Solutions/Portwood/issues/481)). Built from source commit `9f52ec83094f40337b053c6adfea8efacc1ab2fb` with released ancestor **3.59.0.2**.
+**3.60.0.8** (`04tVx000001AeWfIAK`) adds [PR #466](https://github.com/Portwood-Global-Solutions/Portwood/pull/466): **Portwood: Merge PDFs**, a native Flow action for existing uploaded Salesforce PDFs. Supply an ordered Text collection of ContentVersion IDs or a single delimited Text value; the action saves a merged File and returns its IDs, with optional record attachment and duplex padding. Modern compressed PDFs and ordinary form values/appearances are supported. The [Flow recipe](UserGuide.md#11101-merge-existing-pdfs-entirely-in-flow) covers the 384 KiB synchronous / 768 KiB asynchronous input budgets and PDF restrictions.
 
-[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AdNhIAK)
+Includes all .7 customer-branding and earlier Designer/font/table-loop/preview fixes. Built from source commit `af631bc3ed9d215e41fa3f65300569726c25f307` with released ancestor **3.59.0.2**.
+
+[Sandbox install](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK) · [Developer/scratch install](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001AeWfIAK)
 
 ```bash
-sf package install --package 04tVx000001AdNhIAK --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
+sf package install --package 04tVx000001AeWfIAK --target-org <scratch-or-sandbox> --wait 20 --security-type AdminsOnly --no-prompt
 ```
 
-Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. **17/17 source Apex branding tests** and **256 focused signing checks** pass across offline DOM, desktop/mobile browser, completed-link and live guest first-paint checks. Focused Apex Security/AppExchange analysis reports zero violations; formatting and whitespace checks pass. The offline metadata audit retains 51 existing findings. Earlier managed-subscriber validation is recorded in the [3.60.0.6 changelog](CHANGELOG.md#v36006--clearer-and-faster-designer-previews-testing-beta); existing beta orgs have not yet been reinstalled on .7.
+Full Salesforce package validation passed with **81% Apex coverage**; validation was not skipped. **138/138 namespaced-source tests** and **138/138 managed-subscriber tests** pass across PDF parsing, the merge action, bulk merging and signing branding. Both Screen Flow input modes produce independently verified PDFs in both orgs; **208 saved-PDF checks** pass for syntax, page order/text, dimensions, images, form values, duplex padding and historical revisions. PMD Security/AppExchange reports zero violations; Graph Engine hit internal analyzer exceptions and is not counted as passing. Formatting/whitespace checks pass; the offline metadata audit retains 51 existing findings.
 
-This beta is for subscriber installation, uninstallation and reinstallation testing. It is unpromoted; production release checks remain outstanding. Installed betas require uninstall/reinstall to move to another version. Preserve any test data/configuration you need, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
+This beta is unpromoted and intended for install, uninstall and reinstall testing. Existing demo/review org installations are deferred. Installed betas require uninstall/reinstall to move to another version. Preserve needed test data/configuration, detach external component references and remove package permission assignments before uninstalling. See [Salesforce beta upgrade guidance](https://developer.salesforce.com/docs/platform/pkg2-dev/guide/sfdx-dev-dev2gp-install-pkg-upgrade.html) and [PR #465](https://github.com/Portwood-Global-Solutions/Portwood/pull/465) for current validation and org status.
 
 ## Version History
 
@@ -594,7 +596,7 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | Testing beta 3.60.0.7 — PR #465         | `04tVx000001AdNhIAK` |
+| v3.60.0 | Testing beta 3.60.0.8 — PR #465         | `04tVx000001AeWfIAK` |
 | v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |

@@ -39,7 +39,7 @@ PowerPoint and Excel templates are also supported as **alpha-stage** formats —
 
 [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000010fnNIAQ) · [Support](https://portwood.dev/support) · [Expert Services](https://portwood.dev/services)
 
-> **PR #465 testing beta:** beta **3.60.0.7** (`04tVx000001AdNhIAK`) is for install, uninstall and reinstall testing. It removes provider attribution from signing pages while retaining customer branding and all earlier Designer, signing, image, Word-margin and existing-template fixes. See the [beta testing instructions](README.md#pr-465-testing-beta) for installation and validation status. The package remains unpromoted.
+> **PR #465 testing beta:** beta **3.60.0.8** (`04tVx000001AeWfIAK`) adds **Portwood: Merge PDFs** for native Flow merging of existing uploaded PDFs, alongside .7 customer-branded signing and all earlier 3.60 fixes. See the [Flow recipe](#11101-merge-existing-pdfs-entirely-in-flow) for inputs/limits and the [beta testing instructions](README.md#pr-465-testing-beta) for installation and validation status. The package remains unpromoted.
 
 ---
 
