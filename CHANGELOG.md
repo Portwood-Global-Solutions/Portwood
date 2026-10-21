@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed - template export and LWS downloads (#454)
+
+- Template export now downloads the `.docgen.json` bundle and shows the success toast
+  without the misleading `url is not defined` error.
+- Template JSON export, Canvas HTML export, and shared Office-file downloads use Blob URLs
+  instead of `data:` download URLs that Lightning Web Security can block. A permitted MIME
+  fallback preserves the file bytes, filenames, extensions, and Unicode content.
+- Temporary download anchors are removed and Blob URLs are released after the browser has
+  time to start the download. Native Salesforce file preview behavior is unchanged.
+
 ### Added - branded guest signing experience
 
 - Applied reusable brand company name, logo, color, and favicon behavior across the signing
