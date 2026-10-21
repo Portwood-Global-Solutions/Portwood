@@ -3015,30 +3015,6 @@ As of **v3.42+** the **Sign In Person** button is also available on the **Previo
 
 ### 10.7 Signing page experience
 
-The public signing experience uses the same resolved branding as the signature workflow. When a
-template has a Sending Brand selected, the verification, signing, success, and error states use
-that brand's company name, logo, brand color, and browser-tab favicon. The signing page keeps one
-consistent branded header; the verification, success, and error states use the branded browser
-tab without adding a duplicate page header.
-
-When no Sending Brand is selected on the template, Portwood preserves the existing default
-experience and uses the org-wide Signature Settings branding. The template/document name remains
-the document context; it is not used as a substitute brand name.
-
-The PDF signing flow supports five signer-facing paths:
-
-1. **Verification** - the signer confirms their email and enters the PIN when required.
-2. **Signing** - the signer reviews the document and enters each signature, initials, or date.
-3. **Confirmation** - the signer reviews the completed fields and gives electronic consent.
-4. **Success** - the signature is recorded and the completed document is processed.
-5. **Error** - the signer receives a clear branded message for an expired, completed, declined,
-   or otherwise unavailable request.
-
-For signature and initials fields, drawing and typing are mutually exclusive. A prefilled signer
-name disables drawing; clearing the name enables drawing. Starting a drawing disables the typed
-name field, additional strokes remain supported, and clearing the drawing restores the available
-input methods.
-
 Guided, mobile-friendly. States: PIN verify → signing → review → submit.
 
 - Full document HTML renders inline.
@@ -3291,10 +3267,7 @@ _New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point
 
 **Per-brand OWA setup.** Each brand's **Send emails from** address needs the same production setup as the org-wide one (§13.2): a verified Org-Wide Email Address with **Allow All Profiles** enabled, on a DKIM-authenticated sending domain. Until then that brand's emails fall back to the org-wide sender.
 
-**Signing page and certificate.** The guest-facing signing page follows the selected Sending Brand
-when one is assigned. Templates without a selected brand retain the org-wide Signature Settings
-default. The verification-certificate PDF remains part of the signing record and uses the existing
-certificate behavior.
+**Signing page and certificate.** The public signing page and the verification-certificate PDF stay on the org-wide branding — a brand controls the **emails**, not the guest-facing signing experience.
 
 ---
 
