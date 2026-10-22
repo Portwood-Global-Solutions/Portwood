@@ -2320,7 +2320,7 @@
                                     ></c-doc-gen-canvas>
                                 </template>
                                 <template if:true={showFlowDesigner}>
-                                    <div class="dg-format-bar" role="toolbar" aria-label="Text formatting">
+                                    <div class={formatBarClass} role="toolbar" aria-label="Text formatting">
                                         <button
                                             class={boldBtnClass}
                                             data-cmd="bold"
@@ -2551,10 +2551,11 @@
                                                 data-menu="font"
                                                 onmousedown={handleFmtMouseDown}
                                                 onclick={handleFmtMenuToggle}
-                                                title="Font — the PDF engine ships exactly these four"
+                                                title="Font — choose a built-in or approved Asset font"
                                                 aria-haspopup="true"
                                             >
-                                                Aa<span class="dg-fmt-caret">&#9662;</span>
+                                                <span class="dg-fmt-font-label">{selectedFontLabel}</span>
+                                                <span class="dg-fmt-caret">&#9662;</span>
                                             </button>
                                             <template if:true={isFontMenuOpen}>
                                                 <div class="dg-fmt-menu dg-fmt-menu_list" role="menu">
@@ -2562,7 +2563,7 @@
                                                     <template for:each={fontChoices} for:item="font">
                                                         <button
                                                             key={font.key}
-                                                            class="dg-fmt-menu-item"
+                                                            class={font.itemClass}
                                                             style={font.style}
                                                             data-cmd="fontName"
                                                             data-value={font.value}
@@ -2570,7 +2571,10 @@
                                                             onclick={handleFormatAction}
                                                             title={font.title}
                                                         >
-                                                            {font.label}
+                                                            <span class="dg-fmt-menu-check" aria-hidden="true"
+                                                                >{font.check}</span
+                                                            >
+                                                            <span>{font.label}</span>
                                                         </button>
                                                     </template>
                                                 </div>

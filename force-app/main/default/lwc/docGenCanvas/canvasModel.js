@@ -1245,27 +1245,77 @@ const LIST_AND_PARAGRAPH_CSS =
     // gap between list items that the canvas does not show.
     'p { margin: 0 0 0.06in 0; }\n';
 
+/** Remove inline rich-text face overrides when a whole box face is selected. */
+export function applyFontFaceToInline(html) {
+    return String(html || '')
+        .replace(/\sstyle=(['"])(.*?)\1/gi, (_all, quote, css) => {
+            const clean = css.replace(/(?:^|;)\s*font-(?:family|weight|style)\s*:[^;]*/gi, '').trim();
+            return clean ? ' style=' + quote + clean + quote : '';
+        })
+        .replace(/<(\/?)\s*(?:strong|b|em|i)(?=[\s>])/gi, '<$1span');
+}
+
+/** A private marker is expanded to the verified native font by DocGenFontService. */
+export function fontBindingCss(st) {
+    if (!st?.fontFaceKey) return '';
+    return (
+        ' -pw-font-face:' +
+        st.fontFaceKey +
+        '; font-family:' +
+        st.font +
+        '; font-weight:' +
+        st.fontWeight +
+        '; font-style:' +
+        st.fontStyle +
+        ';'
+    );
+}
+
+function faceTypography(st, fallbackFont) {
+    return st?.fontFaceKey
+        ? fontBindingCss(st)
+        : ' font-family: ' +
+              (st?.font || fallbackFont || DEFAULT_STYLE.font) +
+              '; font-weight: ' +
+              (st?.bold && canRenderBold(st?.font || fallbackFont) ? 'bold' : 'normal') +
+              ';';
+}
+
+function readFontBinding(style) {
+    const key = readCss(style, '-pw-font-face');
+    return key
+        ? {
+              fontFaceKey: key,
+              font: readCss(style, 'font-family'),
+              fontWeight: Number(readCss(style, 'font-weight')),
+              fontStyle: readCss(style, 'font-style'),
+              bold: false,
+              italic: false
+          }
+        : {};
+}
+
 /** Box styling as inline CSS. Only properties the engine honours are emitted. */
 function styleCss(box) {
     const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
     // A null property means "the document already says this" — emitting it would
     // override the source's own stylesheet with a canvas default.
     let css = '';
-    if (st.font) css += 'font-family: ' + st.font + '; ';
+    if (st.font && !st.fontFaceKey) css += 'font-family: ' + st.font + '; ';
     if (st.size) css += 'font-size: ' + st.size + 'pt; ';
     if (st.color) css += 'color: ' + st.color + '; ';
     if (st.align) css += 'text-align: ' + st.align + '; ';
     css += 'padding: ' + (st.padding || 0) + 'pt;';
     // Arial Unicode MS has no bold face in the PDF engine, so a bold it emits would
     // silently print regular — the canvas promises a weight the PDF cannot deliver.
-    if (st.bold && canRenderBold(st.font)) css += ' font-weight: bold;';
-    if (st.italic) css += ' font-style: italic;';
+    if (!st.fontFaceKey && st.bold && canRenderBold(st.font)) css += ' font-weight: bold;';
+    if (!st.fontFaceKey && st.italic) css += ' font-style: italic;';
     if (st.underline) css += ' text-decoration: underline;';
     // A flat hex, never rgba(): rgba resolves to nothing in this engine and the fill
     // disappears completely rather than degrading to a solid colour.
     if (st.fill) css += ' background: ' + st.fill + ';';
     if (st.borderWidth > 0) css += ' border: ' + st.borderWidth + 'pt solid ' + st.borderColor + ';';
-    return css;
+    return css + fontBindingCss(st);
 }
 
 /** Escapes only what would break the markup — merge tags must survive verbatim. */
@@ -1361,7 +1411,7 @@ function totalsCell(t, tt, frame, value, span) {
         '; text-align: ' +
         tt.align +
         ';' +
-        (tt.bold && canRenderBold(tt.font) ? ' font-weight: bold;' : ' font-weight: normal;') +
+        faceTypography(tt, DEFAULT_STYLE.font) +
         fill;
     return '<td' + (span || '') + ' style="' + css + '">' + (value || '') + '</td>';
 }
@@ -1385,16 +1435,14 @@ function subLoopRow(t, parentColCount, boxFont) {
     const indent = t.subIndent == null ? 12 : t.subIndent;
     const base =
         frame +
-        ' font-family: ' +
-        (stx.font || boxFont || DEFAULT_STYLE.font) +
-        '; font-size: ' +
+        faceTypography(stx, boxFont) +
+        ' font-size: ' +
         stx.size +
         'pt; color: ' +
         stx.color +
         '; text-align: ' +
         stx.align +
         ';' +
-        (stx.bold && canRenderBold(stx.font || boxFont) ? ' font-weight: bold;' : ' font-weight: normal;') +
         (t.subFill ? ' background: ' + t.subFill + ';' : '');
     const cells = subs
         .map((c, i) => {
@@ -1468,16 +1516,14 @@ function tableToHtml(box) {
     // different face from its data is an ordinary thing to want, and the font was the
     // one typographic property these sections could not set.
     const typo = (x) =>
-        ' font-family: ' +
-        (x.font || st.font) +
-        '; font-size: ' +
+        faceTypography(x, st.font) +
+        ' font-size: ' +
         x.size +
         'pt; color: ' +
         x.color +
         '; text-align: ' +
         x.align +
-        ';' +
-        (x.bold && canRenderBold(x.font || st.font) ? ' font-weight: bold;' : ' font-weight: normal;');
+        ';';
     const frame = gridCss(t, 'body');
     const cellCss = frame + typo(rt);
     const headCss = gridCss(t, 'head') + typo(ht);
@@ -2697,7 +2743,7 @@ function readStyle(style) {
             st.borderColor = bm[2];
         }
     }
-    return st;
+    return { ...st, ...readFontBinding(style) };
 }
 
 /** Recovers a table box's columns and loop binding from the serialized markup. */
@@ -2774,7 +2820,8 @@ function readTable(wrapper, tableEl) {
                     size: parseFloat(readCss(scs, 'font-size')) || DEFAULT_SUB_TEXT.size,
                     color: readCss(scs, 'color') || DEFAULT_SUB_TEXT.color,
                     align: readCss(scs, 'text-align') || DEFAULT_SUB_TEXT.align,
-                    bold: /font-weight:\s*bold/.test(scs)
+                    bold: /font-weight:\s*bold/.test(scs),
+                    ...readFontBinding(scs)
                 };
             }
             continue;
@@ -2791,7 +2838,8 @@ function readTable(wrapper, tableEl) {
                     size: parseFloat(readCss(cs, 'font-size')) || DEFAULT_TOTALS_TEXT.size,
                     color: readCss(cs, 'color') || DEFAULT_TOTALS_TEXT.color,
                     align: readCss(cs, 'text-align') || DEFAULT_TOTALS_TEXT.align,
-                    bold: /font-weight:\s*bold/.test(cs)
+                    bold: /font-weight:\s*bold/.test(cs),
+                    ...readFontBinding(cs)
                 };
             }
         } else {
@@ -2814,6 +2862,12 @@ function readTable(wrapper, tableEl) {
     if (ths[0]) {
         t.headerFill = readCss(ths[0].getAttribute('style'), 'background') || t.headerFill;
         t.headerBold = /font-weight:\s*bold/.test(ths[0].getAttribute('style') || '');
+    }
+    for (const [field, cell] of [
+        ['headerText', ths[0]],
+        ['rowText', tds[0]]
+    ]) {
+        if (cell) t[field] = { ...(t[field] || {}), ...readFontBinding(cell.getAttribute('style') || '') };
     }
     return t;
 }

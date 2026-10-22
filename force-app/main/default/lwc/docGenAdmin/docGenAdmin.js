@@ -8,6 +8,8 @@ import LightningConfirm from 'lightning/confirm';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
+import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
+import { loadFontFace } from 'c/docGenFontLoader';
 import { downloadBase64 as downloadBase64Util, parseSOQLFields, stripOuterSelectFrom } from 'c/docGenUtils';
 // HTML-first authoring: starter designs, AI prompt builder, query-shape extractor
 import {
@@ -776,7 +778,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     get pdfAcroFormFilterOptions() {
-        return [
+        const builtins = [
             { label: 'All fields', value: 'all' },
             { label: 'Mapped', value: 'mapped' },
             { label: 'Unmapped', value: 'unmapped' },
@@ -1519,6 +1521,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // the template toggle stays visible until the next load, it never blocks the
         // editor.
         this._refreshOrgHideDecline();
+        this._loadDesignerFonts();
     }
 
     // #367
@@ -6139,6 +6142,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
 
+        let stagedDraftForGeneration = false;
+
         // Auto-heal sample query config
         if (
             this.editTemplateName === 'Sample Quote Template' &&
@@ -6149,8 +6154,38 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 ', (SELECT Product2.Name, Description, Quantity, UnitPrice, TotalPrice FROM QuoteLineItems)';
         }
 
-        // Save first
-        await this.handleSaveOnly();
+        // Save the live Visual designer body before generation. handleSaveOnly()
+        // persists template fields only; without this step Generate used the last
+        // staged ContentVersion, so a newly selected custom font appeared in the
+        // editor/preview but disappeared from the generated PDF.
+        if (this.activeMainTab === 'design' && this.editTemplateType === 'HTML') {
+            const draft = (this._currentDraftHtml() || '').trim();
+            const lastStaged = (this._lastUploadedHtmlText || '').trim();
+            const norm = (value) => value.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+            if (draft && (this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
+                try {
+                    const base = (this.uploadedFileName || 'template.html').replace(/\.(html?|zip)$/i, '');
+                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, base + '.html', null, 'editor');
+                    this.htmlEditorDirty = false;
+                    stagedDraftForGeneration = true;
+                } catch (err) {
+                    const msg =
+                        err && err.body && err.body.message ? err.body.message : (err && err.message) || String(err);
+                    this.showToast('Generation Failed', 'Could not stage your designer edits. ' + msg, 'error');
+                    return;
+                }
+            }
+        }
+
+        // A staged HTML body is a loose ContentVersion until Save as New Version
+        // links it to the template. Generation reads the active version, so use
+        // the full save path here whenever this run staged live designer edits;
+        // otherwise metadata-only generation keeps the existing lightweight save.
+        if (stagedDraftForGeneration) {
+            await this.handleSaveAndClose();
+        } else {
+            await this.handleSaveOnly();
+        }
 
         this.isLoadingVersions = true;
 
@@ -7415,9 +7450,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         ];
     }
 
-    /** The PDF engine ships exactly four fonts — the picker offers exactly those. */
+    /** The PDF engine ships exactly four fonts plus approved Asset font faces. */
     get fontChoices() {
-        return [
+        const builtins = [
             {
                 key: 'f_helv',
                 label: 'Helvetica',
@@ -7447,6 +7482,179 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 title: 'Arial Unicode MS — widest character coverage (international text)'
             }
         ];
+        const custom = (this.designerFontFaces || [])
+            .filter((face) => face.selectable)
+            .map((face) => ({
+                key: 'f_' + face.key,
+                label: face.label,
+                value: 'face:' + face.key,
+                style:
+                    "font-family:'" + face.family + "';font-weight:" + face.weight + ';font-style:' + face.style + ';',
+                title: face.label + ' — approved Asset font'
+            }));
+        return [...builtins, ...custom].map((font) => ({
+            ...font,
+            selected: font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif'),
+            itemClass:
+                font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif')
+                    ? 'dg-fmt-menu-item dg-fmt-menu-item_selected'
+                    : 'dg-fmt-menu-item',
+            check: font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif') ? '✓' : ''
+        }));
+    }
+
+    get selectedFontLabel() {
+        const value = this.fmtState?.fontValue || 'Helvetica, Arial, sans-serif';
+        const choice = this.fontChoices.find((font) => font.value === value);
+        return choice ? choice.label : 'Helvetica';
+    }
+
+    @track designerFontFaces = [];
+    designerFontError;
+    _designerFontPromise;
+    _pendingDesignerFont;
+
+    async _loadDesignerFonts() {
+        if (this._designerFontPromise) return this._designerFontPromise;
+        this._designerFontPromise = getFontFaces()
+            .then((faces) => {
+                this.designerFontFaces = faces || [];
+                this.designerFontError = undefined;
+                return Promise.allSettled(
+                    this.designerFontFaces
+                        .filter((face) => face.selectable)
+                        .map((face) => loadFontFace({ ...face, key: 'admin-' + face.key, previewFamily: face.family }))
+                );
+            })
+            .catch((error) => {
+                this.designerFontFaces = [];
+                this.designerFontError = error?.body?.message || error.message;
+                return [];
+            });
+        return this._designerFontPromise;
+    }
+
+    _applyCustomDesignerFont(value) {
+        const face = this.designerFontFaces.find((item) => 'face:' + item.key === value);
+        if (!face) return false;
+        this._restoreCaret();
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount) {
+            this.showToast('Select some text first', 'Highlight text in the page, then choose a custom font.', 'info');
+            return true;
+        }
+        const range = selection.getRangeAt(0);
+        const collapsed = selection.isCollapsed;
+        const surface = this._surfaceContaining(range.startContainer) || this._canvas();
+        if (!surface) {
+            this.showToast('Select some text first', 'Highlight text in the page, then choose a custom font.', 'info');
+            return true;
+        }
+        try {
+            if (collapsed) {
+                const span = document.createElement('span');
+                span.setAttribute('data-pw-font-caret', 'true');
+                // Keep the revision binding in a data attribute while the
+                // author is editing. `-pw-font-face` is an intentional
+                // renderer marker, not a valid browser CSS property, and
+                // CSSStyleDeclaration may silently discard it when assigned
+                // through style.setProperty(). _unpillifyTags materialises it
+                // into the staged HTML before preview/save.
+                span.setAttribute('data-pw-font-face', face.key);
+                span.style.fontFamily = '"' + face.family + '"';
+                span.style.fontWeight = String(face.weight);
+                span.style.fontStyle = face.style;
+                span.textContent = '\u200b';
+                range.insertNode(span);
+                const caret = document.createRange();
+                caret.selectNodeContents(span);
+                caret.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(caret);
+                this._pendingDesignerFont = {
+                    key: face.key,
+                    family: face.family,
+                    weight: face.weight,
+                    style: face.style,
+                    surface
+                };
+                this._recordCaret(span, surface);
+                this.htmlEditorDirty = true;
+                this._refreshFmtState();
+                return true;
+            }
+            this._pendingDesignerFont = null;
+            document.execCommand('styleWithCSS', false, 'true');
+            document.execCommand('fontName', false, face.family);
+            const elements = [surface, ...surface.querySelectorAll('*')];
+            for (const element of elements) {
+                if (element === surface || !element.isConnected) continue;
+                let intersects = false;
+                try {
+                    intersects = range.intersectsNode(element);
+                } catch (_e) {
+                    continue;
+                }
+                if (!intersects) continue;
+                const family = (element.style.fontFamily || '').replace(/[\"']/g, '').toLowerCase();
+                const faceAttr = (element.getAttribute('face') || '').toLowerCase();
+                if (
+                    family.includes(String(face.family).toLowerCase()) ||
+                    faceAttr === String(face.family).toLowerCase()
+                ) {
+                    element.removeAttribute('face');
+                    element.setAttribute('data-pw-font-face', face.key);
+                    element.style.fontFamily = '\"' + face.family + '\"';
+                    element.style.fontWeight = String(face.weight);
+                    element.style.fontStyle = face.style;
+                }
+            }
+            this.htmlEditorDirty = true;
+            this._refreshFmtState();
+        } catch (error) {
+            this.showToast('Font could not be applied', error?.message || 'Select text and try again.', 'error');
+        }
+        return true;
+    }
+
+    /**
+     * Insert ordinary typed characters directly into the active custom-font span.
+     * Some browsers split an inline span when it contains only a zero-width seed;
+     * handling beforeinput avoids that browser-dependent behavior entirely.
+     */
+    _handlePendingDesignerFontInput(event, surface) {
+        const pending = this._pendingDesignerFont;
+        if (!pending || pending.surface !== surface || !event) {
+            return false;
+        }
+        if (!['insertText', 'insertCompositionText'].includes(event.inputType) || !event.data) {
+            return false;
+        }
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount || !selection.isCollapsed) {
+            this._pendingDesignerFont = null;
+            return false;
+        }
+        const range = selection.getRangeAt(0);
+        const start = range.startContainer;
+        const owner = start && start.nodeType === 3 ? start.parentElement : start;
+        const bound = owner && owner.closest ? owner.closest('[data-pw-font-face]') : null;
+        if (!bound || bound.getAttribute('data-pw-font-face') !== pending.key) {
+            this._pendingDesignerFont = null;
+            return false;
+        }
+        event.preventDefault();
+        const text = document.createTextNode(event.data);
+        range.insertNode(text);
+        const caret = document.createRange();
+        caret.setStartAfter(text);
+        caret.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(caret);
+        this._lastCanvasRange = caret.cloneRange();
+        this.htmlEditorDirty = true;
+        this._refreshFmtState();
+        return true;
     }
 
     /** Keep the page's text selection alive while clicking toolbar controls. */
@@ -8009,6 +8217,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
     get isAlignMenuOpen() {
         return this.openFmtMenu === 'align';
+    }
+
+    get formatBarClass() {
+        return this.openFmtMenu ? 'dg-format-bar dg-format-bar_menu-open' : 'dg-format-bar';
     }
 
     /** Current text colour, painted as the underbar on the trigger. */
@@ -8969,6 +9181,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // mutates the DOM, the only moment the pre-edit state still exists.
         surface.addEventListener('beforeinput', (e) => {
             this._pushUndo('type:' + ((e && e.inputType) || 'text'));
+            this._handlePendingDesignerFontInput(e, surface);
         });
     }
 
@@ -10890,7 +11103,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * flat, Flying Saucer-safe styling the PDF engine renders.
      */
     // --- Active-format indication: B/I/U/S read as pressed at the caret ---
-    @track fmtState = { bold: false, italic: false, underline: false, strike: false };
+    @track fmtState = {
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        fontValue: 'Helvetica, Arial, sans-serif'
+    };
     // Google-Docs-style size box: shows the size at the caret, sets any pt.
     @track fmtSizePt = 11;
 
@@ -11002,11 +11221,66 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.fmtState.strike ? 'dg-fmt-btn dg-fmt-on' : 'dg-fmt-btn';
     }
 
+    /** Resolve the font represented by the caret/selection to a picker value. */
+    _fontValueAtNode(node) {
+        const fallback = 'Helvetica, Arial, sans-serif';
+        if (!node) {
+            return fallback;
+        }
+        const element = node.nodeType === 3 ? node.parentElement : node;
+        if (!element) {
+            return fallback;
+        }
+        const marked = element.closest && element.closest('[data-pw-font-face]');
+        const markedKey = marked && marked.getAttribute('data-pw-font-face');
+        if (markedKey) {
+            const markedFace = (this.designerFontFaces || []).find((face) => face.selectable && face.key === markedKey);
+            if (markedFace) {
+                return 'face:' + markedFace.key;
+            }
+        }
+        let family = '';
+        try {
+            family = window.getComputedStyle(element).fontFamily || '';
+        } catch (e) {
+            family = element.style?.fontFamily || element.getAttribute('face') || '';
+        }
+        const normalized = family.replace(/["']/g, '').toLowerCase();
+        const custom = (this.designerFontFaces || []).find(
+            (face) =>
+                face.selectable &&
+                normalized.indexOf(
+                    String(face.family || '')
+                        .replace(/["']/g, '')
+                        .toLowerCase()
+                ) !== -1
+        );
+        if (custom) {
+            return 'face:' + custom.key;
+        }
+        if (normalized.indexOf('arial unicode') !== -1) {
+            return "'Arial Unicode MS', Arial, sans-serif";
+        }
+        if (normalized.indexOf('courier') !== -1 || normalized.indexOf('monospace') !== -1) {
+            return "'Courier New', Courier, monospace";
+        }
+        if (normalized.indexOf('times') !== -1 || normalized.indexOf('serif') !== -1) {
+            return "'Times New Roman', Times, serif";
+        }
+        return fallback;
+    }
+
     _refreshFmtState() {
         if (!this.showHtmlBodyVisual) {
             return;
         }
-        const next = { bold: false, italic: false, underline: false, strike: false };
+        const next = {
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            fontValue: this.fmtState.fontValue || 'Helvetica, Arial, sans-serif'
+        };
         try {
             const sel = window.getSelection();
             let node = sel && sel.anchorNode;
@@ -11022,6 +11296,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             if (node && pv && pv.contains(node)) {
                 const cs = window.getComputedStyle(node);
+                next.fontValue = this._fontValueAtNode(node);
                 next.bold = cs.fontWeight === 'bold' || parseInt(cs.fontWeight, 10) >= 600;
                 next.italic = cs.fontStyle === 'italic';
                 const px = parseFloat(cs.fontSize);
@@ -11058,7 +11333,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             cur.bold !== next.bold ||
             cur.italic !== next.italic ||
             cur.underline !== next.underline ||
-            cur.strike !== next.strike
+            cur.strike !== next.strike ||
+            cur.fontValue !== next.fontValue
         ) {
             this.fmtState = next;
         }
@@ -11071,6 +11347,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const cmd = event.currentTarget.dataset.cmd;
         const value = event.currentTarget.dataset.value || null;
         if (!cmd) {
+            return;
+        }
+        if (cmd === 'fontName' && value && value.indexOf('face:') === 0) {
+            this._pushUndo('fmt:fontName');
+            this._applyCustomDesignerFont(value);
+            this.closeFmtMenu();
             return;
         }
         // Undo/redo are the designer's own stack, not execCommand's. execCommand
@@ -12271,7 +12553,120 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    /**
+     * Turn browser/editor font markup back into the exact revision binding the
+     * PDF renderer needs.  execCommand('fontName') is not consistent across
+     * browsers: one version emits an inline style, another emits <font
+     * face="...">, and pasted HTML can put the family on the paragraph itself.
+     * The browser can display all of those, but the native PDF path cannot
+     * identify a custom revision from family alone.  Resolve every inline
+     * custom-family occurrence before the editor tree is serialized.
+     */
+    _normalizeCustomDesignerBindings(root) {
+        const faces = (this.designerFontFaces || []).filter(
+            (face) => face && /^[a-f0-9]{64}$/i.test(face.key || '') && face.family
+        );
+        if (!faces.length) {
+            return;
+        }
+        const familyKey = (value) =>
+            String(value || '')
+                .split(',')[0]
+                .replace(/["']/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        const weightKey = (value) => {
+            const text = String(value || '')
+                .trim()
+                .toLowerCase();
+            if (text === 'normal') return 400;
+            if (text === 'bold') return 700;
+            const parsed = parseInt(text, 10);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+        const styleKey = (value) =>
+            String(value || '')
+                .trim()
+                .toLowerCase() === 'italic'
+                ? 'italic'
+                : 'normal';
+        const candidatesFor = (family) => {
+            const wanted = familyKey(family);
+            if (!wanted) return [];
+            return faces.filter(
+                (face) =>
+                    familyKey(face.family) === wanted ||
+                    familyKey(face.preferredFamily) === wanted ||
+                    familyKey(face.label) === wanted
+            );
+        };
+        const chooseFace = (family, weight, style) => {
+            const candidates = candidatesFor(family);
+            if (!candidates.length) return null;
+            const wantedWeight = weightKey(weight);
+            const wantedStyle = styleKey(style);
+            return (
+                candidates.find(
+                    (face) =>
+                        (wantedWeight == null || weightKey(face.weight) === wantedWeight) &&
+                        styleKey(face.style) === wantedStyle
+                ) ||
+                candidates.find((face) => wantedWeight == null || weightKey(face.weight) === wantedWeight) ||
+                candidates.find((face) => styleKey(face.style) === wantedStyle) ||
+                candidates[0]
+            );
+        };
+        const applyFace = (element, face) => {
+            element.removeAttribute('face');
+            element.setAttribute('data-pw-font-face', face.key);
+            element.style.fontFamily = '"' + face.family + '"';
+            element.style.fontWeight = String(face.weight);
+            element.style.fontStyle = face.style || 'normal';
+        };
+
+        // Existing editor markers are authoritative.  Re-apply the exact
+        // metadata as well, so a marker that came from older editor markup is
+        // still renderable even when its inline style was incomplete.
+        for (const element of root.querySelectorAll('[data-pw-font-face]')) {
+            const face = faces.find((item) => item.key === element.getAttribute('data-pw-font-face'));
+            if (face) applyFace(element, face);
+        }
+
+        // Recover bindings from ordinary browser markup and pasted HTML.
+        for (const element of root.querySelectorAll('*')) {
+            if (element.hasAttribute('data-pw-font-face')) continue;
+            const family = element.style?.fontFamily || element.getAttribute('face') || '';
+            if (!family) continue;
+            const face = chooseFace(family, element.style?.fontWeight, element.style?.fontStyle);
+            if (face) applyFace(element, face);
+        }
+    }
+
     _unpillifyTags(root) {
+        // A custom font chosen at an empty caret uses a zero-width seed so the
+        // browser keeps future typing inside the font-bound span. Remove only the
+        // editor seed before staging; keep the font marker and any text typed into it.
+        for (const el of root.querySelectorAll('[data-pw-font-caret]')) {
+            el.removeAttribute('data-pw-font-caret');
+            el.textContent = (el.textContent || '').replace(/\u200b/g, '');
+            if (!el.textContent && !el.children.length) el.remove();
+        }
+        this._normalizeCustomDesignerBindings(root);
+        // Convert the editor-safe binding into the pinned marker consumed by
+        // DocGenFontService.prepare(). Do this on the serialized staging tree
+        // so the browser never needs to retain the nonstandard CSS property.
+        for (const el of root.querySelectorAll('[data-pw-font-face]')) {
+            const key = el.getAttribute('data-pw-font-face');
+            if (!/^[a-f0-9]{64}$/i.test(key || '')) {
+                continue;
+            }
+            el.removeAttribute('data-pw-font-face');
+            const style = el.getAttribute('style') || '';
+            if (!/(?:^|;)\s*-pw-font-face\s*:/i.test(style)) {
+                el.setAttribute('style', style.replace(/\s*$/, '') + ';-pw-font-face:' + key + ';');
+            }
+        }
         // Editor-only selection chrome must never reach saved HTML.
         for (const el of root.querySelectorAll('[data-dg-selcell]')) {
             el.removeAttribute('data-dg-selcell');

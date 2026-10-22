@@ -1036,6 +1036,13 @@
     gap: 3px;
 }
 
+.dg-fmt-font-label {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .dg-fmt-caret {
     font-size: 0.55rem;
     color: #5b6b83;
@@ -1072,6 +1079,24 @@
 
 .dg-fmt-menu_list {
     min-width: 200px;
+    max-height: min(62vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.dg-fmt-menu_list .dg-fmt-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dg-fmt-menu-check {
+    width: 14px;
+    flex: 0 0 14px;
+    color: #146c43;
+    font-weight: 700;
+    text-align: center;
 }
 
 .dg-fmt-menu-label {
@@ -1122,6 +1147,12 @@
 
 .dg-fmt-menu-item:hover {
     background: #f4f1fe;
+}
+
+.dg-fmt-menu-item_selected {
+    background: #eef8f3;
+    color: #146c43;
+    font-weight: 600;
 }
 
 .dg-fmt-menu-row {
@@ -1392,6 +1423,14 @@
     border-radius: 10px;
     margin-bottom: 6px;
     box-shadow: 0 4px 14px rgba(28, 20, 68, 0.07);
+}
+
+/* The format bar is normally below the sticky designer chrome. When a popover
+   is open, raise the bar's stacking context as well as the popover itself;
+   otherwise the fixed menu is still trapped behind the chrome sibling even
+   though it has its own z-index. */
+.dg-format-bar_menu-open {
+    z-index: 10000;
 }
 
 .dg-fmt-btn {

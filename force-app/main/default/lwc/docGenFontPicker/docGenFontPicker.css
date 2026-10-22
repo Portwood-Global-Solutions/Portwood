@@ -1,0 +1,148 @@
+:host {
+    display: block;
+    min-width: 0;
+    color: #183452;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+* {
+    box-sizing: border-box;
+}
+.font-label {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 12px;
+}
+button,
+input {
+    font: inherit;
+    color: inherit;
+}
+.font-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-width: 150px;
+    height: 34px;
+    padding: 5px 9px;
+    background: #fff;
+    border: 1px solid #bdcbd6;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+}
+.selected-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+}
+.caret {
+    flex: none;
+    font-size: 12px;
+    color: #526576;
+}
+.font-trigger:hover {
+    border-color: #285f64;
+}
+.font-trigger:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+.font-popup {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #bdcbd6;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px #18345226;
+    overflow: hidden;
+}
+.font-search {
+    flex: none;
+    width: calc(100% - 20px);
+    margin: 10px;
+    padding: 8px 10px;
+    border: 1px solid #bdcbd6;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 13px;
+}
+.font-list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 5px;
+    scrollbar-gutter: stable;
+}
+.font-option {
+    display: block;
+    width: 100%;
+    min-height: 54px;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    text-align: left;
+    background: #fff;
+    cursor: pointer;
+}
+.font-option:hover {
+    background: #edf5f4;
+}
+.font-option_selected {
+    background: #e4efee;
+    border-color: #98b8b8;
+}
+.font-option:disabled {
+    cursor: default;
+    color: #73808a;
+}
+.font-name {
+    display: block;
+    font-size: 19px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+.font-detail {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #526576;
+}
+.font-count {
+    flex: none;
+    padding: 7px 12px;
+    margin: 4px 0 0;
+    border-top: 1px solid #e1e8ed;
+    font-size: 11px;
+    color: #526576;
+}
+.font-notice {
+    flex: none;
+    margin: 0;
+    padding: 9px 12px;
+    font-size: 12px;
+}
+.retry {
+    border: 0;
+    padding: 0;
+    background: none;
+    text-decoration: underline;
+    cursor: pointer;
+}
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid #286f78;
+    outline-offset: -2px;
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
