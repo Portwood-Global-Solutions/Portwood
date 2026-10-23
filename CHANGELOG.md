@@ -58,7 +58,7 @@ Two small fixes where the editor promised something the PDF did not deliver.
   `DecompressionStream` (#320, PR #344).** The browser ZIP reader now detects whether
   native `deflate-raw` decompression is available and falls back to an inline RFC 1951
   decoder when it is missing or rejected. The native path remains unchanged for supported
-  browsers. Verified in `MyScratchOrg` with Playwright: the same HTML ZIP failed before
+  browsers. The same HTML ZIP failed before
   the fix with an **Upload Failed** decompression error and reached **Ready to Save** after
   the fix, including image extraction.
 
