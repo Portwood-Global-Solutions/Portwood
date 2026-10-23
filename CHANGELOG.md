@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
+
 - **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
   Clearing a box in the rich-text editor no longer restores its original imported
   content or the placeholder word `Text` when saving and generating a document.
@@ -48,6 +50,12 @@
   Unclosed loops and unbalanced merge braces are shown as errors that can stop
   generation, while advisory findings use wording that no longer implies Portwood
   modified the uploaded file.
+- **Template page size now persists across create and version-save flows.** The admin
+  create wizard no longer seeds `Letter` as a hidden/default page size. When an author
+  selects `Legal`, `A4`, or `Letter`, that value is carried into the first Edit Template
+  Configuration / legacy designer save and then inherited by later template versions
+  until the author changes it. If Page Size is left blank, the app saves `Letter`
+  explicitly as the fallback without restoring `Letter` as the field metadata default.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

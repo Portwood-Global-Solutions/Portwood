@@ -2634,6 +2634,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Base_Object_API__c',
                 'Category__c',
                 'Output_Format__c',
+                'Page_Orientation__c',
+                'Page_Size__c',
+                'Page_Margins__c',
+                'Custom_Margins__c',
                 'Is_Active__c',
                 'Is_Default__c',
                 'API_Name__c'
@@ -2649,6 +2653,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Base_Object_API__c,
                 Category__c,
                 Output_Format__c,
+                Page_Orientation__c,
+                Page_Size__c,
+                Page_Margins__c,
+                Custom_Margins__c,
                 Is_Active__c,
                 Is_Default__c,
                 API_Name__c,
@@ -2909,20 +2917,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // would erase a good query on the next activation. Genuine query edits
             // always arrive non-blank. (Community report: DOCX->HTML lost the query.)
             String incomingQuery = (String) fields.get('Query_Config__c');
-            String existingQuery;
+            DocGen_Template__c existingTemplate;
             if (templateId != null) {
                 /* code-analyzer-suppress ApexFlsViolation */
                 List<DocGen_Template__c> qCur = [
-                    SELECT Query_Config__c
+                    SELECT Query_Config__c, Page_Orientation__c, Page_Size__c, Page_Margins__c, Custom_Margins__c
                     FROM DocGen_Template__c
                     WHERE Id = :templateId
                     WITH SYSTEM_MODE
                     LIMIT 1
                 ];
                 if (!qCur.isEmpty()) {
-                    existingQuery = qCur[0].Query_Config__c;
+                    existingTemplate = qCur[0];
                 }
             }
+            String existingQuery = existingTemplate == null ? null : existingTemplate.Query_Config__c;
             String effectiveQuery = String.isNotBlank(incomingQuery) ? incomingQuery : existingQuery;
             template.Query_Config__c = effectiveQuery;
             // Signer form-field config (dedicated carrier, separate from Query_Config__c
@@ -3134,12 +3143,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                         'Watermark_Image_CV_Id__c',
                         'Template__c',
                         'Is_Active__c',
-                        'Type__c'
+                        'Type__c',
+                        'Page_Orientation__c',
+                        'Page_Size__c',
+                        'Page_Margins__c',
+                        'Custom_Margins__c'
                     }
                 );
                 /* code-analyzer-suppress ApexFlsViolation */
                 List<DocGen_Template_Version__c> activeVersions = [
-                    SELECT Id, Content_Version_Id__c, Watermark_Image_CV_Id__c, Type__c
+                    SELECT
+                        Id,
+                        Content_Version_Id__c,
+                        Watermark_Image_CV_Id__c,
+                        Type__c,
+                        Page_Orientation__c,
+                        Page_Size__c,
+                        Page_Margins__c,
+                        Custom_Margins__c
                     FROM DocGen_Template_Version__c
                     WHERE Template__c = :templateId AND Is_Active__c = TRUE
                     WITH SYSTEM_MODE
@@ -3149,10 +3170,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 String priorContentVersionId = null;
                 String priorWatermarkCvId = null;
                 String priorVersionType = null;
+                String priorPageOrientation = null;
+                String priorPageSize = null;
+                String priorPageMargins = null;
+                String priorCustomMargins = null;
                 for (DocGen_Template_Version__c av : activeVersions) {
                     if (priorVersionId == null) {
                         priorVersionId = av.Id;
                         priorVersionType = av.Type__c;
+                        priorPageOrientation = av.Page_Orientation__c;
+                        priorPageSize = av.Page_Size__c;
+                        priorPageMargins = av.Page_Margins__c;
+                        priorCustomMargins = av.Custom_Margins__c;
                     }
                     if (priorContentVersionId == null && String.isNotBlank(av.Content_Version_Id__c)) {
                         priorContentVersionId = av.Content_Version_Id__c;
@@ -3209,10 +3238,26 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 // 1.68 — snapshot the page orientation, size, and margins so each
                 // version remembers the PDF page setup it was rendered against,
                 // even if the template-level fields change later.
-                version.Page_Orientation__c = (String) fields.get('Page_Orientation__c');
-                version.Page_Size__c = (String) fields.get('Page_Size__c');
-                version.Page_Margins__c = (String) fields.get('Page_Margins__c');
-                version.Custom_Margins__c = (String) fields.get('Custom_Margins__c');
+                version.Page_Orientation__c = fields.containsKey('Page_Orientation__c')
+                    ? (String) fields.get('Page_Orientation__c')
+                    : (String.isNotBlank(priorPageOrientation)
+                          ? priorPageOrientation
+                          : (existingTemplate == null ? null : existingTemplate.Page_Orientation__c));
+                version.Page_Size__c = fields.containsKey('Page_Size__c')
+                    ? (String) fields.get('Page_Size__c')
+                    : (String.isNotBlank(priorPageSize)
+                          ? priorPageSize
+                          : (existingTemplate == null ? null : existingTemplate.Page_Size__c));
+                version.Page_Margins__c = fields.containsKey('Page_Margins__c')
+                    ? (String) fields.get('Page_Margins__c')
+                    : (String.isNotBlank(priorPageMargins)
+                          ? priorPageMargins
+                          : (existingTemplate == null ? null : existingTemplate.Page_Margins__c));
+                version.Custom_Margins__c = fields.containsKey('Custom_Margins__c')
+                    ? (String) fields.get('Custom_Margins__c')
+                    : (String.isNotBlank(priorCustomMargins)
+                          ? priorCustomMargins
+                          : (existingTemplate == null ? null : existingTemplate.Custom_Margins__c));
                 // 1.97 — snapshot output format, header/footer HTML, and title format
                 // so a version is a true render snapshot. Without these, restoring an
                 // older version still rendered with the *template*'s current values,
@@ -3988,10 +4033,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             LIMIT 1
         ];
 
-        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Type__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Type__c', 'Page_Size__c', 'Page_Orientation__c', 'Page_Margins__c', 'Custom_Margins__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Template__c tpl = [
-            SELECT Type__c
+            SELECT Type__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -4051,6 +4099,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             fresh.Is_Active__c = true;
             if (String.isBlank(fresh.Type__c)) {
                 fresh.Type__c = tpl.Type__c;
+            }
+            if (String.isBlank(fresh.Page_Size__c)) {
+                fresh.Page_Size__c = tpl.Page_Size__c;
+            }
+            if (String.isBlank(fresh.Page_Orientation__c)) {
+                fresh.Page_Orientation__c = tpl.Page_Orientation__c;
+            }
+            if (String.isBlank(fresh.Page_Margins__c)) {
+                fresh.Page_Margins__c = tpl.Page_Margins__c;
+            }
+            if (String.isBlank(fresh.Custom_Margins__c)) {
+                fresh.Custom_Margins__c = tpl.Custom_Margins__c;
             }
             DocGenFlsGuard.assertCreateable(fresh, versionFields);
             /* code-analyzer-suppress ApexFlsViolation */
@@ -4493,6 +4553,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Base_Object_API__c',
                 'Is_Active__c',
                 'Watermark_Image_CV_Id__c',
+                'Page_Orientation__c',
+                'Page_Size__c',
+                'Page_Margins__c',
+                'Custom_Margins__c',
                 'Template__c'
             }
         );
@@ -4510,7 +4574,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Type__c,
                 Base_Object_API__c,
                 Is_Active__c,
-                Watermark_Image_CV_Id__c
+                Watermark_Image_CV_Id__c,
+                Page_Orientation__c,
+                Page_Size__c,
+                Page_Margins__c,
+                Custom_Margins__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId
             WITH SYSTEM_MODE

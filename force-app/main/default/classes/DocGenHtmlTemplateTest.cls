@@ -299,6 +299,48 @@ private class DocGenHtmlTemplateTest {
     }
 
     @IsTest
+    static void saveAndPublishHtmlBodyUsesTemplatePageSetupWhenActiveVersionHasNone() {
+        DocGen_Template__c tmpl = new DocGen_Template__c(
+            Name = 'Canvas Legal ' + Datetime.now().getTime(),
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Query_Config__c = 'Name',
+            Page_Size__c = 'Legal',
+            Page_Orientation__c = 'Landscape',
+            Page_Margins__c = 'Custom',
+            Custom_Margins__c = '0.25,0.5,0.75,1.0'
+        );
+        insert tmpl;
+        insert new DocGen_Template_Version__c(
+            Template__c = tmpl.Id,
+            Is_Active__c = true,
+            Type__c = 'HTML',
+            Base_Object_API__c = 'Account'
+        );
+
+        Test.startTest();
+        Map<String, Object> saved = DocGenController.saveAndPublishHtmlBody(
+            tmpl.Id,
+            'canvas.html',
+            '<html><body><p>{Name}</p></body></html>',
+            true
+        );
+        Test.stopTest();
+
+        DocGen_Template_Version__c fresh = [
+            SELECT Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
+            FROM DocGen_Template_Version__c
+            WHERE Id = :(Id) saved.get('versionId')
+            LIMIT 1
+        ];
+        System.assertEquals('Legal', fresh.Page_Size__c, 'Designer publish must not fall back to Letter');
+        System.assertEquals('Landscape', fresh.Page_Orientation__c, 'Designer publish must carry orientation');
+        System.assertEquals('Custom', fresh.Page_Margins__c, 'Designer publish must carry margins mode');
+        System.assertEquals('0.25,0.5,0.75,1.0', fresh.Custom_Margins__c, 'Designer publish must carry custom margins');
+    }
+
+    @IsTest
     static void getHtmlTemplateBodyReturnsLatestBody() {
         DocGen_Template__c tmpl = new DocGen_Template__c(
             Name = 'BodyRead ' + Datetime.now().getTime(),

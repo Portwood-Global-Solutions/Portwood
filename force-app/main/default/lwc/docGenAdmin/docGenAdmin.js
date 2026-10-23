@@ -429,7 +429,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track newTemplateType = 'Canvas';
     @track newTemplateOutputFormat = 'PDF';
     @track newTemplatePageOrientation = 'Portrait';
-    @track newTemplatePageSize = 'Letter';
+    @track newTemplatePageSize = null;
     @track newTemplatePageMargins = 'Default';
     @track newTemplateCustomMargins = '';
     newTemplateObject = 'Account';
@@ -472,9 +472,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track editTemplateObject;
     @track editTemplateOutputFormat;
     @track editTemplatePageOrientation = 'Portrait';
-    @track editTemplatePageSize = 'Letter';
+    @track editTemplatePageSize = null;
     @track editTemplatePageMargins = 'Default';
     @track editTemplateCustomMargins = '';
+    editTemplatePageSetupTouched = false;
     @track editTemplateWatermarkCvId;
     @track isUploadingWatermark = false;
     editTemplateDesc;
@@ -2490,7 +2491,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const s = STARTERS.find((x) => x.key === this.newStarterKey);
         if (s && s.page) {
             this.newTemplatePageOrientation = s.page.orientation || 'Portrait';
-            this.newTemplatePageSize = s.page.size || 'Letter';
+            this.newTemplatePageSize = s.page.size || null;
             this.newTemplatePageMargins = s.page.margins || 'Default';
         }
     }
@@ -3276,7 +3277,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplatePageOrientation = event.detail.value;
     }
     handleNewPageSizeChange(event) {
-        this.newTemplatePageSize = event.detail.value;
+        this.newTemplatePageSize = event.detail.value || null;
     }
     handleNewPageMarginsChange(event) {
         this.newTemplatePageMargins = event.detail.value;
@@ -3893,15 +3894,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplateOutputFormat = event.detail.value;
     }
     handleEditPageOrientationChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplatePageOrientation = event.detail.value;
     }
     handleEditPageSizeChange(event) {
-        this.editTemplatePageSize = event.detail.value;
+        this.editTemplatePageSetupTouched = true;
+        this.editTemplatePageSize = event.detail.value || null;
     }
     handleEditPageMarginsChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplatePageMargins = event.detail.value;
     }
     handleEditCustomMarginsChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplateCustomMargins = event.detail.value;
     }
     handleEditDescChange(event) {
@@ -4751,6 +4756,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     get pageSizeOptions() {
         return [
+            { label: '-- None --', value: '' },
             { label: 'Letter (8.5 x 11 in)', value: 'Letter' },
             { label: 'Legal (8.5 x 14 in)', value: 'Legal' },
             { label: 'A4 (210 x 297 mm)', value: 'A4' }
@@ -4870,17 +4876,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         fields[CATEGORY_FIELD.fieldApiName] = this.newTemplateCategory;
         fields[TYPE_FIELD.fieldApiName] = this.newTemplateType;
         fields[OUTPUT_FORMAT_FIELD.fieldApiName] = this.newTemplateOutputFormat;
-        // Page setup only meaningful for PDF output. v1.90 — skip for HTML
-        // templates: their @page CSS owns page layout, and engine suppresses
-        // template-level overrides when source @page is present. Saving the
-        // create-wizard defaults would just leave conflicting values that
-        // confuse later editors.
-        if (
-            this.newTemplateOutputFormat === 'PDF' &&
-            (this.newTemplateType !== 'HTML' || this.newAuthoringMode === 'starter')
-        ) {
+        const newTemplatePageSize = this.newTemplatePageSize || 'Letter';
+        // Page setup only meaningful for PDF output. Do not seed a default page
+        // size, but if the author explicitly picked one during create, persist it
+        // so the first designer save/new version can inherit that choice.
+        if (this.newTemplateOutputFormat === 'PDF' && this.newTemplateType !== 'Canvas') {
             fields[PAGE_ORIENTATION_FIELD.fieldApiName] = this.newTemplatePageOrientation;
-            fields[PAGE_SIZE_FIELD.fieldApiName] = this.newTemplatePageSize;
+            fields[PAGE_SIZE_FIELD.fieldApiName] = newTemplatePageSize;
             fields[PAGE_MARGINS_FIELD.fieldApiName] = this.newTemplatePageMargins;
             if (this.newTemplatePageMargins === 'Custom') {
                 fields[CUSTOM_MARGINS_FIELD.fieldApiName] = this.newTemplateCustomMargins;
@@ -4939,7 +4941,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 [F.Type]: this.newTemplateType,
                 [F.OutputFormat]: this.newTemplateOutputFormat,
                 [F.PageOrientation]: this.newTemplatePageOrientation,
-                [F.PageSize]: this.newTemplatePageSize,
+                [F.PageSize]: newTemplatePageSize,
                 [F.PageMargins]: this.newTemplatePageMargins,
                 [F.CustomMargins]: this.newTemplateCustomMargins,
                 [F.BaseObject]: this.newTemplateObject,
@@ -5090,10 +5092,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.htmlEditorDirty = false;
             // Starters declare @page — same handling as an uploaded body that owns it.
             this.editHtmlBodyOwnsPageRule = true;
-            this.editTemplatePageOrientation = null;
-            this.editTemplatePageSize = null;
-            this.editTemplatePageMargins = null;
-            this.editTemplateCustomMargins = '';
+            this._clearPageSetupIfNoExplicitSize();
             // Land the author inside the HTML with the draft loaded.
             this.showHtmlBodyEditor = true;
             this._syncHtmlBodyEditorDom(html);
@@ -5129,10 +5128,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.htmlEditorDirty = false;
             if (/@page\b/i.test(html)) {
                 this.editHtmlBodyOwnsPageRule = true;
-                this.editTemplatePageOrientation = null;
-                this.editTemplatePageSize = null;
-                this.editTemplatePageMargins = null;
-                this.editTemplateCustomMargins = '';
+                this._clearPageSetupIfNoExplicitSize();
             }
             this.showHtmlBodyEditor = true;
             this._syncHtmlBodyEditorDom(html);
@@ -5327,9 +5323,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateObject = row[F.BaseObject];
             this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
             this.editTemplatePageOrientation = row[F.PageOrientation] || 'Portrait';
-            this.editTemplatePageSize = row[F.PageSize] || 'Letter';
+            this.editTemplatePageSize = row[F.PageSize] || null;
             this.editTemplatePageMargins = row[F.PageMargins] || 'Default';
             this.editTemplateCustomMargins = row[F.CustomMargins] || '';
+            this.editTemplatePageSetupTouched = false;
             this.editTemplateDesc = row[F.Desc];
             // Pass the raw stored config to the visual builder. V3 JSON must
             // NOT be flattened to V1 SOQL here — V1 can't represent filtered
@@ -5433,7 +5430,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.activeEditTab = activeTab || 'details';
             }
 
-            this.loadVersions(row.Id);
+            await this.loadVersions(row.Id);
             if (row[F.Type] === 'PDF') {
                 this.loadPdfAcroFormMapping();
             }
@@ -5551,7 +5548,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     loadVersions(templateId) {
-        getTemplateVersions({ templateId })
+        return getTemplateVersions({ templateId })
             .then((data) => {
                 if (!data) {
                     this.versions = [];
@@ -5578,6 +5575,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 });
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
+                this._applyActiveVersionPageSetup(active);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
                 this._watermarkSourceFile = null;
                 // Seed the strength control from what's actually stored, so it
@@ -5617,6 +5615,39 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.versions = [];
                 this.editTemplateWatermarkCvId = null;
             });
+    }
+
+    _applyActiveVersionPageSetup(active) {
+        if (!active) {
+            return;
+        }
+        // The edit form saves a new version from these fields. For existing
+        // templates, the active version snapshot is the source of truth for the
+        // page setup that the next version should inherit. Without this, a stale
+        // template-level default can make Legal/A4 versions reopen as Letter and
+        // then save the wrong snapshot.
+        if (active[F.VerPageOrientation]) {
+            this.editTemplatePageOrientation = active[F.VerPageOrientation];
+        }
+        if (active[F.VerPageSize]) {
+            this.editTemplatePageSize = active[F.VerPageSize];
+        }
+        if (active[F.VerPageMargins]) {
+            this.editTemplatePageMargins = active[F.VerPageMargins];
+        }
+        if (active[F.VerCustomMargins]) {
+            this.editTemplateCustomMargins = active[F.VerCustomMargins];
+        }
+    }
+
+    _clearPageSetupIfNoExplicitSize() {
+        if (this.editTemplatePageSize) {
+            return;
+        }
+        this.editTemplatePageOrientation = null;
+        this.editTemplatePageSize = null;
+        this.editTemplatePageMargins = null;
+        this.editTemplateCustomMargins = '';
     }
 
     async handleRestoreVersion(event) {
@@ -5886,6 +5917,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -5910,7 +5942,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -5925,6 +5957,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false, contentVersionId: null });
             this.showToast('Success', 'Template Details saved.', 'success');
+            this.editTemplatePageSetupTouched = false;
             // The modal stays open after a details save; re-baseline the
             // unsaved-changes snapshot so a following Close doesn't warn about
             // edits that are now persisted on the record (#370).
@@ -5979,6 +6012,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -6003,7 +6037,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -6098,6 +6132,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             if (this.editTemplateId) {
                 this.loadVersions(this.editTemplateId);
             }
+            this.editTemplatePageSetupTouched = false;
             this.activeEditTab = this.editTemplateType === 'PDF' ? 'pdfFields' : 'document';
             // "Save as New Version" deliberately leaves the modal open (authors
             // want to preview/test the new version straight away). Re-baseline the
@@ -7091,10 +7126,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // re-introduce conflicting values.
         this.editHtmlBodyOwnsPageRule = this.htmlContainsPageRule(rewritten);
         if (this.editHtmlBodyOwnsPageRule) {
-            this.editTemplatePageOrientation = null;
-            this.editTemplatePageSize = null;
-            this.editTemplatePageMargins = null;
-            this.editTemplateCustomMargins = '';
+            this._clearPageSetupIfNoExplicitSize();
         }
         const pageMsg = this.editHtmlBodyOwnsPageRule
             ? ' Your HTML defines its own @page CSS — template page-layout fields cleared.'
@@ -15867,7 +15899,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplateQuery = '';
         this.newTemplateOutputFormat = 'PDF';
         this.newTemplatePageOrientation = 'Portrait';
-        this.newTemplatePageSize = 'Letter';
+        this.newTemplatePageSize = null;
         this.newTemplatePageMargins = 'Default';
         this.newTemplateCustomMargins = '';
         this.newTemplateObject = 'Account';

@@ -628,16 +628,48 @@ private class DocGenControllerTests {
                 Type__c = 'Word',
                 Base_Object_API__c = 'Account',
                 Category__c = 'General',
-                Description__c = 'Test version'
+                Description__c = 'Test version',
+                Page_Size__c = 'Letter',
+                Page_Orientation__c = 'Portrait',
+                Page_Margins__c = 'Custom',
+                Custom_Margins__c = '0.25,0.5,0.75,1.0'
             );
             insert v;
+            v.Page_Size__c = 'Legal';
+            v.Page_Orientation__c = 'Landscape';
+            v.Page_Margins__c = 'Custom';
+            v.Custom_Margins__c = '0.25,0.5,0.75,1.0';
+            update v;
 
             Test.startTest();
             List<DocGen_Template_Version__c> versions = DocGenController.getTemplateVersions(tpl.Id);
             Test.stopTest();
 
             System.assert(!versions.isEmpty(), 'Should return the created version');
-            System.assertEquals(v.Id, versions[0].Id, 'Should return the correct version');
+            DocGen_Template_Version__c returnedVersion;
+            for (DocGen_Template_Version__c candidate : versions) {
+                if (candidate.Id == v.Id) {
+                    returnedVersion = candidate;
+                    break;
+                }
+            }
+            System.assertNotEquals(null, returnedVersion, 'Should return the correct version');
+            System.assertEquals('Legal', returnedVersion.Page_Size__c, 'Version page size snapshot must be returned');
+            System.assertEquals(
+                'Landscape',
+                returnedVersion.Page_Orientation__c,
+                'Version orientation snapshot must be returned'
+            );
+            System.assertEquals(
+                'Custom',
+                returnedVersion.Page_Margins__c,
+                'Version page margins snapshot must be returned'
+            );
+            System.assertEquals(
+                '0.25,0.5,0.75,1.0',
+                returnedVersion.Custom_Margins__c,
+                'Version custom margins snapshot must be returned'
+            );
         }
     }
 
@@ -1830,6 +1862,144 @@ private class DocGenControllerTests {
     // -----------------------------------------------------------------------
     // getAllTemplates — with ContentDocumentLink subquery
     // -----------------------------------------------------------------------
+    @IsTest
+    static void testSaveTemplateVersionInheritsPageSetupWhenFieldsOmitted() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c tpl = new DocGen_Template__c(
+                Name = 'Template Page Setup Snapshot',
+                Type__c = 'Word',
+                Output_Format__c = 'PDF',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name',
+                Page_Size__c = 'Legal',
+                Page_Orientation__c = 'Landscape',
+                Page_Margins__c = 'Custom',
+                Custom_Margins__c = '0.25,0.5,0.75,1.0'
+            );
+            insert tpl;
+            insert new DocGen_Template_Version__c(
+                Template__c = tpl.Id,
+                Is_Active__c = true,
+                Type__c = 'Word',
+                Base_Object_API__c = 'Account',
+                Page_Size__c = 'A4',
+                Page_Orientation__c = 'Portrait'
+            );
+
+            Map<String, Object> fields = new Map<String, Object>{
+                'Id' => tpl.Id,
+                'Name' => tpl.Name,
+                'Category__c' => null,
+                'Type__c' => 'Word',
+                'Output_Format__c' => 'PDF',
+                'Base_Object_API__c' => 'Account',
+                'Description__c' => null,
+                'Query_Config__c' => 'Name',
+                'Test_Record_Id__c' => null,
+                'Document_Title_Format__c' => null
+            };
+
+            Test.startTest();
+            Map<String, Object> result = DocGenController.saveTemplate(fields, true, null);
+            Test.stopTest();
+
+            DocGen_Template_Version__c created = [
+                SELECT Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
+                FROM DocGen_Template_Version__c
+                WHERE Id = :(Id) result.get('createdVersionId')
+                LIMIT 1
+            ];
+            System.assertEquals(
+                'A4',
+                created.Page_Size__c,
+                'Omitted page size must inherit the previous active version'
+            );
+            System.assertEquals('Portrait', created.Page_Orientation__c, 'Omitted orientation must inherit');
+            System.assertEquals('Custom', created.Page_Margins__c, 'Omitted margins mode must inherit');
+            System.assertEquals('0.25,0.5,0.75,1.0', created.Custom_Margins__c, 'Omitted custom margins must inherit');
+
+            DocGen_Template_Version__c previous = [
+                SELECT Page_Size__c, Page_Orientation__c, Is_Active__c
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :tpl.Id AND Page_Size__c = 'A4'
+                LIMIT 1
+            ];
+            System.assertEquals('A4', previous.Page_Size__c, 'Previous version keeps its original page size');
+            System.assertEquals(
+                'Portrait',
+                previous.Page_Orientation__c,
+                'Previous version keeps its original orientation'
+            );
+            System.assertEquals(false, previous.Is_Active__c, 'Previous version is deactivated but not rewritten');
+        }
+    }
+
+    @IsTest
+    static void testSaveTemplateVersionUsesExplicitPageSetupChange() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c tpl = new DocGen_Template__c(
+                Name = 'Template Page Setup Manual Change',
+                Type__c = 'Word',
+                Output_Format__c = 'PDF',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name',
+                Page_Size__c = 'A4',
+                Page_Orientation__c = 'Portrait',
+                Page_Margins__c = 'Default'
+            );
+            insert tpl;
+            insert new DocGen_Template_Version__c(
+                Template__c = tpl.Id,
+                Is_Active__c = true,
+                Type__c = 'Word',
+                Base_Object_API__c = 'Account',
+                Page_Size__c = 'A4',
+                Page_Orientation__c = 'Portrait',
+                Page_Margins__c = 'Default'
+            );
+
+            Map<String, Object> fields = new Map<String, Object>{
+                'Id' => tpl.Id,
+                'Name' => tpl.Name,
+                'Category__c' => null,
+                'Type__c' => 'Word',
+                'Output_Format__c' => 'PDF',
+                'Base_Object_API__c' => 'Account',
+                'Description__c' => null,
+                'Query_Config__c' => 'Name',
+                'Test_Record_Id__c' => null,
+                'Document_Title_Format__c' => null,
+                'Page_Size__c' => 'Legal',
+                'Page_Orientation__c' => 'Landscape',
+                'Page_Margins__c' => 'Default'
+            };
+
+            Test.startTest();
+            Map<String, Object> result = DocGenController.saveTemplate(fields, true, null);
+            Test.stopTest();
+
+            DocGen_Template_Version__c created = [
+                SELECT Page_Size__c, Page_Orientation__c, Page_Margins__c
+                FROM DocGen_Template_Version__c
+                WHERE Id = :(Id) result.get('createdVersionId')
+                LIMIT 1
+            ];
+            System.assertEquals('Legal', created.Page_Size__c, 'Manual page size change must become the new snapshot');
+            System.assertEquals(
+                'Landscape',
+                created.Page_Orientation__c,
+                'Manual orientation change must become the new snapshot'
+            );
+            System.assertEquals(
+                'Default',
+                created.Page_Margins__c,
+                'Manual margins value must become the new snapshot'
+            );
+        }
+    }
+
     @IsTest
     static void testGetAllTemplatesWithFile() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
