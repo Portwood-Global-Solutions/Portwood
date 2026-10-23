@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
+  Clearing a box in the rich-text editor no longer restores its original imported
+  content or the placeholder word `Text` when saving and generating a document.
+  Empty rich-text content now serializes as empty; legacy boxes without rich-text
+  content retain their plain-text fallback.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
