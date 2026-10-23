@@ -29,6 +29,13 @@
 
 ### Fixed
 
+- **Canvas plain-text merge tags retain their underscores (#282, PR #292).**
+  Custom-field, relationship and namespaced tags containing `__c` or `__r` are no
+  longer mistaken for underline formatting, which could corrupt the tags and leave
+  unresolved text or blank values in generated PDFs. Merge tags are protected during
+  formatting expansion, while bold, italic, underline and strikethrough surrounding
+  them still work. Regression checks cover tag preservation and formatting that
+  spans a merge tag.
 - **The HTML fidelity report now separates rendering notes from generation blockers
   (#318).** Harmless declarations such as `gap` on ordinary block layouts no longer
   produce repeated warnings, related modern-CSS differences are grouped into one clear
