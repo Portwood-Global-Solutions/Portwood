@@ -2937,9 +2937,14 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 
 ### 10.1 Sending a signature request
 
+The sender offers **Upload PDF**, **Salesforce file**, and **Portwood template**
+from **New signature request**. For an existing PDF, follow
+[§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased). The steps below cover
+Portwood templates, which continue using signature merge tags.
+
 1. Open any record.
 2. The **Portwood Signature Sender** LWC appears on the page layout (if placed).
-3. Pick one or more templates (packets).
+3. Click **New signature request**, choose **Portwood template**, and pick one or more templates (packets).
 4. Add signers:
     - **Select from Contacts** (picker shows any Contact on the record).
     - **Manual entry** (name + email + role, for people not yet in Salesforce).
@@ -2955,6 +2960,86 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 
 > **Email setup (admin).** Invitation and completion emails send through the Org-Wide Email Address you configure in **Portwood → Signatures settings**. That OWA must have **Allow All Profiles** enabled (guest signers trigger the completion email) and its sending **domain must be DKIM-authenticated** (Setup → Email → DKIM Keys, then publish the CNAME records in your DNS) — Salesforce blocks unauthenticated custom-domain sends. Without these, signing still works but emails won't deliver (the reason is logged on the request's **Email Status** field).
 
+#### 10.1.1 Signing a customer-uploaded PDF (unreleased)
+
+Use this workflow when your PDF is already prepared and you want recipients to
+sign it without recreating it as a Portwood template. Signature merge tags such
+as `{@Signature_Signer:1:Full}` are not required in an uploaded PDF.
+
+**Before you start.** Open the Salesforce record the signed document belongs to.
+Your administrator must place **Portwood Signature Sender** on that record page
+and assign the appropriate Portwood sender permissions, such as **DocGen_User**
+or **DocGen_Admin**. You need access to the record and any existing PDF you select.
+External signing requires a configured public signing site; email invitations
+also require the verified email sender described in [§10.1](#101-sending-a-signature-request).
+
+1. In **Portwood Signature Sender**, click **New signature request**.
+2. Choose the document source:
+    - **Upload PDF** — choose or drop a PDF from your computer.
+    - **Salesforce file** — select a PDF already attached to this record. Portwood
+      keeps a separate original snapshot, so preparing it does not replace the
+      existing Salesforce File.
+3. Click **Continue** and enter each recipient's name and email. You can also
+   search Contacts to fill these details. Add recipients in their signing order;
+   uploaded PDFs currently use **sequential signing**. Each recipient waits until
+   the previous recipient completes. Parallel signing is not available here.
+4. Continue to field placement. Choose a recipient in **Assign fields to**, choose
+   a field type, then click the PDF to place it. Use the page controls for
+   multi-page documents. Drag fields to move them; select a field to adjust its
+   **Width** and **Height**, move it with the arrow keys, or remove it.
+
+| Field           | What the signer supplies                                            |
+| --------------- | ------------------------------------------------------------------- |
+| **Signature**   | A drawn or typed signature. Place at least one for every recipient. |
+| **Initials**    | Drawn or typed initials.                                            |
+| **Date signed** | The date of signing, filled automatically.                          |
+| **Date picker** | A date selected by the signer.                                      |
+
+5. Click **Review request**. Check the positions and recipient assignments, then
+   set the **Document title**, **Signing Brand**, link expiration (1–365 days),
+   and email verification preference. **Use org default** uses your administrator's
+   settings. A selected Brand applies to invitation emails and the guest signing page.
+6. Choose **Delivery**:
+    - **Preview signing in Salesforce** — creates links requiring Salesforce login.
+      Invitation, reminder, and completion emails are suppressed for these requests.
+      Open the first recipient's link, complete signing, then open the next link.
+      This is an actual signing request; completing it creates a signed file on
+      the record.
+    - **Create public signing links** — creates links for external recipients to
+      open through the configured public signing site.
+    - **Email invitations** — enter an optional subject and message, then send
+      through the configured email sender. Invitations follow the sequential
+      signing order. This option requires both a public signing site and an
+      email sender.
+7. Click **Create preview links**, **Create signing links**, or **Send request**,
+   according to the delivery option. The sender lists sent requests under
+   **Recent requests**.
+
+**Save and resume.** Use **Save draft** before leaving preparation. From the same
+record, find the draft under **Continue preparing** and click **Resume**. Drafts
+are private to their creator and bound to that record. If another window saves
+first, reopen the draft before continuing; an older window cannot overwrite the
+newer revision. Once sent, its original document and prepared field placements
+are locked. Create a new request if those need to change.
+
+**What recipients see.** The PDF signing page guides each recipient through their
+assigned fields, accepts drawn or typed signatures, and requires consent before
+submission. Earlier signatures remain in the PDF as the request advances. On
+completion, Portwood retains the original separately, attaches the completed PDF
+to the related record, and retains the signing audit history. See
+[§10.7.1](#1071-guided-sign-spot-signing-on-the-pdf-viewer-drawn-or-typed) for the
+guided signing experience.
+
+**Limits and common problems.** Use an unlocked PDF no larger than **2 MB**, with
+at most **50 pages**, **10 recipients**, and **100 fields**. PDFs with existing
+digital signatures are rejected; obtain an unsigned copy. Every recipient needs
+a name, valid email, and at least one **Signature** field, with all fields inside
+their PDF page. If **Continue** or **Review request** is disabled, check the
+recipient details and missing signatures. If no Salesforce PDFs appear, attach
+the file to this record or choose **Upload PDF**. If public-link or email delivery
+is unavailable, ask your administrator to complete the signing-site and email
+setup, or use the internal Salesforce preview option.
+
 ### 10.2 Signature tag syntax
 
 See [§7.9](#79-signatures).
@@ -2966,6 +3051,9 @@ Send multiple templates in one session. The signer sees all documents and signs 
 Useful for contract bundles (MSA + SOW + NDA), onboarding packets, etc.
 
 ### 10.4 Sequential vs parallel
+
+The choices below apply to template requests. Customer-uploaded PDFs currently
+support sequential signing only; see [§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased).
 
 - **Parallel**: everyone gets the invite right away. First to sign = first done. Good for lightweight approvals.
 - **Sequential**: signers are emailed in order (by `Sort_Order__c`). Next signer is automatically emailed when the previous signs. Good for hierarchical approvals (employee → manager → VP → CFO).

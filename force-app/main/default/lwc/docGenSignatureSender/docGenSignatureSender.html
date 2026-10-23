@@ -1,633 +1,124 @@
 <template>
-    <div class="slds-var-p-around_medium">
-        <template if:true={isLoading}>
-            <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
-        </template>
-
-        <template if:false={signerResults}>
-            <!-- Template Selection -->
-            <div class="slds-var-m-bottom_medium">
-                <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">Documents</h3>
-
-                <!-- Primary template picker — selecting auto-adds -->
-                <lightning-combobox
-                    name="selectTemplate"
-                    label="Select Template"
-                    value=""
-                    placeholder="Choose a Portwood template..."
-                    options={availableTemplateOptions}
-                    onchange={handleTemplateSelected}
-                >
-                </lightning-combobox>
-
-                <!-- Selected templates list -->
-                <template if:true={hasSelectedTemplates}>
-                    <div class="slds-var-m-top_small">
-                        <template for:each={selectedTemplates} for:item="tmpl" for:index="index">
-                            <div
-                                key={tmpl.id}
-                                class="slds-box slds-theme_shade slds-var-m-bottom_xx-small slds-var-p-around_small"
-                                style="border-radius: 6px"
-                            >
-                                <div class="slds-grid slds-grid_vertical-align-center">
-                                    <template if:true={isPacketMode}>
-                                        <div
-                                            class="slds-col slds-no-flex slds-var-m-right_small"
-                                            style="
-                                                color: #706e6b;
-                                                font-size: 0.75rem;
-                                                font-weight: bold;
-                                                min-width: 24px;
-                                            "
-                                        >
-                                            {tmpl.docNumber}
-                                        </div>
-                                    </template>
-                                    <div class="slds-col slds-grow">
-                                        <p class="slds-text-body_regular"><strong>{tmpl.name}</strong></p>
-                                        <template if:true={tmpl.placementSummary}>
-                                            <p class="slds-text-body_small slds-text-color_weak">
-                                                {tmpl.placementSummary}
-                                            </p>
-                                        </template>
-                                    </div>
-                                    <div
-                                        class="slds-col slds-no-flex slds-grid slds-grid_vertical-align-center"
-                                        style="gap: 4px"
-                                    >
-                                        <template if:true={isPacketMode}>
-                                            <lightning-button-icon
-                                                icon-name="utility:up"
-                                                alternative-text="Move up"
-                                                variant="bare"
-                                                size="small"
-                                                data-index={index}
-                                                onclick={handleMoveTemplateUp}
-                                            ></lightning-button-icon>
-                                            <lightning-button-icon
-                                                icon-name="utility:down"
-                                                alternative-text="Move down"
-                                                variant="bare"
-                                                size="small"
-                                                data-index={index}
-                                                onclick={handleMoveTemplateDown}
-                                            ></lightning-button-icon>
-                                        </template>
-                                        <lightning-button-icon
-                                            icon-name="utility:close"
-                                            alternative-text="Remove"
-                                            variant="bare"
-                                            size="small"
-                                            data-index={index}
-                                            onclick={handleRemoveTemplate}
-                                        ></lightning-button-icon>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </template>
+    <section class="sender">
+        <header class="sender-heading">
+            <lightning-icon icon-name="utility:signature" size="small"></lightning-icon>
+            <div class="grow">
+                <h2>Signatures</h2>
+                <p>Prepare a document and collect signatures on this record.</p>
             </div>
-
-            <!-- Detected Placements Summary -->
-            <template if:true={hasDetectedPlacements}>
-                <div class="slds-box slds-theme_shade slds-var-m-bottom_medium" style="border-radius: 6px">
-                    <div class="slds-grid slds-grid_vertical-align-center slds-var-m-bottom_xx-small">
-                        <lightning-icon
-                            icon-name="utility:edit_form"
-                            size="x-small"
-                            class="slds-var-m-right_x-small"
-                        ></lightning-icon>
-                        <h3 class="slds-text-title_bold">Signature Placements Detected</h3>
-                    </div>
-                    <template for:each={placementSummaryByRole} for:item="ps">
-                        <p key={ps.role} class="slds-text-body_small slds-var-p-left_small">
-                            <span class="slds-badge slds-badge_lightest slds-var-m-right_xx-small">{ps.role}</span>
-                            {ps.summary}
-                        </p>
+            <lightning-button-icon
+                icon-name="utility:refresh"
+                alternative-text="Refresh requests"
+                onclick={refreshRequests}
+            ></lightning-button-icon>
+        </header>
+        <lightning-button
+            class="new-request"
+            variant="brand"
+            label="New signature request"
+            icon-name="utility:add"
+            onclick={openComposer}
+        ></lightning-button>
+        <template if:true={error}><p class="error" role="alert">{error}</p></template>
+        <template if:true={hasDrafts}>
+            <h3>Continue preparing</h3>
+            <template for:each={drafts} for:item="draft">
+                <div class="request-row" key={draft.id}>
+                    <span class="grow">{draft.title}</span><span class="badge">Draft</span>
+                    <lightning-button label="Resume" data-draft={draft.id} onclick={openComposer}></lightning-button>
+                </div>
+            </template>
+        </template>
+        <h3>Recent requests</h3>
+        <template if:false={hasRequests}><p class="empty">Sent requests will appear here.</p></template>
+        <template for:each={requests} for:item="request">
+            <div class="request-row" key={request.id}>
+                <div class="grow"><strong>{request.documentTitle}</strong><small>{request.name}</small></div>
+                <span class="badge">{request.status}</span>
+                <lightning-button label="View" data-id={request.id} onclick={viewRequest}></lightning-button>
+            </div>
+        </template>
+    </section>
+    <template if:true={modalOpen}>
+        <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="preparation-title"
+            tabindex="-1"
+            onkeydown={handleComposerKeydown}
+            class="slds-modal slds-fade-in-open preparation-modal"
+        >
+            <div class="slds-modal__container">
+                <header class="slds-modal__header preparation-header">
+                    <template if:true={showChangeSource}>
+                        <lightning-button
+                            label={sourceActionLabel}
+                            icon-name="utility:back"
+                            onclick={changeSource}
+                        ></lightning-button>
+                    </template>
+                    <h2 id="preparation-title" class="slds-text-heading_medium grow">{modalTitle}</h2>
+                    <lightning-button-icon
+                        icon-name="utility:close"
+                        alternative-text="Close signature request"
+                        onclick={closeComposer}
+                    ></lightning-button-icon>
+                </header>
+                <div class="slds-modal__content preparation-content">
+                    <template if:true={showPdfLoading}
+                        ><lightning-spinner
+                            alternative-text="Opening document preparation"
+                            size="small"
+                        ></lightning-spinner
+                    ></template>
+                    <template if:true={visibleComposerError}
+                        ><p class="composer-error" role="alert">{composerError}</p></template
+                    >
+                    <template if:true={showSourceChooser}>
+                        <section class="source-picker" aria-label="Choose a document source">
+                            <h3>What would you like to send?</h3>
+                            <p>Choose a PDF or generate a document from a Portwood template.</p>
+                            <div class="source-choices">
+                                <button type="button" data-source="upload" onclick={chooseSource}>
+                                    <lightning-icon icon-name="utility:upload" size="small"></lightning-icon>
+                                    <span>Upload PDF</span><small>Bring your own document</small>
+                                </button>
+                                <button type="button" data-source="files" onclick={chooseSource}>
+                                    <lightning-icon icon-name="utility:open_folder" size="small"></lightning-icon>
+                                    <span>Salesforce file</span><small>Choose a PDF on this record</small>
+                                </button>
+                                <button type="button" data-source="templates" onclick={chooseSource}>
+                                    <lightning-icon icon-name="utility:insert_template" size="small"></lightning-icon>
+                                    <span>Portwood template</span><small>Generate from record data</small>
+                                </button>
+                            </div>
+                            <template if:true={hasPreparation}
+                                ><p class="source-hint">
+                                    Your work stays available while you switch sources in this request.
+                                </p></template
+                            >
+                        </section>
+                    </template>
+                    <template if:true={hasPdfEditor}>
+                        <iframe
+                            src={editorUrl}
+                            title="Prepare a PDF for signature"
+                            class="preparation-frame"
+                            hidden={hidePdfEditor}
+                            allow="clipboard-write"
+                        ></iframe>
+                    </template>
+                    <template if:true={templateStarted}>
+                        <div class="template-sender" hidden={hideTemplateEditor}>
+                            <c-doc-gen-template-signature-sender
+                                record-id={recordId}
+                                onrequestcreated={handleTemplateRequestCreated}
+                            ></c-doc-gen-template-signature-sender>
+                        </div>
                     </template>
                 </div>
-            </template>
-
-            <!-- Signing Order -->
-            <div class="slds-var-m-bottom_medium">
-                <lightning-radio-group
-                    name="signingOrder"
-                    label="Signing Order"
-                    type="button"
-                    options={signingOrderOptions}
-                    value={signingOrder}
-                    onchange={handleSigningOrderChange}
-                >
-                </lightning-radio-group>
             </div>
-
-            <!-- Document Title (#42) -->
-            <div class="slds-var-m-bottom_medium">
-                <lightning-input
-                    type="text"
-                    name="documentTitleFormat"
-                    label="Signed Document Title (optional)"
-                    field-level-help="Leave blank to use the template name. Supports merge tokens like {Account.Name} or {Name} that resolve against the related record."
-                    placeholder="\{Account.Name} - Master Agreement Packet"
-                    value={documentTitleFormat}
-                    onchange={handleDocumentTitleChange}
-                    max-length="255"
-                ></lightning-input>
-            </div>
-
-            <!-- Custom subject + message (#193) + signer verification (#verification) — single-template path only -->
-            <template if:true={isSingleTemplate}>
-                <div class="slds-var-m-bottom_medium">
-                    <lightning-input
-                        type="number"
-                        name="expirationDays"
-                        label="Link Expiration in Days (optional)"
-                        field-level-help="How many days the signing links stay valid for this request. Leave blank to use the org default from Portwood Signature Settings."
-                        placeholder="Org default"
-                        value={expirationDays}
-                        min="1"
-                        max="365"
-                        onchange={handleExpirationDaysChange}
-                    ></lightning-input>
-                </div>
-                <div class="slds-var-m-bottom_medium">
-                    <lightning-input
-                        type="text"
-                        name="emailSubject"
-                        label="Custom Email Subject (optional)"
-                        field-level-help="Replaces the subject line of the request email for this send only. Supports tokens like {DocumentTitle} and {SignerName}. Leave blank to use the configured Email Template subject."
-                        placeholder="Action required: please sign {DocumentTitle}"
-                        value={emailSubject}
-                        onchange={handleEmailSubjectChange}
-                        max-length="255"
-                    ></lightning-input>
-                </div>
-                <div class="slds-var-m-bottom_medium">
-                    <lightning-textarea
-                        name="emailMessage"
-                        label="Custom Email Message (optional)"
-                        field-level-help="Replaces the default message in the signature request email for this send only. The branded layout and the signing button are always kept. Leave blank to use the configured Email Template. Edit the templates themselves under Portwood Command Hub → Email Templates."
-                        placeholder="Add a personal note for the signer…"
-                        value={emailMessage}
-                        onchange={handleEmailMessageChange}
-                        max-length="2000"
-                    ></lightning-textarea>
-                </div>
-                <div class="slds-var-m-bottom_medium">
-                    <lightning-combobox
-                        name="verificationOverride"
-                        label="Signer Verification"
-                        value={verificationOverride}
-                        options={verificationOptions}
-                        onchange={handleVerificationOverrideChange}
-                        field-level-help="Whether signers must verify a one-time email code before signing. Default uses the template's setting, then the org default."
-                    ></lightning-combobox>
-                </div>
-                <div class="slds-var-m-bottom_medium">
-                    <lightning-combobox
-                        name="prefillOverride"
-                        label="Email Pre-fill"
-                        value={prefillOverride}
-                        options={prefillOptions}
-                        onchange={handlePrefillOverrideChange}
-                        field-level-help="When verification is on, auto-send the code to the signer's known email and skip the 'type your email' step. The code still goes only to the real inbox."
-                    ></lightning-combobox>
-                </div>
-            </template>
-
-            <!-- Signers Table -->
-            <div class="slds-var-m-bottom_medium">
-                <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">Signers</h3>
-                <template for:each={signers} for:item="signer" for:index="index">
-                    <div
-                        key={signer.id}
-                        class="slds-box slds-theme_shade slds-var-m-bottom_x-small slds-var-p-around_small"
-                    >
-                        <div class="slds-grid slds-gutters_x-small slds-wrap">
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
-                                <lightning-input
-                                    type="text"
-                                    name="role"
-                                    label="Role"
-                                    placeholder="Type or pick below"
-                                    value={signer.roleName}
-                                    data-index={index}
-                                    onchange={handleRoleChange}
-                                    required
-                                >
-                                </lightning-input>
-                                <template if:true={hasRoleSuggestions}>
-                                    <div
-                                        class="slds-var-m-top_xx-small slds-text-body_small slds-text-color_weak"
-                                        style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center"
-                                    >
-                                        <span style="font-size: 11px">Suggestions:</span>
-                                        <template for:each={roleSuggestions} for:item="opt">
-                                            <button
-                                                key={opt.value}
-                                                type="button"
-                                                class="slds-badge"
-                                                style="
-                                                    cursor: pointer;
-                                                    border: 1px solid #c9c9c9;
-                                                    background: #fff;
-                                                    padding: 2px 8px;
-                                                    border-radius: 12px;
-                                                    font-size: 11px;
-                                                "
-                                                data-index={index}
-                                                data-role={opt.value}
-                                                onclick={handleRoleSuggestionClick}
-                                                title={opt.title}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        </template>
-                                    </div>
-                                </template>
-                            </div>
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
-                                <lightning-record-picker
-                                    label="Contact"
-                                    placeholder="Search contacts..."
-                                    object-api-name="Contact"
-                                    value={signer.contactId}
-                                    data-index={index}
-                                    onchange={handleContactChange}
-                                >
-                                </lightning-record-picker>
-                            </div>
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_2-of-12">
-                                <lightning-input
-                                    type="text"
-                                    label="Name"
-                                    value={signer.signerName}
-                                    data-index={index}
-                                    onchange={handleNameChange}
-                                    required
-                                >
-                                </lightning-input>
-                            </div>
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
-                                <lightning-input
-                                    type="email"
-                                    label="Email"
-                                    value={signer.signerEmail}
-                                    data-index={index}
-                                    onchange={handleEmailChange}
-                                    required
-                                >
-                                </lightning-input>
-                            </div>
-                            <div
-                                class="slds-col slds-size_1-of-1 slds-medium-size_1-of-12 slds-grid slds-grid_vertical-align-end"
-                            >
-                                <lightning-button
-                                    icon-name="utility:delete"
-                                    label="Remove"
-                                    title="Remove signer"
-                                    variant="destructive-text"
-                                    data-index={index}
-                                    onclick={handleRemoveSigner}
-                                    disabled={isRemoveDisabled}
-                                >
-                                </lightning-button>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-
-                <lightning-button
-                    label="Add Signer"
-                    variant="neutral"
-                    icon-name="utility:add"
-                    onclick={handleAddSigner}
-                    class="slds-var-m-top_x-small"
-                >
-                </lightning-button>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="slds-var-m-top_large slds-grid slds-gutters_small slds-wrap action-row">
-                <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-var-m-bottom_x-small">
-                    <lightning-button
-                        variant="neutral"
-                        label="Preview Before Sending"
-                        icon-name="utility:preview"
-                        onclick={handleShowPreview}
-                        disabled={isGenerateDisabled}
-                        class="action-btn"
-                    >
-                    </lightning-button>
-                </div>
-                <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-medium-text-align_right">
-                    <lightning-button
-                        variant="brand"
-                        label={generateButtonLabel}
-                        onclick={handleGenerate}
-                        disabled={isGenerateDisabled}
-                        class="action-btn"
-                    >
-                    </lightning-button>
-                </div>
-            </div>
-
-            <template if:true={error}>
-                <div class="slds-text-color_error slds-var-m-top_medium">{error}</div>
-            </template>
-        </template>
-
-        <!-- Success State -->
-        <template if:true={signerResults}>
-            <div class="slds-notify slds-notify_alert slds-theme_success slds-var-m-bottom_medium" role="alert">
-                <h2>Signature Links Generated!</h2>
-            </div>
-            <p class="slds-var-m-bottom_small">Provide each signer with their unique secure link:</p>
-            <template for:each={signerResults} for:item="result">
-                <div
-                    key={result.signerUrl}
-                    class="slds-box slds-theme_shade slds-var-m-bottom_x-small slds-var-p-around_small"
-                >
-                    <div class="slds-grid slds-grid_vertical-align-center slds-wrap">
-                        <div class="slds-col slds-grow slds-size_1-of-1 slds-medium-size_8-of-12">
-                            <p class="slds-text-body_regular">
-                                <strong>{result.signerName}</strong>
-                                <template if:true={result.roleName}>
-                                    <span class="slds-badge slds-var-m-left_x-small">{result.roleName}</span>
-                                </template>
-                            </p>
-                            <p class="slds-text-body_small" style="word-break: break-all">
-                                <a href={result.signerUrl} target="_blank">{result.signerUrl}</a>
-                            </p>
-                        </div>
-                        <div
-                            class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-medium-text-align_right slds-var-m-top_x-small"
-                        >
-                            <lightning-button
-                                icon-name="utility:copy"
-                                label="Copy"
-                                variant="neutral"
-                                data-url={result.signerUrl}
-                                onclick={handleCopyUrl}
-                                class="slds-var-m-right_x-small"
-                            >
-                            </lightning-button>
-                            <lightning-button
-                                icon-name="utility:user"
-                                label="Sign In Person"
-                                variant="brand-outline"
-                                title="Bypass email PIN verification — use only when the signer's identity is verified in person. Action is recorded in the signature audit log."
-                                data-signer-id={result.signerId}
-                                data-url={result.signerUrl}
-                                data-signer-name={result.signerName}
-                                onclick={handleSignInPerson}
-                            >
-                            </lightning-button>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            <lightning-button
-                variant="neutral"
-                label="Copy All Links"
-                icon-name="utility:copy"
-                onclick={handleCopyAllUrls}
-                class="slds-var-m-top_small"
-            >
-            </lightning-button>
-        </template>
-
-        <!-- Previous Requests -->
-        <div class="slds-var-m-top_large">
-            <lightning-button
-                variant="neutral"
-                label={previousRequestsLabel}
-                icon-name="utility:clock"
-                onclick={handleShowPreviousRequests}
-            >
-            </lightning-button>
-        </div>
-        <template if:true={showPreviousRequests}>
-            <div class="slds-var-m-top_medium">
-                <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">Previous Signature Requests</h3>
-                <template if:true={hasPreviousRequests}>
-                    <template for:each={previousRequests} for:item="req">
-                        <div key={req.id} class="slds-box slds-var-m-bottom_small">
-                            <div class="slds-grid slds-grid_vertical-align-center slds-var-m-bottom_x-small">
-                                <div class="slds-col slds-grow">
-                                    <p>
-                                        <strong>{req.name}</strong>
-                                        <span class={req.statusBadgeClass}>{req.status}</span>
-                                    </p>
-                                    <p class="slds-text-body_small slds-text-color_weak">{req.documentTitle}</p>
-                                </div>
-                                <div class="slds-col slds-no-flex">
-                                    <lightning-button-group>
-                                        <lightning-button
-                                            label="View"
-                                            icon-name="utility:open"
-                                            data-request-id={req.id}
-                                            onclick={handleViewRequest}
-                                        >
-                                        </lightning-button>
-                                        <lightning-button
-                                            label="Resend"
-                                            icon-name="utility:send"
-                                            data-request-id={req.id}
-                                            disabled={req.actionsDisabled}
-                                            onclick={handleResendRequest}
-                                        >
-                                        </lightning-button>
-                                        <lightning-button
-                                            label="Revoke"
-                                            variant="destructive-text"
-                                            data-request-id={req.id}
-                                            disabled={req.actionsDisabled}
-                                            onclick={handleRevokeRequest}
-                                        >
-                                        </lightning-button>
-                                    </lightning-button-group>
-                                </div>
-                            </div>
-                            <template for:each={req.signers} for:item="signer">
-                                <div
-                                    key={signer.signerUrl}
-                                    class="slds-box slds-theme_shade slds-var-m-bottom_xx-small slds-var-p-around_x-small"
-                                >
-                                    <div class="slds-grid slds-grid_vertical-align-center">
-                                        <div class="slds-col slds-no-flex slds-var-m-right_x-small">
-                                            <lightning-icon
-                                                icon-name={signer.statusIcon}
-                                                variant={signer.statusVariant}
-                                                size="x-small"
-                                            ></lightning-icon>
-                                        </div>
-                                        <div class="slds-col slds-grow">
-                                            <p class="slds-text-body_small">
-                                                <strong>{signer.signerName}</strong>
-                                                <template if:true={signer.roleName}
-                                                    ><span class="slds-badge slds-var-m-left_xx-small"
-                                                        >{signer.roleName}</span
-                                                    ></template
-                                                >
-                                                <span class="slds-text-color_weak slds-var-m-left_x-small"
-                                                    >{signer.status}</span
-                                                >
-                                            </p>
-                                        </div>
-                                        <div class="slds-col slds-no-flex">
-                                            <template if:true={signer.canVerifyInPerson}>
-                                                <lightning-button
-                                                    icon-name="utility:identity"
-                                                    label="Sign In Person"
-                                                    title="Verify this signer's identity in person and bypass email PIN. Admin-only; recorded in the audit log."
-                                                    variant="neutral"
-                                                    class="slds-var-m-right_xx-small"
-                                                    data-signer-id={signer.signerId}
-                                                    data-signer-name={signer.signerName}
-                                                    onclick={handleSignInPerson}
-                                                >
-                                                </lightning-button>
-                                            </template>
-                                            <lightning-button
-                                                icon-name="utility:copy"
-                                                label="Copy"
-                                                variant="neutral"
-                                                data-url={signer.signerUrl}
-                                                onclick={handleCopyPreviousUrl}
-                                            >
-                                            </lightning-button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                </template>
-                <template if:false={hasPreviousRequests}>
-                    <p class="slds-text-body_regular slds-text-color_weak">
-                        No previous signature requests found for this record.
-                    </p>
-                </template>
-            </div>
-        </template>
-
-        <!-- Preview Modal -->
-        <template if:true={showPreviewModal}>
-            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
-                <div class="slds-modal__container">
-                    <header class="slds-modal__header">
-                        <lightning-button-icon
-                            icon-name="utility:close"
-                            alternative-text="Close"
-                            class="slds-button slds-button_icon slds-modal__close"
-                            onclick={handleClosePreview}
-                        ></lightning-button-icon>
-                        <h2 class="slds-text-heading_medium">Signature Request Preview</h2>
-                        <p class="slds-text-body_small slds-text-color_weak">PDF preview v3</p>
-                    </header>
-                    <div
-                        class="slds-modal__content slds-var-p-around_medium"
-                        style="max-height: 70vh; overflow-y: auto"
-                    >
-                        <!-- Signers + Placements Summary -->
-                        <div class="slds-grid slds-wrap slds-gutters_small slds-var-m-bottom_medium">
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
-                                <h3 class="slds-text-title_bold slds-var-m-bottom_x-small">Signers</h3>
-                                <template for:each={signers} for:item="signer">
-                                    <div key={signer.id} class="slds-var-p-vertical_xx-small">
-                                        <span class="slds-badge slds-var-m-right_x-small">{signer.roleName}</span>
-                                        <strong>{signer.signerName}</strong>
-                                        <span class="slds-text-body_small slds-text-color_weak slds-var-m-left_x-small"
-                                            >{signer.signerEmail}</span
-                                        >
-                                    </div>
-                                </template>
-                            </div>
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
-                                <h3 class="slds-text-title_bold slds-var-m-bottom_x-small">Signing Requirements</h3>
-                                <template for:each={placementSummaryByRole} for:item="ps">
-                                    <div key={ps.role} class="slds-var-p-vertical_xx-small">
-                                        <span class="slds-badge slds-var-m-right_x-small">{ps.role}</span>
-                                        <span class="slds-text-body_small">{ps.summary}</span>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Document Preview -->
-                        <h3 class="slds-text-title_bold slds-var-m-bottom_x-small">Document Preview</h3>
-                        <div
-                            class="slds-box"
-                            style="background: #fff; border: 1px solid #e5e5e5; border-radius: 6px; min-height: 200px"
-                        >
-                            <template if:true={previewLoading}>
-                                <div style="text-align: center; padding: 3rem">
-                                    <lightning-spinner
-                                        alternative-text="Generating preview"
-                                        size="medium"
-                                    ></lightning-spinner>
-                                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_medium">
-                                        {previewStatus}
-                                    </p>
-                                </div>
-                            </template>
-                            <template if:false={previewLoading}>
-                                <div class="preview-document-container">
-                                    <template for:each={previewDocuments} for:item="doc">
-                                        <div key={doc.id} class="preview-document-frame">
-                                            <template if:true={isPacketMode}>
-                                                <div class="preview-document-title">{doc.name}</div>
-                                            </template>
-                                            <template if:true={doc.url}>
-                                                <div class="preview-ready">
-                                                    <lightning-icon
-                                                        icon-name="doctype:pdf"
-                                                        size="medium"
-                                                        class="preview-ready-icon"
-                                                    ></lightning-icon>
-                                                    <div class="preview-ready-body">
-                                                        <p class="slds-text-title_bold">PDF preview ready</p>
-                                                        <p class="slds-text-body_small slds-text-color_weak">
-                                                            Opens from a browser blob URL so Salesforce page chrome does
-                                                            not affect pagination.
-                                                        </p>
-                                                        <a
-                                                            class="slds-button slds-button_brand slds-var-m-top_small"
-                                                            href={doc.url}
-                                                            target="_blank"
-                                                            rel="noopener"
-                                                            >Open PDF Preview</a
-                                                        >
-                                                    </div>
-                                                </div>
-                                            </template>
-                                            <template if:true={doc.error}>
-                                                <p class="preview-error">{doc.error}</p>
-                                            </template>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                    <footer class="slds-modal__footer">
-                        <lightning-button
-                            label="Cancel"
-                            variant="neutral"
-                            onclick={handleClosePreview}
-                        ></lightning-button>
-                        <lightning-button
-                            label="Send for Signature"
-                            variant="brand"
-                            onclick={handleSendFromPreview}
-                            class="slds-var-m-left_x-small"
-                        ></lightning-button>
-                    </footer>
-                </div>
-            </section>
-            <div class="slds-backdrop slds-backdrop_open"></div>
-        </template>
-    </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
 </template>
