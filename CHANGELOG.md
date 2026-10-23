@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
+  Clearing a box in the rich-text editor no longer restores its original imported
+  content or the placeholder word `Text` when saving and generating a document.
+  Empty rich-text content now serializes as empty; legacy boxes without rich-text
+  content retain their plain-text fallback.
 - **ZIP template uploads no longer fail when Lightning Web Security blocks
   `DecompressionStream` (#320, PR #344).** The browser ZIP reader now detects whether
   native `deflate-raw` decompression is available and falls back to an inline RFC 1951
