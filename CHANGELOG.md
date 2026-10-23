@@ -20,7 +20,8 @@ browsers that block `DecompressionStream`.
 ### Added - branded guest signing experience
 
 - Applied reusable brand company name, logo, color, and favicon behavior across the signing
-  verification, signing, confirmation, success, and error paths.
+  verification and signing (PDF view) paths, and the browser tab title/favicon on the error path.
+  The post-signing confirmation and success cards are deliberately plain — see the fix below.
 - Preserved the existing org-wide Signature Settings experience when a template has no Sending
   Brand selected.
 - Improved success and error cards with centered responsive layouts and clearer status treatment.
@@ -153,7 +154,7 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   the signature audit history. Limits: 2 MB, 50 pages, 10 recipients, and 100
   fields; encrypted PDFs and PDFs with existing digital signatures are rejected.
   Parallel signing for uploaded PDFs is not yet supported. See
-  [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf-unreleased).
+  [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf).
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

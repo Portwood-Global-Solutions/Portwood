@@ -2939,7 +2939,7 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 
 The sender offers **Upload PDF**, **Salesforce file**, and **Portwood template**
 from **New signature request**. For an existing PDF, follow
-[§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased). The steps below cover
+[§10.1.1](#1011-signing-a-customer-uploaded-pdf). The steps below cover
 Portwood templates, which continue using signature merge tags.
 
 1. Open any record.
@@ -2960,7 +2960,7 @@ Portwood templates, which continue using signature merge tags.
 
 > **Email setup (admin).** Invitation and completion emails send through the Org-Wide Email Address you configure in **Portwood → Signatures settings**. That OWA must have **Allow All Profiles** enabled (guest signers trigger the completion email) and its sending **domain must be DKIM-authenticated** (Setup → Email → DKIM Keys, then publish the CNAME records in your DNS) — Salesforce blocks unauthenticated custom-domain sends. Without these, signing still works but emails won't deliver (the reason is logged on the request's **Email Status** field).
 
-#### 10.1.1 Signing a customer-uploaded PDF (unreleased)
+#### 10.1.1 Signing a customer-uploaded PDF
 
 Use this workflow when your PDF is already prepared and you want recipients to
 sign it without recreating it as a Portwood template. Signature merge tags such
@@ -3053,7 +3053,7 @@ Useful for contract bundles (MSA + SOW + NDA), onboarding packets, etc.
 ### 10.4 Sequential vs parallel
 
 The choices below apply to template requests. Customer-uploaded PDFs currently
-support sequential signing only; see [§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased).
+support sequential signing only; see [§10.1.1](#1011-signing-a-customer-uploaded-pdf).
 
 - **Parallel**: everyone gets the invite right away. First to sign = first done. Good for lightweight approvals.
 - **Sequential**: signers are emailed in order (by `Sort_Order__c`). Next signer is automatically emailed when the previous signs. Good for hierarchical approvals (employee → manager → VP → CFO).
