@@ -79,6 +79,7 @@
         else if (state.step === 1) html = recipientControls();
         else if (state.step === 2) html = fieldControls();
         else html = reviewControls();
+        // eslint-disable-next-line @lwc/lwc/no-inner-html -- built by *Controls() below, which escapeHtml() every dynamic value
         $('controls').innerHTML = html;
         wireControls(); updateFooter(); renderFields();
     }
@@ -203,6 +204,7 @@
         var base = pageModel.getViewport({ scale: 1 });
         var width = Math.max(160, $('viewport').clientWidth - (window.innerWidth < 700 ? 24 : 44));
         viewport = pageModel.getViewport({ scale: Math.min(1.65, width / base.width) });
+        // eslint-disable-next-line @lwc/lwc/no-inner-html -- static markup; state.page is an internal page-counter Number, not user text
         $('viewport').innerHTML = '<div class="paper" id="paper"><canvas id="pdf-canvas" aria-label="PDF page ' + state.page + '"></canvas><div class="overlay" id="overlay"></div></div>';
         $('paper').style.width = viewport.width + 'px'; $('paper').style.height = viewport.height + 'px';
         var canvas = $('pdf-canvas'), ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -240,6 +242,7 @@
     }
     function renderFields() {
         if (!$('overlay') || !viewport) return;
+        // eslint-disable-next-line @lwc/lwc/no-inner-html -- clears to an empty string
         $('overlay').innerHTML = '';
         if (state.step < 2) return;
         state.fields.filter(function (field) { return field.page === state.page; }).forEach(function (field) {
@@ -249,6 +252,7 @@
             button.className = 'field' + (state.selected === field.id ? ' selected' : '');
             button.setAttribute('aria-label', (person.name || 'Recipient ' + (personIndex + 1)) + ' ' + types[field.type]);
             button.style.borderColor = colors[personIndex % colors.length]; button.style.color = colors[personIndex % colors.length];
+            // eslint-disable-next-line @lwc/lwc/no-inner-html -- both interpolated values are escapeHtml()'d
             button.innerHTML = escapeHtml(types[field.type]) + '<span class="owner">' + escapeHtml(person.name || 'Recipient ' + (personIndex + 1)) + '</span>';
             paintField(button, field); $('overlay').appendChild(button);
             button.addEventListener('click', function (event) { event.stopPropagation(); if (state.step === 2) { state.selected = field.id; renderControls(); } });
@@ -256,6 +260,7 @@
             button.addEventListener('pointerdown', function (event) {
                 event.stopPropagation(); if (event.button !== 0) return;
                 state.selected = field.id;
+                // eslint-disable-next-line @lwc/lwc/no-inner-html -- fieldControls() escapeHtml()s every dynamic value
                 $('controls').innerHTML = fieldControls(); wireControls();
                 $('overlay').querySelectorAll('.field').forEach(function (item) { item.classList.toggle('selected', item.dataset.field === field.id); });
                 var start = screenRect(field), sx = event.clientX, sy = event.clientY;
@@ -295,6 +300,7 @@
                 try {
                     var contacts = await rpc('contacts', [env.recordId, query]);
                     if (input.value !== query || !input.isConnected) return;
+                    // eslint-disable-next-line @lwc/lwc/no-inner-html -- clears to an empty string
                     resultBox.innerHTML = ''; resultBox.hidden = contacts.length === 0;
                     contacts.forEach(function (contact) { var b = document.createElement('button'); b.textContent = contact.Name + (contact.Email ? ' · ' + contact.Email : ''); b.onclick = function () { var person = state.recipients.find(function (p) { return p.key === personKey; }); person.name = contact.Name; person.email = contact.Email || ''; person.contactId = contact.Id; changed(); renderControls(); }; resultBox.appendChild(b); });
                 } catch (err) { error(err); }
@@ -334,6 +340,7 @@
         if (result.emailStatus) html += '<p class="small">' + escapeHtml(result.emailStatus) + '</p>';
         (result.signers || []).forEach(function (signer, index) { html += '<div class="signer-result"><span class="avatar">' + (index + 1) + '</span><div class="grow"><strong>' + escapeHtml(signer.signerName) + '</strong><div class="small">' + escapeHtml(signer.signerEmail) + '</div></div><a href="' + escapeHtml(signer.signerUrl) + '" target="_blank" rel="noopener noreferrer">' + (result.delivery === 'preview' ? 'Open signing preview' : 'Open signing link') + '</a></div>'; });
         html += '<p class="small">The completed PDF will appear in this record’s Files.</p><button id="another" class="primary">Prepare another document</button></section>';
+        // eslint-disable-next-line @lwc/lwc/no-inner-html -- every interpolated value above is escapeHtml()'d
         $('app').innerHTML = html; $('another').onclick = function () {
             if (env.parentOrigin) notify('new-request');
             else { var url = new URL(window.location.href); url.searchParams.delete('draftId'); window.location.assign(url.toString()); }

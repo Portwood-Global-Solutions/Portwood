@@ -2823,11 +2823,11 @@ function readTable(wrapper, tableEl) {
     // marker and the binding read as blank: open a table template, save, and the
     // {#Rel} was silently gone. The wrapper still holds it wherever the parser moved it.
     // READ, to find the {#Rel} marker the parser may have moved. No write.
-    // eslint-disable-next-line @lwc/lwc/no-inner-html
     // The opener may carry ARGUMENTS — `{#ChartBucket:Rel:Field}` — so this cannot be
     // [A-Za-z0-9_]+ (#310). With the narrow pattern a bucket table read back as an
     // unbound table, which is why the documented string-replace workaround did not
     // survive a round trip through the designer.
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- READ, not a write; see comment above.
     const m = /\{#([^{}]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
     t.relationship = m ? m[1] : '';
     const count = Math.max(ths.length, tds.length);
