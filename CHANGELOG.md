@@ -54,6 +54,12 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+- **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
+  Clearing a box in the rich-text editor no longer restores its original imported
+  content or the placeholder word `Text` when saving and generating a document.
+  Empty rich-text content now serializes as empty; legacy boxes without rich-text
+  content retain their plain-text fallback.
+
 ### Fixed
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
