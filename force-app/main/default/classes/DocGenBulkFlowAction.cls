@@ -98,6 +98,19 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                     throw new DocGenException('Provide Template ID or Template API Name.');
                 }
 
+                // Fail closed when a Flow supplies an empty record collection.
+                // Without this guard, buildEffectiveCondition() returned null and
+                // the bulk controller interpreted the request as unfiltered,
+                // generating a document for every record in the template's base
+                // object. A Flow action must never turn an empty selection into
+                // an all-records job.
+                if (req.recordIds != null && !hasNonBlankRecordId(req.recordIds)) {
+                    throw new DocGenException('At least one record ID must be selected.');
+                }
+                if (req.recordIds == null && String.isBlank(req.queryCondition)) {
+                    throw new DocGenException('At least one record ID or a WHERE condition must be supplied.');
+                }
+
                 // Default: combined PDF only (most efficient)
                 Boolean mergeOnly = (req.combinedPdfOnly != false && req.keepIndividualFiles != true);
                 Boolean mergePdf = mergeOnly || (req.keepIndividualFiles == true);
@@ -177,5 +190,18 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
             return idClause;
         }
         return userCondition;
+    }
+
+    @TestVisible
+    private static Boolean hasNonBlankRecordId(List<String> recordIds) {
+        if (recordIds == null) {
+            return false;
+        }
+        for (String raw : recordIds) {
+            if (String.isNotBlank(raw)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

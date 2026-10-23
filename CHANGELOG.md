@@ -78,6 +78,18 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   and Unicode content. Temporary download anchors are removed and Blob URLs are released
   after the browser has time to start the download. Native Salesforce file preview
   behavior is unchanged.
+- **Flow document generation now respects selected record IDs (#463).** Empty record
+  collections fail safely without creating an unscoped all-records job, and a request
+  with neither record IDs nor a WHERE condition is rejected the same way, so a Flow
+  action can no longer turn an empty or unscoped selection into a job that generates a
+  document for every record of the template's base object. Populated collections still
+  generate documents only for the selected records.
+- **Bulk document generation no longer clutters a Job's Files list with internal
+  working data.** The per-job data cache and the per-record HTML snippets used to
+  assemble a combined PDF are implementation detail, not user output; they are no
+  longer linked to the Job record's Files related list. The cache is still cleaned up
+  automatically when the job finishes, and combined/individual output documents are
+  unaffected.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
