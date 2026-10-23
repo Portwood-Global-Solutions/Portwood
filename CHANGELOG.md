@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
-
 ### Added - branded guest signing experience
 
 - Applied reusable brand company name, logo, color, and favicon behavior across the signing
