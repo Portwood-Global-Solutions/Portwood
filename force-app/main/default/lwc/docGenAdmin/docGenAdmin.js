@@ -6800,9 +6800,27 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.lintFindings && this.lintFindings.length > 0;
     }
 
+    get blockingLintCount() {
+        return (this.lintFindings || []).filter((finding) => finding.isBlocking).length;
+    }
+
+    get hasBlockingLintFindings() {
+        return this.blockingLintCount > 0;
+    }
+
+    get lintReportHeading() {
+        return this.hasBlockingLintFindings ? 'Fix before generating' : 'Notes on how this renders';
+    }
+
+    get lintReportIntro() {
+        return this.hasBlockingLintFindings
+            ? 'Your template saved, but the red findings can prevent generation. Fix those before generating; the remaining notes describe PDF-engine differences.'
+            : 'Your template saved. These notes identify PDF-engine differences that may change what a reader sees.';
+    }
+
     /**
-     * Fidelity report (#272): server Finding DTOs → badge rows, the same shape
-     * the Agentforce report renders. Lint actions are always 'warning'.
+     * Fidelity report (#272/#318): server Finding DTOs → badge rows. The linter
+     * uses 'error' only for syntax findings known to prevent generation.
      */
     _mapLintFindings(warnings) {
         return (warnings || []).map((f, i) => ({
@@ -6810,9 +6828,24 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             rule: f.rule,
             detail: f.detail,
             occurrences: f.occurrences,
-            badge: f.action === 'repaired' ? 'Repaired' : f.action === 'removed' ? 'Removed' : 'Check this',
+            occurrenceLabel: f.occurrences === 1 ? '1 match in source' : `${f.occurrences || 0} matches in source`,
+            isBlocking: f.action === 'error',
+            badge:
+                f.action === 'error'
+                    ? 'Fix before generating'
+                    : f.action === 'repaired'
+                      ? 'Repaired'
+                      : f.action === 'removed'
+                        ? 'Removed'
+                        : 'Review',
             badgeClass:
-                f.action === 'warning' ? 'slds-theme_warning' : f.action === 'repaired' ? 'slds-theme_success' : ''
+                f.action === 'error'
+                    ? 'slds-theme_error'
+                    : f.action === 'warning'
+                      ? 'slds-theme_warning'
+                      : f.action === 'repaired'
+                        ? 'slds-theme_success'
+                        : ''
         }));
     }
 
@@ -6820,9 +6853,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // itself already got its own success toast.
     _toastLintFindings() {
         const n = this.lintFindings.length;
+        const blockers = this.blockingLintCount;
+        if (blockers > 0) {
+            this.showToast(
+                'Saved — ' + blockers + ' issue' + (blockers === 1 ? '' : 's') + ' can stop generation',
+                'The template was saved. Fix the red finding' +
+                    (blockers === 1 ? '' : 's') +
+                    ' before generating; the fidelity report has the details.',
+                'warning',
+                'sticky'
+            );
+            return;
+        }
         this.showToast(
-            'Saved — ' + n + ' template warning' + (n === 1 ? '' : 's'),
-            'This will still render. The fidelity report in the edit view lists what the PDF engine handles differently — nothing was blocked.',
+            'Saved — ' + n + ' rendering note' + (n === 1 ? '' : 's'),
+            'The template saved. Review the fidelity report for PDF-engine differences that may change the output.',
             'warning',
             'sticky'
         );

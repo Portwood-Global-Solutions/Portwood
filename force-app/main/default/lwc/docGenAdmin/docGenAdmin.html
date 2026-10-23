@@ -5325,14 +5325,12 @@
                                         <template if:true={hasLintFindings}>
                                             <div class="slds-box slds-var-m-top_medium">
                                                 <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">
-                                                    Template warnings — this will still render
+                                                    {lintReportHeading}
                                                 </h3>
                                                 <p
                                                     class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
                                                 >
-                                                    Nothing was blocked and your file was saved as-is. The PDF engine is
-                                                    CSS 2.1, so at render time it handles the items below differently
-                                                    than a browser would — here's what changes.
+                                                    {lintReportIntro}
                                                 </p>
                                                 <template for:each={lintFindings} for:item="f">
                                                     <div key={f.key} class="slds-var-m-bottom_x-small">
@@ -5340,7 +5338,7 @@
                                                         </lightning-badge>
                                                         <strong class="slds-var-m-left_x-small">{f.rule}</strong>
                                                         <span class="slds-text-body_small slds-text-color_weak">
-                                                            &times;{f.occurrences}</span
+                                                            ({f.occurrenceLabel})</span
                                                         >
                                                         <p class="slds-text-body_small slds-var-m-left_medium">
                                                             {f.detail}

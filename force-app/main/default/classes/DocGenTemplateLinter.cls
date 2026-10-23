@@ -17,8 +17,9 @@
  * across formatting, and field references validated against the template's
  * Base_Object_API__c describe and Query_Config__c.
  *
- * Every check is advisory and individually guarded: lint() never throws and
- * never touches the author's bytes. A warning is a heads-up, not a blocker.
+ * Every check is individually guarded: lint() never throws and never touches
+ * the author's bytes. Findings distinguish rendering notes from syntax errors
+ * that can prevent generation.
  */
 public with sharing class DocGenTemplateLinter {
     // Tags that resolve without a field on the base object. GROUPNAME only
@@ -33,6 +34,18 @@ public with sharing class DocGenTemplateLinter {
         'GROUPNAME'
     };
     private static final Set<String> AGGREGATE_TAGS = new Set<String>{ 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX' };
+    private static final Set<String> CHART_BUCKET_TAGS = new Set<String>{
+        'KEY',
+        'KEY_LABEL',
+        'COUNT',
+        'PERCENT',
+        'PERCENT_INT',
+        'MAX_PERCENT',
+        'COLOR',
+        'COLOR_HEX',
+        'INDEX'
+    };
+    private static final Set<String> CHART_COLUMN_TAGS = new Set<String>{ 'PERCENT_OF_ROW', 'PERCENT_OF_ROW_INT' };
 
     // {Field}, {Parent.Field}, {Field:format} — the GiantQueryAssembler tag shape.
     private static final Pattern FIELD_TAG = Pattern.compile(
@@ -53,7 +66,7 @@ public with sharing class DocGenTemplateLinter {
         runPageSetupConflictCheck(html, tmpl, findings);
         runTbodySelectorCheck(html, findings);
         runMergeTagChecks(html, tmpl, findings);
-        return findings;
+        return quieten(findings);
     }
 
     // -----------------------------------------------------------------------
@@ -63,16 +76,123 @@ public with sharing class DocGenTemplateLinter {
     //    finding so nothing tells the author their file was changed. It wasn't.
     // -----------------------------------------------------------------------
 
+    private static final Map<String, String> REPORT_MODE_DETAIL = new Map<String, String>{
+        'Markdown code fence' => 'This file starts or ends with a ``` fence, which prints as literal text. Delete the fence lines.',
+        'CSS variable' => 'var(...) resolves to nothing in this engine, so the property it feeds is dropped. Write the literal value instead.',
+        'Unresolved CSS variable' => 'A var(...) here has no definition and no fallback, so it reads as "inherit". Set a literal value.',
+        'Custom property declaration' => 'The --name: value declarations are inert — this engine never reads them back out.',
+        'rgba() colour' => 'rgba() resolves to nothing and the element renders invisible. Write a flat hex composited over white.',
+        'hsla() colour' => 'hsla() resolves to nothing and the element renders invisible. Write a flat hex instead.',
+        'Gradient' => 'Gradients are discarded when the stylesheet is parsed, leaving no background. Use a solid fill.',
+        'Numeric font-weight' => 'Only normal and bold exist in this engine. Numeric weights lose their intermediate differences.',
+        'Dingbat font' => 'ZapfDingbats, Symbol, Wingdings and Webdings are not installed. Use a Unicode glyph sized with font-size.',
+        '@media query' => 'Media queries never match because the engine has no viewport. Move required rules to the main stylesheet.',
+        'Loop tag placed between rows' => 'A relationship loop between <tr> elements is moved out of the table by the HTML parser. Put the opener in the first cell and the closer in the last cell of the repeated row.'
+    };
+
+    private static final Set<String> SUPPRESSED_RULES = new Set<String>{
+        'Custom property declaration',
+        'Numeric font-weight',
+        'Flex/grid alignment properties'
+    };
+
+    private static final Set<String> CSS_COMPAT_RULES = new Set<String>{
+        'CSS variable',
+        'Unresolved CSS variable',
+        'rgba() colour',
+        'hsla() colour',
+        'Gradient',
+        'calc()',
+        'display:flex / display:grid',
+        'position: absolute/fixed/sticky',
+        'border-radius',
+        '@media query'
+    };
+
+    private static final Set<String> BLOCKING_RULES = new Set<String>{ 'Unbalanced merge braces', 'Unclosed loop tag' };
+
+    @TestVisible
+    private static Integer maxReportedFindings = 6;
+
+    /** Remove inert duplicates, group CSS compatibility notes, and keep blockers first. */
+    private static List<DocGenAiHtmlValidator.Finding> quieten(List<DocGenAiHtmlValidator.Finding> raw) {
+        List<DocGenAiHtmlValidator.Finding> blockers = new List<DocGenAiHtmlValidator.Finding>();
+        List<DocGenAiHtmlValidator.Finding> notes = new List<DocGenAiHtmlValidator.Finding>();
+        List<String> cssNames = new List<String>();
+        Integer cssCount = 0;
+
+        for (DocGenAiHtmlValidator.Finding f : raw) {
+            if (SUPPRESSED_RULES.contains(f.rule)) {
+                continue;
+            }
+            if (CSS_COMPAT_RULES.contains(f.rule)) {
+                cssNames.add(f.rule);
+                cssCount += (f.occurrences == null ? 1 : f.occurrences);
+                continue;
+            }
+            if (f.action == 'error') {
+                blockers.add(f);
+            } else {
+                notes.add(f);
+            }
+        }
+
+        if (!cssNames.isEmpty()) {
+            List<DocGenAiHtmlValidator.Finding> groupedNotes = new List<DocGenAiHtmlValidator.Finding>{
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    'Modern CSS the PDF engine ignores',
+                    cssCount,
+                    'The renderer is CSS 2.1, so it lays the page out without: ' +
+                        String.join(cssNames, ', ') +
+                        '. Rewrite those rules with table-based layout and literal values.'
+                )
+            };
+            groupedNotes.addAll(notes);
+            notes = groupedNotes;
+        }
+
+        List<DocGenAiHtmlValidator.Finding> ordered = new List<DocGenAiHtmlValidator.Finding>();
+        ordered.addAll(blockers);
+        ordered.addAll(notes);
+        if (ordered.size() <= maxReportedFindings) {
+            return ordered;
+        }
+
+        List<DocGenAiHtmlValidator.Finding> capped = new List<DocGenAiHtmlValidator.Finding>();
+        capped.addAll(blockers); // a cap must never hide a generation blocker
+        Integer noteSlots = maxReportedFindings - blockers.size();
+        if (noteSlots < 0) {
+            noteSlots = 0;
+        }
+        for (Integer i = 0; i < notes.size() && i < noteSlots; i++) {
+            capped.add(notes[i]);
+        }
+        Integer more = notes.size() - noteSlots;
+        if (more > 0) {
+            capped.add(
+                new DocGenAiHtmlValidator.Finding(
+                    'warning',
+                    more + ' more not shown',
+                    more,
+                    'Fix the items above and save again to see the remaining findings.'
+                )
+            );
+        }
+        return capped;
+    }
+
     private static void runRendererCompatibilityCheck(String html, List<DocGenAiHtmlValidator.Finding> findings) {
         try {
             DocGenAiHtmlValidator.Result res = DocGenAiHtmlValidator.sanitize(html);
             for (DocGenAiHtmlValidator.Finding f : res.findings) {
+                String detail = REPORT_MODE_DETAIL.containsKey(f.rule) ? REPORT_MODE_DETAIL.get(f.rule) : f.detail;
                 findings.add(
                     new DocGenAiHtmlValidator.Finding(
-                        'warning',
+                        BLOCKING_RULES.contains(f.rule) ? 'error' : 'warning',
                         f.rule,
                         f.occurrences,
-                        'The PDF engine ignores this at render time — your file was not modified. ' + f.detail
+                        'Your file was not modified. ' + detail
                     )
                 );
             }
@@ -293,7 +413,7 @@ public with sharing class DocGenTemplateLinter {
             }
             findings.add(
                 new DocGenAiHtmlValidator.Finding(
-                    'warning',
+                    'error',
                     'Unclosed loop tag',
                     stack.size(),
                     'Opened but never closed: ' +
@@ -387,6 +507,8 @@ public with sharing class DocGenTemplateLinter {
         Set<String> notQueriedReported = new Set<String>();
         Set<String> loopReported = new Set<String>();
         Integer loopDepth = 0;
+        Integer chartBucketDepth = 0;
+        Integer chartColumnDepth = 0;
         List<MergeToken> stack = new List<MergeToken>();
         for (MergeToken t : tokens) {
             if (t.isOpen == true) {
@@ -396,7 +518,11 @@ public with sharing class DocGenTemplateLinter {
                     // loopDepth (see MergeToken.isRootAnchor).
                     continue;
                 }
-                if (isRelationshipLoop(t.key)) {
+                if (t.key == 'ChartBucket') {
+                    chartBucketDepth++;
+                } else if (chartBucketDepth > 0 && t.key.equalsIgnoreCase('cols')) {
+                    chartColumnDepth++;
+                } else if (isRelationshipLoop(t.key)) {
                     // Only the OUTERMOST loop resolves against the base object —
                     // a nested {#Rel} belongs to the child and is skipped.
                     if (loopDepth == 0 && !loopNames.contains(t.key.toLowerCase()) && !loopReported.contains(t.key)) {
@@ -423,7 +549,13 @@ public with sharing class DocGenTemplateLinter {
             if (t.isClose == true) {
                 if (!stack.isEmpty() && stack[stack.size() - 1].key.equals(t.key)) {
                     MergeToken popped = stack.remove(stack.size() - 1);
-                    if (popped.isRootAnchor != true && isRelationshipLoop(popped.key)) {
+                    if (popped.isRootAnchor == true) {
+                        continue;
+                    } else if (popped.key == 'ChartBucket') {
+                        chartBucketDepth--;
+                    } else if (chartBucketDepth > 0 && popped.key.equalsIgnoreCase('cols')) {
+                        chartColumnDepth--;
+                    } else if (isRelationshipLoop(popped.key)) {
                         loopDepth--;
                     }
                 }
@@ -441,6 +573,8 @@ public with sharing class DocGenTemplateLinter {
             if (
                 BUILTIN_TAGS.contains(upper) ||
                 AGGREGATE_TAGS.contains(upper) ||
+                (chartBucketDepth > 0 && CHART_BUCKET_TAGS.contains(upper)) ||
+                (chartColumnDepth > 0 && CHART_COLUMN_TAGS.contains(upper)) ||
                 upper.startsWith('RUNNINGUSER.') ||
                 upper == 'CHART'
             ) {

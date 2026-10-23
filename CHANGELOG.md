@@ -9,6 +9,16 @@
   browsers. The same HTML ZIP failed before the fix with an **Upload Failed** decompression
   error and reached **Ready to Save** after the fix, including image extraction.
 
+### Fixed
+
+- **The HTML fidelity report now separates rendering notes from generation blockers
+  (#318).** Harmless declarations such as `gap` on ordinary block layouts no longer
+  produce repeated warnings, related modern-CSS differences are grouped into one clear
+  note, and valid ChartBucket variables are no longer reported as unknown merge tags.
+  Unclosed loops and unbalanced merge braces are shown as errors that can stop
+  generation, while advisory findings use wording that no longer implies Portwood
+  modified the uploaded file.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
