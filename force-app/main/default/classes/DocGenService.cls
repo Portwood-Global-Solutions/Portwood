@@ -10886,6 +10886,21 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         sourceStyles = DocGenFontService.expandTags(sourceStyles);
         Boolean headerHasCounters = hasPageCounterTokens(header);
         Boolean footerHasCounters = hasPageCounterTokens(footer);
+        // A header/footer with a page-counter token is serialized through
+        // buildPageMarginContentCss into an @page margin-box CSS `content:` value,
+        // not rendered as normal in-flow HTML — a -pw-font-face binding never
+        // reaches prepare()'s per-element tag walk on that path, so it either
+        // breaks the CSS-content conversion or leaks as an unexpanded marker.
+        if (headerHasCounters && header.contains('-pw-font-face')) {
+            throw new DocGenException(
+                'A font tag cannot share a header with a page-counter token ({PageNumber}/{TotalPages}); move the font tag and the counter into separate elements.'
+            );
+        }
+        if (footerHasCounters && footer.contains('-pw-font-face')) {
+            throw new DocGenException(
+                'A font tag cannot share a footer with a page-counter token ({PageNumber}/{TotalPages}); move the font tag and the counter into separate elements.'
+            );
+        }
         // v1.90 — when the source HTML already declares @page, suppress the engine's
         // size/margin so author CSS wins cleanly. Header/footer margin-box rules are
         // still emitted because the source @page can't supply them on its own.
