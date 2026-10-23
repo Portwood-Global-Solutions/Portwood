@@ -10477,10 +10477,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         String headerSrc = String.isBlank(headerHtml)
             ? null
-            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(headerHtml)));
+            : DocGenFontService.expandTags(decodeBraceEntities(headerHtml));
         String footerSrc = String.isBlank(footerHtml)
             ? null
-            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(footerHtml)));
+            : DocGenFontService.expandTags(decodeBraceEntities(footerHtml));
         if (String.isNotBlank(headerSrc)) {
             sourceStyles += '\n' + extractHtmlStyleBlocks(headerSrc);
             headerSrc = stripStyleAndScriptBlocks(headerSrc);
@@ -10800,7 +10800,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
-        html = DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(html)));
+        html = DocGenFontService.expandTags(decodeBraceEntities(html));
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
         if (bodyOpen == -1) {
