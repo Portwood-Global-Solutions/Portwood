@@ -48,6 +48,14 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ## Unreleased
 
+- **Canvas plain-text merge tags retain their underscores (#282, PR #292).**
+  Custom-field, relationship and namespaced tags containing `__c` or `__r` are no
+  longer mistaken for underline formatting, which could corrupt the tags and leave
+  unresolved text or blank values in generated PDFs. Merge tags are protected during
+  formatting expansion, while bold, italic, underline and strikethrough surrounding
+  them still work. Regression checks cover tag preservation and formatting that
+  spans a merge tag.
+
 ### Fixed
 
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
