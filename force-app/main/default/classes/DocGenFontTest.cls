@@ -67,15 +67,15 @@ private class DocGenFontTest {
             System.assertEquals('400', String.valueOf(meta.get('weight')));
             System.assertEquals('Staged', f.Status__c);
             System.assertEquals(1, [SELECT COUNT() FROM DocGen_Font_Face__c]);
-            DocGenFontService.checkText(meta, '?ahin ?');
+            DocGenFontService.checkText(meta, 'Şahin ş');
             try {
-                DocGenFontService.checkText(meta, '?');
+                DocGenFontService.checkText(meta, '漢');
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('U+6F22'));
             }
             try {
-                DocGenFontService.checkText(meta, '??');
+                DocGenFontService.checkText(meta, '😀');
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('U+1F600'));
@@ -122,7 +122,7 @@ private class DocGenFontTest {
         System.runAs(fontAdmin()) {
             String key = stage();
             try {
-                DocGenFontService.prepare(bound(key, '?ahin'));
+                DocGenFontService.prepare(bound(key, 'Şahin'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('review'));
@@ -162,7 +162,7 @@ private class DocGenFontTest {
     static void exactFaceAndMissingMergedGlyph() {
         System.runAs(fontAdmin()) {
             String key = verified();
-            String html = DocGenFontService.prepare(bound(key, '?ahin &amp; ?'));
+            String html = DocGenFontService.prepare(bound(key, 'Şahin &amp; 漢'));
             System.assert(html.contains('-fs-pdf-font-encoding:Identity-H'));
             System.assert(
                 html.contains('src:url("/sfc/servlet.shepherd/version/download/'),
@@ -172,33 +172,33 @@ private class DocGenFontTest {
             System.assert(!html.contains('/resource/'));
             System.assert(!html.contains('format(\'truetype\')'));
             try {
-                DocGenFontService.prepare(bound(key, '?'));
+                DocGenFontService.prepare(bound(key, '漢'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('U+6F22'));
             }
             try {
-                DocGenFontService.prepare(bound(key, '<b>?ahin</b>'));
+                DocGenFontService.prepare(bound(key, '<b>Şahin</b>'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('explicit verified face'));
             }
             try {
-                DocGenFontService.prepare(bound(key, '?ahin').replace('font-weight:400', 'font-weight:700'));
+                DocGenFontService.prepare(bound(key, 'Şahin').replace('font-weight:400', 'font-weight:700'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('explicit verified face'));
             }
             try {
-                DocGenFontService.prepare(bound(key, '?ahin').replace('<head>', '<head><style>@font-face{}</style>'));
+                DocGenFontService.prepare(bound(key, 'Şahin').replace('<head>', '<head><style>@font-face{}</style>'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('registry'));
             }
             try {
                 DocGenFontService.prepare(
-                    bound(key, '?ahin')
-                        .replace('</body>', '<p style="font-family:Portwood Test Script">?ahin</p></body>')
+                    bound(key, 'Şahin')
+                        .replace('</body>', '<p style="font-family:Portwood Test Script">Şahin</p></body>')
                 );
                 System.assert(false);
             } catch (DocGenException e) {
@@ -206,7 +206,7 @@ private class DocGenFontTest {
             }
             try {
                 DocGenFontService.prepare(
-                    bound(key, '?ahin')
+                    bound(key, 'Şahin')
                         .replace('<head>', '<head><style>.custom{font-family:Portwood Test Script;}</style>')
                 );
                 System.assert(false);
@@ -233,7 +233,7 @@ private class DocGenFontTest {
                 'tr{page-break-inside:avoid !important;}';
             String authored = bound(
                     key,
-                    '<h1 class="title" style="width:90% !important;text-align:center !important;">?ahin ?</h1>'
+                    '<h1 class="title" style="width:90% !important;text-align:center !important;">Şahin 漢</h1>'
                 )
                 .replace('<head>', '<head><style>' + css + '</style>');
             String rendered = DocGenFontService.prepare(authored);
@@ -264,7 +264,7 @@ private class DocGenFontTest {
     static void importantFontValuesStillRequireExactFace() {
         System.runAs(fontAdmin()) {
             String key = verified();
-            String exact = bound(key, '?ahin ?')
+            String exact = bound(key, 'Şahin 漢')
                 .replace('Portwood Test Script\';', 'Portwood Test Script\' !IMPORTANT;')
                 .replace('font-weight:400;', 'font-weight:normal ! important;')
                 .replace('font-style:normal;', 'font-style:normal !important;');
@@ -288,8 +288,8 @@ private class DocGenFontTest {
             }
             try {
                 DocGenFontService.prepare(
-                    bound(key, '?ahin')
-                        .replace('</body>', '<p style="font-family:Portwood Test Script !important;">?ahin</p></body>')
+                    bound(key, 'Şahin')
+                        .replace('</body>', '<p style="font-family:Portwood Test Script !important;">Şahin</p></body>')
                 );
                 System.assert(false, 'Priority cannot bypass an explicit binding requirement');
             } catch (DocGenException e) {
@@ -297,7 +297,7 @@ private class DocGenFontTest {
             }
             try {
                 DocGenFontService.prepare(
-                    bound(key, '?ahin')
+                    bound(key, 'Şahin')
                         .replace(
                             '<head>',
                             '<head><style>.unbound{font-family:"Portwood Test Script" !IMPORTANT;}</style>'
@@ -316,17 +316,17 @@ private class DocGenFontTest {
             String custom =
                 '<div style="-pw-font-face:' +
                 key +
-                ';font-family:\'Portwood Test Script\';font-weight:400;font-style:normal;">?ahin <span>?</span></div>';
+                ';font-family:\'Portwood Test Script\';font-weight:400;font-style:normal;">Şahin <span>漢</span></div>';
             String out = DocGenService.wrapHtmlForPdf(custom, '', null, null);
-            System.assert(out.contains('?ahin') && out.contains('?</span>'), 'Selected font glyphs remain live text');
+            System.assert(out.contains('Şahin') && out.contains('漢</span>'), 'Selected font glyphs remain live text');
             System.assert(
-                !out.contains('Arial Unicode MS\', sans-serif;\">?'),
+                !out.contains('Arial Unicode MS\', sans-serif;\">漢'),
                 'No automatic substitution inside selected face'
             );
-            String legacy = DocGenService.wrapHtmlForPdf('<p>?</p>', '', null, null);
+            String legacy = DocGenService.wrapHtmlForPdf('<p>漢</p>', '', null, null);
             System.assert(legacy.contains('Arial Unicode MS'));
             DocGenFontController.retireFont(key);
-            System.assert(DocGenFontService.prepare(bound(key, '?ahin')).contains('Identity-H'));
+            System.assert(DocGenFontService.prepare(bound(key, 'Şahin')).contains('Identity-H'));
             for (Map<String, Object> face : DocGenFontController.getFontFaces())
                 if (face.get('key') == key)
                     System.assertEquals(false, face.get('selectable'));
@@ -377,7 +377,7 @@ private class DocGenFontTest {
             System.runAs(author) {
                 System.assert(!FeatureManagement.checkPermission('Manage_DocGen_Fonts'));
                 System.assert(!DocGenFontController.getFontFaces().isEmpty());
-                System.assert(DocGenFontService.prepare(bound(key, '?ahin ?')).contains('Identity-H'));
+                System.assert(DocGenFontService.prepare(bound(key, 'Şahin 漢')).contains('Identity-H'));
                 try {
                     DocGenFontController.retireFont(key);
                     System.assert(false);
@@ -540,7 +540,7 @@ private class DocGenFontTest {
             ];
             delete link;
             try {
-                DocGenFontService.prepare(bound(key, '?ahin'));
+                DocGenFontService.prepare(bound(key, 'Şahin'));
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('missing or changed'));
@@ -569,7 +569,7 @@ private class DocGenFontTest {
             System.assertEquals(false, preview.PreferencesLinkLatestVersion);
             System.assertEquals(original.Id, preview.ContentVersionId);
             System.assert(
-                DocGenFontService.prepare(bound(key, '?ahin')).contains(String.valueOf(original.Id) + '?font.ttf')
+                DocGenFontService.prepare(bound(key, 'Şahin')).contains(String.valueOf(original.Id) + '?font.ttf')
             );
         }
     }
@@ -585,7 +585,7 @@ private class DocGenFontTest {
             User author = [SELECT Id FROM User WHERE LastName = 'Portwood Font Author QA' LIMIT 1];
             System.runAs(author) {
                 System.assertEquals(tag, DocGenFontController.getFontFaces()[0].get('mergeTag'));
-                String source = '<p style="' + tag + ';font-size:12pt">?ahin ?</p>';
+                String source = '<p style="' + tag + ';font-size:12pt">Şahin 漢</p>';
                 String expanded = DocGenFontService.expandTags(source);
                 System.assert(expanded.contains('-pw-font-face:' + key));
                 System.assert(expanded.contains('font-size:12pt'));
@@ -603,7 +603,7 @@ private class DocGenFontTest {
     static void htmlTemplateFontTagMergesBodyAndChrome() {
         System.runAs(fontAdmin()) {
             String key = verified(), tag = fontTag(key);
-            Account a = new Account(Name = '?ahin ?irket');
+            Account a = new Account(Name = 'Şahin Şirket');
             insert a;
             DocGen_Template__c t = new DocGen_Template__c(
                 Name = 'HTML font tags',
@@ -612,25 +612,25 @@ private class DocGenFontTest {
                 Base_Object_API__c = 'Account',
                 Query_Config__c = 'Name',
                 Header_Html__c = '<p style="' + tag + '">Header {Name}</p>',
-                Footer_Html__c = '<p style="' + tag + '">Footer ?</p>'
+                Footer_Html__c = '<p style="' + tag + '">Footer 漢</p>'
             );
             insert t;
             String source =
                 '<html><head><style>p{color:#183452}</style></head><body style="' +
                 tag +
-                ';font-size:14pt"><h1>{Name}</h1><p>Live ?</p></body></html>';
+                ';font-size:14pt"><h1>{Name}</h1><p>Live 漢</p></body></html>';
             Map<String, Object> saved = DocGenController.saveAndPublishHtmlBody(t.Id, 'font-tags.html', source, true);
             Test.startTest();
             // The renderer cannot fetch Files inserted inside an uncommitted test transaction.
             // Exercise the complete HTML merge; committed Files embedding is verified by live PDF probes.
             String rendered = DocGenService.generateHtmlForRecord(t.Id, a.Id, null);
             Test.stopTest();
-            System.assert(rendered.contains('?ahin ?irket'), rendered);
+            System.assert(rendered.contains('Şahin Şirket'), rendered);
             System.assert(rendered.contains('-pw-font-face:' + key), 'Body binding survives extraction');
             System.assert(rendered.contains('Identity-H'));
             System.assert(!rendered.contains('{%font:'));
-            System.assert(!rendered.contains('Arial Unicode MS\', sans-serif;\">?'));
-            System.assert(rendered.contains('Header ?ahin ?irket') && rendered.contains('Footer ?'));
+            System.assert(!rendered.contains('Arial Unicode MS\', sans-serif;\">漢'));
+            System.assert(rendered.contains('Header Şahin Şirket') && rendered.contains('Footer 漢'));
             DocGen_Template_Version__c version = [
                 SELECT Id
                 FROM DocGen_Template_Version__c
@@ -710,10 +710,10 @@ private class DocGenFontTest {
         System.runAs(fontAdmin()) {
             String key = verified(), tag = fontTag(key);
             DocGenFontController.retireFont(key);
-            String source = '<p style="' + tag + '">?ahin ?</p>';
+            String source = '<p style="' + tag + '">Şahin 漢</p>';
             System.assert(DocGenService.wrapHtmlForPdf(source, '', null, null).contains('Identity-H'));
             try {
-                DocGenService.wrapHtmlForPdf('<p style="' + tag + '">?</p>', '', null, null);
+                DocGenService.wrapHtmlForPdf('<p style="' + tag + '">漢</p>', '', null, null);
                 System.assert(false);
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('U+6F22'));
@@ -733,7 +733,7 @@ private class DocGenFontTest {
             System.assert(prepared.contains('@font-face') && prepared.contains(key));
             System.assert(!prepared.contains('{%font:'));
             try {
-                DocGenFontService.prepare(shell.replace('{ROWS}', row.replace('Hello customer', '?')));
+                DocGenFontService.prepare(shell.replace('{ROWS}', row.replace('Hello customer', '漢')));
                 System.assert(false, 'Glyphs from injected batch rows must be validated.');
             } catch (DocGenException e) {
                 System.assert(e.getMessage().contains('U+6F22'));
@@ -745,7 +745,7 @@ private class DocGenFontTest {
     static void fontTagsSurviveGiantParentResolution() {
         System.runAs(fontAdmin()) {
             String key = verified(), tag = fontTag(key);
-            Account a = new Account(Name = 'Giant ?ahin');
+            Account a = new Account(Name = 'Giant Şahin');
             insert a;
             DocGen_Template__c t = new DocGen_Template__c(
                 Name = 'Giant font tag',
@@ -758,7 +758,7 @@ private class DocGenFontTest {
             DocGenGiantQueryAssembler giant = new DocGenGiantQueryAssembler(null, t.Id, a.Id, 'Contacts');
             String source = '<p style="' + tag + '">{Name}</p>';
             String merged = giant.resolveParentMergeTags(source);
-            System.assert(merged.contains('Giant ?ahin'), merged);
+            System.assert(merged.contains('Giant Şahin'), merged);
             System.assert(merged.contains(tag), 'The giant parent regex leaves font tags for the shared HTML wrapper');
             System.assert(DocGenService.wrapHtmlForPdf(merged, '', null, null).contains('Identity-H'));
             String body = DocGenService.extractHtmlBodyContent('<html><body style="' + tag + '">{Name}</body></html>');
@@ -782,14 +782,14 @@ private class DocGenFontTest {
                     fontTag(regular) +
                     '">Regular <strong style="' +
                     DocGenFontService.mergeTag('barlow', bold) +
-                    '">Bold ?ahin</strong> Regular ?</p>',
+                    '">Bold Şahin</strong> Regular 漢</p>',
                 '',
                 null,
                 null
             );
             System.assert(html.contains('-pw-font-face:' + regular) && html.contains('-pw-font-face:' + bold));
             System.assert(html.contains('font-weight:700'));
-            System.assert(html.contains('Bold ?ahin') && html.contains('Regular ?'));
+            System.assert(html.contains('Bold Şahin') && html.contains('Regular 漢'));
         }
     }
 
@@ -803,8 +803,8 @@ private class DocGenFontTest {
     static void filenamesMetricsAndColorOutlineCompatibility() {
         System.runAs(fontAdmin()) {
             Blob bytes = DocGenFontTestData.regular();
-            Map<String, Object> meta = new DocGenFontInspector(bytes).inspect('Brand Font (Regular) ????.TTF');
-            System.assertEquals('Brand Font (Regular) ????.TTF', meta.get('filename'));
+            Map<String, Object> meta = new DocGenFontInspector(bytes).inspect('Brand Font (Regular) 😀😀.TTF');
+            System.assertEquals('Brand Font (Regular) 😀😀.TTF', meta.get('filename'));
             System.assertEquals(false, meta.get('colorFont'));
             String h = EncodingUtil.convertToHex(bytes);
             for (String tag : new List<String>{ '68686561', '686d7478' }) {
@@ -878,8 +878,8 @@ private class DocGenFontTest {
                     new List<Integer>{ 128512, 128512 }
                 }
             };
-            DocGenFontService.checkText(meta, '????');
-            for (String text : new List<String>{ '??', '??' }) {
+            DocGenFontService.checkText(meta, '😀😀');
+            for (String text : new List<String>{ '😀', '😀' }) {
                 try {
                     DocGenFontService.checkText(meta, text);
                     System.assert(

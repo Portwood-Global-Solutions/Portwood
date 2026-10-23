@@ -63,7 +63,7 @@
             <template lwc:if={isBulkUpload}>
                 <section class="upload" aria-label="Bulk upload fonts">
                     <h3>Bulk upload and inspect fonts</h3>
-                    <p class="upload-steps">Upload ? Inspect ? Generate PDF specimens ? Review and approve</p>
+                    <p class="upload-steps">Upload → Inspect → Generate PDF specimens → Review and approve</p>
                     <p class="hint">
                         Unsupported fonts are rejected before they are saved. Their temporary Salesforce File is
                         removed.
@@ -123,7 +123,7 @@
             <template lwc:else>
                 <section class="upload" aria-label="Upload font">
                     <h3>Upload and inspect a font</h3>
-                    <p class="upload-steps">Upload ? Inspect ? Generate PDF specimen ? Review and approve</p>
+                    <p class="upload-steps">Upload → Inspect → Generate PDF specimen → Review and approve</p>
                     <p class="hint">
                         Fonts containing supplementary Unicode characters above U+FFFF are rejected before they are
                         saved because the Salesforce native PDF renderer cannot render them.
@@ -280,7 +280,7 @@
                                     <span class="face-name">{face.label}</span>
                                     <template if:true={face.canPreview}>
                                         <span class="face-sample" style={face.previewStyle}
-                                            >The quick brown fox ? 123</span
+                                            >The quick brown fox Ş 123</span
                                         >
                                     </template>
                                     <template if:false={face.canPreview}

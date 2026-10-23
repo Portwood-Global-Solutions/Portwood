@@ -75,11 +75,11 @@ public with sharing class DocGenFontService {
             if (!tag.startsWith('<!--') && hasFontTag(tag)) {
                 Matcher styles = Pattern.compile('(?is)\\sstyle\\s*=\\s*(["\'])(.*?)\\1').matcher(tag);
                 if (!styles.find())
-                    throw new DocGenException('Place the font tag inside an element?s quoted style attribute.');
+                    throw new DocGenException('Place the font tag inside an element’s quoted style attribute.');
                 String style = styles.group(2).unescapeHtml4();
                 Matcher font = Pattern.compile('(?i)\\{%font:([a-z0-9-]{1,40}):([a-f0-9]{16,64})\\}').matcher(style);
                 if (!font.find())
-                    throw new DocGenException('Invalid font tag. Copy a verified face?s tag from Assets > Fonts.');
+                    throw new DocGenException('Invalid font tag. Copy a verified face’s tag from Assets > Fonts.');
                 String before = style.substring(0, font.start());
                 if (String.isNotBlank(before) && !before.trim().endsWith(';'))
                     throw new DocGenException(
@@ -120,10 +120,10 @@ public with sharing class DocGenFontService {
     }
     public static String faceCss(DocGen_Font_Face__c face) {
         if (face.Source_Checksum__c == null)
-            throw new DocGenException('Generate and review this font?s Salesforce File PDF specimen in Assets first.');
+            throw new DocGenException('Generate and review this font’s Salesforce File PDF specimen in Assets first.');
         DocGenFontController.sourceFile(face);
         Map<String, Object> m = metadata(face);
-        // Let the PDF renderer resolve the File in the caller?s Salesforce context.
+        // Let the PDF renderer resolve the File in the caller’s Salesforce context.
         // An absolute org-domain URL works in API Apex but silently loses every
         // custom font when generation is invoked from Lightning.
         String url = DocGenFontController.fileUrl(face.Source_CV_Id__c);
@@ -221,8 +221,8 @@ public with sharing class DocGenFontService {
     public static String specimenText(Map<String, Object> m) {
         for (
             String candidate : new List<String>{
-                'Portwood ? ?ahin ?irket ? ? 0123456789',
-                'Portwood ? ?? ?? ? 0123456789',
+                'Portwood 漢 Şahin Şirket 漢 😀 0123456789',
+                'Portwood 漢 😀 😀 漢 0123456789',
                 'Portwood - Document font - 0123456789'
             }
         ) {
@@ -447,7 +447,7 @@ public with sharing class DocGenFontService {
                 )
                     if (families.contains(family.trim()))
                         throw new DocGenException(
-                            'Custom font stylesheets need inline font bindings. Use an Assets font tag in each container?s style attribute.'
+                            'Custom font stylesheets need inline font bindings. Use an Assets font tag in each container’s style attribute.'
                         );
         }
 

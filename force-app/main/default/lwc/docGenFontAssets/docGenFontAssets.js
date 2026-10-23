@@ -25,7 +25,7 @@ export default class DocGenFontAssets extends LightningElement {
     busy = false;
     message = '';
     error = '';
-    sample = 'Portwood ? ?ahin ?irket\nThe font you choose is the font you print.';
+    sample = 'Portwood 漢 Şahin Şirket\nThe font you choose is the font you print.';
     showUpload = false;
     isBulkUpload = false;
     fontKey = '';
@@ -198,7 +198,7 @@ export default class DocGenFontAssets extends LightningElement {
     async copyFontTag() {
         try {
             await navigator.clipboard.writeText(this.selected.mergeTag);
-            this.message = 'Font tag copied. Paste it inside an HTML element?s style attribute.';
+            this.message = 'Font tag copied. Paste it inside an HTML element’s style attribute.';
             this.error = '';
         } catch {
             this.error = 'Copy the font tag from the field below.';
@@ -206,8 +206,8 @@ export default class DocGenFontAssets extends LightningElement {
     }
     get reviewHint() {
         return this.selected?.hasCedilla
-            ? 'Check embedded font identity, live text, layout and actual ? / ? glyphs in the current PDF. Approval records your review.'
-            : 'Check embedded font identity, live text, layout and the glyphs this face covers. This face does not include ? / ?. Approval records your review.';
+            ? 'Check embedded font identity, live text, layout and actual Ş / ş glyphs in the current PDF. Approval records your review.'
+            : 'Check embedded font identity, live text, layout and the glyphs this face covers. This face does not include Ş / ş. Approval records your review.';
     }
     get fontDetail() {
         const f = this.selected;
@@ -465,7 +465,7 @@ export default class DocGenFontAssets extends LightningElement {
                 this.pendingJob = '';
                 return result;
             }
-            this.message = 'Processing font in Salesforce?';
+            this.message = 'Processing font in Salesforce…';
             await new Promise((resolve) => {
                 this.pollResolve = resolve;
                 this.pollTimer = setTimeout(resolve, 2000);
