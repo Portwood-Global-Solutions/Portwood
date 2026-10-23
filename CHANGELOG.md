@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- **Prepare customer-uploaded PDFs for signature (#482).** From a record's
+  **Portwood Signature Sender**, choose **Upload PDF**, **Salesforce file**, or
+  **Portwood template**. Uploaded PDFs do not need signature merge tags: place
+  signature, initials, date-signed, and date-picker fields on the document and
+  assign them to recipients. Save and resume private, record-bound drafts before
+  sending. Uploaded PDFs support sequential signing, a signing Brand, email
+  verification settings, public signing links, email invitations, and internal
+  Salesforce preview links. The original PDF is retained separately, sent field
+  placements are locked, and the completed PDF is attached to the record with
+  the signature audit history. Limits: 2 MB, 50 pages, 10 recipients, and 100
+  fields; encrypted PDFs and PDFs with existing digital signatures are rejected.
+  Parallel signing for uploaded PDFs is not yet supported. See
+  [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf-unreleased).
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
