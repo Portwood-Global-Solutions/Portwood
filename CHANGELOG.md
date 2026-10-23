@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added - branded guest signing experience
+
+- Applied reusable brand company name, logo, color, and favicon behavior across the signing
+  verification, signing, confirmation, success, and error paths.
+- Preserved the existing org-wide Signature Settings experience when a template has no Sending
+  Brand selected.
+- Improved success and error cards with centered responsive layouts and clearer status treatment.
+
+### Fixed - signer input and error-state behavior
+
+- Drawing and typed signatures are mutually exclusive while retaining manual multi-stroke drawing.
+- Signature drawing now renders immediately and keeps the typed field disabled from the first
+  stroke; clearing either method restores the available input controls.
+- Error pages retain the resolved company name and logo favicon in the browser tab, including
+  already-signed and expired-link responses.
+
 - **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
   Clearing a box in the rich-text editor no longer restores its original imported
   content or the placeholder word `Text` when saving and generating a document.

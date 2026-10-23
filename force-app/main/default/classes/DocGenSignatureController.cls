@@ -147,6 +147,14 @@ public without sharing class DocGenSignatureController {
         // server-side at completion). See DocGenFieldWritebackService.publicFormFields.
         @AuraEnabled
         public List<Object> formFields;
+        @AuraEnabled
+        public String brandName;
+        @AuraEnabled
+        public String brandColor;
+        @AuraEnabled
+        public String brandLogoUrl;
+        @AuraEnabled
+        public String brandFooterText;
     }
 
     public class SaveSignatureResult {
@@ -401,6 +409,7 @@ public without sharing class DocGenSignatureController {
             if (
                 DocGenSignatureExpiry.isExpired(signers[0].Signature_Request__r.Expires_At__c, signers[0].CreatedDate)
             ) {
+                applySigningBrand(res, signers[0].Signature_Request__r.Id);
                 res.errorMessage = 'This signature link has expired. Please request a new one.';
                 return res;
             }
@@ -747,12 +756,13 @@ public without sharing class DocGenSignatureController {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
 
+        DocGen_Signature_Request__c parentReq = signer.Signature_Request__r;
+        applySigningBrand(res, parentReq.Id);
         if (signer.Status__c == 'Signed') {
             res.errorMessage = 'You have already signed this document.';
             return res;
         }
 
-        DocGen_Signature_Request__c parentReq = signer.Signature_Request__r;
         if (parentReq.Status__c == 'Signed' || parentReq.Status__c == 'Cancelled') {
             res.errorMessage = 'This signature request is no longer active.';
             return res;
@@ -858,6 +868,7 @@ public without sharing class DocGenSignatureController {
     private static SignatureInitResponse validateLegacyRequest(DocGen_Signature_Request__c req) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
+        applySigningBrand(res, req.Id);
 
         if (req.Status__c == 'Signed') {
             res.errorMessage = 'This document has already been signed.';
@@ -907,6 +918,24 @@ public without sharing class DocGenSignatureController {
         }
 
         return res;
+    }
+
+    /** One resolved brand payload is shared by every public signer state. */
+    private static void applySigningBrand(SignatureInitResponse res, Id requestId) {
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        DocGen_Brand__c brand = DocGenBrandResolver.getBrand(DocGenBrandResolver.resolveBrandForRequest(requestId));
+        res.brandName = brand != null && String.isNotBlank(brand.Company_Name__c)
+            ? brand.Company_Name__c
+            : (settings == null ? 'Portwood' : settings.Company_Name__c);
+        res.brandColor = brand != null && String.isNotBlank(brand.Brand_Color__c)
+            ? brand.Brand_Color__c
+            : (settings == null ? '#0176D3' : settings.Signature_Email_Brand_Color__c);
+        res.brandLogoUrl = brand != null
+            ? (String.isNotBlank(brand.Logo_Url_Extended__c) ? brand.Logo_Url_Extended__c : brand.Logo_Url__c)
+            : (settings == null ? null : settings.Signature_Email_Logo_Url__c);
+        res.brandFooterText = brand != null && String.isNotBlank(brand.Footer_Text__c)
+            ? brand.Footer_Text__c
+            : (settings == null ? null : settings.Signature_Email_Footer_Text__c);
     }
 
     // CxSAST: Apex_CRUD_ContentDistribution — SYSTEM_MODE required for guest user context; ContentDistribution created for signature document preview
