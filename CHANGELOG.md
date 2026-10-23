@@ -17,13 +17,11 @@
   stroke; clearing either method restores the available input controls.
 - Error pages retain the resolved company name and logo favicon in the browser tab, including
   already-signed and expired-link responses.
-- **The final "Signature Complete" confirmation screen now shows the resolved Brand header**,
-  matching the "waiting for other signers" screen earlier in the same multi-signer flow. The
-  completion screen was grouped with the verify/error states that intentionally hide the brand
-  header, but unlike those states it has no other branding element of its own (the PDF view has
-  an inline brand block; the verify screen's title carries the brand name) — so a signer on a
-  branded request saw the company name, logo, and color bar throughout signing and then lost all
-  of it on the very last screen.
+- **The "waiting for other signers" screen in a multi-signer request no longer shows the Brand
+  header**, matching the unbranded, generic look of the final "Signature Complete" screen. Both
+  post-signing confirmation cards are now deliberately unbranded and consistent with each other;
+  the brand header still shows during active signing (the PDF view and the verify-email step
+  carry the brand through their own inline elements instead).
 
 - **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
   Clearing a box in the rich-text editor no longer restores its original imported

@@ -1519,14 +1519,23 @@
                         // The PDF view uses the full height, so align the wrapper to the top.
                         var pw = document.getElementById('page-wrapper');
                         var brandHeader = document.getElementById('brand-header');
+                        // The brand header never shows on 'pdf' (its own inline brand block
+                        // covers it), 'verify' (the brand name is already in the title),
+                        // 'error' (brand identity is tab title/favicon only — see the
+                        // comment at the validateToken error path below), or the
+                        // post-signing confirmation cards 'waiting'/'success' (kept
+                        // deliberately unbranded, matching the generic confirmation
+                        // look across both the "waiting for other signers" and final
+                        // "Signature Complete" screens).
+                        var unbrandedStates = { verify: true, error: true, success: true, waiting: true };
                         if (name === 'pdf') {
                             pw.style.justifyContent = 'flex-start';
                             if (brandHeader) brandHeader.style.display = 'none';
-                        } else if (name === 'verify' || name === 'error') {
-                            if (brandHeader) brandHeader.style.display = 'none';
                         } else {
                             pw.style.justifyContent = 'center';
-                            if (brandHeader && signerData) brandHeader.style.display = 'flex';
+                            if (brandHeader) {
+                                brandHeader.style.display = signerData && !unbrandedStates[name] ? 'flex' : 'none';
+                            }
                         }
                         pw.style.padding = '1rem';
                     }
