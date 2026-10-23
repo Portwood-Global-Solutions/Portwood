@@ -1,15 +1,15 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v3.59.0",
-      "versionNumber": "3.59.0.NEXT",
+      "versionName": "v3.60.0",
+      "versionNumber": "3.60.0.NEXT",
       "path": "force-app",
       "default": true,
       "definitionFile": "config/build-def.json",
       "postInstallScript": "DocGenEmailTemplateInstall",
       "package": "Portwood",
-      "ancestorVersion": "3.58.0",
-      "versionDescription": "Turn any Salesforce record into a finished document — quotes, invoices, contracts, certificates, letters, statements and reports. Build your template in Word, Excel or PowerPoint, or design one right in your browser, then drop in the fields you want and Portwood fills them in. Tables grow with your data, charts draw themselves, and images, barcodes and QR codes come along too. Send a document for signature and track it to completion. Generate one from a record, thousands at once, or let a Flow do it automatically overnight. Everything runs inside your own Salesforce org — no external services and no data leaving the platform. Free for every user."
+      "ancestorVersion": "3.59.0",
+      "versionDescription": "Turn any Salesforce record into a finished document — quotes, invoices, contracts, certificates, letters, statements and reports. Build your template in Word, Excel or PowerPoint, or design one right in your browser, then drop in the fields you want and Portwood fills them in. Tables grow with your data, charts draw themselves, and images, barcodes and QR codes come along too. Send a document for signature and track it to completion — including PDFs your customers upload themselves — with your own company name, logo and color carried through the whole signing experience. Bring your own fonts for a perfect match to your brand. Generate one from a record, thousands at once, or let a Flow do it automatically overnight. Everything runs inside your own Salesforce org — no external services and no data leaving the platform. Free for every user."
     },
     {
       "versionName": "v1.1.0 — Free install, no installation key",
@@ -252,6 +252,7 @@
     "Portwood@3.57.0-2": "04tVx0000015OKTIA2",
     "Portwood@3.58.0-1": "04tVx0000017QurIAE",
     "Portwood@3.59.0-1": "04tVx0000019KRxIAM",
-    "Portwood@3.59.0-2": "04tVx0000019Ki5IAE"
+    "Portwood@3.59.0-2": "04tVx0000019Ki5IAE",
+    "Portwood@3.60.0-1": "04tVx000001BOsrIAG"
   }
 }

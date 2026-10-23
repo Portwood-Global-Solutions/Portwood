@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
+
+Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
+80% coverage
+
+Fifteen fixes and features land together this release. The headline is signing any PDF a customer
+uploads — no Portwood template required — through the same guided field-placement and
+sequential-signer flow as a template-based request, with a Portwood Brand's company name, logo and
+color carried consistently through the whole signer journey. Custom TrueType fonts can now be
+uploaded and pinned to text for native PDF output that matches your brand exactly. The rest is a
+sweep of Canvas and template fixes: rich-text color persistence, header/footer image expiry,
+legacy designer HTML/CSS preservation and page-size handling, a DOCX template regex limit, empty
+record collection handling during bulk generation, and a ZIP-upload decompression fallback for
+browsers that block `DecompressionStream`.
+
 ### Added - branded guest signing experience
 
 - Applied reusable brand company name, logo, color, and favicon behavior across the signing

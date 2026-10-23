@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx0000019Ki5IAE --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001BOsrIAG --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000019Ki5IAE) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx0000019Ki5IAE)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -448,12 +448,13 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships **every two weeks, on a Friday**. Next release: **2026-10-23**, then 11-06, 11-20.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-06**, then 11-20, 12-04.
 
 Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
 | Version     | Headline                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                    |
 | **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records              |
 | **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                  |
 | **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                              |
@@ -473,6 +474,8 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding**: send any PDF your customer uploads out for signature — no Portwood template required — with the same guided drag-and-drop field placement, sequential multi-signer flow, and brand identity as a template-based request. Pick a Portwood Brand on a signing request and your company name, logo and color now carry through the whole signer journey consistently; the post-signing confirmation screens stay generic by design, matching the rest of the flow. Upload your own TrueType fonts in Command Hub → Assets and pin them to text in Canvas or HTML templates for native PDF output that matches your brand exactly. See the CHANGELOG for details.
 
 **v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability**: the Canvas Designer gets a run of maturity fixes — a **Show sample data** toggle renders the artboard with a Test Record's real values instead of raw merge tags, mutually exclusive boxes can share a **Variant group** so inactive alternatives no longer leave empty space in output, elements below a growing table now follow it automatically, and a table bound to `{#ChartBucket}` resolves correctly instead of printing raw tags — so a chart with its numbers in a table beside it, one of the most common chart layouts, is now authorable in Canvas, not just Word and HTML. Signature audit records are now tamper-evident: document hashes and IP addresses can't be altered after the record is created. `{~Label}` lets a tag inside a loop reach data on a sibling relationship of the parent record — useful for a per-item chart that needs company-wide context. Also fixed: special/accented currency characters (including `Ș`/`ș`) in fillable PDFs, negative currency sign placement, long hyperlinks wrapping instead of clipping, and DOCX→PDF header/footer spacing. See the CHANGELOG for details.
 
@@ -573,7 +576,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.59.0 | **Latest (Released)**                   | `04tVx0000019Ki5IAE` |
+| v3.60.0 | **Latest (Released)**                   | `04tVx000001BOsrIAG` |
+| v3.59.0 | Released                                | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |
 | v3.56.0 | Released                                | `04tVx0000010fnNIAQ` |
