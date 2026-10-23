@@ -1522,7 +1522,7 @@
                         if (name === 'pdf') {
                             pw.style.justifyContent = 'flex-start';
                             if (brandHeader) brandHeader.style.display = 'none';
-                        } else if (name === 'verify' || name === 'success' || name === 'error') {
+                        } else if (name === 'verify' || name === 'error') {
                             if (brandHeader) brandHeader.style.display = 'none';
                         } else {
                             pw.style.justifyContent = 'center';
