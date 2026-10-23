@@ -56,6 +56,14 @@ Two small fixes where the editor promised something the PDF did not deliver.
 
 ### Fixed
 
+- **ZIP template uploads no longer fail when Lightning Web Security blocks
+  `DecompressionStream` (#320, PR #344).** The browser ZIP reader now detects whether
+  native `deflate-raw` decompression is available and falls back to an inline RFC 1951
+  decoder when it is missing or rejected. The native path remains unchanged for supported
+  browsers. Verified in `MyScratchOrg` with Playwright: the same HTML ZIP failed before
+  the fix with an **Upload Failed** decompression error and reached **Ready to Save** after
+  the fix, including image extraction.
+
 - **Canvas bold is no longer a silent no-op on `'Arial Unicode MS'` (#281).** The PDF
   engine (`Blob.toPdf`/Flying Saucer) embeds Arial Unicode MS with no bold face, so a
   bold box set to it printed regular while the canvas showed bold — WYSIWYG said
