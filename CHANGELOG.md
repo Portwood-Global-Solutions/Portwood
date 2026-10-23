@@ -100,6 +100,10 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   Salesforce rich-text URLs into template-owned Files. The same image is
   identified by its SHA-256 content hash and reused across saves and new
   template versions; only a newly inserted or changed image creates a new File.
+- **Canvas rich text colors now persist when applied through the toolbar or entered as RGB in HTML (#469).**
+  RGB colors are converted to equivalent hex values before sanitization, keeping the selected colors in the
+  canvas and saved template. Existing named and hex colors continue to work; unsupported color functions
+  remain filtered.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

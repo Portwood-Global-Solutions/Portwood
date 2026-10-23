@@ -74,5 +74,61 @@ const WHOLE_DOC = [
     ok(clean.includes('{SUM:Lines.Amount:currency}'), 'and so is the merge tag');
 }
 
+// --- #469: toolbar RGB colours must survive the model and save/reopen --------
+{
+    const colours = [
+        ['rgb(255, 0, 0)', '#ff0000'],
+        ['rgb(0, 128, 255)', '#0080ff'],
+        ['RGB( 0 , 0 , 0 )', '#000000'],
+        ['rgb(255,255,255)', '#ffffff'],
+        ['red', 'red'],
+        ['#f00', '#f00'],
+        ['#ff0000', '#ff0000']
+    ];
+    for (const [colour, expected] of colours) {
+        const clean = m.sanitizeInline(
+            `<p><span style="color: ${colour}; font-weight: bold">Colour {Account.Name}</span></p>`
+        );
+        ok(clean.includes(`color: ${expected}`), `${colour} is retained as ${expected}`);
+        ok(
+            clean.includes('font-weight: bold') && clean.includes('{Account.Name}'),
+            'formatting and merge tags survive'
+        );
+        ok(m.sanitizeInline(clean) === clean, 'repeated sanitization preserves the colour');
+
+        const doc = m.blankDocument();
+        const box = m.newTextBox(1, 1, 3, 0.5);
+        box.html = clean;
+        doc.artboards[0].boxes.push(box);
+        const geo = m.pageGeometry('Letter', 'Portrait');
+        const saved = m.serialize(doc, geo);
+        ok(saved.includes(`color: ${expected}`), 'serialized HTML retains the colour');
+        const reopened = m.deserialize(saved);
+        ok(reopened.artboards[0].boxes[0].html === clean, 'reopening retains the formatted box content');
+    }
+}
+{
+    const clean = m.sanitizeInline(
+        '<span style="color: rgb(255, 0, 0); background-color: rgb(0, 128, 255)">Highlight</span>'
+    );
+    ok(
+        clean.includes('color: #ff0000') && clean.includes('background-color: #0080ff'),
+        'toolbar highlight survives too'
+    );
+}
+// Unsupported functions and invalid RGB values must still be rejected.
+for (const colour of [
+    'rgba(255, 0, 0, 0.5)',
+    'hsl(0, 100%, 50%)',
+    'hsla(0, 100%, 50%, 1)',
+    'var(--colour)',
+    'calc(1 + 1)',
+    'rgb(256, 0, 0)',
+    'rgb(-1, 0, 0)'
+]) {
+    const clean = m.sanitizeInline(`<span style="color: ${colour}; font-weight: bold">Safe</span>`);
+    ok(!clean.includes('color:') && clean.includes('font-weight: bold'), `${colour} remains filtered`);
+}
+
 console.log(fail ? `\n${fail} FAILED` : '\ninline sanitize OK');
 process.exit(fail ? 1 : 0);

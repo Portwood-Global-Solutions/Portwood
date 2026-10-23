@@ -1877,6 +1877,16 @@ const SAFE_STYLE = [
     'vertical-align'
 ];
 
+function normalizeRgbColors(value) {
+    // Lightning's colour toolbar emits rgb(). Store the equivalent hex colour so
+    // the editor, canvas and PDF share the same supported representation (#469).
+    return value.replace(/\brgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/gi, (match, r, g, b) => {
+        const channels = [r, g, b].map(Number);
+        if (channels.some((channel) => channel > 255)) return match;
+        return '#' + channels.map((channel) => channel.toString(16).padStart(2, '0')).join('');
+    });
+}
+
 function dropUnsafeStyle(value) {
     // A colour the engine cannot resolve is worse than no colour: rgba() makes the
     // whole background disappear rather than degrading.
@@ -1989,8 +1999,9 @@ export function sanitizeInline(html) {
             if (style) {
                 for (const prop of SAFE_STYLE) {
                     const m = new RegExp('(?:^|;)\\s*' + prop + '\\s*:\\s*([^;]+)').exec(style);
-                    if (m && !dropUnsafeStyle(m[1])) {
-                        keep.push(prop + ': ' + m[1].trim());
+                    const value = m ? normalizeRgbColors(m[1].trim()) : null;
+                    if (m && !dropUnsafeStyle(value)) {
+                        keep.push(prop + ': ' + value);
                     }
                 }
             }
