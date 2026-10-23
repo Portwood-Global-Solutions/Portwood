@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <classAccesses>
         <apexClass>DocGenAuthenticatorController</apexClass>
@@ -36,7 +36,8 @@
         <apexClass>DocGenSignatureValidator</apexClass>
         <enabled>true</enabled>
     </classAccesses>
-    <description>Grants Site Guest User permission to execute the Portwood Signature Visualforce page and related Apex controllers.</description>
+    <description
+    >Grants Site Guest User permission to execute the Portwood Signature Visualforce page and related Apex controllers.</description>
     <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Brand__c.Brand_Color__c</field>

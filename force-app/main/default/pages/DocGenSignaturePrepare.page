@@ -1,4 +1,5 @@
-<apex:page controller="DocGenSignaturePreparationController"
+<apex:page
+    controller="DocGenSignaturePreparationController"
     showHeader="false"
     sidebar="false"
     standardStylesheets="false"

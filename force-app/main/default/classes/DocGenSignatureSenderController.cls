@@ -2210,7 +2210,16 @@ public with sharing class DocGenSignatureSenderController {
 
         DocGenFlsGuard.assertAccessible(
             DocGen_Signature_Request__c.sObjectType,
-            new Set<String>{ 'Name', 'Status__c', 'Source_Document_Id__c', 'CreatedDate', 'Related_Record_Id__c' }
+            new Set<String>{
+                'Name',
+                'Status__c',
+                'Source_Document_Id__c',
+                'CreatedDate',
+                'Related_Record_Id__c',
+                'Original_Document_CV_Id__c',
+                'PDF_Internal_Preview__c',
+                'Document_Title_Format__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Signature_Request__c> requests = [
