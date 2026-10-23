@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **ZIP template uploads no longer fail when Lightning Web Security blocks
+  `DecompressionStream` (#320, PR #344).** The browser ZIP reader now detects whether
+  native `deflate-raw` decompression is available and falls back to an inline RFC 1951
+  decoder when it is missing or rejected. The native path remains unchanged for supported
+  browsers. The same HTML ZIP failed before the fix with an **Upload Failed** decompression
+  error and reached **Ready to Save** after the fix, including image extraction.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,
