@@ -171,12 +171,13 @@ private class DocGenFontTest {
             System.assert(html.contains('?font.ttf'));
             System.assert(!html.contains('/resource/'));
             System.assert(!html.contains('format(\'truetype\')'));
-            try {
-                DocGenFontService.prepare(bound(key, '漢'));
-                System.assert(false);
-            } catch (DocGenException e) {
-                System.assert(e.getMessage().contains('U+6F22'));
-            }
+            // An unsupported glyph inside a pinned binding falls back to Arial Unicode MS
+            // for that element rather than aborting the whole document (see
+            // hasUnsupportedRenderText's doc comment) -- checkText() is the strict,
+            // throwing check, reserved for upload-time/verification review.
+            String fallback = DocGenFontService.prepare(bound(key, '漢'));
+            System.assert(!fallback.contains('-pw-font-face:' + key), fallback);
+            System.assert(fallback.contains('Arial Unicode MS'), fallback);
             try {
                 DocGenFontService.prepare(bound(key, '<b>Şahin</b>'));
                 System.assert(false);
@@ -233,7 +234,7 @@ private class DocGenFontTest {
                 'tr{page-break-inside:avoid !important;}';
             String authored = bound(
                     key,
-                    '<h1 class="title" style="width:90% !important;text-align:center !important;">Şahin 漢</h1>'
+                    '<h1 class="title" style="width:90% !important;text-align:center !important;">Şahin ş</h1>'
                 )
                 .replace('<head>', '<head><style>' + css + '</style>');
             String rendered = DocGenFontService.prepare(authored);
@@ -264,7 +265,7 @@ private class DocGenFontTest {
     static void importantFontValuesStillRequireExactFace() {
         System.runAs(fontAdmin()) {
             String key = verified();
-            String exact = bound(key, 'Şahin 漢')
+            String exact = bound(key, 'Şahin ş')
                 .replace('Portwood Test Script\';', 'Portwood Test Script\' !IMPORTANT;')
                 .replace('font-weight:400;', 'font-weight:normal ! important;')
                 .replace('font-style:normal;', 'font-style:normal !important;');
@@ -706,18 +707,17 @@ private class DocGenFontTest {
         }
     }
     @IsTest
-    static void fontTagKeepsRetiredRevisionAndRejectsMissingGlyphs() {
+    static void fontTagKeepsRetiredRevisionAndFallsBackOnMissingGlyphs() {
         System.runAs(fontAdmin()) {
             String key = verified(), tag = fontTag(key);
             DocGenFontController.retireFont(key);
             String source = '<p style="' + tag + '">Şahin 漢</p>';
             System.assert(DocGenService.wrapHtmlForPdf(source, '', null, null).contains('Identity-H'));
-            try {
-                DocGenService.wrapHtmlForPdf('<p style="' + tag + '">漢</p>', '', null, null);
-                System.assert(false);
-            } catch (DocGenException e) {
-                System.assert(e.getMessage().contains('U+6F22'));
-            }
+            // An unsupported glyph falls back to Arial Unicode MS for that element
+            // rather than aborting the document (see hasUnsupportedRenderText).
+            String fallback = DocGenService.wrapHtmlForPdf('<p style="' + tag + '">漢</p>', '', null, null);
+            System.assert(!fallback.contains('-pw-font-face:' + key), fallback);
+            System.assert(fallback.contains('Arial Unicode MS'), fallback);
         }
     }
 
@@ -732,12 +732,14 @@ private class DocGenFontTest {
             String prepared = DocGenFontService.prepare(shell.replace('{ROWS}', row));
             System.assert(prepared.contains('@font-face') && prepared.contains(key));
             System.assert(!prepared.contains('{%font:'));
-            try {
-                DocGenFontService.prepare(shell.replace('{ROWS}', row.replace('Hello customer', '漢')));
-                System.assert(false, 'Glyphs from injected batch rows must be validated.');
-            } catch (DocGenException e) {
-                System.assert(e.getMessage().contains('U+6F22'));
-            }
+            // An unsupported glyph in an injected batch row falls back to Arial
+            // Unicode MS for that row rather than aborting the whole document.
+            String fallback = DocGenFontService.prepare(shell.replace('{ROWS}', row.replace('Hello customer', '漢')));
+            System.assert(
+                !fallback.contains('-pw-font-face:' + key),
+                'Glyphs from injected batch rows must be validated: ' + fallback
+            );
+            System.assert(fallback.contains('Arial Unicode MS'), fallback);
         }
     }
 
@@ -782,14 +784,14 @@ private class DocGenFontTest {
                     fontTag(regular) +
                     '">Regular <strong style="' +
                     DocGenFontService.mergeTag('barlow', bold) +
-                    '">Bold Şahin</strong> Regular 漢</p>',
+                    '">Bold Şahin</strong> Regular ş</p>',
                 '',
                 null,
                 null
             );
             System.assert(html.contains('-pw-font-face:' + regular) && html.contains('-pw-font-face:' + bold));
             System.assert(html.contains('font-weight:700'));
-            System.assert(html.contains('Bold Şahin') && html.contains('Regular 漢'));
+            System.assert(html.contains('Bold Şahin') && html.contains('Regular ş'));
         }
     }
 
@@ -878,8 +880,8 @@ private class DocGenFontTest {
                     new List<Integer>{ 128512, 128512 }
                 }
             };
-            DocGenFontService.checkText(meta, '😀😀');
-            for (String text : new List<String>{ '😀', '😀' }) {
+            DocGenFontService.checkText(meta, '♪♬');
+            for (String text : new List<String>{ '𝄞', '😀' }) {
                 try {
                     DocGenFontService.checkText(meta, text);
                     System.assert(

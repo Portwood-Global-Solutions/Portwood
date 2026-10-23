@@ -8859,11 +8859,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             assetCvCache.put(key, null);
         }
 
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c', 'Is_Active__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Asset__c.sObjectType,
+            new Set<String>{ 'Asset_Key__c', 'Asset_Type__c', 'Is_Active__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Asset__c> assets = [
             SELECT
                 Asset_Key__c,
+                Asset_Type__c,
                 (
                     SELECT ContentDocument.LatestPublishedVersionId
                     FROM ContentDocumentLinks
@@ -8876,6 +8880,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         ];
 
         for (DocGen_Asset__c asset : assets) {
+            // Font assets are resolved through the font registry ({%font:}), not the
+            // generic {%asset:} image path -- stay null here, same as DocGenController's
+            // getAssets() exclusion, so a font key can never be used as an image tag.
+            if (asset.Asset_Type__c == 'Font') {
+                continue;
+            }
             String cvId = null;
             if (asset.ContentDocumentLinks != null && !asset.ContentDocumentLinks.isEmpty()) {
                 Id latest = asset.ContentDocumentLinks[0].ContentDocument.LatestPublishedVersionId;
@@ -10817,11 +10827,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (openEnd == -1) {
             return html;
         }
+        String bodyTag = html.substring(bodyOpen, openEnd + 1);
         Integer bodyClose = lower.lastIndexOf('</body>');
         if (bodyClose == -1 || bodyClose <= openEnd) {
-            return html.substring(openEnd + 1);
+            return DocGenFontService.retainBodyFont(bodyTag, html.substring(openEnd + 1));
         }
-        return html.substring(openEnd + 1, bodyClose);
+        return DocGenFontService.retainBodyFont(bodyTag, html.substring(openEnd + 1, bodyClose));
     }
 
     /**
