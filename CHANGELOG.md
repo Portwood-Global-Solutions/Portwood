@@ -95,6 +95,11 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   no longer stripped during editor round trips. Conditional tags still appear as editor-only pills
   in Visual mode, but their green pill styling and other preview chrome are removed from saved HTML
   and generated PDF input.
+- **Rich-text header/footer images are now durable and deduplicated.** Images
+  inserted into HTML template headers or footers are migrated from temporary
+  Salesforce rich-text URLs into template-owned Files. The same image is
+  identified by its SHA-256 content hash and reused across saves and new
+  template versions; only a newly inserted or changed image creates a new File.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

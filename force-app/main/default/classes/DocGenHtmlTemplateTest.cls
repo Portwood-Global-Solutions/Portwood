@@ -412,7 +412,9 @@ private class DocGenHtmlTemplateTest {
         List<Map<String, Object>> imgs = DocGenController.listHtmlTemplateImages(tmpl.Id);
         Test.stopTest();
 
-        System.assertEquals(2, imgs.size(), 'Both uploaded images should be listed');
+        // Identical image bytes are content-addressed and reused rather than
+        // creating a duplicate File for every save/version.
+        System.assertEquals(1, imgs.size(), 'Identical uploaded images should be deduplicated');
         String url = (String) imgs[0].get('url');
         System.assert(url.startsWith('/sfc/servlet.shepherd/version/download/'), 'Relative shepherd URL expected');
         System.assertNotEquals(null, imgs[0].get('fileName'), 'File name expected');

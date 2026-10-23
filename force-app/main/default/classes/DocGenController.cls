@@ -3637,10 +3637,39 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             base = fileName;
         }
 
+        Blob imageBytes;
+        try {
+            imageBytes = EncodingUtil.base64Decode(base64Content);
+        } catch (Exception decodeErr) {
+            throw new DocGenException('Image content is not valid base64.');
+        }
+
+        // Use content identity rather than upload time as the asset key. The
+        // same header/footer image is commonly carried into many new template
+        // versions; it must reuse one File instead of creating a duplicate on
+        // every Save as New Version. A changed image produces a new hash and a
+        // new File as expected.
+        String imageHash = EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', imageBytes));
+        String stableTitle = 'docgen_html_img_' + templateId + '_' + imageHash;
+        for (
+            ContentVersion existing : DocGenService.loadInternalContentVersionMetaForEntityByTitlePrefix(
+                templateId,
+                'docgen_html_img_'
+            )
+        ) {
+            if (existing.Title == stableTitle) {
+                return new Map<String, Object>{
+                    'contentVersionId' => existing.Id,
+                    'fileName' => existing.PathOnClient,
+                    'url' => '/sfc/servlet.shepherd/version/download/' + existing.Id
+                };
+            }
+        }
+
         ContentVersion cv = new ContentVersion();
-        cv.Title = 'docgen_html_img_' + templateId + '_' + Datetime.now().getTime() + '_' + base;
+        cv.Title = stableTitle;
         cv.PathOnClient = base;
-        cv.VersionData = EncodingUtil.base64Decode(base64Content);
+        cv.VersionData = imageBytes;
         cv.FirstPublishLocationId = templateId;
         /* code-analyzer-suppress ApexFlsViolation */
         Database.insert(cv, AccessLevel.USER_MODE);
