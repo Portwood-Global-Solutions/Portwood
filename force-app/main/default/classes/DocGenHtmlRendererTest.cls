@@ -102,6 +102,52 @@ private class DocGenHtmlRendererTest {
     }
 
     @IsTest
+    static void testTableVerticalMergeEmitsRowspanForHeaderLogo() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Map<String, String> images = new Map<String, String>{
+                'rIdLogo' => EncodingUtil.base64Encode(Blob.valueOf('logo'))
+            };
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+                'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+                'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+                'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+                '<w:body><w:tbl>' +
+                '<w:tblGrid><w:gridCol w:w="3168"/><w:gridCol w:w="7632"/></w:tblGrid>' +
+                '<w:tr>' +
+                '<w:tc><w:tcPr><w:vMerge w:val="restart"/><w:vAlign w:val="center"/></w:tcPr>' +
+                '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="1737360" cy="455023"/>' +
+                '<a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="rIdLogo"/></pic:blipFill></pic:pic></a:graphicData></a:graphic>' +
+                '</wp:inline></w:drawing></w:r></w:p></w:tc>' +
+                '<w:tc><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>CENTURY UTILITY SERVICES</w:t></w:r></w:p></w:tc>' +
+                '</w:tr>' +
+                '<w:tr>' +
+                '<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>' +
+                '<w:tc><w:p><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Reference line</w:t></w:r></w:p></w:tc>' +
+                '</w:tr>' +
+                '</w:tbl></w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml, images);
+
+            System.assert(
+                html.contains('rowspan="2"'),
+                'A Word vMerge restart should render as an HTML rowspan: ' + html
+            );
+            System.assert(
+                html.contains('vertical-align:middle'),
+                'The merged logo cell should keep Word center vertical alignment: ' + html
+            );
+            System.assert(
+                html.contains('width="182" height="48"'),
+                'The logo should keep the authored Word image extent: ' + html
+            );
+        }
+    }
+
+    @IsTest
     static void testTableColgroupFromTblGrid() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
@@ -1600,24 +1646,258 @@ private class DocGenHtmlRendererTest {
     // Hyperlink rendering
     // =========================================================================
 
+    // A <w:hyperlink r:id="..."> the way Word writes it for Insert → Link.
+    private static String hyperlinkDocXml(String linkText) {
+        return '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:body>' +
+            '<w:p><w:hyperlink r:id="rId5" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<w:r><w:t>' +
+            linkText +
+            '</w:t></w:r>' +
+            '</w:hyperlink></w:p>' +
+            '</w:body></w:document>';
+    }
+
+    // word/_rels/document.xml.rels holding one hyperlink relationship for rId5.
+    private static String hyperlinkRelsXml(String target, String targetMode) {
+        return '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"' +
+            ' Target="' +
+            target +
+            '"' +
+            (targetMode == null ? '' : ' TargetMode="' + targetMode + '"') +
+            '/>' +
+            '</Relationships>';
+    }
+
+    // #363 — with the rels resolved, a Word-authored link emits a real <a href>.
     @IsTest
-    static void testHyperlink() {
+    static void testHyperlinkResolvesUrlFromRels() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('form X'),
+                hyperlinkRelsXml('https://example.com/formX', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(html.contains('<a href='), 'Word-authored hyperlink should emit an anchor. Got: ' + html);
+            System.assert(
+                html.contains('<a href="https://example.com/formX"'),
+                'Anchor should carry the URL resolved from the rels part. Got: ' + html
+            );
+            System.assert(html.contains('form X'), 'Should contain link text');
+            System.assert(html.contains('color:#0563C1'), 'Should have link color');
+            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+        }
+    }
+
+    // A query string's & is escaped in the rels part and must reach the href that way,
+    // neither raw (malformed HTML) nor double-escaped.
+    @IsTest
+    static void testHyperlinkQueryStringAmpersandStaysEscaped() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Report'),
+                hyperlinkRelsXml('https://example.com/r?a=1&amp;b=2', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(
+                html.contains('<a href="https://example.com/r?a=1&amp;b=2"'),
+                'Ampersand should stay XML-escaped exactly once. Got: ' + html
+            );
+            System.assert(!html.contains('&amp;amp;'), 'Ampersand should not be double-escaped. Got: ' + html);
+        }
+    }
+
+    // A hand-built .docx can write a bare & in the rels Target. It must be
+    // escaped on the way into w:docgen-url, not copied through raw (a bare &
+    // in combinedDocumentXml fails the strict downstream parse, blanking the PDF).
+    @IsTest
+    static void testHyperlinkRawAmpersandInRelsTargetGetsEscaped() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Report'),
+                hyperlinkRelsXml('https://example.com/r?a=1&b=2', 'External')
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(
+                html.contains('<a href="https://example.com/r?a=1&amp;b=2"'),
+                'A raw ampersand from the rels target must be escaped exactly once. Got: ' + html
+            );
+            System.assert(!html.contains('a=1&b=2'), 'Bare ampersand must not survive. Got: ' + html);
+            System.assert(!html.contains('&amp;amp;'), 'Must not double-escape. Got: ' + html);
+        }
+    }
+
+    // Internal (non-External) targets are file paths, not URLs — no anchor.
+    @IsTest
+    static void testHyperlinkInternalTargetNotLinked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                hyperlinkDocXml('Click Here'),
+                hyperlinkRelsXml('other.docx', null)
+            );
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(!html.contains('<a href='), 'Internal target should not emit an anchor. Got: ' + html);
+            System.assert(html.contains('Click Here'), 'Should still render the text');
+            System.assert(html.contains('color:#0563C1'), 'Should keep the link styling');
+        }
+    }
+
+    // A hand-built .docx can point a relationship at a script URL; the styled-span
+    // fallback is the correct output, since this HTML also renders in the signature viewer.
+    @IsTest
+    static void testHyperlinkUnsafeSchemeNotLinked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Click Here'),
+                    hyperlinkRelsXml('javascript:alert(1)', 'External')
+                )
+            );
+            System.assert(!html.contains('<a href='), 'javascript: should not become an anchor. Got: ' + html);
+            System.assert(!html.containsIgnoreCase('javascript:'), 'Script URL should not reach output. Got: ' + html);
+
+            // Entity-obfuscated variant — the raw prefix isn't what a browser resolves.
+            String obfuscated = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Click Here'),
+                    hyperlinkRelsXml('java&#115;cript:alert(1)', 'External')
+                )
+            );
+            System.assert(
+                !obfuscated.contains('<a href='),
+                'Obfuscated script URL should not link. Got: ' + obfuscated
+            );
+        }
+    }
+
+    // mailto: is what Word writes for an email link and must survive.
+    @IsTest
+    static void testHyperlinkMailtoResolves() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    hyperlinkDocXml('Email us'),
+                    hyperlinkRelsXml('mailto:sales@example.com', 'External')
+                )
+            );
+            System.assert(
+                html.contains('<a href="mailto:sales@example.com"'),
+                'mailto: link should resolve. Got: ' + html
+            );
+        }
+    }
+
+    // Without a rels part there is nothing to resolve — the pre-#363 styled-span
+    // fallback stays, and it must not throw or drop the text.
+    @IsTest
+    static void testHyperlinkWithoutRelsFallsBackToStyledText() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml = hyperlinkDocXml('Click Here');
+            System.assertEquals(xml, DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, null), 'Null rels is a no-op');
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+            System.assert(!html.contains('<a href='), 'No rels means no URL to emit. Got: ' + html);
+            System.assert(html.contains('Click Here'), 'Should contain link text');
+            System.assert(html.contains('color:#0563C1'), 'Should have link color');
+            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+        }
+    }
+
+    // Rich-text-generated links already carry w:docgen-url; resolution must leave them alone.
+    @IsTest
+    static void testHyperlinkRichTextUrlNotRestamped() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
             String xml =
                 '<?xml version="1.0" encoding="UTF-8"?>' +
                 '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-                '<w:body>' +
-                '<w:p><w:hyperlink r:id="rId5" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-                '<w:r><w:t>Click Here</w:t></w:r>' +
-                '</w:hyperlink></w:p>' +
-                '</w:body></w:document>';
+                '<w:body><w:p>' +
+                '<w:hyperlink w:docgen-url="https://example.com/rich" r:id="rId5"' +
+                ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+                '<w:r><w:t>Rich</w:t></w:r></w:hyperlink>' +
+                '</w:p></w:body></w:document>';
 
-            String html = DocGenHtmlRenderer.convertToHtml(xml);
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, hyperlinkRelsXml('https://example.com/rels', 'External'))
+            );
 
-            System.assert(html.contains('Click Here'), 'Should contain link text');
-            System.assert(html.contains('color:#0563C1'), 'Should have link color');
-            System.assert(html.contains('text-decoration:underline'), 'Should have underline');
+            System.assert(
+                html.contains('<a href="https://example.com/rich"'),
+                'Existing docgen-url should win over the rels target. Got: ' + html
+            );
+            System.assert(!html.contains('example.com/rels'), 'Should not restamp a resolved link. Got: ' + html);
+        }
+    }
+
+    // An in-document bookmark has no r:id at all — left alone, per #363's scope note.
+    @IsTest
+    static void testHyperlinkAnchorOnlyUnchanged() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body><w:p><w:hyperlink w:anchor="_Toc123">' +
+                '<w:r><w:t>Section 2</w:t></w:r></w:hyperlink></w:p></w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(xml, hyperlinkRelsXml('https://example.com/x', 'External'))
+            );
+
+            System.assert(!html.contains('<a href='), 'Bookmark link should not borrow an unrelated target');
+            System.assert(html.contains('Section 2'), 'Should contain link text');
+        }
+    }
+
+    // Two links in one paragraph, one resolvable and one not — each takes its own branch,
+    // and the surrounding runs survive the rewrite intact.
+    @IsTest
+    static void testHyperlinkMixedResolutionInOneParagraph() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+                ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+                '<w:body><w:p>' +
+                '<w:r><w:t xml:space="preserve">See </w:t></w:r>' +
+                '<w:hyperlink r:id="rId5"><w:r><w:t>form X</w:t></w:r></w:hyperlink>' +
+                '<w:r><w:t xml:space="preserve"> and </w:t></w:r>' +
+                '<w:hyperlink r:id="rId9"><w:r><w:t>form Y</w:t></w:r></w:hyperlink>' +
+                '<w:r><w:t> today.</w:t></w:r>' +
+                '</w:p></w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(
+                DocGenHtmlRenderer.resolveHyperlinkRelIds(
+                    xml,
+                    hyperlinkRelsXml('https://example.com/formX', 'External')
+                )
+            );
+
+            System.assert(html.contains('<a href="https://example.com/formX"'), 'rId5 should link. Got: ' + html);
+            System.assertEquals(1, html.countMatches('<a href='), 'Only rId5 resolves; rId9 has no rel. Got: ' + html);
+            System.assert(html.contains('form Y'), 'Unresolved link keeps its text');
+            System.assert(html.contains('See ') && html.contains(' today.'), 'Surrounding runs preserved');
         }
     }
 
@@ -2538,6 +2818,236 @@ private class DocGenHtmlRendererTest {
             html.contains('@top-center { content: normal'),
             'Expected default header to be suppressed on page 1'
         );
+    }
+
+    @IsTest
+    static void testCompactTableHeaderDoesNotOverReserveTopMargin() {
+        String compactHeader =
+            '<w:hdr><w:tbl><w:tr>' +
+            '<w:tc><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>Left</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>Right</w:t></w:r></w:p></w:tc>' +
+            '</w:tr></w:tbl></w:hdr>';
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_HEADER_START -->' +
+            compactHeader +
+            '<!-- DOCGEN_HEADER_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            !html.contains('margin: 1in 1in 1in 1in;'),
+            'A compact header should pull the body up to the header bottom instead of leaving the full top margin: ' +
+            html
+        );
+    }
+
+    @IsTest
+    static void testCustomerCompactThreeRowHeaderKeepsWordBodyTopMargin() {
+        String header =
+            '<w:hdr><w:p><w:pPr><w:pStyle w:val="Header"/><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r/></w:p>' +
+            '<w:tbl><w:tr>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>CENTURY UTILITIES</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>BILLING SUMMARY</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>PAGE HEADER</w:t></w:r></w:p></w:tc>' +
+            '</w:tr><w:tr>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Project: TEST-001</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Period: October 2026</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Region: Canada</w:t></w:r></w:p></w:tc>' +
+            '</w:tr><w:tr>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Invoice grouping</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Labor / Allowances</w:t></w:r></w:p></w:tc>' +
+            '<w:tc><w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>QA DOCX TEST</w:t></w:r></w:p></w:tc>' +
+            '</w:tr></w:tbl></w:hdr>';
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_HEADER_START -->' +
+            header +
+            '<!-- DOCGEN_HEADER_END -->' +
+            '<w:p><w:r><w:t>LABOR AND EQUIPMENT BILLING SUMMARY</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="20160"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="288" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            html.contains('margin: 0.9'),
+            'The sample compact three-row header should place the body just after the header bottom: ' + html
+        );
+    }
+
+    @IsTest
+    static void testCompactFooterKeepsWordBodyBottomMargin() {
+        String footer =
+            '<w:ftr><w:p><w:pPr><w:pStyle w:val="Footer"/><w:jc w:val="center"/></w:pPr>' +
+            '<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>PORTWOOD QA FOOTER</w:t></w:r></w:p></w:ftr>';
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_FOOTER_START -->' +
+            footer +
+            '<!-- DOCGEN_FOOTER_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="20160"/><w:pgMar w:top="792" w:right="720" w:bottom="720" w:left="720" w:header="288" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            html.contains('margin: 0.55in 0.5in 0.5in 0.5in;'),
+            'A compact footer at Word\'s footer distance should not inflate the body bottom margin: ' + html
+        );
+    }
+
+    @IsTest
+    static void testCompactImageTextHeaderKeepsWordBodyTopMargin() {
+        String header =
+            '<w:hdr><w:p><w:pPr><w:pStyle w:val="Header"/><w:spacing w:after="0"/></w:pPr><w:r/></w:p>' +
+            '<w:tbl><w:tblGrid><w:gridCol w:w="3168"/><w:gridCol w:w="7632"/></w:tblGrid>' +
+            '<w:tr>' +
+            '<w:tc><w:tcPr><w:vMerge w:val="restart"/><w:vAlign w:val="center"/></w:tcPr>' +
+            '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="1737360" cy="455023"/></wp:inline></w:drawing></w:r></w:p></w:tc>' +
+            '<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>CENTURY UTILITY SERVICES</w:t></w:r></w:p></w:tc>' +
+            '</w:tr><w:tr>' +
+            '<w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>' +
+            '<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="14"/></w:rPr><w:t>Reference line</w:t></w:r></w:p></w:tc>' +
+            '</w:tr></w:tbl><w:p><w:pPr><w:pStyle w:val="Header"/><w:spacing w:after="0"/></w:pPr><w:r/></w:p></w:hdr>';
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>' +
+            '<!-- DOCGEN_HEADER_START -->' +
+            header +
+            '<!-- DOCGEN_HEADER_END -->' +
+            '<w:p><w:r><w:t>Body starts where Word body margin places it</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="20160"/><w:pgMar w:top="792" w:right="720" w:bottom="720" w:left="720" w:header="288" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            !html.contains('margin: 0.55in 0.5in 0.5in 0.5in;'),
+            'A compact logo/text header should use the header bottom plus small clearance as the body start, not the old full top margin: ' +
+            html
+        );
+        System.assert(
+            html.contains(
+                '@top-center { content: element(docgen-running-header); vertical-align: top; padding-top: 0.2in; }'
+            ),
+            'The running header should be pinned to Word\'s authored header distance from the page top: ' + html
+        );
+        System.assert(
+            html.contains('id="docgen-header" data-dg-region="header"><table'),
+            'Empty header paragraphs around a table should not become visible blank lines in PDF chrome: ' + html
+        );
+        System.assert(
+            html.contains('<p style="font-size:8'),
+            'Header paragraphs should carry run font size so PDF line boxes match the measured header height: ' + html
+        );
+        System.assert(
+            !html.contains('</table><p style="margin:0;">&nbsp;</p></div><div class="docgen-body-content">'),
+            'A trailing empty header paragraph should not add blank space between the header table and body: ' + html
+        );
+    }
+
+    @IsTest
+    static void testMultiRowTableHeaderUsesHeaderBottomForBodyTopMargin() {
+        String rows = '';
+        for (Integer i = 0; i < 9; i++) {
+            rows +=
+                '<w:tr><w:tc><w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>Row ' +
+                i +
+                '</w:t></w:r></w:p></w:tc></w:tr>';
+        }
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr><w:tbl>' +
+            rows +
+            '</w:tbl></w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            !html.contains('margin: 1in 1in 1in 1in;'),
+            'DOCX header height should define the body start so there is no unused gap below the header: ' + html
+        );
+    }
+
+    @IsTest
+    static void testTallFirstPageHeaderDoesNotGrowNormalPageMargin() {
+        String firstHeader = '<w:hdr><w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="1280160"/></wp:inline></w:drawing></w:r></w:p></w:hdr>';
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr><w:p><w:r><w:t>Default</w:t></w:r></w:p></w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<!-- DOCGEN_HEADER_FIRST_START -->' +
+            firstHeader +
+            '<!-- DOCGEN_HEADER_FIRST_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:titlePg/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            !html.contains('@page { size: 8.5in 11in; margin: 1in 1in 1in 1in;'),
+            'Normal pages should also use their default header bottom as the body start: ' + html
+        );
+        System.assert(
+            html.contains('@page :first { margin: 2.25in 1in 1in 1in;'),
+            'The first page should get a body start based on its tall first-page header bottom plus clearance: ' + html
+        );
+    }
+
+    @IsTest
+    static void testDefaultTallHeaderUsesHeaderBottomForBodyTopMargin() {
+        String docXml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr><w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="1280160"/></wp:inline></w:drawing></w:r></w:p></w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+            '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>' +
+            '</w:body></w:document>';
+        String html = DocGenHtmlRenderer.convertToHtml(docXml);
+
+        System.assert(
+            html.contains('margin: 2.25in 1in 1in 1in;'),
+            'A DOCX default header should place the body just after the header bottom: ' + html
+        );
+    }
+
+    @IsTest
+    static void testFooterHeightHonorsDirectAndStyleFontSizes() {
+        DocGenHtmlRenderer.stylesXml =
+            '<?xml version="1.0"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+            '<w:style w:type="character" w:styleId="TinyFooter"><w:rPr><w:sz w:val="16"/></w:rPr></w:style>' +
+            '</w:styles>';
+        try {
+            String directRows = '';
+            String styledRows = '';
+            for (Integer i = 0; i < 12; i++) {
+                directRows += '<w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>D</w:t></w:r></w:p>';
+                styledRows += '<w:p><w:r><w:rPr><w:rStyle w:val="TinyFooter"/></w:rPr><w:t>S</w:t></w:r></w:p>';
+            }
+            String directDoc =
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+                '<!-- DOCGEN_FOOTER_START --><w:ftr>' +
+                directRows +
+                '</w:ftr><!-- DOCGEN_FOOTER_END -->' +
+                '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+                '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>' +
+                '</w:body></w:document>';
+            String styledDoc = directDoc.replace(directRows, styledRows);
+
+            String directHtml = DocGenHtmlRenderer.convertToHtml(directDoc);
+            String styledHtml = DocGenHtmlRenderer.convertToHtml(styledDoc);
+
+            System.assert(
+                directHtml.contains('margin: 1in 1in 1.5'),
+                'Twelve direct 8pt footer lines should reserve about 1.5in, not the 11pt default height: ' + directHtml
+            );
+            System.assert(
+                styledHtml.contains('margin: 1in 1in 1.5'),
+                'Twelve style-inherited 8pt footer lines should use the inherited font size: ' + styledHtml
+            );
+        } finally {
+            DocGenHtmlRenderer.stylesXml = null;
+        }
     }
 
     @IsTest

@@ -139,7 +139,8 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
                 templateId: this.selectedTemplateId,
                 recordCount: this.recordCount,
                 batchSize: this.batchSize || 1,
-                mergePdf: this.mergePdf || false
+                mergePdf: this.mergePdf || false,
+                duplexPadding: (this.mergePdf && this.duplexPadding) || false
             });
         } catch (error) {
             console.error('Job analysis failed', error);
@@ -300,6 +301,24 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
 
     handleOutputModeChange(event) {
         this.outputMode = event.detail.value;
+        if (!this.mergePdf) {
+            this.duplexPadding = false;
+        }
+        if (this.filterValidated) {
+            this.runAnalysis();
+        }
+    }
+
+    // Duplex padding (#382) — Combined PDF only. Appends one blank page to any
+    // odd-length document before the merge so it starts on the front of a sheet.
+    @track duplexPadding = false;
+
+    get showDuplexPadding() {
+        return this.mergePdf;
+    }
+
+    handleDuplexPaddingChange(event) {
+        this.duplexPadding = event.target.checked;
         if (this.filterValidated) {
             this.runAnalysis();
         }
@@ -585,7 +604,8 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
                 mergePdf: this.mergePdf || false,
                 batchSize: this.batchSize || 1,
                 mergeOnly: this.mergeOnly || false,
-                sortOrder: this.sortOrderClause
+                sortOrder: this.sortOrderClause,
+                duplexPadding: this.mergePdf && this.duplexPadding
             });
             this.showToast('Success', 'Job started. Status will auto-refresh every 5 seconds.', 'success');
             this.startPolling();

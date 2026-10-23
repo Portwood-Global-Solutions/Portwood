@@ -311,6 +311,7 @@ private class DocGenSarahFixesTest {
         // PIN-verify so the save passes the verification gate.
         signer.PIN_Verified_At__c = System.now();
         update signer;
+        signAllPlacements(new Set<Id>{ signer.Id });
         String token = signer.Secure_Token__c;
 
         String base64 = EncodingUtil.base64Encode(Blob.toPdf('<html><body>x</body></html>'));
@@ -468,5 +469,24 @@ private class DocGenSarahFixesTest {
         }
         System.assert(sawFull, 'Full placement must be parsed from the inline tag');
         System.assert(sawDate, 'Date placement must be parsed from the inline tag');
+    }
+
+    /**
+     * #407: the server refuses to finalize a signer whose placements are still Pending, so a test
+     * that drives a composited save must first do what the guided signing UI does, which is to
+     * sign every placement (signPlacement) before the final save.
+     */
+    private static void signAllPlacements(Set<Id> signerIds) {
+        List<DocGen_Signature_Placement__c> plcs = [
+            SELECT Id
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c IN :signerIds
+        ];
+        for (DocGen_Signature_Placement__c p : plcs) {
+            p.Status__c = 'Signed';
+            p.Signed_Value__c = 'Test Signer';
+            p.Signed_At__c = System.now();
+        }
+        update plcs;
     }
 }

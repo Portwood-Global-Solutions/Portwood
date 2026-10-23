@@ -12,6 +12,11 @@
  * LWS-safe MIME type: PDF, images, text) or as a file-servlet download URL (everything
  * else, including Office formats that Lightning Web Security blocks for Blob URLs).
  *
+ * Delivery_Mode__c controls what the LWC does with the file: DOWNLOAD (default,
+ * blank, or unrecognized), PREVIEW (open the native file preview, no download), or
+ * PREVIEW_AND_DOWNLOAD. Preview uses the ContentDocumentId, so a preview-only
+ * button skips reading VersionData into heap.
+ *
  * The generation call is isolated behind the Generator seam so the full controller
  * flow can be unit-tested without invoking real document rendering.
  */
@@ -21,6 +26,15 @@ public with sharing class DocGenButtonController {
      *  stay within Apex heap. Not final so tests can exercise both branches. */
     @TestVisible
     private static Integer inlineDownloadMaxBytes = 3500000; // ~3.5 MB
+
+    /** Normalized Delivery_Mode__c values returned to the LWC. */
+    public static final String DELIVERY_DOWNLOAD = 'DOWNLOAD';
+    public static final String DELIVERY_PREVIEW = 'PREVIEW';
+    public static final String DELIVERY_PREVIEW_AND_DOWNLOAD = 'PREVIEW_AND_DOWNLOAD';
+
+    /** Cap on recipients per Send Email action (manual entry included). */
+    @TestVisible
+    private static final Integer MAX_EMAIL_RECIPIENTS = 10;
 
     public class DocGenButtonException extends Exception {
     }
@@ -92,6 +106,10 @@ public with sharing class DocGenButtonController {
         public String developerName;
         @AuraEnabled
         public String label;
+        @AuraEnabled
+        public String templateName;
+        @AuraEnabled
+        public String deliveryMode; // DOWNLOAD | PREVIEW | PREVIEW_AND_DOWNLOAD
     }
 
     public class GenerateResultDTO {
@@ -111,6 +129,35 @@ public with sharing class DocGenButtonController {
         public Id contentDocumentId;
         @AuraEnabled
         public Id contentVersionId;
+        @AuraEnabled
+        public String deliveryMode; // DOWNLOAD | PREVIEW | PREVIEW_AND_DOWNLOAD
+    }
+
+    public class EmailCandidate {
+        @AuraEnabled
+        public String label;
+        @AuraEnabled
+        public String value;
+    }
+
+    public class EmailTemplateOption {
+        @AuraEnabled
+        public String label;
+        @AuraEnabled
+        public String value;
+    }
+
+    public class SendEmailResultDTO {
+        @AuraEnabled
+        public Boolean success;
+        @AuraEnabled
+        public String errorMessage;
+        @AuraEnabled
+        public String fileName;
+        @AuraEnabled
+        public Id contentDocumentId;
+        @AuraEnabled
+        public Id contentVersionId;
     }
 
     // ---------------------------------------------------------------------
@@ -126,19 +173,40 @@ public with sharing class DocGenButtonController {
      *  per click and caching would let a stale/empty result persist. */
     @AuraEnabled
     public static List<ButtonOption> getButtons(Id recordId) {
+        return getButtonsForAction(recordId, 'Document');
+    }
+
+    @AuraEnabled
+    public static List<ButtonOption> getEmailButtons(Id recordId) {
+        return getButtonsForAction(recordId, 'Email');
+    }
+
+    private static List<ButtonOption> getButtonsForAction(Id recordId, String actionType) {
         List<ButtonOption> options = new List<ButtonOption>();
         if (recordId == null) {
             return options;
         }
         String objectApiName = recordId.getSObjectType().getDescribe().getName();
         String rtDevName = recordTypeDevName(recordId);
+        List<DocGen_Button__mdt> matchedConfigs = new List<DocGen_Button__mdt>();
         for (DocGen_Button__mdt cfg : loadConfigs(objectApiName)) {
-            if (!matchesRecordType(cfg, rtDevName)) {
+            if (
+                normalizeActionType(cfg.Action_Type__c) != normalizeActionType(actionType) ||
+                !matchesRecordType(cfg, rtDevName)
+            ) {
                 continue;
             }
+            matchedConfigs.add(cfg);
+        }
+        Map<String, String> templateNames = templateNamesByConfig(matchedConfigs);
+        for (DocGen_Button__mdt cfg : matchedConfigs) {
             ButtonOption opt = new ButtonOption();
             opt.developerName = cfg.DeveloperName;
             opt.label = String.isNotBlank(cfg.MasterLabel) ? cfg.MasterLabel : cfg.DeveloperName;
+            opt.templateName = templateNames.containsKey(cfg.DeveloperName)
+                ? templateNames.get(cfg.DeveloperName)
+                : templateLabel(cfg);
+            opt.deliveryMode = normalizeDeliveryMode(cfg.Delivery_Mode__c);
             options.add(opt);
         }
         return options;
@@ -158,6 +226,11 @@ public with sharing class DocGenButtonController {
             // Enforce the object + record-type match here too — getButtons hides a
             // mismatched button, but generate is directly callable, so the display
             // filter alone can be bypassed.
+            if (normalizeActionType(cfg.Action_Type__c) != 'Document') {
+                throw new DocGenButtonException(
+                    'Portwood Button "' + configDeveloperName + '" is not a document-generation button.'
+                );
+            }
             String recObject = recordId.getSObjectType().getDescribe().getName();
             if (String.isNotBlank(cfg.Object_API_Name__c) && cfg.Object_API_Name__c != recObject) {
                 throw new DocGenButtonException(
@@ -206,7 +279,7 @@ public with sharing class DocGenButtonController {
             gReq.recordId = recordId;
             gReq.saveToRecord = cfg.Save_To_Record__c == true;
             gReq.documentTitle = cfg.Document_Title__c;
-            gReq.outputFormatOverride = cfg.Output_Format_Override__c;
+            gReq.outputFormatOverride = normalizeOutputFormatOverride(cfg.Output_Format_Override__c);
 
             GenResult res = generator.generate(gReq);
             if (res == null || res.success != true) {
@@ -250,6 +323,7 @@ public with sharing class DocGenButtonController {
             ContentVersion cv = cvs[0];
 
             dto.success = true;
+            dto.deliveryMode = normalizeDeliveryMode(cfg.Delivery_Mode__c);
             dto.contentVersionId = cv.Id;
             dto.contentDocumentId = cv.ContentDocumentId;
             dto.fileName = buildFileName(cv);
@@ -262,7 +336,9 @@ public with sharing class DocGenButtonController {
 
             // Also return base64 for small files. The LWC uses the Blob path only for
             // LWS-safe MIME types (PDF, images, text) and otherwise uses downloadUrl.
-            if (cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
+            // A preview-only button never downloads, so skip loading VersionData.
+            Boolean needsDownload = dto.deliveryMode != DELIVERY_PREVIEW;
+            if (needsDownload && cv.ContentSize != null && cv.ContentSize <= inlineDownloadMaxBytes) {
                 List<ContentVersion> withData = [
                     SELECT VersionData
                     FROM ContentVersion
@@ -275,6 +351,196 @@ public with sharing class DocGenButtonController {
                 }
             }
 
+            return dto;
+        } catch (Exception e) {
+            dto.success = false;
+            dto.errorMessage = e.getMessage();
+            return dto;
+        }
+    }
+
+    public static String getEmailPreviewHtml(Id recordId, String configDeveloperName) {
+        return getEmailPreviewHtml(recordId, configDeveloperName, null);
+    }
+
+    @AuraEnabled
+    public static String getEmailPreviewHtml(Id recordId, String configDeveloperName, String templateReference) {
+        try {
+            DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
+            Id templateId = resolveEmailTemplateId(cfg, configDeveloperName, templateReference, recordId);
+            String html = DocGenSignatureSenderController.getDocumentPreviewHtml(templateId, String.valueOf(recordId));
+            return String.isBlank(html) ? previewFallback('Preview is unavailable for this template.') : html;
+        } catch (Exception e) {
+            return previewFallback('Preview is unavailable: ' + e.getMessage());
+        }
+    }
+
+    /**
+     * Templates the user may pick for this Email button on this record. A button that pins a
+     * template offers only that one; otherwise only active templates built for the record's own
+     * object are offered. Not cacheable: the answer depends on the record and the button.
+     */
+    @AuraEnabled
+    public static List<EmailTemplateOption> getEmailTemplateOptions(Id recordId, String configDeveloperName) {
+        List<EmailTemplateOption> out = new List<EmailTemplateOption>();
+        DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
+        String recObject = recordId.getSObjectType().getDescribe().getName();
+        Id pinnedId = hasConfiguredTemplate(cfg) ? resolveTemplateId(cfg, configDeveloperName, null) : null;
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Name', 'API_Name__c', 'Base_Object_API__c', 'Is_Active__c' }
+        );
+        /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
+        for (DocGen_Template__c t : [
+            SELECT Id, Name, API_Name__c
+            FROM DocGen_Template__c
+            WHERE Is_Active__c = TRUE AND Base_Object_API__c = :recObject
+            WITH SYSTEM_MODE
+            ORDER BY Name
+        ]) {
+            if (pinnedId != null && t.Id != pinnedId) {
+                continue;
+            }
+            EmailTemplateOption option = new EmailTemplateOption();
+            option.label = t.Name;
+            option.value = String.isNotBlank(t.API_Name__c) ? 'key:' + t.API_Name__c : 'id:' + t.Id;
+            out.add(option);
+        }
+        return out;
+    }
+
+    @AuraEnabled
+    public static List<EmailCandidate> getEmailCandidates(Id recordId) {
+        List<EmailCandidate> out = new List<EmailCandidate>();
+        if (recordId == null) {
+            return out;
+        }
+        Schema.DescribeSObjectResult d = recordId.getSObjectType().getDescribe();
+        Map<String, Schema.SObjectField> fields = d.fields.getMap();
+        List<String> emailFields = new List<String>();
+        for (String fieldName : fields.keySet()) {
+            Schema.DescribeFieldResult f = fields.get(fieldName).getDescribe();
+            if (f.getType() == Schema.DisplayType.Email && f.isAccessible()) {
+                emailFields.add(f.getName());
+            }
+        }
+        if (emailFields.isEmpty()) {
+            return out;
+        }
+        emailFields.sort();
+        String soql =
+            'SELECT ' +
+            String.join(emailFields, ',') +
+            ' FROM ' +
+            d.getName() +
+            ' WHERE Id = :recordId LIMIT 1';
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<SObject> rows = Database.query(soql, AccessLevel.USER_MODE);
+        if (rows.isEmpty()) {
+            return out;
+        }
+        for (String fieldName : emailFields) {
+            String email = (String) rows[0].get(fieldName);
+            if (String.isBlank(email)) {
+                continue;
+            }
+            EmailCandidate candidate = new EmailCandidate();
+            candidate.label = fields.get(fieldName).getDescribe().getLabel() + ' - ' + email;
+            candidate.value = email;
+            out.add(candidate);
+        }
+        return out;
+    }
+
+    public static SendEmailResultDTO sendGeneratedEmail(
+        Id recordId,
+        String configDeveloperName,
+        List<String> toAddresses,
+        String subject,
+        String body
+    ) {
+        return sendGeneratedEmail(recordId, configDeveloperName, null, toAddresses, subject, body);
+    }
+
+    @AuraEnabled
+    public static SendEmailResultDTO sendGeneratedEmail(
+        Id recordId,
+        String configDeveloperName,
+        String templateReference,
+        List<String> toAddresses,
+        String subject,
+        String body
+    ) {
+        SendEmailResultDTO dto = new SendEmailResultDTO();
+        try {
+            if (recordId == null) {
+                throw new DocGenButtonException('No record was provided.');
+            }
+            if (String.isBlank(subject)) {
+                throw new DocGenButtonException('Enter an email subject.');
+            }
+            if (String.isBlank(body)) {
+                throw new DocGenButtonException('Enter an email body.');
+            }
+            List<String> recipients = normalizeEmails(toAddresses);
+            if (recipients.isEmpty()) {
+                throw new DocGenButtonException('Choose or enter at least one recipient email address.');
+            }
+
+            DocGen_Button__mdt cfg = validateConfig(recordId, configDeveloperName, 'Email');
+            Id templateId = resolveEmailTemplateId(cfg, configDeveloperName, templateReference, recordId);
+
+            GenRequest gReq = new GenRequest();
+            gReq.templateId = templateId;
+            gReq.recordId = recordId;
+            gReq.saveToRecord = true;
+            gReq.documentTitle = cfg.Document_Title__c;
+            gReq.outputFormatOverride = cfg.Output_Format_Override__c;
+
+            GenResult res = generator.generate(gReq);
+            if (res == null || res.success != true) {
+                throw new DocGenButtonException(
+                    (res != null && String.isNotBlank(res.errorMessage))
+                        ? res.errorMessage
+                        : 'Document generation failed.'
+                );
+            }
+            ContentVersion cv = latestVersion(res);
+            ContentVersion withData = [
+                SELECT VersionData
+                FROM ContentVersion
+                WHERE Id = :cv.Id
+                WITH USER_MODE
+                LIMIT 1
+            ];
+
+            Messaging.EmailFileAttachment attachment = new Messaging.EmailFileAttachment();
+            attachment.setFileName(buildFileName(cv));
+            attachment.setContentType(mimeFor(cv.FileExtension));
+            attachment.setBody(withData.VersionData);
+
+            Messaging.SingleEmailMessage msg = new Messaging.SingleEmailMessage();
+            msg.setToAddresses(recipients);
+            msg.setSubject(stripHtml(subject));
+            msg.setHtmlBody(body);
+            msg.setFileAttachments(new List<Messaging.EmailFileAttachment>{ attachment });
+            // Send from the sender the admin configured for Portwood when there is one; otherwise
+            // as the running user. Never guess an org-wide address the admin did not choose.
+            Id configuredSenderId = configuredOrgWideEmailAddressId();
+            if (configuredSenderId != null) {
+                msg.setOrgWideEmailAddressId(configuredSenderId);
+            }
+            if (!Test.isRunningTest()) {
+                Messaging.SendEmailResult[] sendResults = Messaging.sendEmail(new List<Messaging.Email>{ msg }, false);
+                if (sendResults == null || sendResults.isEmpty() || sendResults[0].isSuccess() != true) {
+                    throw new DocGenButtonException(buildSendEmailError(sendResults));
+                }
+            }
+
+            dto.success = true;
+            dto.fileName = buildFileName(cv);
+            dto.contentVersionId = cv.Id;
+            dto.contentDocumentId = cv.ContentDocumentId;
             return dto;
         } catch (Exception e) {
             dto.success = false;
@@ -356,9 +622,11 @@ public with sharing class DocGenButtonController {
                 Object_API_Name__c,
                 Template_Id__c,
                 Template_API_Name__c,
+                Action_Type__c,
                 Save_To_Record__c,
                 Output_Format_Override__c,
                 Document_Title__c,
+                Delivery_Mode__c,
                 Active__c,
                 Sort_Order__c,
                 Record_Type_Developer_Names__c
@@ -386,9 +654,11 @@ public with sharing class DocGenButtonController {
                 Object_API_Name__c,
                 Template_Id__c,
                 Template_API_Name__c,
+                Action_Type__c,
                 Save_To_Record__c,
                 Output_Format_Override__c,
                 Document_Title__c,
+                Delivery_Mode__c,
                 Active__c,
                 Record_Type_Developer_Names__c
             FROM DocGen_Button__mdt
@@ -397,6 +667,350 @@ public with sharing class DocGenButtonController {
             LIMIT 1
         ]; // NOPMD ApexCRUDViolation — CMDT is admin-authored config; internal config reads use SYSTEM_MODE
         return rows.isEmpty() ? null : rows[0];
+    }
+
+    @TestVisible
+    private static String normalizeOutputFormatOverride(String rawOverride) {
+        if (String.isBlank(rawOverride)) {
+            return null;
+        }
+        String value = rawOverride.trim();
+        String key = value.toUpperCase();
+        Map<String, String> aliases = new Map<String, String>{
+            'PDF' => 'PDF',
+            'DOCX' => 'Word',
+            'WORD' => 'Word',
+            'XLSX' => 'Excel',
+            'XLSM' => 'Excel',
+            'EXCEL' => 'Excel',
+            'PPTX' => 'PowerPoint',
+            'PPT' => 'PowerPoint',
+            'POWERPOINT' => 'PowerPoint',
+            'POWER POINT' => 'PowerPoint',
+            'HTML' => 'HTML'
+        };
+        return aliases.containsKey(key) ? aliases.get(key) : value;
+    }
+
+    /** Maps the admin-entered Delivery_Mode__c to a canonical value. Blank or
+     *  unrecognized values return DOWNLOAD so existing buttons are unchanged.
+     *  Accepts spaces, hyphens, "+", and "&" as separators (e.g. "Preview + Download"). */
+    @TestVisible
+    private static String normalizeDeliveryMode(String raw) {
+        if (String.isBlank(raw)) {
+            return DELIVERY_DOWNLOAD;
+        }
+        // Separators ("+", "&", "-", spaces) collapse to "_", and a spelled-out "AND" is dropped,
+        // so "Preview + Download", "Preview & Download" and "Preview_And_Download" all become
+        // PREVIEW_DOWNLOAD. (The "+" and "&" forms have no "AND" to match on, which is why the
+        // canonical-string compare alone left them falling back to DOWNLOAD.)
+        String k = raw.trim().toUpperCase().replaceAll('[\\s+&-]+', '_').replaceAll('_+', '_').replace('_AND_', '_');
+        if (k == DELIVERY_PREVIEW) {
+            return DELIVERY_PREVIEW;
+        }
+        if (k == 'PREVIEW_DOWNLOAD' || k == 'DOWNLOAD_PREVIEW' || k == 'BOTH') {
+            return DELIVERY_PREVIEW_AND_DOWNLOAD;
+        }
+        return DELIVERY_DOWNLOAD;
+    }
+
+    private static DocGen_Button__mdt validateConfig(Id recordId, String configDeveloperName, String actionType) {
+        if (recordId == null) {
+            throw new DocGenButtonException('No record was provided.');
+        }
+        DocGen_Button__mdt cfg = getConfig(configDeveloperName);
+        if (cfg == null) {
+            throw new DocGenButtonException(
+                'No active Portwood Button configuration named "' + configDeveloperName + '".'
+            );
+        }
+        if (normalizeActionType(cfg.Action_Type__c) != normalizeActionType(actionType)) {
+            throw new DocGenButtonException(
+                'Portwood Button "' + configDeveloperName + '" is not a ' + actionType + ' button.'
+            );
+        }
+        String recObject = recordId.getSObjectType().getDescribe().getName();
+        if (String.isNotBlank(cfg.Object_API_Name__c) && cfg.Object_API_Name__c != recObject) {
+            throw new DocGenButtonException(
+                'Portwood Button "' +
+                    configDeveloperName +
+                    '" is configured for ' +
+                    cfg.Object_API_Name__c +
+                    ' records, not ' +
+                    recObject +
+                    '.'
+            );
+        }
+        if (!matchesRecordType(cfg, recordTypeDevName(recordId))) {
+            throw new DocGenButtonException(
+                'Portwood Button "' + configDeveloperName + '" is not available for this record\'s record type.'
+            );
+        }
+        if (
+            normalizeActionType(actionType) != 'Email' &&
+            String.isBlank(cfg.Template_Id__c) &&
+            String.isBlank(cfg.Template_API_Name__c)
+        ) {
+            throw new DocGenButtonException(
+                'Portwood Button "' +
+                    configDeveloperName +
+                    '" has no template configured. Set Template Id or Template API Name.'
+            );
+        }
+        return cfg;
+    }
+
+    private static Id resolveTemplateId(DocGen_Button__mdt cfg, String configDeveloperName) {
+        return resolveTemplateId(cfg, configDeveloperName, null);
+    }
+
+    private static Id resolveTemplateId(DocGen_Button__mdt cfg, String configDeveloperName, String templateReference) {
+        if (String.isNotBlank(templateReference)) {
+            if (templateReference.startsWith('key:')) {
+                return DocGenService.templateIdByApiName(templateReference.substring(4));
+            }
+            if (templateReference.startsWith('id:')) {
+                try {
+                    return (Id) templateReference.substring(3);
+                } catch (Exception idEx) {
+                    throw new DocGenButtonException('The selected template Id is invalid.');
+                }
+            }
+            throw new DocGenButtonException('The selected template is invalid.');
+        }
+        if (String.isNotBlank(cfg.Template_Id__c)) {
+            try {
+                return (Id) cfg.Template_Id__c;
+            } catch (Exception idEx) {
+                throw new DocGenButtonException(
+                    'Portwood Button "' +
+                        configDeveloperName +
+                        '" has an invalid Template Id (' +
+                        cfg.Template_Id__c +
+                        '). Set it to a Portwood Template record Id, or use Template API Name.'
+                );
+            }
+        }
+        return DocGenService.templateIdByApiName(cfg.Template_API_Name__c);
+    }
+
+    private static ContentVersion latestVersion(GenResult res) {
+        Id cvId = res.contentVersionId;
+        if (cvId == null && res.contentDocumentId != null) {
+            List<ContentVersion> latest = [
+                SELECT Id
+                FROM ContentVersion
+                WHERE ContentDocumentId = :res.contentDocumentId
+                WITH USER_MODE
+                ORDER BY CreatedDate DESC
+                LIMIT 1
+            ];
+            if (!latest.isEmpty()) {
+                cvId = latest[0].Id;
+            }
+        }
+        if (cvId == null) {
+            throw new DocGenButtonException('The document was generated but no file reference was returned.');
+        }
+        List<ContentVersion> cvs = [
+            SELECT Id, Title, FileExtension, ContentSize, ContentDocumentId
+            FROM ContentVersion
+            WHERE Id = :cvId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        if (cvs.isEmpty()) {
+            throw new DocGenButtonException('Generated file could not be read back. Check file sharing/visibility.');
+        }
+        return cvs[0];
+    }
+
+    private static List<String> normalizeEmails(List<String> rawAddresses) {
+        Set<String> unique = new Set<String>();
+        if (rawAddresses != null) {
+            for (String raw : rawAddresses) {
+                if (String.isBlank(raw)) {
+                    continue;
+                }
+                for (String part : raw.split('[,;\\s]+')) {
+                    String email = part == null ? null : part.trim();
+                    if (String.isBlank(email)) {
+                        continue;
+                    }
+                    if (!Pattern.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', email)) {
+                        throw new DocGenButtonException('Invalid email address: ' + email);
+                    }
+                    unique.add(email.toLowerCase());
+                }
+            }
+        }
+        if (unique.size() > MAX_EMAIL_RECIPIENTS) {
+            throw new DocGenButtonException(
+                'A Send Email action can address at most ' + MAX_EMAIL_RECIPIENTS + ' recipients.'
+            );
+        }
+        return new List<String>(unique);
+    }
+
+    private static String normalizeActionType(String actionType) {
+        return String.isNotBlank(actionType) && actionType.equalsIgnoreCase('Email') ? 'Email' : 'Document';
+    }
+
+    private static String templateLabel(DocGen_Button__mdt cfg) {
+        return String.isNotBlank(cfg.Template_API_Name__c) ? cfg.Template_API_Name__c : cfg.Template_Id__c;
+    }
+
+    private static Map<String, String> templateNamesByConfig(List<DocGen_Button__mdt> configs) {
+        Map<String, String> out = new Map<String, String>();
+        Set<Id> templateIds = new Set<Id>();
+        Set<String> templateApiNames = new Set<String>();
+        Map<Id, List<String>> configNamesByTemplateId = new Map<Id, List<String>>();
+        Map<String, List<String>> configNamesByTemplateApi = new Map<String, List<String>>();
+        for (DocGen_Button__mdt cfg : configs) {
+            if (String.isNotBlank(cfg.Template_Id__c)) {
+                try {
+                    Id templateId = (Id) cfg.Template_Id__c;
+                    templateIds.add(templateId);
+                    if (!configNamesByTemplateId.containsKey(templateId)) {
+                        configNamesByTemplateId.put(templateId, new List<String>());
+                    }
+                    configNamesByTemplateId.get(templateId).add(cfg.DeveloperName);
+                } catch (Exception ignored) {
+                    System.debug(
+                        LoggingLevel.DEBUG,
+                        'Ignoring invalid Portwood Button template id: ' + ignored.getMessage()
+                    );
+                }
+            } else if (String.isNotBlank(cfg.Template_API_Name__c)) {
+                templateApiNames.add(cfg.Template_API_Name__c);
+                if (!configNamesByTemplateApi.containsKey(cfg.Template_API_Name__c)) {
+                    configNamesByTemplateApi.put(cfg.Template_API_Name__c, new List<String>());
+                }
+                configNamesByTemplateApi.get(cfg.Template_API_Name__c).add(cfg.DeveloperName);
+            }
+        }
+        if (templateIds.isEmpty() && templateApiNames.isEmpty()) {
+            return out;
+        }
+        try {
+            DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Name', 'API_Name__c' });
+            /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
+            for (DocGen_Template__c t : [
+                SELECT Id, Name, API_Name__c
+                FROM DocGen_Template__c
+                WHERE Id IN :templateIds OR API_Name__c IN :templateApiNames
+                WITH SYSTEM_MODE
+            ]) {
+                if (configNamesByTemplateId.containsKey(t.Id)) {
+                    for (String configName : configNamesByTemplateId.get(t.Id)) {
+                        out.put(configName, t.Name);
+                    }
+                }
+                if (String.isNotBlank(t.API_Name__c) && configNamesByTemplateApi.containsKey(t.API_Name__c)) {
+                    for (String configName : configNamesByTemplateApi.get(t.API_Name__c)) {
+                        out.put(configName, t.Name);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.DEBUG, 'Portwood Button template name lookup skipped: ' + e.getMessage());
+        }
+        return out;
+    }
+
+    private static String previewFallback(String message) {
+        return '<div style="font-family:Arial,sans-serif;padding:16px;">' + message.escapeHtml4() + '</div>';
+    }
+
+    private static String buildSendEmailError(Messaging.SendEmailResult[] sendResults) {
+        List<String> messages = new List<String>();
+        if (sendResults != null) {
+            for (Messaging.SendEmailResult result : sendResults) {
+                if (result == null || result.isSuccess()) {
+                    continue;
+                }
+                for (Messaging.SendEmailError err : result.getErrors()) {
+                    if (err != null && String.isNotBlank(err.getMessage())) {
+                        messages.add(err.getMessage());
+                    }
+                }
+            }
+        }
+        return messages.isEmpty()
+            ? 'Salesforce did not accept the email for delivery.'
+            : 'Salesforce did not accept the email for delivery: ' + String.join(messages, '; ');
+    }
+
+    /**
+     * The org-wide sender an admin explicitly chose for Portwood emails
+     * (DocGen_Settings__c.Signature_OWA_Id__c, the same setting the signature and email-template
+     * senders use), and only if it is still verified. Null means "send as the running user".
+     */
+    @TestVisible
+    private static Id configuredOrgWideEmailAddressId() {
+        try {
+            DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+            if (settings == null || String.isBlank(settings.Signature_OWA_Id__c)) {
+                return null;
+            }
+            String configured = settings.Signature_OWA_Id__c;
+            List<OrgWideEmailAddress> senders = [
+                SELECT Id
+                FROM OrgWideEmailAddress
+                WHERE Id = :configured AND IsVerified = TRUE
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            return senders.isEmpty() ? null : senders[0].Id;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Boolean hasConfiguredTemplate(DocGen_Button__mdt cfg) {
+        return String.isNotBlank(cfg.Template_Id__c) || String.isNotBlank(cfg.Template_API_Name__c);
+    }
+
+    /**
+     * Template an Email button may generate. A button that pins a template always uses it (the
+     * client cannot swap it). Otherwise the client's choice must be an active template built for
+     * the record's own object, so the picker is not the only thing standing between a user and
+     * every template in the org.
+     */
+    private static Id resolveEmailTemplateId(
+        DocGen_Button__mdt cfg,
+        String configDeveloperName,
+        String templateReference,
+        Id recordId
+    ) {
+        if (hasConfiguredTemplate(cfg)) {
+            return resolveTemplateId(cfg, configDeveloperName, null);
+        }
+        if (String.isBlank(templateReference)) {
+            throw new DocGenButtonException('Choose a template.');
+        }
+        Id templateId = resolveTemplateId(cfg, configDeveloperName, templateReference);
+        String recObject = recordId.getSObjectType().getDescribe().getName();
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Base_Object_API__c', 'Is_Active__c' }
+        );
+        /* code-analyzer-suppress ApexCRUDViolation ApexFlsViolation */
+        List<DocGen_Template__c> allowed = [
+            SELECT Id
+            FROM DocGen_Template__c
+            WHERE Id = :templateId AND Is_Active__c = TRUE AND Base_Object_API__c = :recObject
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (allowed.isEmpty()) {
+            throw new DocGenButtonException('That template is not available for this record.');
+        }
+        return templateId;
+    }
+
+    private static String stripHtml(String value) {
+        return String.isBlank(value) ? value : value.replaceAll('<[^>]*>', '').replace('&nbsp;', ' ').trim();
     }
 
     private static String buildFileName(ContentVersion cv) {

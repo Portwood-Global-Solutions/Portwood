@@ -44,6 +44,8 @@ jobs:
             - name: Run Claude Code Review
               id: claude-review
               uses: anthropics/claude-code-action@v1
+              # Make the automated review non-fatal while we diagnose action failures.
+              continue-on-error: true
               with:
                   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
                   plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
@@ -51,3 +53,10 @@ jobs:
                   prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
                   # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
                   # or https://code.claude.com/docs/en/cli-reference for available options
+
+            - name: Upload Claude debug output
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: claude-execution-output
+                  path: /home/runner/work/_temp/claude-execution-output.json

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Delivery_Mode__c</fullName>
+    <label>Delivery Mode</label>
+    <description
+    >Optional. How the generated file reaches the user: Download (default when blank), Preview (opens the file in the Salesforce file preview, no download), or Preview_And_Download (both). Case-insensitive; unrecognized values fall back to Download.</description>
+    <type>Text</type>
+    <length>40</length>
+    <required>false</required>
+    <unique>false</unique>
+</CustomField>

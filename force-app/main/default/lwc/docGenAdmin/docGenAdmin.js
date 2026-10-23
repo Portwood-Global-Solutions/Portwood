@@ -49,6 +49,8 @@ function columnsSectionSnippet(n) {
 // Apex
 import getTemplateList from '@salesforce/apex/DocGenController.getTemplateList';
 import getTemplateById from '@salesforce/apex/DocGenController.getTemplateById';
+// #369 — Sending Brand picker
+import getBrands from '@salesforce/apex/DocGenBrandController.getBrands';
 import deleteTemplate from '@salesforce/apex/DocGenController.deleteTemplate';
 import saveTemplate from '@salesforce/apex/DocGenController.saveTemplate';
 import generateDocumentData from '@salesforce/apex/DocGenController.generateDocumentData';
@@ -60,7 +62,6 @@ import getContentVersionBase64 from '@salesforce/apex/DocGenController.getConten
 import getLatestContentVersionId from '@salesforce/apex/DocGenController.getLatestContentVersionId';
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
 import previewDraftPdf from '@salesforce/apex/DocGenController.previewDraftPdf';
-import previewDraftPdfData from '@salesforce/apex/DocGenController.previewDraftPdfData';
 import generatePdfAsync from '@salesforce/apex/DocGenController.generatePdfAsync';
 import getPdfSampleGenerationStatus from '@salesforce/apex/DocGenController.getPdfSampleGenerationStatus';
 import prepareChartImages from '@salesforce/apex/DocGenChartImageController.prepareChartImages';
@@ -83,6 +84,8 @@ import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions
 import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import saveWatermarkImage from '@salesforce/apex/DocGenController.saveWatermarkImage';
+import getWatermarkSource from '@salesforce/apex/DocGenController.getWatermarkSource';
+import getWatermarkOpacity from '@salesforce/apex/DocGenController.getWatermarkOpacity';
 import clearWatermarkImage from '@salesforce/apex/DocGenController.clearWatermarkImage';
 import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
@@ -98,7 +101,12 @@ import DOCGEN_TEMPLATE_OBJECT from '@salesforce/schema/DocGen_Template__c';
 import NAME_FIELD from '@salesforce/schema/DocGen_Template__c.Name';
 import CATEGORY_FIELD from '@salesforce/schema/DocGen_Template__c.Category__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
+// The version object carries its OWN restricted Type picklist — see #303.
+import DOCGEN_VERSION_OBJECT from '@salesforce/schema/DocGen_Template_Version__c';
+import VERSION_TYPE_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Type__c';
 import BASE_OBJECT_FIELD from '@salesforce/schema/DocGen_Template__c.Base_Object_API__c';
+// #369 — which Portwood Brand this template's signature emails use
+import BRAND_FIELD from '@salesforce/schema/DocGen_Template__c.Brand__c';
 import QUERY_CONFIG_FIELD from '@salesforce/schema/DocGen_Template__c.Query_Config__c';
 import DESC_FIELD from '@salesforce/schema/DocGen_Template__c.Description__c';
 import OUTPUT_FORMAT_FIELD from '@salesforce/schema/DocGen_Template__c.Output_Format__c';
@@ -123,6 +131,9 @@ import CUSTOM_MARGINS_FIELD from '@salesforce/schema/DocGen_Template__c.Custom_M
 // #verification — template-level signer-verification defaults
 import SIGNER_VERIFICATION_FIELD from '@salesforce/schema/DocGen_Template__c.Signer_Verification__c';
 import PREFILL_SIGNER_EMAIL_FIELD from '@salesforce/schema/DocGen_Template__c.Prefill_Signer_Email__c';
+// #367
+import HIDE_SIGNER_DECLINE_FIELD from '@salesforce/schema/DocGen_Template__c.Hide_Signer_Decline__c';
+import getSettingsFresh from '@salesforce/apex/DocGenSetupController.getSettingsFresh';
 import testRecordFilter from '@salesforce/apex/DocGenController.testRecordFilter';
 // 1.61 — HTML zip sidesteps File Upload Security via client-side unzip + per-part upload
 import saveHtmlTemplateImage from '@salesforce/apex/DocGenController.saveHtmlTemplateImage';
@@ -165,7 +176,8 @@ const TYPE_VALUE_HISTORY = {
     PowerPoint: '1.0',
     Excel: '1.5x',
     HTML: '1.61.0',
-    PDF: '3.03.0'
+    PDF: '3.03.0',
+    Canvas: '3.54.0'
 };
 
 /**
@@ -221,6 +233,7 @@ const F = {
     Type: TYPE_FIELD.fieldApiName,
     OutputFormat: OUTPUT_FORMAT_FIELD.fieldApiName,
     BaseObject: BASE_OBJECT_FIELD.fieldApiName,
+    Brand: BRAND_FIELD.fieldApiName,
     QueryConfig: QUERY_CONFIG_FIELD.fieldApiName,
     // #161 follow-up — dedicated storage for Signer Inputs form-field config.
     // The field has no @salesforce/schema import yet (backend ships it in
@@ -251,6 +264,7 @@ const F = {
     // #verification — template-level defaults
     SignerVerification: SIGNER_VERIFICATION_FIELD.fieldApiName,
     PrefillSignerEmail: PREFILL_SIGNER_EMAIL_FIELD.fieldApiName,
+    HideSignerDecline: HIDE_SIGNER_DECLINE_FIELD.fieldApiName,
     // PHD-9 — stable developer key for Flow lookups; namespace resolved from an
     // already-imported field (same pattern as FormFieldsConfig).
     ApiName:
@@ -446,6 +460,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     editTemplateId;
     editTemplateName;
     editTemplateCategory;
+    // #369 — which Portwood Brand this template's signature emails use
+    @track editTemplateBrand = '';
+    @track brandOptions = [];
     @track editTemplateType;
     // @track so children re-render when it arrives. The canvas mounts before the
     // template record finishes loading, and without this the Data picker was handed
@@ -478,6 +495,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // #208 — per-template default {Message} for signature emails
     @track editTemplateDefaultEmailMessage = '';
     @track editTemplatePrefillSignerEmail = 'Inherit';
+    // #367 — "Hide Decline Button" for this template; unchecked by default (Decline shown).
+    @track editTemplateHideDecline = false;
+    // #367 — org-wide "Hide Decline Button", fetched once on mount so this template
+    // toggle can hide itself when the org has already hidden Decline everywhere.
+    @track orgHideDecline = false;
     editTemplateSpecificRecordIds;
     editTemplateRequiredPermissionSets;
     editTemplateRecordFilter;
@@ -1349,6 +1371,24 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    // #369 — the Sending Brand picker on the edit modal's Details tab.
+    // Imperative, not @wire: getBrands() is cacheable=false (the Brands admin
+    // screen needs a fresh read right after a save), and @wire only works
+    // against cacheable=true Apex methods — a wired call here silently never
+    // populates.
+    async loadBrandOptions() {
+        try {
+            const data = await getBrands();
+            this.brandOptions = [
+                { label: '— None — (uses org default)', value: '' },
+                ...data.filter((b) => b.isActive !== false).map((b) => ({ label: b.name, value: b.id })),
+                { label: 'Manage brands…', value: '__manage__' }
+            ];
+        } catch (error) {
+            // Non-fatal — the picker just stays empty; template editing still works.
+        }
+    }
+
     templateSortedBy;
     templateSortedDirection = 'asc';
 
@@ -1472,6 +1512,23 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // never throws — an org without Einstein simply keeps the copy-paste
         // path as the only visible option.
         this._refreshAgentforceAvailability();
+        // #369 — load the Sending Brand options for the template editor + email tab.
+        this.loadBrandOptions();
+        // #367 — the per-template Decline toggle is moot (and hidden) once the org
+        // has hidden Decline everywhere. Never awaited and never throws — worst case
+        // the template toggle stays visible until the next load, it never blocks the
+        // editor.
+        this._refreshOrgHideDecline();
+    }
+
+    // #367
+    async _refreshOrgHideDecline() {
+        try {
+            const data = await getSettingsFresh();
+            this.orgHideDecline = data.Signature_Hide_Decline__c === true;
+        } catch (_err) {
+            // Leave the per-template toggle visible if the org setting can't be read.
+        }
     }
 
     disconnectedCallback() {
@@ -3793,6 +3850,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     handleEditCategoryChange(event) {
         this.editTemplateCategory = event.detail.value;
     }
+    // #369
+    handleEditBrandChange(event) {
+        const val = event.detail.value;
+        if (val === '__manage__') {
+            this.dispatchEvent(new CustomEvent('managebrands'));
+            return;
+        }
+        this.editTemplateBrand = val;
+    }
     handleEditTypeChange(event) {
         this.editTemplateType = event.detail.value;
         if (event.detail.value === 'Excel' && this.editTemplateOutputFormat === 'PDF') {
@@ -4470,6 +4536,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplatePrefillSignerEmail = event.detail.value;
     }
 
+    // #367
+    handleHideDeclineChange(event) {
+        this.editTemplateHideDecline = event.target.checked;
+    }
+
     get isBuilderDisabled() {
         return this.isManualQuery;
     }
@@ -4497,6 +4568,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     _typePicklist;
     @track _orgTypeValues = null;
 
+    // The SECOND restricted Type picklist (#303).
+    //
+    // Saving a template writes Type__c on DocGen_Template__c AND on the version
+    // record, and BOTH fields are restricted picklists carrying the same value
+    // set. The check above only ever read the template's, so the warning named
+    // one object — and an admin who followed it exactly still could not save:
+    //
+    //   "I added the 'Canvas' type manually which got me over the initial error
+    //    message ... the save failed ... Type: bad value for restricted
+    //    picklist field: Canvas"
+    //
+    // They fixed the field the message named and hit the one it did not.
+    @wire(getObjectInfo, { objectApiName: DOCGEN_VERSION_OBJECT })
+    versionObjectInfo;
+
+    @wire(getPicklistValues, {
+        recordTypeId: '$versionObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: VERSION_TYPE_FIELD
+    })
+    wiredVersionTypePicklist(result) {
+        this._versionTypePicklist = result;
+        if (result && result.data && Array.isArray(result.data.values)) {
+            this._orgVersionTypeValues = result.data.values.map((v) => v.value);
+        }
+    }
+    _versionTypePicklist;
+    @track _orgVersionTypeValues = null;
+
     get typeOptions() {
         const fallback = Object.keys(TYPE_VALUE_HISTORY);
         // Until the wire resolves (and if it errors) keep the historical hardcoded
@@ -4520,18 +4619,95 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgTypeValues.includes(v));
     }
 
-    get hasMissingTypeValues() {
-        return this.missingTypeValues.length > 0;
+    /** Values missing from the VERSION object's Type picklist (#303). */
+    get missingVersionTypeValues() {
+        if (!this._orgVersionTypeValues || !this._orgVersionTypeValues.length) {
+            return [];
+        }
+        return Object.keys(TYPE_VALUE_HISTORY).filter((v) => !this._orgVersionTypeValues.includes(v));
     }
 
+    get hasMissingTypeValues() {
+        return this.missingTypeValues.length > 0 || this.missingVersionTypeValues.length > 0;
+    }
+
+    /**
+     * Names EVERY field that needs the value, not just the first one (#303).
+     *
+     * The old message named only "Portwood Template > Type". Saving also writes
+     * the version record's own restricted Type picklist, so an admin who did
+     * exactly what the message said still hit
+     * "Type: bad value for restricted picklist field: Canvas" on save.
+     */
     get missingTypeValuesMessage() {
-        const missing = this.missingTypeValues.map((v) => `${v} (added in v${TYPE_VALUE_HISTORY[v]})`).join(', ');
+        const onTemplate = this.missingTypeValues;
+        const onVersion = this.missingVersionTypeValues;
+        const all = Array.from(new Set([...onTemplate, ...onVersion]));
+
+        const fields = [];
+        if (onTemplate.length) {
+            fields.push('Portwood Template > Type');
+        }
+        if (onVersion.length) {
+            fields.push('Portwood Template Version > Type');
+        }
+
         return (
-            `This org's Template Type picklist is missing: ${missing}. ` +
-            'That means the package upgrade did not fully apply its schema. ' +
-            'Re-run the package upgrade, or add the missing values to the ' +
-            'Portwood Template > Type field in Setup. Until then those template types cannot be created.'
+            `Missing Type picklist value: ${all.join(', ')}. ` +
+            `${all.includes('Canvas') ? 'Canvas must be active on ' : 'Add or activate the missing value on '}` +
+            `${fields.join(' and ')}. ` +
+            'Open the field link below, add or activate the value in Picklist Values, then click Re-check.'
         );
+    }
+
+    /**
+     * Direct Setup links for every field that is short a value (#303).
+     *
+     * Apex cannot add a picklist value — the Apex Metadata API exposes only
+     * CustomMetadata and Layout, not CustomField/ValueSet — so this is an admin
+     * task by necessity. The least we can do is take them to the exact field
+     * rather than describing where it lives. Object API names come from the wire,
+     * so these carry the package namespace in a subscriber org.
+     */
+    get missingTypeFieldLinks() {
+        const links = [];
+        const base = '/lightning/setup/ObjectManager/';
+        const tmplApi = this.templateObjectInfo && this.templateObjectInfo.data && this.templateObjectInfo.data.apiName;
+        const versApi = this.versionObjectInfo && this.versionObjectInfo.data && this.versionObjectInfo.data.apiName;
+        if (this.missingTypeValues.length && tmplApi) {
+            links.push({
+                objectApiName: tmplApi,
+                label: 'Portwood Template > Type',
+                url: base + tmplApi + '/FieldsAndRelationships/view'
+            });
+        }
+        if (this.missingVersionTypeValues.length && versApi) {
+            links.push({
+                objectApiName: versApi,
+                label: 'Portwood Template Version > Type',
+                url: base + versApi + '/FieldsAndRelationships/view'
+            });
+        }
+        return links;
+    }
+
+    /** Re-read both picklists after the admin has added the values. */
+    handleRecheckTypeValues() {
+        Promise.all([refreshApex(this._typePicklist), this._refreshVersionTypePicklist()])
+            .then(() => {
+                if (this.hasMissingTypeValues) {
+                    this.showToast('Still missing', this.missingTypeValuesMessage, 'warning');
+                } else {
+                    this.showToast('Schema is complete', 'Every template type is available now.', 'success');
+                }
+            })
+            .catch(() => {
+                this.showToast('Could not re-check', 'Reload the page to check again.', 'warning');
+            });
+    }
+
+    _refreshVersionTypePicklist() {
+        return this._versionTypePicklist ? refreshApex(this._versionTypePicklist) : Promise.resolve();
     }
 
     get outputFormatOptions() {
@@ -4837,17 +5013,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * Returns an error string, or null when the create looks safe to attempt.
      */
     _preflightCreate() {
-        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(this.newTemplateType)) {
+        const missingFields = this._missingTypeFieldsForValue(this.newTemplateType);
+        if (missingFields.length) {
+            const versionSuffix = TYPE_VALUE_HISTORY[this.newTemplateType]
+                ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
+                : '';
+            const fieldText = missingFields.join(missingFields.length > 1 ? ' AND ' : '');
             return (
-                `This org's Template Type picklist does not contain "${this.newTemplateType}"` +
-                (TYPE_VALUE_HISTORY[this.newTemplateType]
-                    ? ` (added in v${TYPE_VALUE_HISTORY[this.newTemplateType]})`
-                    : '') +
-                '. The package upgrade did not fully apply its schema. Re-run the upgrade, or pick one of: ' +
-                this._orgTypeValues.join(', ')
+                `This org cannot create "${this.newTemplateType}" templates because ` +
+                `"${this.newTemplateType}"${versionSuffix} is missing from ${fieldText}. ` +
+                'Add or reactivate that picklist value in Setup, then click Re-check.'
             );
         }
         return null;
+    }
+
+    _missingTypeFieldsForValue(value) {
+        const fields = [];
+        if (this._orgTypeValues && this._orgTypeValues.length && !this._orgTypeValues.includes(value)) {
+            fields.push('Portwood Template > Type');
+        }
+        if (
+            this._orgVersionTypeValues &&
+            this._orgVersionTypeValues.length &&
+            !this._orgVersionTypeValues.includes(value)
+        ) {
+            fields.push('Portwood Template Version > Type');
+        }
+        return fields;
     }
 
     /**
@@ -5126,6 +5319,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.lintFindings = [];
             this.editTemplateName = row.Name;
             this.editTemplateCategory = row[F.Category];
+            this.editTemplateBrand = row[F.Brand] || '';
             this.editTemplateType = row[F.Type];
             this.editTemplateObject = row[F.BaseObject];
             this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
@@ -5173,6 +5367,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateLockOutputFormat = row[F.LockOutputFormat] || false;
             this.editTemplateSignerVerification = row[F.SignerVerification] || 'Inherit';
             this.editTemplatePrefillSignerEmail = row[F.PrefillSignerEmail] || 'Inherit';
+            this.editTemplateHideDecline = row[F.HideSignerDecline] === true;
             this.editTemplateApiName = row[F.ApiName] || '';
             this.editTemplateDefaultEmailMessage = row[F.DefaultEmailMessage] || '';
             this.editTemplateSpecificRecordIds = row[F.SpecificRecordIds];
@@ -5274,6 +5469,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return JSON.stringify([
             this.editTemplateName,
             this.editTemplateCategory,
+            this.editTemplateBrand,
             this.editTemplateType,
             this.editTemplateObject,
             this.editTemplateOutputFormat,
@@ -5297,6 +5493,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateCustomMargins,
             this.editTemplateSignerVerification,
             this.editTemplatePrefillSignerEmail,
+            this.editTemplateHideDecline,
             this.editTemplateApiName,
             this.editTemplateDefaultEmailMessage
         ]);
@@ -5379,6 +5576,20 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
+                this._watermarkSourceFile = null;
+                // Seed the strength control from what's actually stored, so it
+                // doesn't report the default over an image at another value (#313).
+                if (this.editTemplateWatermarkCvId && active) {
+                    getWatermarkOpacity({ versionId: active.Id })
+                        .then((pct) => {
+                            if (pct) {
+                                this.watermarkOpacityPct = String(pct);
+                            }
+                        })
+                        .catch(() => {
+                            // Non-fatal — leave the control at its default.
+                        });
+                }
 
                 // Enrich with the body ContentVersion's number + filename so the table
                 // shows which underlying file each version points at (diagnostic).
@@ -5658,10 +5869,25 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
         }
 
+        // #322 — a header/footer band only reaches editTemplateHeaderHtml/FooterHtml
+        // through the band's native 'input' listener. A chip click, a drag-drop
+        // insert or a pill retype all mutate the band DOM directly and never fire
+        // that event, so without this the field below could still be what the band
+        // held BEFORE the edit. _liveChrome() re-reads the live bands the same way
+        // Preview already does, so Save can never persist a stale chrome value.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
+            return;
+        }
+
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
             Category__c: this.editTemplateCategory,
+            Brand__c: this.editTemplateBrand || null,
             Type__c: this.editTemplateType,
             Output_Format__c: this.editTemplateOutputFormat,
             Base_Object_API__c: this.editTemplateObject,
@@ -5686,6 +5912,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
+            Hide_Signer_Decline__c: this.editTemplateHideDecline,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
@@ -5695,6 +5922,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false, contentVersionId: null });
             this.showToast('Success', 'Template Details saved.', 'success');
+            // The modal stays open after a details save; re-baseline the
+            // unsaved-changes snapshot so a following Close doesn't warn about
+            // edits that are now persisted on the record (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
@@ -5704,6 +5935,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async handleSaveAndClose() {
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
+            return;
+        }
+        // #322 — see the matching comment in handleSaveOnly: a header/footer band
+        // only reaches editTemplateHeaderHtml/FooterHtml through the band's native
+        // 'input' listener, and a chip/drag/pill-retype insert never fires it. Force
+        // a fresh read from the live bands before this handler goes anywhere near
+        // the fields below, or a tag visibly added to the header can be silently
+        // dropped by a save that looked completely successful.
+        try {
+            this._liveChrome();
+        } catch (err) {
+            const msg = err && err.message ? err.message : String(err);
+            this.showToast('Could not read the header/footer', msg, 'error');
             return;
         }
         // Designer: unapplied visual/source edits fold into the staged body
@@ -5736,6 +5980,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
             Category__c: this.editTemplateCategory,
+            Brand__c: this.editTemplateBrand || null,
             Type__c: this.editTemplateType,
             Output_Format__c: this.editTemplateOutputFormat,
             Base_Object_API__c: this.editTemplateObject,
@@ -5760,6 +6005,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
+            Hide_Signer_Decline__c: this.editTemplateHideDecline,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
@@ -5850,6 +6096,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.loadVersions(this.editTemplateId);
             }
             this.activeEditTab = this.editTemplateType === 'PDF' ? 'pdfFields' : 'document';
+            // "Save as New Version" deliberately leaves the modal open (authors
+            // want to preview/test the new version straight away). Re-baseline the
+            // unsaved-changes snapshot against the just-saved values so clicking
+            // Close afterwards doesn't falsely prompt to discard changes (#370).
+            this._editSnapshot = this._editFieldSignature();
             return refreshApex(this.wiredTemplatesResult);
         } catch (error) {
             this.showToast('Error saving template', error.body ? error.body.message : error.message, 'error');
@@ -6798,9 +7049,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return html;
         }
         try {
+            // Clean ONLY the body when the document has one (#319). Parsing the
+            // whole document and splicing the result back into <body> copies the
+            // head's <meta>/<title>/<style> into the body while leaving the head
+            // in place — duplicating them, and growing the file on every save.
+            const bodyRe = /(<body\b[^>]*>)([\s\S]*?)(<\/body\s*>)/i;
+            const bodyMatch = html.match(bodyRe);
+            const target = bodyMatch ? bodyMatch[2] : html;
+
             const tpl = document.createElement('template');
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            tpl.innerHTML = html;
+            tpl.innerHTML = target;
             const root = tpl.content;
             for (const marker of root.querySelectorAll('.dg-drop-marker')) {
                 marker.remove();
@@ -6808,34 +7067,62 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
-                // Preview-wrapped payload: keep only the page content, minus
-                // the injected scoped stylesheet.
+                // Preview-wrapped payload: drop the injected scoped stylesheet,
+                // then UNWRAP the preview div in place rather than reading only
+                // pv.innerHTML. Reading the inner HTML discards every sibling of
+                // the preview — which on a flattened document is where the
+                // author's <style>, <title> and <meta> are sitting (#319).
                 for (const styleEl of pv.querySelectorAll(':scope > style')) {
                     styleEl.remove();
                 }
-                // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-                const inner = pv.innerHTML.trim();
-                // Preserve an original shell if one wrapped the preview; else
-                // the content becomes the document body in a minimal shell.
-                const bodyRe = /(<body\b[^>]*>)[\s\S]*?(<\/body\s*>)/i;
-                const outer = html.replace(/[\s\S]*/, ''); // placeholder, replaced below
-                void outer;
-                if (bodyRe.test(html) && !/class="dg-pv"/.test(html.split(/<body\b[^>]*>/i)[0] || '')) {
-                    return html.replace(bodyRe, (m, open, close) => open + '\n' + inner + '\n' + close);
+                // insertBefore/remove, not replaceWith — LWS proxied nodes are
+                // missing ChildNode.replaceWith (the v3.39 lesson).
+                while (pv.firstChild) {
+                    pv.parentNode.insertBefore(pv.firstChild, pv);
                 }
-                return (
-                    '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8" />\n<style>\n@page { size: Letter portrait; margin: 0.75in; }\nbody { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; }\n</style>\n</head>\n<body>\n' +
-                    inner +
-                    '\n</body>\n</html>\n'
-                );
+                pv.remove();
             }
-            // No pv wrapper — serialize the cleaned fragment back out.
             const container = document.createElement('div');
-            container.appendChild(root.cloneNode(true));
+            container.appendChild(root);
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            return container.innerHTML;
+            const cleaned = container.innerHTML.trim();
+
+            // Put the cleaned content back inside the AUTHOR'S OWN shell, and
+            // never fabricate one (#319).
+            //
+            // Two bugs used to live in these few lines, and they chained:
+            //
+            //  1. Parsing a full document into a <template> fragment discards
+            //     <!DOCTYPE>, <html>, <head> and <body> — they are ignored tokens
+            //     in that insertion mode. Serializing the fragment back therefore
+            //     returned a body with no shell. The author's <style> survived, so
+            //     nothing looked wrong yet.
+            //  2. On the NEXT save that shell-less body arrives wrapped in the
+            //     canvas's .dg-pv div, so `bodyRe.test(html)` is false, and the
+            //     old code fell through to a hardcoded
+            //     `<style>@page { size: Letter portrait }...</style>` shell —
+            //     silently replacing the author's entire stylesheet, and resetting
+            //     a Landscape template to Portrait.
+            //
+            // Splicing the cleaned BODY back into the original string, and
+            // otherwise returning the cleaned content untouched, fixes both: the
+            // shell is preserved when there is one, and no shell is invented when
+            // there is not.
+            if (bodyMatch) {
+                return html.replace(bodyRe, (m, open, inner, close) => open + '\n' + cleaned + '\n' + close);
+            }
+            return cleaned;
         } catch (e) {
-            return html;
+            // #322 — this function is the last line of defense against editor
+            // chrome (pills, drop markers, the preview wrapper) reaching a saved
+            // template body. The guard above already established `html` still
+            // carries at least one of those markers, so silently handing it back
+            // unchanged here means a failed sanitize looks IDENTICAL to a
+            // successful one to every caller — "Editor HTML staged" fires and the
+            // dirty markup goes on to save. Fail loud instead: _processAndSaveHtmlBody
+            // already documents itself as "Throws on failure — callers own the
+            // error toast," so this matches its existing contract.
+            throw new Error('Could not clean staged HTML: ' + (e && e.message ? e.message : String(e)));
         }
     }
 
@@ -12206,7 +12493,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return container.innerHTML.trim();
     }
 
-    // --- Live PDF preview (real Blob.toPdf output in a blob: iframe) ---
+    // --- Live PDF preview in Salesforce's native file viewer ---
     async handlePdfPreview() {
         if (!this.editTemplateTestRecordId) {
             this.showToast(
@@ -12216,59 +12503,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             );
             return;
         }
-        // ONE read of the model, not three reads of three surfaces — see
-        // _draftSurfaces. Taken before the popup-blocked early return so both
-        // request shapes below send the same document.
+        // Render the current unsaved draft rather than the last saved version.
         const draft = this._draftSurfaces();
         const draftHtml = (draft.body || '').trim();
         if (!draftHtml) {
             this.showToast('Nothing to preview', 'The editor is empty.', 'warning');
             return;
         }
-        // A ready-but-unopened preview from the last render: open it in THIS
-        // click (synchronous = never popup-blocked), then reset.
-        if (this._pendingPreviewUrl) {
-            const readyWin = window.open(this._pendingPreviewUrl, '_blank');
-            if (readyWin) {
-                this._pendingPreviewUrl = null;
-                this.pdfPreviewReady = false;
-            }
-            return;
-        }
         this.isPdfPreviewLoading = true;
         try {
-            const res = await previewDraftPdfData({
-                templateId: this.editTemplateId,
-                recordId: this.editTemplateTestRecordId,
-                draftHtml,
-                draftHeaderHtml: draft.header,
-                draftFooterHtml: draft.footer
-            });
-            if (res && res.base64) {
-                const raw = atob(res.base64);
-                const bytes = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) {
-                    bytes[i] = raw.charCodeAt(i);
-                }
-                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-                // Usually still inside the click's activation window, so this
-                // opens directly. (LWS neuters a pre-opened window's proxy —
-                // document.write/location are silent no-ops — so the tab must
-                // be opened WITH its URL.)
-                const win = window.open(url, '_blank');
-                if (!win) {
-                    // Popup blocked: arm the button for a synchronous open.
-                    this._pendingPreviewUrl = url;
-                    this.pdfPreviewReady = true;
-                    this.showToast(
-                        'Preview ready',
-                        'Your PDF is rendered — click "Open preview" to view it.',
-                        'success'
-                    );
-                }
-                return;
-            }
-            // Too large for the Aura payload — ContentVersion + native viewer.
             const res2 = await previewDraftPdf({
                 templateId: this.editTemplateId,
                 recordId: this.editTemplateTestRecordId,
@@ -12296,12 +12539,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.pdfPreviewUrl = null;
     }
 
-    @track pdfPreviewReady = false;
-
     get pdfPreviewBtnLabel() {
-        if (this.pdfPreviewReady) {
-            return 'Open preview \u2197';
-        }
         return this.isPdfPreviewLoading ? 'Rendering…' : 'PDF Preview';
     }
 
@@ -15184,7 +15422,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.isAutoCreating = false;
         this.showAdvancedOptions = false;
         this.newTemplateLogoChoice = 'none';
-        this.newTemplateType = 'Word';
+        this.newTemplateType = 'HTML';
         this.newTemplateDesc = '';
         this.newTemplateQuery = '';
         this.newTemplateOutputFormat = 'PDF';
@@ -15249,8 +15487,98 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         ].map((o) => ({ ...o, selected: o.value === this.watermarkOpacityPct }));
     }
 
-    handleWatermarkOpacityChange(event) {
+    /**
+     * The file the author picked, kept UNBAKED for the session (#313).
+     *
+     * Opacity is baked into the PNG's pixels at upload time, so once an image is
+     * stored the control had nothing left to act on — changing it did nothing,
+     * silently:
+     *
+     *   "When I try to update the Watermark percentage after I uploaded the
+     *    image it doesn't update this value. It works when I change it before I
+     *    upload the file."
+     *
+     * Keeping the original means a later change can re-bake from it. Re-baking
+     * the STORED image would compound the wash — 30% of an already-30% image is
+     * 9% — so the original is the only correct source.
+     */
+    _watermarkSourceFile = null;
+
+    async handleWatermarkOpacityChange(event) {
         this.watermarkOpacityPct = event.currentTarget.value;
+        // Nothing uploaded yet: the value is picked up when they do upload.
+        if (!this.editTemplateWatermarkCvId) {
+            return;
+        }
+        // Already re-baking a previous change — let it finish; the select is
+        // disabled in the template while isUploadingWatermark is true.
+        if (this.isUploadingWatermark) {
+            return;
+        }
+        await this._reuploadWatermarkAtCurrentOpacity();
+    }
+
+    /** The saved file name encodes the wash so the control can seed from it on
+     *  reload — "watermark-p50.png" (#313). */
+    _watermarkFileName(pct) {
+        return 'watermark-p' + (parseInt(pct, 10) || 100) + '.png';
+    }
+
+    /** base64 PNG -> Blob, without fetch() on a data: URI (awkward under the
+     *  managed-package security sandbox). _bakeWatermarkOpacity tolerates a
+     *  nameless Blob; the upload name is passed explicitly. Mirrors
+     *  docGenButton.base64ToBlob. */
+    _base64ToBlob(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: 'image/png' });
+    }
+
+    /** Re-bakes the retained original at the current setting and replaces the stored image. */
+    async _reuploadWatermarkAtCurrentOpacity() {
+        const active = (this.versions || []).find((v) => v[F.VerIsActive]);
+        if (!active) {
+            return;
+        }
+        this.isUploadingWatermark = true;
+        try {
+            const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
+            // In-session file first; otherwise the original persisted at upload
+            // time, which is what makes this work after a reload (#313).
+            let source = this._watermarkSourceFile;
+            if (!source) {
+                const stored = await getWatermarkSource({ versionId: active.Id });
+                if (!stored) {
+                    this.showToast(
+                        'Re-upload to change the wash',
+                        'This watermark was uploaded before Portwood started keeping the original, so the opacity is baked in. Upload the image again to apply ' +
+                            pct +
+                            '%.',
+                        'warning'
+                    );
+                    return;
+                }
+                source = this._base64ToBlob(stored);
+            }
+            const baked = await this._bakeWatermarkOpacity(source, pct);
+            const original = await this._bakeWatermarkOpacity(source, 100);
+            this.editTemplateWatermarkCvId = await saveWatermarkImage({
+                versionId: active.Id,
+                fileName: this._watermarkFileName(pct),
+                base64Data: baked.base64,
+                sourceBase64: original.base64
+            });
+            this.showToast('Watermark updated', 'Re-applied at ' + pct + '%.', 'success');
+        } catch (err) {
+            const msg =
+                err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Update failed';
+            this.showToast('Could not update the watermark', msg, 'error');
+        } finally {
+            this.isUploadingWatermark = false;
+        }
     }
 
     /** Redraws the image at the chosen opacity on a canvas → PNG base64.
@@ -15267,8 +15595,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 reader.onerror = () => reject(new Error('FileReader failed'));
                 reader.readAsDataURL(blobOrFile);
             });
+        const baseName = (file.name || 'watermark').replace(/\.[^.]+$/, '');
         if (pct >= 100) {
-            return { base64: await readAsBase64(file), fileName: file.name };
+            return { base64: await readAsBase64(file), fileName: baseName + '.png' };
         }
         const url = URL.createObjectURL(file);
         try {
@@ -15288,7 +15617,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const commaIdx = dataUrl.indexOf(',');
             return {
                 base64: dataUrl.substring(commaIdx + 1),
-                fileName: file.name.replace(/\.[^.]+$/, '') + '.png'
+                fileName: baseName + '.png'
             };
         } finally {
             URL.revokeObjectURL(url);
@@ -15302,6 +15631,17 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         if (!file.type || !file.type.startsWith('image/')) {
             this.showToast('Unsupported file', 'Please choose an image file (PNG, JPEG, GIF).', 'error');
+            event.target.value = '';
+            return;
+        }
+        // The save carries the baked image AND the unbaked source; both are
+        // base64 in the synchronous Apex heap. Keep watermarks small (#313).
+        if (file.size > 3 * 1024 * 1024) {
+            this.showToast(
+                'Image too large',
+                'Use a watermark image under 3 MB — a logo or stamp at screen resolution is plenty.',
+                'error'
+            );
             event.target.value = '';
             return;
         }
@@ -15319,12 +15659,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             const pct = parseInt(this.watermarkOpacityPct, 10) || 100;
             const baked = await this._bakeWatermarkOpacity(file, pct);
+            // Persist the UNBAKED original too, so the opacity stays adjustable in
+            // any later session — not just this one (#313).
+            const source = await this._bakeWatermarkOpacity(file, 100);
             const newCvId = await saveWatermarkImage({
                 versionId: active.Id,
-                fileName: baked.fileName,
-                base64Data: baked.base64
+                // Encode the wash into the name so the control seeds from it on
+                // reload rather than snapping to the default (#313).
+                fileName: this._watermarkFileName(pct),
+                base64Data: baked.base64,
+                sourceBase64: source.base64
             });
             this.editTemplateWatermarkCvId = newCvId;
+            // Retain the UNBAKED original so a later opacity change can re-bake
+            // from it rather than washing an already-washed image (#313).
+            this._watermarkSourceFile = file;
             this.showToast('Success', 'Watermark uploaded.', 'success');
         } catch (err) {
             const msg =
@@ -15345,6 +15694,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             await clearWatermarkImage({ versionId: active.Id });
             this.editTemplateWatermarkCvId = null;
+            this._watermarkSourceFile = null;
             this.showToast('Removed', 'Watermark cleared.', 'success');
         } catch (err) {
             const msg = err && err.body && err.body.message ? err.body.message : (err && err.message) || 'Clear failed';

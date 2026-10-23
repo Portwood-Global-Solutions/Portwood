@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Brand__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <description
+    >The Portwood Brand that documents generated from this template send as. When set, signature emails for requests generated from this template use this brand's Org-Wide Email Address, logo, color, and company name ahead of the org-wide Signature Settings default (#369). Blank behaves exactly as before this field existed.</description>
+    <externalId>false</externalId>
+    <label>Sending Brand</label>
+    <referenceTo>DocGen_Brand__c</referenceTo>
+    <relationshipLabel>Templates</relationshipLabel>
+    <relationshipName>Templates</relationshipName>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>Lookup</type>
+</CustomField>

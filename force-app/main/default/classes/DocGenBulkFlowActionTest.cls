@@ -40,6 +40,44 @@ private class DocGenBulkFlowActionTest {
     }
 
     @IsTest
+    static void duplexPaddingInputReachesTheJob() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+
+            // Combined PDF + duplex on → the flag is persisted.
+            DocGenBulkFlowAction.Request mergeReq = new DocGenBulkFlowAction.Request();
+            mergeReq.templateId = temp.Id;
+            mergeReq.queryCondition = 'Name = \'Test Account 1\'';
+            mergeReq.combinedPdfOnly = true;
+            mergeReq.duplexPadding = true;
+
+            // Individual Files only (no combined bundle) + duplex on → forced off.
+            DocGenBulkFlowAction.Request indivReq = new DocGenBulkFlowAction.Request();
+            indivReq.templateId = temp.Id;
+            indivReq.queryCondition = 'Name = \'Test Account 2\'';
+            indivReq.combinedPdfOnly = false;
+            indivReq.keepIndividualFiles = false;
+            indivReq.duplexPadding = true;
+
+            Test.startTest();
+            List<DocGenBulkFlowAction.Response> res = DocGenBulkFlowAction.generateBulkDocuments(
+                new List<DocGenBulkFlowAction.Request>{ mergeReq, indivReq }
+            );
+            Test.stopTest();
+
+            DocGen_Job__c onJob = [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :res[0].jobId];
+            DocGen_Job__c offJob = [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :res[1].jobId];
+            System.assertEquals(true, onJob.Duplex_Padding__c, 'Combined PDF job should carry the duplex flag');
+            System.assertNotEquals(
+                true,
+                offJob.Duplex_Padding__c,
+                'Individual Files job must not carry the duplex flag'
+            );
+        }
+    }
+
+    @IsTest
     static void testGenerateBulkDocumentsErrorPath() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {

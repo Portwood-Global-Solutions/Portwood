@@ -243,8 +243,19 @@ public with sharing class DocGenChartBucketResolver {
                     cursor = tagClose + 1;
                     continue;
                 }
-            } else if (cursor + 2 <= len && xml.substring(cursor, cursor + 2) == '{#') {
+            } else if (
+                (cursor + 2 <= len && xml.substring(cursor, cursor + 2) == '{#') ||
+                (cursor + 2 <= len &&
+                xml.substring(cursor, cursor + 2) == '{~')
+            ) {
                 // Generic section opener — push depth so nested ChartBucket tags are deferred.
+                // {~Label} (#439 root-anchor tag) counts too: a chart wrapped in one must
+                // stay deferred until the TAG'S OWN recursion (processXml(job.innerXml,
+                // rootDataContext) in DocGenService.drainRootTagJobs) resolves it against
+                // root data — not get eagerly (and wrongly) resolved here against whatever
+                // loop row this preprocessInline pass is currently running against. The
+                // matching {/Label} closer needs no special case: the generic {/ branch
+                // below pops depth for ANY {/word} closer, {~Label}'s included.
                 Integer tagClose = xml.indexOf('}', cursor);
                 if (tagClose == -1) {
                     out.append(xml.substring(cursor));

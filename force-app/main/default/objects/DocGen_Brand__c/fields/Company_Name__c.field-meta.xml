@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Company_Name__c</fullName>
+    <description
+    >This brand's company name, shown in its signature emails and used as a fallback when no logo is configured. Blank falls back to the org default (DocGen_Settings__c.Company_Name__c).</description>
+    <externalId>false</externalId>
+    <label>Company Name</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

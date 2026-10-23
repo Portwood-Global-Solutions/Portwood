@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Footer_Text__c</fullName>
+    <description
+    >Optional footer text override for this brand's signature emails. Blank falls back to the org default (DocGen_Settings__c.Signature_Email_Footer_Text__c).</description>
+    <externalId>false</externalId>
+    <label>Footer Text</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

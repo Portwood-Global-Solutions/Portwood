@@ -22,17 +22,17 @@ public without sharing class DocGenAuthenticatorController {
         // of the signed PDF. Describe check below is the explicit CRUD/FLS
         // enforcement signal documented in DocGenSignatureGuestSecurity.
         DocGenSignatureGuestSecurity.assertAuditReadable();
-        // Field allowlist: Signed_Date__c, IP_Address__c, Signer_Name__c,
-        // Signer_Email__c, Consent_Captured__c, PIN_Verified_At__c,
+        // Field allowlist: Signature_Request__c, Signed_Date__c, IP_Address__c,
+        // Signer_Name__c, Signer_Email__c, Consent_Captured__c, PIN_Verified_At__c,
         // Document_Hash_SHA256__c, Signer__r.Role_Name__c — only verification-
         // contract fields are returned. SYSTEM_MODE is required because guest
         // profile has no DocGen_Signature_Audit__c CRUD by design; the hash
         // IS the capability.
         //
-        // No LIMIT: a multi-signer document has one audit record per signer,
-        // all sharing the same Document_Hash_SHA256__c (the hash of the
-        // final stamped PDF). The verifier returns every signer for the
-        // complete audit trail of the document.
+        // For chained guided signing, earlier signer audits retain the hash of
+        // the document as it existed when they signed. First find the request
+        // that owns the uploaded hash, then return every signer audit for that
+        // request without mutating historical hashes.
         // v2.0.1 — per-field FLS enforcement on SOQL reads (the "Apex SOQL
         // USER_MODE Missing" finding category). DocGenFlsGuard.assertAccessible
         // calls Schema.SObjectField.getDescribe().isAccessible() on every field
@@ -50,13 +50,33 @@ public without sharing class DocGenAuthenticatorController {
                 'Consent_Captured__c',
                 'PIN_Verified_At__c',
                 'Document_Hash_SHA256__c',
+                'Signature_Request__c',
                 'Signer__c'
             }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signature_Audit__c> matchingAudits = [
+            SELECT Signature_Request__c
+            FROM DocGen_Signature_Audit__c
+            WHERE Document_Hash_SHA256__c = :fileHash AND Signer_Name__c != 'SYSTEM'
+            WITH SYSTEM_MODE
+        ];
+
+        Set<Id> requestIds = new Set<Id>();
+        for (DocGen_Signature_Audit__c audit : matchingAudits) {
+            if (audit.Signature_Request__c != null) {
+                requestIds.add(audit.Signature_Request__c);
+            }
+        }
+        if (requestIds.isEmpty()) {
+            return results;
+        }
+
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signature_Audit__c> audits = [
             SELECT
                 Id,
+                Signature_Request__c,
                 Signed_Date__c,
                 IP_Address__c,
                 Signer_Name__c,
@@ -66,7 +86,7 @@ public without sharing class DocGenAuthenticatorController {
                 Document_Hash_SHA256__c,
                 Signer__r.Role_Name__c
             FROM DocGen_Signature_Audit__c
-            WHERE Document_Hash_SHA256__c = :fileHash AND Signer_Name__c != 'SYSTEM'
+            WHERE Signature_Request__c IN :requestIds AND Signer_Name__c != 'SYSTEM'
             WITH SYSTEM_MODE
             ORDER BY Signed_Date__c ASC
         ];

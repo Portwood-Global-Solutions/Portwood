@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Hide_Signer_Decline__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Per-template "Hide Decline Button" switch (#367). Unchecked (the default) — the signer's "Decline to Sign" button shows on this template's signing pages. Check it to hide Decline for this template's signature requests, e.g. formal or binding documents where a self-serve refusal isn't wanted. The org-wide switch (Signature_Hide_Decline__c on DocGen_Settings__c) hides Decline everywhere regardless of this field. Requests with no template (raw source-document sends) are gated by the org-wide switch alone.</description>
+    <externalId>false</externalId>
+    <label>Hide Decline Button</label>
+    <type>Checkbox</type>
+</CustomField>

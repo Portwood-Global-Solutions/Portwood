@@ -751,6 +751,12 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                 if (csf != null) {
                     fieldPaths.add(csf);
                 }
+                // #297 — {Field:currency:X:convert} on a plain field converts from the
+                // record's own CurrencyIsoCode, so it must be queried and seeded into
+                // the miniMap the same way (schema validation drops it single-currency).
+                if (String.isNotBlank(m.group(2)) && DocGenCurrency.wantsConversion(m.group(2))) {
+                    fieldPaths.add('CurrencyIsoCode');
+                }
             }
 
             // Validate field paths against schema
@@ -875,6 +881,14 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                     String csf = currencyAutoSourceField(fmt);
                     if (csf != null && validFieldSet.contains(csf)) {
                         miniMap.put(csf, rec.get(csf));
+                    }
+                    // #297 — seed the record's own currency for {…:currency:X:convert}
+                    if (
+                        String.isNotBlank(fmt) &&
+                        DocGenCurrency.wantsConversion(fmt) &&
+                        validFieldSet.contains('CurrencyIsoCode')
+                    ) {
+                        miniMap.put('CurrencyIsoCode', rec.get('CurrencyIsoCode'));
                     }
                     try {
                         replacement = DocGenService.processXmlForTest('{' + path + ':' + fmt + '}', miniMap);

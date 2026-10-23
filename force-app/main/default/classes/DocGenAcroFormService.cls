@@ -473,7 +473,7 @@ public with sharing class DocGenAcroFormService {
                   );
             String serialized = objNum + ' 0 obj\n' + body + '\nendobj\n';
             appendText += serialized;
-            offset += serialized.length();
+            offset += Blob.valueOf(serialized).size();
         }
 
         return plan.usesXrefStream
@@ -841,9 +841,9 @@ public with sharing class DocGenAcroFormService {
             fontSize +
             ' Tf 0 g 2 ' +
             decimalToPdf(textY) +
-            ' Td (' +
-            escapePdfString(value) +
-            ') Tj ET Q';
+            ' Td ' +
+            pdfAppearanceTextStringObject(value) +
+            ' Tj ET Q';
         Integer length = Blob.valueOf(content).size();
         return '<</Type/XObject/Subtype/Form/FormType 1/BBox[0 0 ' +
             decimalToPdf(width) +
@@ -1177,11 +1177,32 @@ public with sharing class DocGenAcroFormService {
         if (value == null) {
             return '';
         }
-        return value.replace('&', '&amp;')
-            .replace('<', '&lt;')
-            .replace('>', '&gt;')
-            .replace('"', '&quot;')
-            .replace('\'', '&apos;');
+        String out = '';
+        for (Integer i = 0; i < value.length(); i++) {
+            out += escapeXmlChar(value.substring(i, i + 1));
+        }
+        return out;
+    }
+
+    private static String escapeXmlChar(String ch) {
+        if (ch == '&') {
+            return '&amp;';
+        }
+        if (ch == '<') {
+            return '&lt;';
+        }
+        if (ch == '>') {
+            return '&gt;';
+        }
+        if (ch == '"') {
+            return '&quot;';
+        }
+        if (ch == '\'') {
+            return '&apos;';
+        }
+        String byteHex = singleByteTextHex(ch);
+        Integer code = hexByteToInt(byteHex);
+        return code >= 128 ? '&#' + String.valueOf(code) + ';' : ch;
     }
 
     private static String normalizeXfaFieldName(String name) {
@@ -1230,7 +1251,7 @@ public with sharing class DocGenAcroFormService {
         if (fieldType == 'Btn') {
             return withButtonValue(body, value);
         }
-        String literal = '(' + escapePdfString(value) + ')';
+        String literal = pdfTextStringObject(value);
         String updated = removePdfKeyValue(removePdfKeyValue(removePdfKeyValue(body, '/V'), '/DV'), '/AP');
         Integer idx = updated.lastIndexOf('>>');
         if (idx == -1) {
@@ -1595,6 +1616,85 @@ public with sharing class DocGenAcroFormService {
         out = out.replace('\r', '\\r');
         out = out.replace('\n', '\\n');
         return out;
+    }
+
+    private static String pdfTextStringObject(String value) {
+        return isPdfLiteralSafe(value) ? '(' + escapePdfString(value) + ')' : '<' + pdfUtf16BeHex(value) + '>';
+    }
+
+    private static String pdfAppearanceTextStringObject(String value) {
+        return isPdfLiteralSafe(value) ? '(' + escapePdfString(value) + ')' : '<' + pdfSingleByteTextHex(value) + '>';
+    }
+
+    private static Boolean isPdfLiteralSafe(String value) {
+        if (value == null) {
+            return true;
+        }
+        String printableAscii = ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+        for (Integer i = 0; i < value.length(); i++) {
+            String ch = value.substring(i, i + 1);
+            if (!printableAscii.contains(ch)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String pdfUtf16BeHex(String value) {
+        if (value == null) {
+            return '';
+        }
+        String out = 'FEFF';
+        for (Integer i = 0; i < value.length(); i++) {
+            String ch = value.substring(i, i + 1);
+            out += utf16CodeUnitHex(ch);
+        }
+        return out;
+    }
+
+    private static String pdfSingleByteTextHex(String value) {
+        if (value == null) {
+            return '';
+        }
+        String out = '';
+        for (Integer i = 0; i < value.length(); i++) {
+            String ch = value.substring(i, i + 1);
+            out += singleByteTextHex(ch);
+        }
+        return out;
+    }
+
+    private static String utf16CodeUnitHex(String ch) {
+        String byteHex = singleByteTextHex(ch);
+        if (byteHex.length() == 2) {
+            return '00' + byteHex;
+        }
+        return '003F';
+    }
+
+    private static String singleByteTextHex(String ch) {
+        if (ch == '\n') {
+            return '0A';
+        }
+        if (ch == '\r') {
+            return '0D';
+        }
+        if (ch == '\t') {
+            return '09';
+        }
+        String ascii = ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+        Integer asciiIdx = ascii.indexOf(ch);
+        if (asciiIdx >= 0) {
+            return byteToHex(asciiIdx + 32);
+        }
+        String utf8Hex = EncodingUtil.convertToHex(Blob.valueOf(ch)).toUpperCase();
+        if (utf8Hex.length() == 4 && (utf8Hex.startsWith('C2') || utf8Hex.startsWith('C3'))) {
+            Integer first = hexByteToInt(utf8Hex.substring(0, 2));
+            Integer second = hexByteToInt(utf8Hex.substring(2, 4));
+            Integer code = first == 194 ? 128 + (second - 128) : 192 + (second - 128);
+            return byteToHex(code);
+        }
+        return '3F';
     }
 
     private static String escapePdfName(String value) {

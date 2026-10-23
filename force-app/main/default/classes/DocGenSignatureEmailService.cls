@@ -151,10 +151,13 @@ public without sharing class DocGenSignatureEmailService {
         }
 
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
-        String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
-        String senderName = UserInfo.getName();
-        String senderEmail = UserInfo.getUserEmail();
-
+        // #369 — the request's template's Brand, if any, supplies its own OWA
+        // ahead of the org default; getBrand() already excludes inactive brands.
+        Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+        DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
+        String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+            ? activeBrand.OWA_Id__c
+            : (settings == null ? null : settings.Signature_OWA_Id__c);
         // OWA is required for signature emails — guest users cannot send without one,
         // and consistent branding requires all emails come from the same address.
         if (String.isBlank(owaId)) {
@@ -164,6 +167,48 @@ public without sharing class DocGenSignatureEmailService {
             return;
         }
 
+        // Sender identity for the {SenderName} token and Reply-To. Resolve from the
+        // request CREATOR, not UserInfo — this method also runs from
+        // DocGenSignaturePdfTrigger as the Automated Process user (sequential signing,
+        // #379), whose non-routable noreply@<orgId> address makes Messaging.sendEmail
+        // reject the whole message on Reply-To. The running user is only the fallback
+        // when there is no request context (or the creator has no email).
+        String senderName = UserInfo.getName();
+        String senderEmail = UserInfo.getUserEmail();
+        if (requestId != null) {
+            try {
+                DocGenFlsGuard.guestAssertAccessible(
+                    DocGen_Signature_Request__c.sObjectType,
+                    new Set<String>{ 'CreatedById' }
+                );
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                DocGen_Signature_Request__c creatorRow = [
+                    SELECT CreatedById
+                    FROM DocGen_Signature_Request__c
+                    WHERE Id = :requestId
+                    WITH SYSTEM_MODE
+                    LIMIT 1
+                ]; // NOPMD
+                DocGenFlsGuard.guestAssertAccessible(User.sObjectType, new Set<String>{ 'Name', 'Email' });
+                /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+                User creator = [
+                    SELECT Name, Email
+                    FROM User
+                    WHERE Id = :creatorRow.CreatedById
+                    WITH SYSTEM_MODE
+                    LIMIT 1
+                ]; // NOPMD
+                if (String.isNotBlank(creator.Email)) {
+                    senderName = creator.Name;
+                    senderEmail = creator.Email;
+                }
+            } catch (Exception resolveEx) {
+                System.debug(
+                    LoggingLevel.WARN,
+                    'Portwood: could not resolve request creator for Reply-To: ' + resolveEx.getMessage()
+                );
+            }
+        }
         // {ExpirationHours} reflects the request's actual signing window (stamped
         // Expires_At__c, or the legacy 48h when no requestId / no stamp).
         String expirationHours = String.valueOf(DocGenSignatureExpiry.effectiveHours(requestExpiresAt(requestId)));
@@ -194,7 +239,8 @@ public without sharing class DocGenSignatureEmailService {
             DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
                 templateType,
                 tokens,
-                messageOverride
+                messageOverride,
+                brandId
             );
 
             String subject = String.isNotBlank(subjectOverride)
@@ -211,7 +257,10 @@ public without sharing class DocGenSignatureEmailService {
             email.setOrgWideEmailAddressId(owaId);
 
             // Reply-to the creating user so signer replies reach a human, not the OWA.
-            if (String.isNotBlank(senderEmail)) {
+            // Never set a non-routable noreply@<orgId> address (the Automated Process
+            // user's, when this runs from the platform-event trigger) — Messaging.sendEmail
+            // rejects the whole message with INVALID_EMAIL_ADDRESS (#379).
+            if (String.isNotBlank(senderEmail) && !senderEmail.startsWithIgnoreCase('noreply@')) {
                 email.setReplyTo(senderEmail);
             }
 
@@ -340,7 +389,16 @@ public without sharing class DocGenSignatureEmailService {
                 return;
             }
 
-            DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(templateType, tokens);
+            // #369 — the request's template's Brand, if any, supplies its own
+            // identity/OWA ahead of the org default.
+            Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+            DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
+            DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
+                templateType,
+                tokens,
+                null,
+                brandId
+            );
 
             Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
             email.setToAddresses(new List<String>{ sender.Email });
@@ -355,7 +413,9 @@ public without sharing class DocGenSignatureEmailService {
             }
 
             DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
-            String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
+            String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+                ? activeBrand.OWA_Id__c
+                : (settings == null ? null : settings.Signature_OWA_Id__c);
             if (String.isNotBlank(owaId)) {
                 email.setOrgWideEmailAddressId(owaId);
             }
@@ -412,8 +472,14 @@ public without sharing class DocGenSignatureEmailService {
                 return;
             }
 
+            // #369 — the request's template's Brand, if any, supplies its own
+            // identity/OWA ahead of the org default.
+            Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+            DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
             DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
-            String owaId = settings == null ? null : settings.Signature_OWA_Id__c;
+            String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+                ? activeBrand.OWA_Id__c
+                : (settings == null ? null : settings.Signature_OWA_Id__c);
             if (String.isBlank(owaId)) {
                 // Guest/async sends require an OWA; surface the reason instead of failing silently.
                 updateEmailStatus(
@@ -447,7 +513,9 @@ public without sharing class DocGenSignatureEmailService {
                 }
                 DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
                     DocGenEmailTemplateService.TYPE_COMPLETION,
-                    new Map<String, String>{ 'SignerName' => s.Signer_Name__c, 'DocumentTitle' => docTitle }
+                    new Map<String, String>{ 'SignerName' => s.Signer_Name__c, 'DocumentTitle' => docTitle },
+                    null,
+                    brandId
                 );
                 Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
                 email.setToAddresses(new List<String>{ s.Signer_Email__c });

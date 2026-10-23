@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Logo_Url_Extended__c</fullName>
+    <description
+    >Long-form logo URL override. Supersedes Logo_Url__c (a platform Url field, hard-capped at 255 characters) so Salesforce Files public-delivery URLs and other long links fit. Mirrors DocGen_Email_Template__c.Logo_Url_Extended__c.</description>
+    <externalId>false</externalId>
+    <label>Logo URL (Long)</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

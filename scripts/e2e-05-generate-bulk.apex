@@ -68,6 +68,7 @@ try {
         false,
         1,
         false,
+        null,
         null
     );
     if (jobId != null) {
@@ -80,6 +81,29 @@ try {
 } catch (Exception e) {
     fail++;
     System.debug('SUBMIT JOB: FAIL — ' + e.getMessage());
+}
+
+// ===== Individual output is linked to the parent bulk job =====
+// Invoke the batch lifecycle directly so this E2E assertion can inspect the
+// generated ContentDocumentLink in the same transaction.
+try {
+    DocGenBatch linkBatch = new DocGenBatch(jobId);
+    linkBatch.start(null);
+    Account linkAccount = [SELECT Id FROM Account WHERE Id = :acctId LIMIT 1];
+    linkBatch.execute(null, new List<SObject>{ linkAccount });
+    linkBatch.finish(null);
+
+    List<Map<String, String>> jobFiles = DocGenBulkController.getJobGeneratedPdfs(jobId);
+    if (jobFiles != null && !jobFiles.isEmpty()) {
+        pass++;
+        System.debug('INDIVIDUAL FILE LINKED TO JOB: PASS — files: ' + jobFiles.size());
+    } else {
+        fail++;
+        System.debug('INDIVIDUAL FILE LINKED TO JOB: FAIL — no generated files on Job History');
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('INDIVIDUAL FILE LINKED TO JOB: FAIL — ' + e.getMessage());
 }
 
 // ===== Sort Order — parent-level ORDER BY on the bulk query =====
@@ -199,7 +223,7 @@ try {
 
 // ===== Analyze Job =====
 try {
-    DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tmplId, 1, 1, false);
+    DocGenBulkController.JobAnalysis analysis = DocGenBulkController.analyzeJob(tmplId, 1, 1, false, false);
     if (analysis != null && analysis.canProceed != null) {
         pass++;
         System.debug('ANALYZE JOB: PASS — canProceed: ' + analysis.canProceed + ', summary: ' + analysis.summary);
@@ -210,6 +234,83 @@ try {
 } catch (Exception e) {
     fail++;
     System.debug('ANALYZE JOB: FAIL — ' + e.getMessage());
+}
+
+// ===== Duplex padding (#382) — Combined-PDF only, forced off otherwise =====
+try {
+    // Combined PDF + duplex on: the flag is persisted on the job.
+    Id dpxJob = DocGenBulkController.submitJob(
+        tmplId,
+        'Name = \'E2E Test Corp\'',
+        'E2E Duplex On',
+        true,
+        1,
+        true,
+        null,
+        true
+    );
+    DocGen_Job__c dpxRec = [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :dpxJob];
+    if (dpxRec.Duplex_Padding__c == true) {
+        pass++;
+        System.debug('DUPLEX FLAG PERSISTED: PASS');
+    } else {
+        fail++;
+        System.debug('DUPLEX FLAG PERSISTED: FAIL — flag not set on Combined-PDF job');
+    }
+    delete [SELECT Id FROM DocGen_Job__c WHERE Id = :dpxJob];
+
+    // Individual Files + duplex on: submitJobInternal must force it off (no merge to pad).
+    Id noMergeJob = DocGenBulkController.submitJob(
+        tmplId,
+        'Name = \'E2E Test Corp\'',
+        'E2E Duplex Forced Off',
+        false,
+        1,
+        false,
+        null,
+        true
+    );
+    DocGen_Job__c noMergeRec = [SELECT Duplex_Padding__c FROM DocGen_Job__c WHERE Id = :noMergeJob];
+    if (noMergeRec.Duplex_Padding__c != true) {
+        pass++;
+        System.debug('DUPLEX FORCED OFF FOR INDIVIDUAL FILES: PASS');
+    } else {
+        fail++;
+        System.debug('DUPLEX FORCED OFF FOR INDIVIDUAL FILES: FAIL — flag survived on a non-merge job');
+    }
+    delete [SELECT Id FROM DocGen_Job__c WHERE Id = :noMergeJob];
+
+    // analyzeJob: the duplex packet ceiling is a hard block above ~400 documents,
+    // and it must fire regardless of whether the template has a Test Record.
+    DocGenBulkController.JobAnalysis dpxSmall = DocGenBulkController.analyzeJob(tmplId, 10, 1, true, true);
+    DocGenBulkController.JobAnalysis dpxHuge = DocGenBulkController.analyzeJob(tmplId, 5000, 1, true, true);
+    Boolean smallOk = dpxSmall != null && dpxSmall.canProceed == true;
+    Boolean hugeBlocked = dpxHuge != null && dpxHuge.canProceed == false;
+    Boolean hasDuplexItem = false;
+    if (dpxHuge != null && dpxHuge.items != null) {
+        for (DocGenBulkController.AnalysisItem it : dpxHuge.items) {
+            if (it.label == 'Duplex Packet' && it.status == 'error') {
+                hasDuplexItem = true;
+            }
+        }
+    }
+    if (smallOk && hugeBlocked && hasDuplexItem) {
+        pass++;
+        System.debug('DUPLEX CEILING: PASS');
+    } else {
+        fail++;
+        System.debug(
+            'DUPLEX CEILING: FAIL — small.canProceed=' +
+                (dpxSmall == null ? 'null' : String.valueOf(dpxSmall.canProceed)) +
+                ' huge.canProceed=' +
+                (dpxHuge == null ? 'null' : String.valueOf(dpxHuge.canProceed)) +
+                ' duplexErrorItem=' +
+                hasDuplexItem
+        );
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('DUPLEX PADDING: FAIL — ' + e.getMessage());
 }
 
 // ===== Save Query =====

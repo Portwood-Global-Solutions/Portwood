@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Brand_Color__c</fullName>
+    <description
+    >Hex color code (#RRGGBB) for this brand's signature emails. Blank falls back to the org default (DocGen_Settings__c.Signature_Email_Brand_Color__c).</description>
+    <externalId>false</externalId>
+    <label>Brand Color</label>
+    <length>7</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

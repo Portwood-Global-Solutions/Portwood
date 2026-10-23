@@ -814,6 +814,59 @@ private class DocGenHtmlTemplateTest {
         System.assertEquals(richText, result, 'HTML without images should pass through verbatim');
     }
 
+    // #399 — a rich-text value whose only structural element is a <table> (or a
+    // heading) used to miss the rich-text gate and get XML-escaped, so the raw
+    // markup printed in the PDF. It must now pass through to the renderer.
+    @IsTest
+    static void bareTableRichTextRendersForHtmlTemplates() {
+        Test.startTest();
+        String result = DocGenService.processXmlForTest(
+            '<div>{F}</div>',
+            new Map<String, Object>{ 'F' => '<table><tr><td>Region</td><td>Sales</td></tr></table>' },
+            'HTML'
+        );
+        Test.stopTest();
+        System.assert(result.contains('<td>Region</td>'), 'table cells pass through: ' + result);
+        System.assert(!result.contains('&lt;table'), 'table markup must not be escaped: ' + result);
+    }
+
+    @IsTest
+    static void headingOnlyRichTextRendersForHtmlTemplates() {
+        Test.startTest();
+        String result = DocGenService.processXmlForTest(
+            '<div>{F}</div>',
+            new Map<String, Object>{ 'F' => '<h2>Quarterly Report</h2>' },
+            'HTML'
+        );
+        Test.stopTest();
+        System.assert(result.contains('<h2>Quarterly Report</h2>'), 'heading passes through: ' + result);
+    }
+
+    @IsTest
+    static void plainTextWithAngleBracketsStaysEscapedForHtmlTemplates() {
+        Test.startTest();
+        String result = DocGenService.processXmlForTest(
+            '<div>{F}</div>',
+            new Map<String, Object>{ 'F' => 'true if a < b and c > d' },
+            'HTML'
+        );
+        Test.stopTest();
+        System.assert(result.contains('a &lt; b'), 'angle brackets in prose stay escaped: ' + result);
+        System.assert(!result.contains('<b '), 'must not be treated as a tag: ' + result);
+    }
+
+    @IsTest
+    static void scriptTagInFieldValueStaysEscapedForHtmlTemplates() {
+        Test.startTest();
+        String result = DocGenService.processXmlForTest(
+            '<div>{F}</div>',
+            new Map<String, Object>{ 'F' => '<script>alert(1)</script>' },
+            'HTML'
+        );
+        Test.stopTest();
+        System.assert(result.contains('&lt;script&gt;'), 'script tag must remain escaped: ' + result);
+    }
+
     // Plain (non-rich-text) multi-line values previously routed through
     // convertMultilineToXml for HTML templates and emitted DOCX <w:br/> markers
     // that Flying Saucer couldn't render. Verify newlines now become <br/>.

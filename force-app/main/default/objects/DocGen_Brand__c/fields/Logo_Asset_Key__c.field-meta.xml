@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Logo_Asset_Key__c</fullName>
+    <description
+    >Shared Asset key (DocGen_Asset__c.Asset_Key__c) supplying this brand's logo. When set, the send path resolves the asset's LATEST file to its public delivery link — replacing the asset's image updates the logo everywhere this brand is used, with no edit here. Takes precedence over the Logo URL fields.</description>
+    <externalId>false</externalId>
+    <label>Logo Asset Key</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

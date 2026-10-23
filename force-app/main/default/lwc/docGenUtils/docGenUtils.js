@@ -531,3 +531,108 @@ export function rasterizeSvgToPng(svgString, width, height, scale = 4) {
         img.src = url;
     });
 }
+
+// ---------------------------------------------------------------------------
+// Preview hardening
+// ---------------------------------------------------------------------------
+
+// Elements that can run code, load another document, or collect input. A preview never
+// needs any of them, so they are removed outright rather than neutralised.
+const PREVIEW_DROP_TAGS =
+    'script,iframe,frame,frameset,object,embed,applet,base,meta,link,form,input,button,textarea,select,' +
+    'option,noscript,template,svg,math,portal,dialog';
+
+// Attributes whose value is a URL. Anything that is not http(s), mailto, tel, a fragment or a
+// relative path is dropped; data: is kept only for raster images.
+const PREVIEW_URL_ATTRS = [
+    'href',
+    'src',
+    'xlink:href',
+    'poster',
+    'data',
+    'cite',
+    'action',
+    'formaction',
+    'background',
+    'ping',
+    'longdesc'
+];
+const PREVIEW_IMAGE_URL_ATTRS = ['src', 'poster', 'background'];
+const PREVIEW_BAD_CSS = /expression\s*\(|javascript:|vbscript:|behavior\s*:|-moz-binding|@import/i;
+
+function isSafePreviewUrl(value, attrName) {
+    // Browsers ignore whitespace and control characters inside a scheme ("java\tscript:"), so
+    // compare against the value with all of them removed.
+    // eslint-disable-next-line no-control-regex
+    const v = String(value || '')
+        .replace(/[\u0000- \u007f-\u009f]+/g, '')
+        .toLowerCase();
+    if (!v) {
+        return true;
+    }
+    if (v.startsWith('data:')) {
+        return PREVIEW_IMAGE_URL_ATTRS.includes(attrName) && /^data:image\/(?:png|jpe?g|gif|webp|bmp)[;,]/.test(v);
+    }
+    const scheme = v.match(/^([a-z][a-z0-9+.-]*):/);
+    if (scheme) {
+        return ['http', 'https', 'mailto', 'tel'].includes(scheme[1]);
+    }
+    return true;
+}
+
+function cleanPreviewCss(css) {
+    return String(css || '')
+        .replace(/@import\b[^;]*;?/gi, '')
+        .replace(/expression\s*\(/gi, '(')
+        .replace(/(?:javascript|vbscript):/gi, '')
+        .replace(/behavior\s*:[^;}]*/gi, '')
+        .replace(/-moz-binding\s*:[^;}]*/gi, '');
+}
+
+/**
+ * Harden merged-document HTML before it is written into a lwc:dom="manual" host.
+ *
+ * The preview HTML contains record data, and the merge does not HTML-escape it, so a field
+ * holding markup would otherwise become live markup in the page. This removes scripts, frames,
+ * forms, SVG and friends, every on* handler (quoted or not), srcdoc, unsafe URLs and dangerous
+ * CSS. It parses into an inert <template>, so nothing runs while it works. Fails closed: with
+ * no DOM available it returns an empty string.
+ *
+ * It does not scope CSS: pair it with scopeHtmlForInlinePreview (c/docGenAuthoringKit).
+ */
+export function sanitizePreviewHtml(html) {
+    if (!html) {
+        return '';
+    }
+    if (typeof document === 'undefined') {
+        return '';
+    }
+    const tpl = document.createElement('template');
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- inert <template> parse, the first step of sanitising; nothing here executes
+    tpl.innerHTML = String(html);
+    const root = tpl.content;
+
+    for (const el of Array.from(root.querySelectorAll(PREVIEW_DROP_TAGS))) {
+        el.remove();
+    }
+    for (const el of Array.from(root.querySelectorAll('*'))) {
+        for (const attr of Array.from(el.attributes)) {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on') || name === 'srcdoc' || name === 'srcset' || name === 'ping') {
+                el.removeAttribute(attr.name);
+            } else if (PREVIEW_URL_ATTRS.includes(name) && !isSafePreviewUrl(attr.value, name)) {
+                el.removeAttribute(attr.name);
+            } else if (name === 'style' && PREVIEW_BAD_CSS.test(attr.value)) {
+                el.removeAttribute(attr.name);
+            }
+        }
+    }
+    for (const style of Array.from(root.querySelectorAll('style'))) {
+        style.textContent = cleanPreviewCss(style.textContent);
+    }
+
+    const box = document.createElement('div');
+    box.appendChild(root);
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- serialising the already-sanitised fragment
+    return box.innerHTML;
+}

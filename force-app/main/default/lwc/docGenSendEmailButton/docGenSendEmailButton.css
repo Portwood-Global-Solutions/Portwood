@@ -1,0 +1,193 @@
+.send-email-shell {
+    position: relative;
+    min-height: 0;
+    isolation: isolate;
+    color: #172033;
+    background: linear-gradient(145deg, #f8fbff 0%, #ffffff 42%, #f7fafc 100%);
+    border-radius: 0.75rem;
+}
+
+.flow-intro {
+    margin: -0.25rem 0 1rem;
+    padding: 0.15rem 0 0.85rem;
+    border-bottom: 1px solid #dfe7f2;
+}
+
+.flow-eyebrow {
+    color: #526b8b;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.75rem;
+}
+
+.flow-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.stepper-step {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #8794a8;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.stepper-step:hover {
+    color: #2d5ee3;
+}
+
+.stepper-step:focus-visible {
+    outline: 2px solid #155eef;
+    outline-offset: 3px;
+    border-radius: 0.35rem;
+}
+
+.stepper-step span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 1px solid #c9d4e3;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.stepper-step-active {
+    color: #155eef;
+}
+
+.stepper-step-active span {
+    color: #fff;
+    background: #155eef;
+    border-color: #155eef;
+}
+
+.stepper-step-complete {
+    color: #27735d;
+}
+
+.stepper-step-complete span {
+    color: #fff;
+    background: #27735d;
+    border-color: #27735d;
+}
+
+.stepper-line {
+    height: 1px;
+    flex: 1;
+    min-width: 1.25rem;
+    background: #d7e0ec;
+}
+
+.stepper-line-complete {
+    background: #27735d;
+}
+
+.flow-card {
+    padding: 1rem 1.1rem;
+    border: 1px solid #dce5f0;
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 8px 24px rgba(24, 50, 80, 0.06);
+}
+
+.section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+}
+
+.section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    color: #155eef;
+    background: #e9f1ff;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.section-heading h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.section-heading p {
+    margin: 0.15rem 0 0;
+    color: #69788e;
+    font-size: 0.78rem;
+}
+.subsection-heading {
+    margin: 1.1rem 0 0.55rem;
+    color: #26364d;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+.manual-recipient-block {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #edf1f6;
+}
+.compose-card lightning-input-rich-text {
+    display: block;
+    margin-top: 0.25rem;
+}
+
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    min-height: 9rem;
+    border-radius: 0.75rem;
+    background: rgba(248, 251, 255, 0.84);
+    backdrop-filter: blur(2px);
+}
+
+.loading-message {
+    margin-top: 3.25rem;
+    color: #526b8b;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.preview-frame {
+    max-height: 28rem;
+    min-height: 18rem;
+    overflow: auto;
+    border: 1px solid #cfdbea;
+    border-radius: 0.5rem;
+    background: #eef3f8;
+    padding: 1.25rem;
+}
+
+/* The preview page (.dg-pv, added by scopeHtmlForInlinePreview) is the paper. This host only
+   contains it: the transform and paint containment make any position: fixed / absolute content
+   in the merged HTML stay inside the preview instead of covering the page behind the modal. */
+.preview-html {
+    position: relative;
+    overflow: auto;
+    transform: translateZ(0);
+    contain: content;
+}

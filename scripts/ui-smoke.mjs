@@ -23,6 +23,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const argVal = (name, fallback = null) => {
@@ -40,8 +43,12 @@ const record = (name, ok, detail = '') => {
 };
 
 function frontDoorUrl(org) {
+    // shell: true — on Windows, execFileSync spawns 'sf' directly and never
+    // consults PATHEXT, so it can't find the sf.cmd/sf.ps1 shim npm installs;
+    // only a real shell resolves it. Confirmed needed on this machine.
     const raw = execFileSync('sf', ['org', 'open', '--target-org', org, '--url-only', '--json'], {
-        encoding: 'utf8'
+        encoding: 'utf8',
+        shell: true
     });
     return JSON.parse(raw).result.url;
 }
@@ -67,8 +74,9 @@ function tabPath(org) {
     //     ask which packages are installed.
     const run = (argv) => {
         try {
-            return JSON.parse(execFileSync('sf', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))
-                .result;
+            return JSON.parse(
+                execFileSync('sf', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: true })
+            ).result;
         } catch {
             return null;
         }
@@ -2561,6 +2569,127 @@ async function main() {
                 }
             } catch (e) {
                 record('"/" reaches the canvas instead of global search', false, e.message);
+            }
+        }
+
+        // --- 4e. #322 — a header/footer insert that never fires 'input' must still
+        // survive Save. _syncBandToRecord (which unpillifies a band back into
+        // editTemplateHeaderHtml/FooterHtml) used to be wired ONLY to the band's
+        // native 'input' listener. A chip click inserts via Range.insertNode, which
+        // the DOM spec does not fire 'input' for, so the tag was visibly added to
+        // the canvas, "Save as New Version" reported success, and the persisted
+        // Header_Html__c silently kept its PRE-insert value — proven against a real
+        // saved record with scripts/qa's SOQL, not DOM state, which is what let it
+        // ship unnoticed. This check is the regression guard for that fix.
+        {
+            const soqlHeader = () => {
+                try {
+                    // shell: true for the sf.cmd/sf.ps1 resolution reason noted on
+                    // frontDoorUrl above. With shell: true, Node concatenates args
+                    // rather than quoting each one, so the query — which has spaces —
+                    // is wrapped in its own quotes here rather than relying on the
+                    // array boundary.
+                    const q =
+                        "SELECT Id, Header_Html__c FROM DocGen_Template__c WHERE Name = 'Verify — Designer (pill-dense)'";
+                    const raw = execFileSync('sf', ['data', 'query', '--target-org', ORG, '-q', `"${q}"`, '--json'], {
+                        encoding: 'utf8',
+                        shell: true
+                    });
+                    const rec = (JSON.parse(raw).result || {}).records || [];
+                    return rec[0] || null;
+                } catch (e) {
+                    return null;
+                }
+            };
+
+            let before = null;
+            try {
+                before = soqlHeader();
+                if (!before) {
+                    record(
+                        'header persistence: chip insert (no keystroke) survives Save',
+                        false,
+                        'could not read the fixture record via SOQL'
+                    );
+                } else {
+                    const focusHeader = inPage(`
+            const b = __dgFind('.dg-chrome-band_header');
+            if (!b) return false;
+            b.focus();
+            return true;`);
+                    const clickFirstChipIn = inPage(`
+            const chip = __dgFind('.dg-tag-chip[data-snippet]');
+            if (!chip) return null;
+            const snip = chip.getAttribute('data-snippet');
+            chip.click();
+            return snip;`);
+
+                    const focused = await page.evaluate(focusHeader);
+                    await ensureTagRail(page, inPage);
+                    const snippet = focused ? await page.evaluate(clickFirstChipIn) : null;
+
+                    if (!snippet) {
+                        record(
+                            'header persistence: chip insert (no keystroke) survives Save',
+                            false,
+                            'could not focus the header band or find a chip to insert'
+                        );
+                    } else {
+                        await page.waitForTimeout(600);
+                        const saveBtn = page.locator('button:has-text("Save as New Version")').first();
+                        if (!(await saveBtn.count())) {
+                            record(
+                                'header persistence: chip insert (no keystroke) survives Save',
+                                false,
+                                'no "Save as New Version" button found'
+                            );
+                        } else {
+                            await saveBtn.click();
+                            await page.waitForTimeout(4000);
+                            const after = soqlHeader();
+                            const persisted = (after && after.Header_Html__c) || '';
+                            record(
+                                'header persistence: chip insert (no keystroke) survives Save',
+                                persisted.indexOf(snippet) !== -1,
+                                `snippet=${snippet}; persisted=${persisted.slice(0, 160)}`
+                            );
+                            record(
+                                'header persistence: no editor pill markup leaks into saved source',
+                                persisted.indexOf('data-dg-tag') === -1,
+                                persisted.slice(0, 160)
+                            );
+                        }
+                    }
+                }
+            } catch (e) {
+                record('header persistence: chip insert (no keystroke) survives Save', false, e.message);
+            } finally {
+                // Restore the fixture so repeated runs of this suite stay idempotent —
+                // this is the one check here that mutates a real saved record. Goes
+                // through anonymous Apex rather than `sf data record update --values`:
+                // the captured HTML routinely carries its own double quotes (style="…"),
+                // and --values plus shell: true has no reliable way to nest those inside
+                // the outer quoting a Windows shell needs for a value containing spaces.
+                // An Apex string literal only has to escape \ and ', which Apex itself
+                // then round-trips exactly — no shell involved at all.
+                if (before && typeof before.Header_Html__c === 'string') {
+                    try {
+                        const escaped = before.Header_Html__c.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        const dir = mkdtempSync(join(tmpdir(), 'dgqa-'));
+                        const file = join(dir, 'restore.apex');
+                        writeFileSync(
+                            file,
+                            `DocGen_Template__c t = [SELECT Id FROM DocGen_Template__c WHERE Id = '${before.Id}' LIMIT 1];\nt.Header_Html__c = '${escaped}';\nupdate t;\n`,
+                            'utf8'
+                        );
+                        execFileSync('sf', ['apex', 'run', '--target-org', ORG, '-f', file], {
+                            encoding: 'utf8',
+                            shell: true
+                        });
+                    } catch (e) {
+                        console.log('  [warning] could not restore the fixture header — ' + e.message);
+                    }
+                }
             }
         }
 
