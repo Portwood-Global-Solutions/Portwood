@@ -10,7 +10,12 @@ import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
 import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import { loadFontFace } from 'c/docGenFontLoader';
-import { downloadBase64 as downloadBase64Util, parseSOQLFields, stripOuterSelectFrom } from 'c/docGenUtils';
+import {
+    downloadBase64 as downloadBase64Util,
+    downloadBlob,
+    parseSOQLFields,
+    stripOuterSelectFrom
+} from 'c/docGenUtils';
 // HTML-first authoring: starter designs, AI prompt builder, query-shape extractor
 import {
     STARTERS,
@@ -5224,15 +5229,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             this.showToast('Exporting', 'Preparing ' + row.Name + '...', 'info');
             const jsonStr = await exportTemplate({ templateId: row.Id });
-            // application/json is not on the LWS createObjectURL allowlist, so a
-            // Blob URL is refused outright in an LWS-enabled org. A data: URI is.
-            const a = document.createElement('a');
-            a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonStr);
-            a.download = (row.Name || 'template').replace(/[^a-zA-Z0-9_-]/g, '_') + '.docgen.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const fileName = (row.Name || 'template').replace(/[^a-zA-Z0-9_-]/g, '_') + '.docgen.json';
+            downloadBlob(new Blob([jsonStr], { type: 'text/plain' }), fileName);
             this.showToast('Exported', row.Name + ' exported successfully', 'success');
         } catch (error) {
             this.showToast('Export Error', error.body ? error.body.message : error.message, 'error');

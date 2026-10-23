@@ -10,6 +10,7 @@ import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
 import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
+import { downloadBlob } from 'c/docGenUtils';
 import { loadScript } from 'lightning/platformResourceLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
 import { renderChartToCanvas, SAMPLE_CHART_BUCKETS, prepareChartsClientSide } from 'c/docGenChartJs';
@@ -750,26 +751,8 @@ export default class DocGenCanvas extends LightningElement {
     handleExportHtml() {
         try {
             const html = serialize(this.doc, this.geo);
-            // data: URI rather than URL.createObjectURL(new Blob(...)).
-            //
-            // Lightning Web Security refuses the Blob route outright —
-            //   "Cannot 'createObjectURL' using an unsecure [object Blob]"
-            // — and it refuses it whether the Blob is built from a string or from
-            // a typed array, so this is not about the Blob's contents. A data URI
-            // never touches createObjectURL, so it works with LWS on or off.
-            //
-            // The size ceiling that normally rules data URIs out does not bite
-            // here: a canvas body is markup for one page design, a few KB, not an
-            // embedded document. encodeURIComponent also percent-encodes as UTF-8,
-            // so an em dash or a non-ASCII field label survives intact.
-            const href = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-            const a = document.createElement('a');
-            a.href = href;
-            a.download = this.exportFileName;
-            // Anchor must be in the document for the click to register in Firefox.
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Download as plain text so LWS does not sanitize the exported markup.
+            downloadBlob(new Blob([html], { type: 'text/plain' }), this.exportFileName);
             this.statusText = 'Exported ' + this.exportFileName;
         } catch (e) {
             this.statusText = 'Export failed: ' + (e && e.message ? e.message : 'unknown error');

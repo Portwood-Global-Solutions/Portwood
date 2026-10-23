@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
-
 - **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
   Clearing a box in the rich-text editor no longer restores its original imported
   content or the placeholder word `Text` when saving and generating a document.
@@ -56,6 +54,14 @@
   Configuration / legacy designer save and then inherited by later template versions
   until the author changes it. If Page Size is left blank, the app saves `Letter`
   explicitly as the fallback without restoring `Letter` as the field metadata default.
+- **Template export and LWS downloads (#454).** Template export now downloads the
+  `.docgen.json` bundle and shows the success toast without the misleading `url is not
+defined` error. Template JSON export, Canvas HTML export, and shared Office-file
+  downloads use Blob URLs instead of `data:` download URLs that Lightning Web Security
+  can block. A permitted MIME fallback preserves the file bytes, filenames, extensions,
+  and Unicode content. Temporary download anchors are removed and Blob URLs are released
+  after the browser has time to start the download. Native Salesforce file preview
+  behavior is unchanged.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
