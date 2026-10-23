@@ -11,8 +11,13 @@ private class DocGenBrandResolverTest {
     }
 
     private static DocGen_Signature_Request__c newRequest(Id templateId, Id accountId) {
+        return newRequest(templateId, accountId, null);
+    }
+
+    private static DocGen_Signature_Request__c newRequest(Id templateId, Id accountId, Id brandId) {
         DocGen_Signature_Request__c req = new DocGen_Signature_Request__c(
             Template__c = templateId,
+            Brand__c = brandId,
             Related_Record_Id__c = accountId,
             Status__c = 'Sent',
             Secure_Token__c = 'a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1'
@@ -60,6 +65,44 @@ private class DocGenBrandResolverTest {
 
         DocGenBrandResolver.clearCache();
         System.assertEquals(brand.Id, DocGenBrandResolver.resolveBrandForRequest(req.Id));
+    }
+
+    // ---- #482: a request's own Brand__c (customer-uploaded-PDF signing has no
+    //      Template__c to derive a brand from at all) must resolve on its own,
+    //      and must win over a template-derived brand when both are present.
+    @IsTest
+    static void resolveBrandForRequest_directBrandNoTemplate_returnsBrandId() {
+        Account acc = new Account(Name = 'Brand Resolver Test Acct');
+        insert acc;
+        DocGen_Brand__c brand = new DocGen_Brand__c(Name = 'Uploaded PDF Brand', Is_Active__c = true);
+        insert brand;
+        DocGen_Signature_Request__c req = newRequest(null, acc.Id, brand.Id);
+
+        DocGenBrandResolver.clearCache();
+        System.assertEquals(
+            brand.Id,
+            DocGenBrandResolver.resolveBrandForRequest(req.Id),
+            'a directly-selected Brand__c must resolve even with no Template__c'
+        );
+    }
+
+    @IsTest
+    static void resolveBrandForRequest_directBrandOverridesTemplateBrand_prefersDirect() {
+        Account acc = new Account(Name = 'Brand Resolver Test Acct');
+        insert acc;
+        DocGen_Brand__c templateBrand = new DocGen_Brand__c(Name = 'Template Brand', Is_Active__c = true);
+        insert templateBrand;
+        DocGen_Brand__c directBrand = new DocGen_Brand__c(Name = 'Directly Selected Brand', Is_Active__c = true);
+        insert directBrand;
+        DocGen_Template__c tmpl = newTemplate('Overridden Template', templateBrand.Id);
+        DocGen_Signature_Request__c req = newRequest(tmpl.Id, acc.Id, directBrand.Id);
+
+        DocGenBrandResolver.clearCache();
+        System.assertEquals(
+            directBrand.Id,
+            DocGenBrandResolver.resolveBrandForRequest(req.Id),
+            'a directly-selected Brand__c must win over the template-derived brand'
+        );
     }
 
     // ---- getBrand: null safety, active gate, field values ----
