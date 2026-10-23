@@ -618,7 +618,7 @@
                                             options={pageSizeOptions}
                                             onchange={handleNewPageSizeChange}
                                             class="slds-var-m-top_medium"
-                                            field-level-help="Letter (US default), Legal, or A4 (international)."
+                                            field-level-help="Optional PDF page size. If left blank, Letter is used when the template is saved."
                                         ></lightning-combobox>
                                         <lightning-combobox
                                             label="Page Margins"
@@ -2320,7 +2320,7 @@
                                     ></c-doc-gen-canvas>
                                 </template>
                                 <template if:true={showFlowDesigner}>
-                                    <div class="dg-format-bar" role="toolbar" aria-label="Text formatting">
+                                    <div class={formatBarClass} role="toolbar" aria-label="Text formatting">
                                         <button
                                             class={boldBtnClass}
                                             data-cmd="bold"
@@ -2551,10 +2551,11 @@
                                                 data-menu="font"
                                                 onmousedown={handleFmtMouseDown}
                                                 onclick={handleFmtMenuToggle}
-                                                title="Font — the PDF engine ships exactly these four"
+                                                title="Font — choose a built-in or approved Asset font"
                                                 aria-haspopup="true"
                                             >
-                                                Aa<span class="dg-fmt-caret">&#9662;</span>
+                                                <span class="dg-fmt-font-label">{selectedFontLabel}</span>
+                                                <span class="dg-fmt-caret">&#9662;</span>
                                             </button>
                                             <template if:true={isFontMenuOpen}>
                                                 <div class="dg-fmt-menu dg-fmt-menu_list" role="menu">
@@ -2562,7 +2563,7 @@
                                                     <template for:each={fontChoices} for:item="font">
                                                         <button
                                                             key={font.key}
-                                                            class="dg-fmt-menu-item"
+                                                            class={font.itemClass}
                                                             style={font.style}
                                                             data-cmd="fontName"
                                                             data-value={font.value}
@@ -2570,7 +2571,10 @@
                                                             onclick={handleFormatAction}
                                                             title={font.title}
                                                         >
-                                                            {font.label}
+                                                            <span class="dg-fmt-menu-check" aria-hidden="true"
+                                                                >{font.check}</span
+                                                            >
+                                                            <span>{font.label}</span>
                                                         </button>
                                                     </template>
                                                 </div>
@@ -3717,7 +3721,7 @@
                                                 options={pageSizeOptions}
                                                 onchange={handleEditPageSizeChange}
                                                 class="slds-var-m-top_medium"
-                                                field-level-help="Letter (US default), Legal, or A4 (international)."
+                                                field-level-help="Optional PDF page size. If left blank, Letter is used when the template is saved."
                                             ></lightning-combobox>
                                             <lightning-combobox
                                                 label="Page Margins"
@@ -5325,14 +5329,12 @@
                                         <template if:true={hasLintFindings}>
                                             <div class="slds-box slds-var-m-top_medium">
                                                 <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">
-                                                    Template warnings — this will still render
+                                                    {lintReportHeading}
                                                 </h3>
                                                 <p
                                                     class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
                                                 >
-                                                    Nothing was blocked and your file was saved as-is. The PDF engine is
-                                                    CSS 2.1, so at render time it handles the items below differently
-                                                    than a browser would — here's what changes.
+                                                    {lintReportIntro}
                                                 </p>
                                                 <template for:each={lintFindings} for:item="f">
                                                     <div key={f.key} class="slds-var-m-bottom_x-small">
@@ -5340,7 +5342,7 @@
                                                         </lightning-badge>
                                                         <strong class="slds-var-m-left_x-small">{f.rule}</strong>
                                                         <span class="slds-text-body_small slds-text-color_weak">
-                                                            &times;{f.occurrences}</span
+                                                            ({f.occurrenceLabel})</span
                                                         >
                                                         <p class="slds-text-body_small slds-var-m-left_medium">
                                                             {f.detail}

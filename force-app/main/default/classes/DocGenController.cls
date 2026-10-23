@@ -2634,6 +2634,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Base_Object_API__c',
                 'Category__c',
                 'Output_Format__c',
+                'Page_Orientation__c',
+                'Page_Size__c',
+                'Page_Margins__c',
+                'Custom_Margins__c',
                 'Is_Active__c',
                 'Is_Default__c',
                 'API_Name__c'
@@ -2649,6 +2653,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Base_Object_API__c,
                 Category__c,
                 Output_Format__c,
+                Page_Orientation__c,
+                Page_Size__c,
+                Page_Margins__c,
+                Custom_Margins__c,
                 Is_Active__c,
                 Is_Default__c,
                 API_Name__c,
@@ -2909,20 +2917,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // would erase a good query on the next activation. Genuine query edits
             // always arrive non-blank. (Community report: DOCX->HTML lost the query.)
             String incomingQuery = (String) fields.get('Query_Config__c');
-            String existingQuery;
+            DocGen_Template__c existingTemplate;
             if (templateId != null) {
                 /* code-analyzer-suppress ApexFlsViolation */
                 List<DocGen_Template__c> qCur = [
-                    SELECT Query_Config__c
+                    SELECT Query_Config__c, Page_Orientation__c, Page_Size__c, Page_Margins__c, Custom_Margins__c
                     FROM DocGen_Template__c
                     WHERE Id = :templateId
                     WITH SYSTEM_MODE
                     LIMIT 1
                 ];
                 if (!qCur.isEmpty()) {
-                    existingQuery = qCur[0].Query_Config__c;
+                    existingTemplate = qCur[0];
                 }
             }
+            String existingQuery = existingTemplate == null ? null : existingTemplate.Query_Config__c;
             String effectiveQuery = String.isNotBlank(incomingQuery) ? incomingQuery : existingQuery;
             template.Query_Config__c = effectiveQuery;
             // Signer form-field config (dedicated carrier, separate from Query_Config__c
@@ -3134,12 +3143,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                         'Watermark_Image_CV_Id__c',
                         'Template__c',
                         'Is_Active__c',
-                        'Type__c'
+                        'Type__c',
+                        'Page_Orientation__c',
+                        'Page_Size__c',
+                        'Page_Margins__c',
+                        'Custom_Margins__c'
                     }
                 );
                 /* code-analyzer-suppress ApexFlsViolation */
                 List<DocGen_Template_Version__c> activeVersions = [
-                    SELECT Id, Content_Version_Id__c, Watermark_Image_CV_Id__c, Type__c
+                    SELECT
+                        Id,
+                        Content_Version_Id__c,
+                        Watermark_Image_CV_Id__c,
+                        Type__c,
+                        Page_Orientation__c,
+                        Page_Size__c,
+                        Page_Margins__c,
+                        Custom_Margins__c
                     FROM DocGen_Template_Version__c
                     WHERE Template__c = :templateId AND Is_Active__c = TRUE
                     WITH SYSTEM_MODE
@@ -3149,10 +3170,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 String priorContentVersionId = null;
                 String priorWatermarkCvId = null;
                 String priorVersionType = null;
+                String priorPageOrientation = null;
+                String priorPageSize = null;
+                String priorPageMargins = null;
+                String priorCustomMargins = null;
                 for (DocGen_Template_Version__c av : activeVersions) {
                     if (priorVersionId == null) {
                         priorVersionId = av.Id;
                         priorVersionType = av.Type__c;
+                        priorPageOrientation = av.Page_Orientation__c;
+                        priorPageSize = av.Page_Size__c;
+                        priorPageMargins = av.Page_Margins__c;
+                        priorCustomMargins = av.Custom_Margins__c;
                     }
                     if (priorContentVersionId == null && String.isNotBlank(av.Content_Version_Id__c)) {
                         priorContentVersionId = av.Content_Version_Id__c;
@@ -3209,10 +3238,26 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 // 1.68 — snapshot the page orientation, size, and margins so each
                 // version remembers the PDF page setup it was rendered against,
                 // even if the template-level fields change later.
-                version.Page_Orientation__c = (String) fields.get('Page_Orientation__c');
-                version.Page_Size__c = (String) fields.get('Page_Size__c');
-                version.Page_Margins__c = (String) fields.get('Page_Margins__c');
-                version.Custom_Margins__c = (String) fields.get('Custom_Margins__c');
+                version.Page_Orientation__c = fields.containsKey('Page_Orientation__c')
+                    ? (String) fields.get('Page_Orientation__c')
+                    : (String.isNotBlank(priorPageOrientation)
+                          ? priorPageOrientation
+                          : (existingTemplate == null ? null : existingTemplate.Page_Orientation__c));
+                version.Page_Size__c = fields.containsKey('Page_Size__c')
+                    ? (String) fields.get('Page_Size__c')
+                    : (String.isNotBlank(priorPageSize)
+                          ? priorPageSize
+                          : (existingTemplate == null ? null : existingTemplate.Page_Size__c));
+                version.Page_Margins__c = fields.containsKey('Page_Margins__c')
+                    ? (String) fields.get('Page_Margins__c')
+                    : (String.isNotBlank(priorPageMargins)
+                          ? priorPageMargins
+                          : (existingTemplate == null ? null : existingTemplate.Page_Margins__c));
+                version.Custom_Margins__c = fields.containsKey('Custom_Margins__c')
+                    ? (String) fields.get('Custom_Margins__c')
+                    : (String.isNotBlank(priorCustomMargins)
+                          ? priorCustomMargins
+                          : (existingTemplate == null ? null : existingTemplate.Custom_Margins__c));
                 // 1.97 — snapshot output format, header/footer HTML, and title format
                 // so a version is a true render snapshot. Without these, restoring an
                 // older version still rendered with the *template*'s current values,
@@ -3592,10 +3637,39 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             base = fileName;
         }
 
+        Blob imageBytes;
+        try {
+            imageBytes = EncodingUtil.base64Decode(base64Content);
+        } catch (Exception decodeErr) {
+            throw new DocGenException('Image content is not valid base64.');
+        }
+
+        // Use content identity rather than upload time as the asset key. The
+        // same header/footer image is commonly carried into many new template
+        // versions; it must reuse one File instead of creating a duplicate on
+        // every Save as New Version. A changed image produces a new hash and a
+        // new File as expected.
+        String imageHash = EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', imageBytes));
+        String stableTitle = 'docgen_html_img_' + templateId + '_' + imageHash;
+        for (
+            ContentVersion existing : DocGenService.loadInternalContentVersionMetaForEntityByTitlePrefix(
+                templateId,
+                'docgen_html_img_'
+            )
+        ) {
+            if (existing.Title == stableTitle) {
+                return new Map<String, Object>{
+                    'contentVersionId' => existing.Id,
+                    'fileName' => existing.PathOnClient,
+                    'url' => '/sfc/servlet.shepherd/version/download/' + existing.Id
+                };
+            }
+        }
+
         ContentVersion cv = new ContentVersion();
-        cv.Title = 'docgen_html_img_' + templateId + '_' + Datetime.now().getTime() + '_' + base;
+        cv.Title = stableTitle;
         cv.PathOnClient = base;
-        cv.VersionData = EncodingUtil.base64Decode(base64Content);
+        cv.VersionData = imageBytes;
         cv.FirstPublishLocationId = templateId;
         /* code-analyzer-suppress ApexFlsViolation */
         Database.insert(cv, AccessLevel.USER_MODE);
@@ -3687,7 +3761,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // Drop head/style/script FIRST. A CSS rule body (`p{color:red}`) is textually
         // indistinguishable from a merge tag, so checking for tags before stripping
         // made every styled-but-empty document look like it had content.
-        String cleaned = html.replaceAll('(?is)<(head|style|script)\\b[^>]*>.*?</\\1\\s*>', ' ');
+        String cleaned = stripHtmlBlocksLinear(html);
 
         // Structural content counts regardless of text.
         String lower = cleaned.toLowerCase();
@@ -3695,17 +3769,117 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             return true;
         }
         // A merge tag is authored content even if the document is otherwise bare.
-        if (Pattern.compile('\\{[#^/%@]?[A-Za-z_][^}]*\\}').matcher(cleaned).find()) {
+        if (containsMergeTagLinear(cleaned)) {
             return true;
         }
-        String text = cleaned.replaceAll('(?s)<[^>]*>', ' ');
-        text = text.replaceAll('&nbsp;|&#160;', ' ').replaceAll('\\s+', ' ').trim();
+        String text = stripHtmlTagsAndCollapseWhitespace(cleaned);
         if (String.isBlank(text)) {
             return false;
         }
         // The Designer's seed copy for a blank canvas is not authored content — if it
         // is all that is being saved, the editor never loaded a real body.
         return !text.startsWithIgnoreCase('Start typing your document here');
+    }
+
+    /** Removes head/style/script blocks without matching across the whole HTML body with regex. */
+    private static String stripHtmlBlocksLinear(String html) {
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer head = lower.indexOf('<head', cursor);
+            Integer style = lower.indexOf('<style', cursor);
+            Integer script = lower.indexOf('<script', cursor);
+            Integer start = -1;
+            String name = '';
+            if (head != -1 && (start == -1 || head < start)) {
+                start = head;
+                name = 'head';
+            }
+            if (style != -1 && (start == -1 || style < start)) {
+                start = style;
+                name = 'style';
+            }
+            if (script != -1 && (start == -1 || script < start)) {
+                start = script;
+                name = 'script';
+            }
+            if (start == -1) {
+                break;
+            }
+            Integer boundary = start + 1 + name.length();
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf('</' + name, openEnd + 1);
+            Integer closeEnd = closeStart == -1 ? -1 : lower.indexOf('>', closeStart);
+            if (openEnd == -1 || closeEnd == -1) {
+                cursor = start + 1;
+                continue;
+            }
+            parts.add(html.substring(cursor, start));
+            parts.add(' ');
+            cursor = closeEnd + 1;
+        }
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
+    }
+
+    /** Finds merge tags without a whole-body matcher. */
+    private static Boolean containsMergeTagLinear(String html) {
+        Integer scan = 0;
+        while (scan < html.length()) {
+            Integer open = html.indexOf('{', scan);
+            if (open == -1) {
+                return false;
+            }
+            Integer p = open + 1;
+            if (p < html.length() && '#^/%@'.contains(html.substring(p, p + 1))) {
+                p++;
+            }
+            if (p < html.length()) {
+                Integer cp = html.charAt(p);
+                if ((cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95) {
+                    if (html.indexOf('}', p + 1) != -1) {
+                        return true;
+                    }
+                }
+            }
+            scan = open + 1;
+        }
+        return false;
+    }
+
+    /** Removes markup and collapses whitespace without regex backtracking. */
+    private static String stripHtmlTagsAndCollapseWhitespace(String html) {
+        List<String> textParts = new List<String>();
+        Boolean inWhitespace = false;
+        Integer i = 0;
+        while (i < html.length()) {
+            if (html.substring(i, i + 1) == '<') {
+                Integer tagEnd = html.indexOf('>', i + 1);
+                if (tagEnd != -1) {
+                    inWhitespace = true;
+                    i = tagEnd + 1;
+                    continue;
+                }
+            }
+            Integer cp = html.charAt(i);
+            Boolean whitespace = cp <= 32 || cp == 160;
+            if (whitespace) {
+                inWhitespace = true;
+            } else {
+                if (inWhitespace && !textParts.isEmpty()) {
+                    textParts.add(' ');
+                }
+                textParts.add(html.substring(i, i + 1));
+                inWhitespace = false;
+            }
+            i++;
+        }
+        return String.join(textParts, '').replace('&nbsp;', ' ').replace('&#160;', ' ').trim();
     }
 
     @AuraEnabled
@@ -3988,10 +4162,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             LIMIT 1
         ];
 
-        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Type__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Type__c', 'Page_Size__c', 'Page_Orientation__c', 'Page_Margins__c', 'Custom_Margins__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Template__c tpl = [
-            SELECT Type__c
+            SELECT Type__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -4051,6 +4228,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             fresh.Is_Active__c = true;
             if (String.isBlank(fresh.Type__c)) {
                 fresh.Type__c = tpl.Type__c;
+            }
+            if (String.isBlank(fresh.Page_Size__c)) {
+                fresh.Page_Size__c = tpl.Page_Size__c;
+            }
+            if (String.isBlank(fresh.Page_Orientation__c)) {
+                fresh.Page_Orientation__c = tpl.Page_Orientation__c;
+            }
+            if (String.isBlank(fresh.Page_Margins__c)) {
+                fresh.Page_Margins__c = tpl.Page_Margins__c;
+            }
+            if (String.isBlank(fresh.Custom_Margins__c)) {
+                fresh.Custom_Margins__c = tpl.Custom_Margins__c;
             }
             DocGenFlsGuard.assertCreateable(fresh, versionFields);
             /* code-analyzer-suppress ApexFlsViolation */
@@ -4493,6 +4682,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Base_Object_API__c',
                 'Is_Active__c',
                 'Watermark_Image_CV_Id__c',
+                'Page_Orientation__c',
+                'Page_Size__c',
+                'Page_Margins__c',
+                'Custom_Margins__c',
                 'Template__c'
             }
         );
@@ -4510,7 +4703,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Type__c,
                 Base_Object_API__c,
                 Is_Active__c,
-                Watermark_Image_CV_Id__c
+                Watermark_Image_CV_Id__c,
+                Page_Orientation__c,
+                Page_Size__c,
+                Page_Margins__c,
+                Custom_Margins__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId
             WITH SYSTEM_MODE
@@ -8493,6 +8690,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // version number (VersionNumber) without an N+1 per asset.
         Set<Id> latestCvIds = new Set<Id>();
         for (DocGen_Asset__c a : assets) {
+            if (a.Asset_Type__c == 'Font') {
+                continue;
+            }
             if (a.ContentDocumentLinks != null && !a.ContentDocumentLinks.isEmpty()) {
                 Id cvId = a.ContentDocumentLinks[0].ContentDocument.LatestPublishedVersionId;
                 if (cvId != null) {
@@ -8516,6 +8716,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         List<Map<String, Object>> result = new List<Map<String, Object>>();
         for (DocGen_Asset__c a : assets) {
+            if (a.Asset_Type__c == 'Font') {
+                continue;
+            }
             String latestCvId = null;
             Datetime lastModified = null;
             if (a.ContentDocumentLinks != null && !a.ContentDocumentLinks.isEmpty()) {

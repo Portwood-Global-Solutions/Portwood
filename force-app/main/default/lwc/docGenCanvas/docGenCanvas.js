@@ -4,10 +4,13 @@ import saveAndPublishHtmlBody from '@salesforce/apex/DocGenController.saveAndPub
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
 import getTemplateVersions from '@salesforce/apex/DocGenController.getTemplateVersions';
 import getVersionBody from '@salesforce/apex/DocGenController.getVersionBody';
+import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import { extractQueryShape } from 'c/docGenAuthoringKit';
+import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
+import { downloadBlob } from 'c/docGenUtils';
 import { loadScript } from 'lightning/platformResourceLoader';
 import CHARTJS_RESOURCE from '@salesforce/resourceUrl/DocGenChartJs';
 import { renderChartToCanvas, SAMPLE_CHART_BUCKETS, prepareChartsClientSide } from 'c/docGenChartJs';
@@ -62,7 +65,8 @@ import {
     wouldCycle,
     boxLabel,
     normalizeCustomPage as normalizeCustom,
-    canRenderBold
+    canRenderBold,
+    applyFontFaceToInline
 } from './canvasModel';
 
 /**
@@ -78,6 +82,59 @@ import {
  */
 function isUnicodeFont(font) {
     return !canRenderBold(font);
+}
+
+/** CSS font-family values are commonly quoted and commonly supplied as a fallback list. */
+function normalizeFontFamily(value) {
+    return String(value || '')
+        .split(',')[0]
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+}
+
+/**
+ * Reads the one family used by a pasted paragraph. A mixed-font selection is left
+ * alone: choosing one face for it would hide part of the author's formatting.
+ */
+function pastedFontFamily(html) {
+    const families = [];
+    const add = (value) => {
+        const normalized = normalizeFontFamily(value);
+        if (normalized && !families.includes(normalized)) families.push(normalized);
+    };
+    const markup = String(html || '');
+    const styles = /<[^>]*\sstyle\s*=\s*(['"])([\s\S]*?)\1/gi;
+    let match;
+    while ((match = styles.exec(markup))) {
+        const family = /(?:^|;)\s*font-family\s*:\s*([^;]+)/i.exec(match[2]);
+        if (family) add(family[1]);
+    }
+    const faces = /<font\b[^>]*\bface\s*=\s*(['"])(.*?)\1/gi;
+    while ((match = faces.exec(markup))) add(match[2]);
+    return families.length === 1 ? families[0] : null;
+}
+
+function fontFamilyDisplayName(html) {
+    const markup = String(html || '');
+    const styles = /<[^>]*\sstyle\s*=\s*(['"])([\s\S]*?)\1/gi;
+    let match;
+    while ((match = styles.exec(markup))) {
+        const family = /(?:^|;)\s*font-family\s*:\s*([^;]+)/i.exec(match[2]);
+        if (family)
+            return family[1]
+                .split(',')[0]
+                .trim()
+                .replace(/^['"]|['"]$/g, '');
+    }
+    const face = /<font\b[^>]*\bface\s*=\s*(['"])(.*?)\1/i.exec(markup);
+    return face
+        ? face[2]
+              .split(',')[0]
+              .trim()
+              .replace(/^['"]|['"]$/g, '')
+        : '';
 }
 
 /**
@@ -96,6 +153,39 @@ function isUnicodeFont(font) {
  * box at 2.4in x 3.1in on screen is at 2.4in x 3.1in in the PDF.
  */
 export default class DocGenCanvas extends LightningElement {
+    fontFaces = [];
+    @track detectedPasteFont = null;
+    fontValue(st) {
+        return st?.fontFaceKey ? 'face:' + st.fontFaceKey : st?.font;
+    }
+    fontPatch(value) {
+        const face = this.fontFaces.find((f) => 'face:' + f.key === value);
+        return face
+            ? {
+                  font: "'" + face.family + "'",
+                  fontFaceKey: face.key,
+                  fontWeight: face.weight,
+                  fontStyle: face.style,
+                  bold: false,
+                  italic: false
+              }
+            : { font: value, fontFaceKey: null, fontWeight: null, fontStyle: null };
+    }
+    async loadFonts() {
+        try {
+            this.fontFaces = await getFontFaces();
+            const previews = this.fontFaces.filter((f) => f.selectable).map((f) => loadFontFace(f));
+            const results = await Promise.allSettled(previews);
+            if (results.some((result) => result.status === 'rejected')) {
+                this.statusText = 'Custom fonts are available, but one or more browser previews could not load.';
+            }
+        } catch (e) {
+            this.statusText = 'Font library could not load: ' + (e.body?.message || e.message);
+        }
+    }
+    previewFont(st) {
+        return st?.fontFaceKey ? "'PW_" + st.fontFaceKey + "'" : st?.font;
+    }
     @api recordId;
 
     /**
@@ -661,26 +751,8 @@ export default class DocGenCanvas extends LightningElement {
     handleExportHtml() {
         try {
             const html = serialize(this.doc, this.geo);
-            // data: URI rather than URL.createObjectURL(new Blob(...)).
-            //
-            // Lightning Web Security refuses the Blob route outright —
-            //   "Cannot 'createObjectURL' using an unsecure [object Blob]"
-            // — and it refuses it whether the Blob is built from a string or from
-            // a typed array, so this is not about the Blob's contents. A data URI
-            // never touches createObjectURL, so it works with LWS on or off.
-            //
-            // The size ceiling that normally rules data URIs out does not bite
-            // here: a canvas body is markup for one page design, a few KB, not an
-            // embedded document. encodeURIComponent also percent-encodes as UTF-8,
-            // so an em dash or a non-ASCII field label survives intact.
-            const href = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-            const a = document.createElement('a');
-            a.href = href;
-            a.download = this.exportFileName;
-            // Anchor must be in the document for the click to register in Firefox.
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Download as plain text so LWS does not sanitize the exported markup.
+            downloadBlob(new Blob([html], { type: 'text/plain' }), this.exportFileName);
             this.statusText = 'Exported ' + this.exportFileName;
         } catch (e) {
             this.statusText = 'Export failed: ' + (e && e.message ? e.message : 'unknown error');
@@ -1158,7 +1230,7 @@ export default class DocGenCanvas extends LightningElement {
         const z = this.zoom || 1;
         let css =
             'font-family:' +
-            st.font +
+            this.previewFont(st) +
             ';font-size:' +
             (st.size * z).toFixed(2) +
             'pt;color:' +
@@ -1168,8 +1240,9 @@ export default class DocGenCanvas extends LightningElement {
             ';padding:' +
             (st.padding * z).toFixed(2) +
             'pt;';
-        if (st.bold) css += 'font-weight:bold;';
-        if (st.italic) css += 'font-style:italic;';
+        if (st.fontFaceKey) css += 'font-weight:' + st.fontWeight + ';font-style:' + st.fontStyle + ';';
+        if (!st.fontFaceKey && st.bold) css += 'font-weight:bold;';
+        if (!st.fontFaceKey && st.italic) css += 'font-style:italic;';
         if (st.underline) css += 'text-decoration:underline;';
         if (st.fill) css += 'background:' + st.fill + ';';
         if (st.borderWidth > 0) css += 'border:' + (st.borderWidth * z).toFixed(2) + 'pt solid ' + st.borderColor + ';';
@@ -1654,19 +1727,19 @@ export default class DocGenCanvas extends LightningElement {
 
     /** Header and body rows are styled separately — see DEFAULT_HEADER_TEXT. */
     get selHeaderFont() {
-        return this.selHeaderText.font || this.selFont;
+        return this.selHeaderText.font ? this.fontValue(this.selHeaderText) : this.selFont;
     }
 
     get selRowFont() {
-        return this.selRowText.font || this.selFont;
+        return this.selRowText.font ? this.fontValue(this.selRowText) : this.selFont;
     }
 
     get selTotalsFont() {
-        return this.selTotalsText.font || this.selFont;
+        return this.selTotalsText.font ? this.fontValue(this.selTotalsText) : this.selFont;
     }
 
     get selSubFont() {
-        return this.selSubText.font || this.selFont;
+        return this.selSubText.font ? this.fontValue(this.selSubText) : this.selFont;
     }
 
     handleRowTextChange(event) {
@@ -1701,7 +1774,7 @@ export default class DocGenCanvas extends LightningElement {
             value = parseFloat(event.target.value);
             if (isNaN(value)) return;
         } else {
-            value = event.target.value;
+            value = key === 'font' ? event.detail.value : event.target.value;
         }
         const field =
             which === 'header'
@@ -1711,7 +1784,7 @@ export default class DocGenCanvas extends LightningElement {
                   : which === 'sub'
                     ? 'subText'
                     : 'rowText';
-        const patch = { [key]: value };
+        const patch = key === 'font' ? this.fontPatch(value) : { [key]: value };
         if (key === 'font' && isUnicodeFont(value) && current.bold) {
             patch.bold = false;
         }
@@ -2038,7 +2111,61 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get fontOptions() {
-        return FONT_CHOICES;
+        const options = fontPickerOptions(FONT_CHOICES, this.fontFaces);
+        if (this.detectedPasteFont && !options.some((option) => option.value === this.detectedPasteFont.value)) {
+            options.push(this.detectedPasteFont);
+        }
+        return options;
+    }
+
+    /**
+     * Turns a pasted CSS family into the same value the font picker uses. Registered
+     * faces get the private face:key value; other families remain visible as a normal
+     * CSS option so the author can see exactly what was pasted.
+     */
+    pastedFontPatch(html) {
+        const normalized = pastedFontFamily(html);
+        if (!normalized) return null;
+        const display = fontFamilyDisplayName(html) || normalized;
+        const face = this.fontFaces.find((candidate) =>
+            [candidate.family, candidate.preferredFamily, candidate.label, candidate.previewFamily]
+                .filter(Boolean)
+                .some((value) => normalizeFontFamily(value) === normalized)
+        );
+        if (face) {
+            return {
+                family: display,
+                value: 'face:' + face.key,
+                patch: this.fontPatch('face:' + face.key),
+                custom: true
+            };
+        }
+        const builtin = FONT_CHOICES.find((choice) => normalizeFontFamily(choice.value) === normalized);
+        const value = builtin ? builtin.value : normalized.replace(/[^a-z0-9_-]+/gi, ' ').trim();
+        if (!value) return null;
+        return {
+            family: display,
+            value,
+            patch: this.fontPatch(value),
+            custom: false
+        };
+    }
+
+    applyPastedFont(box, html) {
+        const detected = this.pastedFontPatch(html);
+        if (!detected) return { html };
+        this.detectedPasteFont = {
+            label: detected.family,
+            value: detected.value,
+            fontFamily: detected.patch.font,
+            fontFace: detected.custom ? this.fontFaces.find((face) => face.key === detected.value.slice(5)) : null,
+            detail: detected.custom ? 'Approved custom font' : 'Detected from pasted paragraph'
+        };
+        this.statusText = 'Detected font: ' + detected.family;
+        return {
+            html: detected.custom ? applyFontFaceToInline(html) : html,
+            style: { ...this.selectedStyle, ...detected.patch }
+        };
     }
 
     get selectedStyle() {
@@ -2046,7 +2173,7 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get selFont() {
-        return this.selectedStyle.font;
+        return this.fontValue(this.selectedStyle);
     }
     get selSize() {
         return this.selectedStyle.size;
@@ -2071,7 +2198,7 @@ export default class DocGenCanvas extends LightningElement {
     }
     /** Arial Unicode MS has no bold face in the PDF — the Bold toggle is a no-op for it. */
     get boxBoldDisabled() {
-        return isUnicodeFont(this.selFont);
+        return !!this.selectedStyle.fontFaceKey || isUnicodeFont(this.selFont);
     }
     get boldTitle() {
         return this.boxBoldDisabled
@@ -2119,11 +2246,24 @@ export default class DocGenCanvas extends LightningElement {
         const font = event.detail.value;
         // Switching to Arial Unicode MS clears an active bold: it has no bold face, so
         // keeping bold on would show a weight the PDF cannot print (see canRenderBold).
-        const patch = { font };
+        const patch = this.fontPatch(font);
         if (isUnicodeFont(font) && this.selectedStyle.bold) {
             patch.bold = false;
         }
-        this._patchStyle(patch);
+        if (this.selectedBox?.kind === 'table') {
+            const table = { ...this.selectedBox.table };
+            for (const band of ['headerText', 'rowText', 'subText', 'totalsText']) {
+                table[band] = { ...(table[band] || {}), ...patch };
+            }
+            this.applyToBox(this.selectedBox.id, { style: { ...this.selectedStyle, ...patch }, table });
+        } else if (this.selectedBox?.kind === 'text' && patch.fontFaceKey && this.selectedBox.html != null) {
+            this.applyToBox(this.selectedBox.id, {
+                style: { ...this.selectedStyle, ...patch },
+                html: applyFontFaceToInline(this.selectedBox.html)
+            });
+        } else {
+            this._patchStyle(patch);
+        }
     }
 
     handleNumChange(event) {
@@ -2200,6 +2340,7 @@ export default class DocGenCanvas extends LightningElement {
         this._connected = true;
         this._onKey = (e) => this.handleKeyDown(e);
         window.addEventListener('keydown', this._onKey);
+        await this.loadFonts();
         await this.loadBody();
         await this.loadVersions();
     }
@@ -3143,7 +3284,13 @@ export default class DocGenCanvas extends LightningElement {
         if (model.kind === 'table') {
             // preview-only — dataMap is never written back into model/this.doc, only
             // read here to render real rows; serialize() never sees it.
-            return tablePreviewHtml(model, this.showSampleData ? this.resolvedSampleData : null);
+            const preview = JSON.parse(JSON.stringify(model));
+            if (preview.style?.fontFaceKey) preview.style.font = this.previewFont(preview.style);
+            for (const field of ['headerText', 'rowText', 'totalsText', 'subText']) {
+                const st = preview.table?.[field];
+                if (st?.fontFaceKey) st.font = this.previewFont(st);
+            }
+            return tablePreviewHtml(preview, this.showSampleData ? this.resolvedSampleData : null);
         }
         if (model.kind === 'image') {
             const img = model.image || {};
@@ -3478,7 +3625,7 @@ export default class DocGenCanvas extends LightningElement {
      * stay for tables and go for text.
      */
     get showBoxTypography() {
-        return this.selectedIsTable;
+        return this.selectedIsTable || this.canEditRichText;
     }
 
     /**
@@ -3502,7 +3649,6 @@ export default class DocGenCanvas extends LightningElement {
      */
     get richTextFormats() {
         return [
-            'font',
             'size',
             'bold',
             'italic',
@@ -3733,7 +3879,8 @@ export default class DocGenCanvas extends LightningElement {
         // Sanitized like any other authored markup: a paste from a web page must not
         // put an absolutely-positioned div inside an artboard whose whole layout
         // contract is position.
-        this.applyToBox(box.id, { html: sanitizeInline(event.target.value) });
+        const html = sanitizeInline(event.target.value);
+        this.applyToBox(box.id, { ...this.applyPastedFont(box, html) });
     }
 
     get canEditRichText() {
@@ -3780,7 +3927,8 @@ export default class DocGenCanvas extends LightningElement {
             return;
         }
         // Deliberately does NOT touch richSeed — see above.
-        this.applyToBox(box.id, { html: sanitizeInline(event.target.value) });
+        const html = sanitizeInline(event.target.value);
+        this.applyToBox(box.id, { ...this.applyPastedFont(box, html) });
     }
 
     // The "/" workaround that used to live here is gone. Nothing is typed on the

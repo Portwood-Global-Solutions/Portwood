@@ -38,13 +38,43 @@ const ok = (c, m) => {
     if (!c) fail++;
 };
 
+function stripEditorLayer(root) {
+    for (const el of root.querySelectorAll('style[data-dg-editor]')) {
+        el.remove();
+    }
+    for (const pv of root.querySelectorAll('div.dg-pv')) {
+        const first = pv.firstElementChild;
+        if (
+            first &&
+            first.tagName === 'STYLE' &&
+            !first.hasAttribute('data-dg-authored') &&
+            /(^|})\s*\.dg-pv\b/.test(first.textContent || '')
+        ) {
+            first.remove();
+        }
+    }
+    for (const marker of root.querySelectorAll('.dg-drop-marker')) {
+        marker.remove();
+    }
+    for (const parked of root.querySelectorAll('style[data-dg-authored]')) {
+        const restored = document.createElement('style');
+        restored.textContent = parked.textContent;
+        parked.parentNode.replaceChild(restored, parked);
+    }
+}
+
+function unpillifyTags(root) {
+    for (const pill of root.querySelectorAll('[data-dg-tag]')) {
+        const tag = pill.tagName === 'IMG' ? pill.getAttribute('data-dg-tag') : pill.textContent;
+        pill.parentNode.replaceChild(document.createTextNode(tag || ''), pill);
+    }
+}
+
 /** Mirrors docGenAdmin._sanitizeStagedHtml. */
 function sanitizeStagedHtml(html) {
     if (
         !html ||
-        (html.indexOf('data-dg-tag') === -1 &&
-            html.indexOf('dg-pv') === -1 &&
-            html.indexOf('dg-drop-marker') === -1)
+        (html.indexOf('data-dg-tag') === -1 && html.indexOf('dg-pv') === -1 && html.indexOf('dg-drop-marker') === -1)
     ) {
         return html;
     }
@@ -55,14 +85,10 @@ function sanitizeStagedHtml(html) {
         const tpl = document.createElement('template');
         tpl.innerHTML = target;
         const root = tpl.content;
-        for (const marker of root.querySelectorAll('.dg-drop-marker')) {
-            marker.remove();
-        }
+        stripEditorLayer(root);
+        unpillifyTags(root);
         const pv = root.querySelector('div.dg-pv');
         if (pv) {
-            for (const styleEl of pv.querySelectorAll(':scope > style')) {
-                styleEl.remove();
-            }
             while (pv.firstChild) {
                 pv.parentNode.insertBefore(pv.firstChild, pv);
             }
@@ -84,7 +110,8 @@ function sanitizeStagedHtml(html) {
 const wrapInPreview = (doc) =>
     doc.replace(
         /(<body\b[^>]*>)([\s\S]*?)(<\/body\s*>)/i,
-        (m, open, inner, close) => `${open}<div class="dg-pv"><style>.dg-pv{padding:1in}</style>${inner}</div>${close}`
+        (m, open, inner, close) =>
+            `${open}<div class="dg-pv"><style data-dg-editor="preview">.dg-pv{padding:1in}</style>${inner}</div>${close}`
     );
 
 // klugo's template: Landscape Letter, author stylesheet in <head>, a tag pill in
@@ -146,10 +173,19 @@ const stripped = sanitizeStagedHtml(withArtifacts);
 ok(!stripped.includes('dg-drop-marker'), 'drop markers removed');
 ok(stripped.includes('.fixed-page'), 'and the stylesheet is still not collateral');
 
-const previewOnly = `<html><head><style>.keep{color:red}</style></head><body><div class="dg-pv"><style>.dg-pv{padding:1in}</style><p data-dg-tag="X">{X}</p></div></body></html>`;
+const previewOnly = `<html><head><style>.keep{color:red}</style></head><body><div class="dg-pv"><style data-dg-editor="preview">.dg-pv{padding:1in}</style><p data-dg-tag="X">{X}</p></div></body></html>`;
 const unwrapped = sanitizeStagedHtml(previewOnly);
 ok(!unwrapped.includes('.dg-pv{'), "the preview's own scoped stylesheet is removed");
 ok(unwrapped.includes('.keep'), "the author's stylesheet beside it is not");
+
+console.log('\nfragment styles and conditional pills (#464)');
+const fragment = `<div class="dg-pv"><style data-dg-editor="preview">.dg-pv{padding:1in}</style><style data-dg-authored="1" type="text/dg-css">.format-check{color:#b42318}</style><span data-dg-tag="true" style="background:#e3f5e9;border:1px solid #9fd6b1">{#IF Name != ''}</span><p class="format-check">{Name}</p><span data-dg-tag="true" style="background:#e3f5e9;border:1px solid #9fd6b1">{/IF}</span></div>`;
+const fragmentOut = sanitizeStagedHtml(fragment);
+ok(fragmentOut.includes('.format-check{color:#b42318}'), "fragment author's stylesheet survives Visual to Source");
+ok(fragmentOut.includes("{#IF Name != ''}"), 'conditional opener survives as plain template text');
+ok(fragmentOut.includes('{/IF}'), 'conditional closer survives as plain template text');
+ok(!fragmentOut.includes('data-dg-tag'), 'conditional pill wrappers do not reach saved or preview HTML');
+ok(!fragmentOut.includes('#e3f5e9') && !fragmentOut.includes('#9fd6b1'), 'green pill chrome does not reach PDF input');
 
 console.log('\na clean body must not be touched at all');
 const clean = '<html><head><style>p{color:blue}</style></head><body><p>{Name}</p></body></html>';

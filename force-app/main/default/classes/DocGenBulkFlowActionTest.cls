@@ -205,6 +205,52 @@ private class DocGenBulkFlowActionTest {
     }
 
     @IsTest
+    static void testEmptyRecordCollectionFailsClosedWithoutCreatingJob() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            Integer jobsBefore = [SELECT COUNT() FROM DocGen_Job__c];
+
+            DocGenBulkFlowAction.Request req = new DocGenBulkFlowAction.Request();
+            req.templateId = temp.Id;
+            req.recordIds = new List<String>();
+
+            Test.startTest();
+            List<DocGenBulkFlowAction.Response> responses = DocGenBulkFlowAction.generateBulkDocuments(
+                new List<DocGenBulkFlowAction.Request>{ req }
+            );
+            Test.stopTest();
+
+            System.assertEquals(false, responses[0].success, 'An empty selection must fail closed.');
+            System.assertEquals(null, responses[0].jobId, 'An empty selection must not create a job.');
+            System.assert(
+                responses[0].errorMessage.contains('At least one record ID'),
+                'The Flow should receive a useful empty-selection error.'
+            );
+            System.assertEquals(jobsBefore, [SELECT COUNT() FROM DocGen_Job__c], 'No job should be inserted.');
+        }
+    }
+
+    @IsTest
+    static void testUnscopedRequestFailsClosedWithoutCreatingJob() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            DocGenBulkFlowAction.Request req = new DocGenBulkFlowAction.Request();
+            req.templateId = temp.Id;
+
+            Test.startTest();
+            List<DocGenBulkFlowAction.Response> responses = DocGenBulkFlowAction.generateBulkDocuments(
+                new List<DocGenBulkFlowAction.Request>{ req }
+            );
+            Test.stopTest();
+
+            System.assertEquals(false, responses[0].success, 'An unscoped request must fail closed.');
+            System.assertEquals(null, responses[0].jobId, 'An unscoped request must not create a job.');
+        }
+    }
+
+    @IsTest
     static void testGenerateBulk_withRecordIdsInput_endToEnd() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {

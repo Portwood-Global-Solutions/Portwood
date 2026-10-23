@@ -4,23 +4,10 @@
  */
 
 /**
- * Downloads a base64-encoded file via a temporary anchor element.
- *
- * @param {string} base64Data - The base64-encoded file content
- * @param {string} fileName   - The download filename (including extension)
- * @param {string} mimeType   - The MIME type (e.g. 'application/pdf')
- */
-/**
- * MIME types Lightning Web Security will accept through URL.createObjectURL.
- *
- * LWS sanitizes createObjectURL against an allowlist — PDF, images and plain
- * text pass, everything else is rejected with
- *
- *   Lightning Web Security: Cannot 'createObjectURL' using an unsecure [object Blob]
- *
- * Office formats (.docx/.pptx/.xlsx), JSON and HTML are all off it. This is the
- * single source of truth; docGenButton reads the same list so the two cannot
- * drift apart.
+ * Conservative MIME list used directly for Blob downloads. Some orgs have
+ * rejected other MIME types even though Salesforce's documented allowlist is
+ * broader. docGenButton also uses this to choose between a Blob and its existing
+ * Salesforce file download URL.
  */
 export function isBlobSafeMime(mimeType) {
     if (!mimeType) {
@@ -30,45 +17,48 @@ export function isBlobSafeMime(mimeType) {
 }
 
 /**
- * Downloads base64 content as a file.
- *
- * Two routes, because one is not enough in an LWS-enabled org:
- *
- *   - allowlisted MIME -> Blob + createObjectURL. Preferred: no size ceiling,
- *     and the browser streams it.
- *   - anything else -> a data: URI, which never calls createObjectURL and so
- *     cannot be refused. This is what makes .docx/.pptx/.xlsx downloads work
- *     with LWS on; previously they threw and the user got nothing.
- *
- * The createObjectURL branch is also wrapped, so if the allowlist changes under
- * us in a future release the download degrades to the data: URI instead of
- * failing outright.
+ * Download a Blob without data: URLs, which LWS can reject on anchor.href.
+ * A plain-text fallback preserves the bytes when an org rejects the original
+ * MIME type. The download attribute preserves the requested file extension.
+ */
+export function downloadBlob(blob, fileName) {
+    let objectUrl;
+    try {
+        objectUrl = URL.createObjectURL(blob);
+    } catch (error) {
+        if (blob.type === 'text/plain') {
+            throw error;
+        }
+        objectUrl = URL.createObjectURL(new Blob([blob], { type: 'text/plain' }));
+    }
+    const anchor = document.createElement('a');
+    try {
+        anchor.download = fileName;
+        anchor.href = objectUrl;
+        document.body.appendChild(anchor);
+        anchor.click();
+    } finally {
+        if (anchor.parentNode) {
+            anchor.parentNode.removeChild(anchor);
+        }
+        // Match docGenButton: let the browser start reading before releasing it.
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+    }
+}
+
+/**
+ * Download base64 bytes. Use Salesforce's documented binary MIME for Office
+ * and other types outside the conservative allowlist, without sanitizing HTML.
  */
 export function downloadBase64(base64Data, fileName, mimeType) {
-    const anchor = document.createElement('a');
-    anchor.download = fileName;
-
-    let objectUrl = null;
-    if (isBlobSafeMime(mimeType)) {
-        try {
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
-        } catch (e) {
-            objectUrl = null; // fall through to the data: URI
-        }
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
     }
-
-    anchor.href = objectUrl || 'data:' + (mimeType || 'application/octet-stream') + ';base64,' + base64Data;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-    }
+    const blobType = isBlobSafeMime(mimeType) ? mimeType : 'application/octet-stream';
+    downloadBlob(new Blob([bytes], { type: blobType }), fileName);
 }
 
 /**

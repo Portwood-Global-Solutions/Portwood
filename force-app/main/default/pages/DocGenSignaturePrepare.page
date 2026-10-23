@@ -1,0 +1,547 @@
+<apex:page
+    controller="DocGenSignaturePreparationController"
+    showHeader="false"
+    sidebar="false"
+    standardStylesheets="false"
+    applyHtmlTag="false"
+    applyBodyTag="false"
+    docType="html-5.0"
+>
+    <html lang="en">
+        <head>
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <title>Prepare signature request</title>
+            <style>
+                * {
+                    box-sizing: border-box;
+                }
+                body {
+                    margin: 0;
+                    font:
+                        14px/1.45 -apple-system,
+                        BlinkMacSystemFont,
+                        'Segoe UI',
+                        sans-serif;
+                    color: #181e29;
+                    background: #fff;
+                }
+                button,
+                input,
+                select,
+                textarea {
+                    font: inherit;
+                    color: inherit;
+                }
+                button {
+                    cursor: pointer;
+                    border: 1px solid #cbd4e0;
+                    background: #fff;
+                    border-radius: 5px;
+                    padding: 8px 12px;
+                    min-height: 36px;
+                }
+                button:hover:not(:disabled) {
+                    border-color: #0176d3;
+                }
+                button:disabled {
+                    opacity: 0.45;
+                    cursor: default;
+                }
+                button:focus-visible,
+                input:focus-visible,
+                select:focus-visible,
+                textarea:focus-visible {
+                    outline: 2px solid #0176d3;
+                    outline-offset: 2px;
+                }
+                .primary {
+                    background: #075cad;
+                    border-color: #075cad;
+                    color: #fff;
+                }
+                .quiet {
+                    border-color: transparent;
+                    background: transparent;
+                    color: #536175;
+                }
+                .shell {
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 100vh;
+                }
+                .topbar {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 22px;
+                    border-bottom: 1px solid #d9e0e8;
+                }
+                .grow {
+                    flex: 1;
+                    min-width: 0;
+                }
+                .small {
+                    font-size: 12px;
+                    color: #5a6879;
+                }
+                .draft {
+                    font-size: 11px;
+                    background: #f1f4f7;
+                    border-radius: 4px;
+                    padding: 3px 7px;
+                }
+                .steps {
+                    display: flex;
+                    padding: 0 22px;
+                    border-bottom: 1px solid #d9e0e8;
+                    gap: 10px;
+                }
+                .step {
+                    flex: 1;
+                    text-align: left;
+                    border: 0;
+                    border-bottom: 3px solid transparent;
+                    border-radius: 0;
+                    padding: 12px 4px;
+                    color: #596779;
+                }
+                .step[aria-current='step'] {
+                    color: #075cad;
+                    border-bottom-color: #075cad;
+                }
+                .number {
+                    border: 1px solid #cad4df;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    display: inline-grid;
+                    place-items: center;
+                    font-size: 11px;
+                    margin-right: 7px;
+                }
+                .step[aria-current='step'] .number {
+                    background: #075cad;
+                    border-color: #075cad;
+                    color: #fff;
+                }
+                .workspace {
+                    display: grid;
+                    grid-template-columns: 320px minmax(0, 1fr);
+                    flex: 1;
+                    min-height: 510px;
+                }
+                .inspector {
+                    padding: 22px;
+                    border-right: 1px solid #d9e0e8;
+                    min-width: 0;
+                }
+                .viewer {
+                    min-width: 0;
+                    background: #f1f4f8;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .toolbar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    padding: 12px 18px;
+                    border-bottom: 1px solid #d9e0e8;
+                    flex-wrap: wrap;
+                }
+                .toolbar button {
+                    padding: 4px 10px;
+                    min-height: 28px;
+                }
+                .viewport {
+                    padding: 22px;
+                    overflow: auto;
+                    min-height: 440px;
+                    flex: 1;
+                }
+                .paper {
+                    position: relative;
+                    background: #fff;
+                    margin: 0 auto;
+                    box-shadow: 0 1px 5px #17233426;
+                }
+                .paper canvas {
+                    display: block;
+                }
+                .paper .overlay {
+                    position: absolute;
+                    inset: 0;
+                }
+                .placeholder {
+                    height: 100%;
+                    min-height: 370px;
+                    display: grid;
+                    place-content: center;
+                    text-align: center;
+                    color: #5a6879;
+                }
+                .placeholder strong {
+                    font-weight: 500;
+                    font-size: 17px;
+                    margin-bottom: 6px;
+                }
+                .source-buttons {
+                    display: grid;
+                    gap: 8px;
+                    margin: 16px 0;
+                }
+                .source-buttons button {
+                    text-align: left;
+                    display: flex;
+                    justify-content: space-between;
+                }
+                .source-buttons button.active {
+                    color: #075cad;
+                    background: #edf5ff;
+                    border-color: #075cad;
+                }
+                .drop {
+                    padding: 22px 10px;
+                    border: 1px dashed #a9b8cb;
+                    border-radius: 6px;
+                    text-align: center;
+                    background: #f8fafc;
+                }
+                .drop.dragging {
+                    border-color: #075cad;
+                    background: #edf5ff;
+                }
+                .file-input {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    overflow: hidden;
+                    opacity: 0;
+                }
+                .file-item {
+                    display: block;
+                    width: 100%;
+                    text-align: left;
+                    margin: 8px 0;
+                    word-break: break-word;
+                }
+                .selected-file {
+                    padding: 12px;
+                    background: #f1f5f9;
+                    border-radius: 5px;
+                    margin: 16px 0;
+                    overflow-wrap: anywhere;
+                }
+                .selected-file strong {
+                    display: block;
+                }
+                .recipient {
+                    padding: 13px 0;
+                    border-bottom: 1px solid #d9e0e8;
+                }
+                .recipient-head {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .recipient-head strong {
+                    flex: 1;
+                }
+                .recipient-head button {
+                    padding: 2px 5px;
+                    min-height: 26px;
+                }
+                .avatar {
+                    width: 25px;
+                    height: 25px;
+                    border-radius: 50%;
+                    display: inline-grid;
+                    place-items: center;
+                    background: #edf5ff;
+                    color: #075cad;
+                    font-size: 12px;
+                }
+                .recipient:nth-child(even) .avatar {
+                    background: #f3eefa;
+                    color: #7040a0;
+                }
+                label {
+                    display: block;
+                    font-size: 12px;
+                    color: #526174;
+                    margin: 10px 0 5px;
+                }
+                input:not([type='range']):not([type='checkbox']),
+                select,
+                textarea {
+                    width: 100%;
+                    padding: 8px;
+                    border: 1px solid #bac7d6;
+                    border-radius: 5px;
+                    background: #fff;
+                    min-width: 0;
+                }
+                input[type='range'] {
+                    width: 100%;
+                }
+                .field-tools {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                    margin: 14px 0;
+                }
+                .field-tools button {
+                    padding: 10px 5px;
+                    font-size: 12px;
+                }
+                .field-tools button.active {
+                    background: #edf5ff;
+                    color: #075cad;
+                    border-color: #075cad;
+                }
+                .field {
+                    position: absolute;
+                    border: 1px dashed #075cad;
+                    border-radius: 3px;
+                    background: #edf5ffed;
+                    color: #075cad;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    padding: 4px 7px;
+                    min-height: 0;
+                    touch-action: none;
+                    text-align: left;
+                    overflow: hidden;
+                }
+                .field .owner {
+                    font-size: 10px;
+                    display: block;
+                    margin-top: 2px;
+                }
+                .field.selected {
+                    border-style: solid;
+                    outline: 2px solid #075cad;
+                    outline-offset: 2px;
+                }
+                .field-info {
+                    margin-top: 18px;
+                    padding-top: 15px;
+                    border-top: 1px solid #d9e0e8;
+                }
+                .field-info h3 {
+                    margin-bottom: 5px;
+                }
+                .bottom {
+                    border-top: 1px solid #d9e0e8;
+                    padding: 12px 22px;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                }
+                .bottom .actions {
+                    display: flex;
+                    gap: 10px;
+                }
+                .error {
+                    color: #8e1521;
+                    background: #fff0f1;
+                    padding: 10px 14px;
+                    border-bottom: 1px solid #efc5c9;
+                    white-space: pre-wrap;
+                }
+                .notice {
+                    background: #eef5ff;
+                    color: #224c78;
+                    border-radius: 5px;
+                    padding: 12px;
+                    font-size: 12px;
+                    margin: 14px 0;
+                }
+                .success {
+                    padding: 30px;
+                    max-width: 760px;
+                    margin: auto;
+                    width: 100%;
+                }
+                .signer-result {
+                    border-top: 1px solid #d9e0e8;
+                    padding: 15px 0;
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                }
+                .signer-result a {
+                    color: #075cad;
+                }
+                .status-ok {
+                    color: #27613c;
+                }
+                .contact-options {
+                    border: 1px solid #cad4df;
+                    border-radius: 4px;
+                }
+                .contact-options button {
+                    display: block;
+                    text-align: left;
+                    width: 100%;
+                    border: 0;
+                    border-bottom: 1px solid #e5ebf0;
+                    font-size: 12px;
+                }
+                h2 {
+                    font-size: 20px;
+                    margin: 0 0 12px;
+                }
+                h3 {
+                    font-size: 15px;
+                    margin: 0 0 10px;
+                }
+                p {
+                    margin: 6px 0 14px;
+                }
+                [hidden] {
+                    display: none !important;
+                }
+                .busy {
+                    position: fixed;
+                    inset: 0;
+                    background: #ffffffda;
+                    display: grid;
+                    place-content: center;
+                    z-index: 10;
+                    text-align: center;
+                    font-weight: 500;
+                }
+                .busy:before {
+                    content: '';
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    border: 3px solid #d5e2ee;
+                    border-top-color: #075cad;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto 12px;
+                }
+                @keyframes spin {
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .busy:before {
+                        animation: none;
+                    }
+                }
+                @media (max-width: 700px) {
+                    .workspace {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    .inspector {
+                        border-right: 0;
+                        border-bottom: 1px solid #d9e0e8;
+                    }
+                    .steps {
+                        flex-wrap: wrap;
+                    }
+                    .step {
+                        flex-basis: 40%;
+                    }
+                    .viewport {
+                        padding: 12px;
+                    }
+                    .topbar {
+                        padding: 12px;
+                    }
+                    .bottom {
+                        padding: 12px;
+                    }
+                    .field-tools {
+                        grid-template-columns: repeat(4, minmax(0, 1fr));
+                    }
+                    input,
+                    select,
+                    textarea {
+                        font-size: 16px;
+                    }
+                    .signer-result {
+                        flex-wrap: wrap;
+                    }
+                    .field {
+                        font-size: 10px;
+                    }
+                    .field .owner {
+                        font-size: 9px;
+                    }
+                }
+            </style>
+            <apex:includeScript value="{!URLFOR($Resource.pdflib, 'pdf-lib.min.js')}" />
+        </head>
+        <body>
+            <div class="shell" id="app">
+                <header class="topbar">
+                    <div class="grow">
+                        <strong id="document-heading">New signature request</strong>
+                        <div class="small">The completed PDF will be attached to this Salesforce record.</div>
+                    </div>
+                    <span class="draft">Draft</span><button id="save" type="button" class="quiet">Save draft</button>
+                </header>
+                <nav class="steps" aria-label="Prepare signature request">
+                    <button class="step" data-step="0" aria-current="step">
+                        <span class="number">1</span>Documents</button
+                    ><button class="step" data-step="1"><span class="number">2</span>Recipients</button
+                    ><button class="step" data-step="2"><span class="number">3</span>Fields</button
+                    ><button class="step" data-step="3"><span class="number">4</span>Review and send</button>
+                </nav>
+                <div id="error" role="alert" class="error" hidden="hidden"></div>
+                <main class="workspace">
+                    <aside class="inspector" id="controls"></aside>
+                    <section class="viewer" aria-label="Document preview">
+                        <div class="toolbar">
+                            <span id="file-label" class="small">Document preview</span>
+                            <div id="page-controls" hidden="hidden">
+                                <button id="previous-page" aria-label="Previous page">‹</button>
+                                <span id="page-label" class="small"></span>
+                                <button id="next-page" aria-label="Next page">›</button>
+                            </div>
+                        </div>
+                        <div class="viewport" id="viewport">
+                            <div class="placeholder">
+                                <strong>Your document preview</strong><span>Choose a PDF to get started.</span>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+                <footer class="bottom">
+                    <div class="grow small" id="status" aria-live="polite">Choose a document to start.</div>
+                    <div class="actions">
+                        <button id="back">Back</button><button class="primary" id="next">Continue</button>
+                    </div>
+                </footer>
+            </div>
+            <div class="busy" id="busy" role="status" hidden="hidden">Loading</div>
+            <script>
+                window.PortwoodPreparation = {
+                    recordId: '{!JSENCODE($CurrentPage.parameters.recordId)}',
+                    source: '{!JSENCODE($CurrentPage.parameters.source)}',
+                    draftId: '{!JSENCODE($CurrentPage.parameters.draftId)}',
+                    parentOrigin: '{!JSENCODE($CurrentPage.parameters.parentOrigin)}',
+                    nonce: '{!JSENCODE($CurrentPage.parameters.nonce)}',
+                    moduleUrl: "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}",
+                    workerUrl: "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}",
+                    actions: {
+                        context: '{!$RemoteAction.DocGenSignaturePreparationController.getContext}',
+                        upload: '{!$RemoteAction.DocGenSignaturePreparationController.uploadPdf}',
+                        select: '{!$RemoteAction.DocGenSignaturePreparationController.selectPdf}',
+                        load: '{!$RemoteAction.DocGenSignaturePreparationController.loadDraft}',
+                        save: '{!$RemoteAction.DocGenSignaturePreparationController.saveDraft}',
+                        send: '{!$RemoteAction.DocGenSignaturePreparationController.sendDraft}',
+                        contacts: '{!$RemoteAction.DocGenSignaturePreparationController.searchContacts}'
+                    }
+                };
+            </script>
+            <script src="{!URLFOR($Resource.DocGenSignaturePrepare)}"></script>
+        </body>
+    </html>
+</apex:page>

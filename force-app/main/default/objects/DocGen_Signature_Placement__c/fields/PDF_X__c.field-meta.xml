@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>PDF_X__c</fullName>
+    <description
+    >Field lower-left X in unrotated PDF points, including CropBox origin. Managed by the signature editor.</description>
+    <externalId>false</externalId>
+    <label>PDF X</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>4</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

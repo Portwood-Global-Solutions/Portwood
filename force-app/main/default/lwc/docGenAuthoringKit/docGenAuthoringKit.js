@@ -807,7 +807,11 @@ export function scopeHtmlForInlinePreview(html) {
     const styles = [];
     work = work.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (m, css) => {
         styles.push(css);
-        return '';
+        // Keep an inert copy where the author put it. The scoped sheet below
+        // renders the preview; this copy only lets the serializer return the
+        // author's CSS unchanged after a Visual/Source round trip (#464).
+        // A non-CSS type prevents unscoped rules from leaking into Lightning.
+        return '<style data-dg-authored="1" type="text/dg-css">' + css + '</style>';
     });
     const bodyMatch = work.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
     let content = bodyMatch ? bodyMatch[1] : work.replace(/<\/?(?:!DOCTYPE|html|head|body|meta|title)\b[^>]*>/gi, '');
@@ -860,7 +864,9 @@ export function scopeHtmlForInlinePreview(html) {
         // their edges stay reachable for column drag-resize.
         '.dg-pv table { max-width: 100% !important; }\n' +
         '.dg-pv td, .dg-pv th { overflow-wrap: break-word; }';
-    return '<div class="dg-pv"><style>' + baseline + css + '</style>' + content + '</div>';
+    // Mark the stylesheet the editor owns so serialization removes only editor
+    // chrome, never an author's <style> element (#464).
+    return '<div class="dg-pv"><style data-dg-editor="preview">' + baseline + css + '</style>' + content + '</div>';
 }
 
 // ---------------------------------------------------------------------------

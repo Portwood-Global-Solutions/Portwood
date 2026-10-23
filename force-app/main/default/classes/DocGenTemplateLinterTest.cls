@@ -58,15 +58,14 @@ private class DocGenTemplateLinterTest {
         Test.stopTest();
 
         System.assertEquals(before, html, 'lint must never touch the author\'s bytes');
-        System.assertNotEquals(null, findRule(findings, 'display:flex / display:grid'), 'flex must be reported');
-        System.assertNotEquals(null, findRule(findings, 'Gradient'), 'gradients must be reported');
-        System.assertNotEquals(null, findRule(findings, 'calc()'), 'calc() must be reported');
+        DocGenAiHtmlValidator.Finding css = findRule(findings, 'Modern CSS the PDF engine ignores');
+        System.assertNotEquals(null, css, 'modern CSS must still be reported');
+        System.assert(css.detail.contains('display:flex / display:grid'), 'flex must be named: ' + css.detail);
+        System.assert(css.detail.contains('Gradient'), 'gradients must be named: ' + css.detail);
+        System.assert(css.detail.contains('calc()'), 'calc() must be named: ' + css.detail);
         for (DocGenAiHtmlValidator.Finding f : findings) {
-            System.assertEquals('warning', f.action, 'lint never repairs or removes — every finding is a warning');
-            System.assert(
-                f.detail.contains('your file was not modified'),
-                'reworded detail must say the file was not modified: ' + f.detail
-            );
+            System.assertNotEquals('repaired', f.action, 'lint never modifies the file');
+            System.assertNotEquals('removed', f.action, 'lint never modifies the file');
         }
     }
 
@@ -121,6 +120,7 @@ private class DocGenTemplateLinterTest {
         );
         DocGenAiHtmlValidator.Finding f = findRule(findings, 'Unclosed loop tag');
         System.assertNotEquals(null, f, 'generation would fail with "Malformed loop tag" — warn at save time');
+        System.assertEquals('error', f.action, 'a malformed loop blocks generation');
         System.assert(f.detail.contains('{#Lines}'), 'the warning must name the tag: ' + f.detail);
     }
 
@@ -209,6 +209,38 @@ private class DocGenTemplateLinterTest {
     }
 
     @isTest
+    static void chartBucketVariablesAreValidatedInTheirOwnScope() {
+        String html =
+            '<html><body>{#ChartBucket:Contacts:Department}' +
+            '<p>{key} {key_label} {count} {percent} {percent_int} {max_percent} ' +
+            '{color} {color_hex} {index}</p>' +
+            '{#cols}<span>{percent_of_row} {percent_of_row_int}</span>{/cols}' +
+            '{/ChartBucket}</body></html>';
+
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+
+        System.assertEquals(
+            null,
+            findRule(findings, 'Merge tag does not resolve'),
+            'ChartBucket values come from the bucket resolver, not Account fields: ' + findings
+        );
+        System.assertEquals(
+            null,
+            findRule(findings, 'Loop relationship not found'),
+            'the nested cols list is supplied by a pivot ChartBucket: ' + findings
+        );
+    }
+
+    @isTest
+    static void chartBucketScopeDoesNotHideAnActuallyUnknownTag() {
+        String html = '<html><body>{#ChartBucket:Contacts:Department}<p>{key_label} {NotAField__c}</p>{/ChartBucket}</body></html>';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        DocGenAiHtmlValidator.Finding f = findRule(findings, 'Merge tag does not resolve');
+        System.assertNotEquals(null, f, 'only documented bucket variables are exempt');
+        System.assert(f.detail.contains('NotAField__c'), 'the real unknown tag must be named: ' + f.detail);
+    }
+
+    @isTest
     static void unknownLoopRelationshipIsReported() {
         List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(
             '<p>{#NotARel}</p><p>{Name}</p><p>{/NotARel}</p>',
@@ -274,6 +306,54 @@ private class DocGenTemplateLinterTest {
     }
 
     @isTest
+    static void inertGapOnBlockLayoutIsNotReported() {
+        String html =
+            '<html><head><style>.panel{display:block;padding:12px;gap:16px}</style></head>' +
+            '<body><div class="panel"><p>First</p><p>Second</p></div></body></html>';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate(null));
+        System.assertEquals(
+            0,
+            findings.size(),
+            'gap is inert without flex/grid and must not read as a defect: ' + findings
+        );
+    }
+
+    @isTest
+    static void reportModeDoesNotClaimItRepairedTheFile() {
+        String html =
+            '<html><head><style>.a{font-weight:600}.b{background:rgba(0,0,0,.5)}' +
+            '.c{background:linear-gradient(#fff,#000)}</style></head><body>{Name}</body></html>';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        System.assert(!findings.isEmpty(), 'the visible renderer differences must still be reported');
+        for (DocGenAiHtmlValidator.Finding f : findings) {
+            String detail = f.detail.toLowerCase();
+            System.assert(!detail.contains('mapped '), 'report mode did not map anything: ' + f.detail);
+            System.assert(!detail.contains('composited the'), 'report mode did not composite anything: ' + f.detail);
+            System.assert(!detail.contains('replaced each'), 'report mode did not replace anything: ' + f.detail);
+        }
+    }
+
+    @isTest
+    static void generationBlockersAreErrorsAndCannotBeHiddenByTheCap() {
+        DocGenTemplateLinter.maxReportedFindings = 1;
+        String html =
+            '```html\n<link rel="stylesheet" href="a.css"><style>.x{display:flex}</style>' + '<p>{#Contacts}</p>\n```';
+        List<DocGenAiHtmlValidator.Finding> findings = DocGenTemplateLinter.lint(html, accountTemplate('Name'));
+        DocGenAiHtmlValidator.Finding blocker = findRule(findings, 'Unclosed loop tag');
+        System.assertNotEquals(
+            null,
+            blocker,
+            'the cap must never hide a finding that prevents generation: ' + findings
+        );
+        System.assertEquals(
+            'error',
+            blocker.action,
+            'the UI must distinguish generation blockers from rendering notes'
+        );
+        System.assertEquals('Unclosed loop tag', findings[0].rule, 'generation blockers must be listed first');
+    }
+
+    @isTest
     static void lintNeverThrowsOnGarbage() {
         Test.startTest();
         List<DocGenAiHtmlValidator.Finding> blank = DocGenTemplateLinter.lint(null, null);
@@ -286,6 +366,25 @@ private class DocGenTemplateLinterTest {
         System.assertEquals(0, blank.size(), 'blank input is an empty report, not an exception');
         System.assertNotEquals(null, garbage);
         System.assertNotEquals(null, noTemplate);
+    }
+
+    @isTest
+    static void largeHtmlSaveSkipsRegexHeavyLintWithoutBlockingUpload() {
+        DocGen_Template__c tpl = newHtmlTemplate();
+        List<String> paragraphs = new List<String>();
+        for (Integer i = 0; i < 5000; i++) {
+            paragraphs.add('<p class="row">A long imported HTML paragraph with {Name}.</p>');
+        }
+        String html = '<html><body>' + String.join(paragraphs, '') + '</body></html>';
+        System.assert(html.length() > 200000, 'precondition: exercise the bounded large-file path');
+
+        Test.startTest();
+        Map<String, Object> res = DocGenController.saveHtmlTemplateBody(tpl.Id, 'large.html', html);
+        Test.stopTest();
+
+        System.assertNotEquals(null, res.get('contentVersionId'), 'large HTML must still be uploaded');
+        List<DocGenAiHtmlValidator.Finding> warnings = (List<DocGenAiHtmlValidator.Finding>) res.get('warnings');
+        System.assertNotEquals(null, findRule(warnings, 'Detailed fidelity scan skipped'));
     }
 
     // -----------------------------------------------------------------------

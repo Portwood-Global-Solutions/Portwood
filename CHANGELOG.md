@@ -2,6 +2,144 @@
 
 ## Unreleased
 
+### Added - branded guest signing experience
+
+- Applied reusable brand company name, logo, color, and favicon behavior across the signing
+  verification, signing, confirmation, success, and error paths.
+- Preserved the existing org-wide Signature Settings experience when a template has no Sending
+  Brand selected.
+- Improved success and error cards with centered responsive layouts and clearer status treatment.
+
+### Fixed - signer input and error-state behavior
+
+- Drawing and typed signatures are mutually exclusive while retaining manual multi-stroke drawing.
+- Signature drawing now renders immediately and keeps the typed field disabled from the first
+  stroke; clearing either method restores the available input controls.
+- Error pages retain the resolved company name and logo favicon in the browser tab, including
+  already-signed and expired-link responses.
+- **The "waiting for other signers" screen in a multi-signer request no longer shows the Brand
+  header**, matching the unbranded, generic look of the final "Signature Complete" screen. Both
+  post-signing confirmation cards are now deliberately unbranded and consistent with each other;
+  the brand header still shows during active signing (the PDF view and the verify-email step
+  carry the brand through their own inline elements instead).
+
+- **Cleared Canvas text boxes stay empty in generated PDFs (#295, PR #361).**
+  Clearing a box in the rich-text editor no longer restores its original imported
+  content or the placeholder word `Text` when saving and generating a document.
+  Empty rich-text content now serializes as empty; legacy boxes without rich-text
+  content retain their plain-text fallback.
+- **ZIP template uploads no longer fail when Lightning Web Security blocks
+  `DecompressionStream` (#320, PR #344).** The browser ZIP reader now detects whether
+  native `deflate-raw` decompression is available and falls back to an inline RFC 1951
+  decoder when it is missing or rejected. The native path remains unchanged for supported
+  browsers. The same HTML ZIP failed before the fix with an **Upload Failed** decompression
+  error and reached **Ready to Save** after the fix, including image extraction.
+
+### Added
+
+- **Custom font assets for native PDF output.** Command Hub → Assets now has a Custom Fonts
+  section for uploading static TrueType faces individually, in batches of up to 25 files, or
+  as a ZIP archive of up to 200 `.ttf` files / 25 MB. Each face is inspected, stored as a
+  Salesforce File revision, and must pass a native PDF specimen review before approval.
+- **Custom font selection in Canvas and HTML authoring.** Approved faces appear beside the
+  built-in fonts, preview with their real browser font, and can be pinned to text using a
+  copied `{%font:asset-key:revision-key}` inline-style tag. Imported Word/HTML PDF templates
+  automatically match approved faces by family, weight, and style.
+- **Per-face lifecycle controls.** Admins can approve multiple inspected faces, retire approved
+  faces so existing template revisions keep working, and delete retired faces individually or
+  in bulk. Active/approved faces cannot be deleted.
+- **Native PDF font safety checks.** Upload inspection rejects unsupported supplementary-plane
+  Unicode coverage before creating the font registry record. If an already-approved face is
+  unavailable during rendering, Portwood skips that face and continues the document with the
+  normal PDF fallback instead of failing the entire document.
+
+### Fixed
+
+- **Canvas plain-text merge tags retain their underscores (#282, PR #292).**
+  Custom-field, relationship and namespaced tags containing `__c` or `__r` are no
+  longer mistaken for underline formatting, which could corrupt the tags and leave
+  unresolved text or blank values in generated PDFs. Merge tags are protected during
+  formatting expansion, while bold, italic, underline and strikethrough surrounding
+  them still work. Regression checks cover tag preservation and formatting that
+  spans a merge tag.
+- **The HTML fidelity report now separates rendering notes from generation blockers
+  (#318).** Harmless declarations such as `gap` on ordinary block layouts no longer
+  produce repeated warnings, related modern-CSS differences are grouped into one clear
+  note, and valid ChartBucket variables are no longer reported as unknown merge tags.
+  Unclosed loops and unbalanced merge braces are shown as errors that can stop
+  generation, while advisory findings use wording that no longer implies Portwood
+  modified the uploaded file.
+- **Template page size now persists across create and version-save flows.** The admin
+  create wizard no longer seeds `Letter` as a hidden/default page size. When an author
+  selects `Legal`, `A4`, or `Letter`, that value is carried into the first Edit Template
+  Configuration / legacy designer save and then inherited by later template versions
+  until the author changes it. If Page Size is left blank, the app saves `Letter`
+  explicitly as the fallback without restoring `Letter` as the field metadata default.
+- **Template export and LWS downloads (#454).** Template export now downloads the
+  `.docgen.json` bundle and shows the success toast without the misleading `url is not
+defined` error. Template JSON export, Canvas HTML export, and shared Office-file
+  downloads use Blob URLs instead of `data:` download URLs that Lightning Web Security
+  can block. A permitted MIME fallback preserves the file bytes, filenames, extensions,
+  and Unicode content. Temporary download anchors are removed and Blob URLs are released
+  after the browser has time to start the download. Native Salesforce file preview
+  behavior is unchanged.
+- **Flow document generation now respects selected record IDs (#463).** Empty record
+  collections fail safely without creating an unscoped all-records job, and a request
+  with neither record IDs nor a WHERE condition is rejected the same way, so a Flow
+  action can no longer turn an empty or unscoped selection into a job that generates a
+  document for every record of the template's base object. Populated collections still
+  generate documents only for the selected records.
+- **Bulk document generation no longer clutters a Job's Files list with internal
+  working data.** The per-job data cache and the per-record HTML snippets used to
+  assemble a combined PDF are implementation detail, not user output; they are no
+  longer linked to the Job record's Files related list. The cache is still cleaned up
+  automatically when the job finishes, and combined/individual output documents are
+  unaffected.
+- **Legacy Designer preserves authored HTML and CSS when switching between Source and Visual
+  modes (#464).** Custom `<style>` blocks, including `@page`, font, spacing, and layout rules, are
+  no longer stripped during editor round trips. Conditional tags still appear as editor-only pills
+  in Visual mode, but their green pill styling and other preview chrome are removed from saved HTML
+  and generated PDF input.
+- **Rich-text header/footer images are now durable and deduplicated.** Images
+  inserted into HTML template headers or footers are migrated from temporary
+  Salesforce rich-text URLs into template-owned Files. The same image is
+  identified by its SHA-256 content hash and reused across saves and new
+  template versions; only a newly inserted or changed image creates a new File.
+- **Canvas rich text colors now persist when applied through the toolbar or entered as RGB in HTML (#469).**
+  RGB colors are converted to equivalent hex values before sanitization, keeping the selected colors in the
+  canvas and saved template. Existing named and hex colors continue to work; unsupported color functions
+  remain filtered.
+- **DOCX saves no longer fail with `Regex too complicated` on large or complex templates.**
+  The upload-time DOCX fidelity linter previously applied whole-document regular expressions
+  while scanning text runs, merge tags, table rows, and conditional expressions. Apex could
+  exceed its regex step limit during **Save as New Version**, especially with long paragraphs,
+  repeated tags, and large tables. Those scans now use linear string processing while
+  preserving the existing warning behavior. The focused `DocGenDocxTemplateLinterTest` suite
+  passes all 20 tests. Extremely large files can still be subject to Salesforce heap, CPU, and
+  DOCX/rendering limits.
+- **HTML template processing no longer relies on whole-document regex scans.** Style/script
+  removal, substantive-content detection, merge-tag detection, and long-link handling now use
+  bounded linear scans, preventing the same regex limit from being reached by large HTML
+  templates while preserving styles and normal merge behavior. Large uploads also bypass the
+  regex-heavy advisory fidelity report, preventing that optional scan from rolling back the
+  upload when Apex reaches its regex step limit.
+
+### Added
+
+- **Prepare customer-uploaded PDFs for signature (#482).** From a record's
+  **Portwood Signature Sender**, choose **Upload PDF**, **Salesforce file**, or
+  **Portwood template**. Uploaded PDFs do not need signature merge tags: place
+  signature, initials, date-signed, and date-picker fields on the document and
+  assign them to recipients. Save and resume private, record-bound drafts before
+  sending. Uploaded PDFs support sequential signing, a signing Brand, email
+  verification settings, public signing links, email invitations, and internal
+  Salesforce preview links. The original PDF is retained separately, sent field
+  placements are locked, and the completed PDF is attached to the record with
+  the signature audit history. Limits: 2 MB, 50 pages, 10 recipients, and 100
+  fields; encrypted PDFs and PDFs with existing digital signatures are rejected.
+  Parallel signing for uploaded PDFs is not yet supported. See
+  [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf-unreleased).
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,

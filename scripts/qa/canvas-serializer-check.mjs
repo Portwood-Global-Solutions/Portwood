@@ -26,6 +26,19 @@ const marks = m.newTextBox(0.5, 3.6, 3, 0.4);
 marks.text = 'Terms: **Net/30** //rush// __signed__ ~~void~~ {Name} 5 < 10';
 doc.artboards[0].boxes.push(marks);
 
+// #282 regression: two merge tags carrying double underscores (the __r / __c every
+// relationship and custom field has). The underline mark `__` must not pair the
+// underscores across the two tags into a <u> span inside {…}.
+const relBox = m.newTextBox(0.5, 3.9, 3, 0.4);
+relBox.text = '{Client__r.Name} / {Amount__c}';
+doc.artboards[0].boxes.push(relBox);
+
+// A mark SPANNING a tag must still expand — the fix keeps tags atomic without cutting
+// the string into slices, so **Total: {Amount__c}** prints bold, not literal asterisks.
+const spanBox = m.newTextBox(0.5, 4.05, 3, 0.4);
+spanBox.text = '**Total: {Amount__c}**';
+doc.artboards[0].boxes.push(spanBox);
+
 const cond = m.newTextBox(0.5, 4.2, 3, 0.4);
 cond.text = '{#IF Amount > 100000}Large deal{/IF}';
 doc.artboards[0].boxes.push(cond);
@@ -81,6 +94,14 @@ const variantHtml = m.serialize(variantDoc, geo);
 const rich = m.newTextBox(0.5, 5.2, 3, 0.4);
 rich.html = '<p><b>Rich</b> text with {Owner.Name} and a &#123;braced&#125; entity</p>';
 doc.artboards[0].boxes.push(rich);
+
+// #295: an author clearing a box in the rich-text editor writes html='' (not null).
+// That must serialize to nothing — falling through to `text` would resurrect stale
+// content the canvas shows as empty (the pre-edit import, or the 'Text' placeholder).
+const cleared = m.newTextBox(0.5, 5.6, 3, 0.4);
+cleared.html = '';
+cleared.text = 'STALE-CLEARED-BOX';
+doc.artboards[0].boxes.push(cleared);
 
 const logo = m.newImageBox(0.5, 0.2, 1.5, 0.75);
 logo.image.src = '/sfc/servlet.shepherd/version/download/068000000000001';
@@ -282,6 +303,16 @@ const checks = [
     ['strike mark expands', html.includes('<s>void</s>')],
     ['a slash inside a mark survives', html.includes('<b>Net/30</b>')],
     ['merge tag beside marks is untouched', html.includes('{Name}')],
+    // #282: the __r / __c double underscores must not be absorbed by the underline
+    // mark, or the pair of tags collapses into one <u> span and both print raw.
+    ['a __r merge tag survives intact', html.includes('{Client__r.Name}')],
+    ['a __c merge tag survives intact', html.includes('{Amount__c}')],
+    ['no underline mark opens inside a merge tag', !html.includes('{Client<u>r.Name}')],
+    ['no underline spans across two merge tags', !html.includes('<u>r.Name} / {Amount</u>')],
+    // A mark that SPANS a tag must still expand — baking the slice split in would
+    // resurrect literal ** in the PDF for every bolded merge tag.
+    ['a mark spanning a merge tag still expands', html.includes('<b>Total: {Amount__c}</b>')],
+    ['no literal ** survives into the output', !html.includes('**')],
     ['a literal < stays escaped, not turned into markup', html.includes('5 &lt; 10')],
     // A flow box's margin is the GAP from the previous flow box, never its absolute y.
     // Emitting y put a box authored at 7.5in seven and a half inches BELOW the table
@@ -327,6 +358,9 @@ const checks = [
     // showing what a format suffix looks like, and decoding it would turn the example
     // into a live merge tag that prints the record's data.
     ['escaped braces are NOT turned into live tags', /&#123;braced&#125;|&amp;#123;/.test(html)],
+    // #295: an empty html='' is authored-empty, not "fall back to text". The stale
+    // `text` on a cleared box must never serialize into the document.
+    ['a cleared box serializes empty, not its stale text', !html.includes('STALE-CLEARED-BOX')],
 
     // --- Images ------------------------------------------------------------
     // Flying Saucer computes a replaced element's size ONCE PER URL, so the same image

@@ -8,7 +8,14 @@ import LightningConfirm from 'lightning/confirm';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
-import { downloadBase64 as downloadBase64Util, parseSOQLFields, stripOuterSelectFrom } from 'c/docGenUtils';
+import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
+import { loadFontFace } from 'c/docGenFontLoader';
+import {
+    downloadBase64 as downloadBase64Util,
+    downloadBlob,
+    parseSOQLFields,
+    stripOuterSelectFrom
+} from 'c/docGenUtils';
 // HTML-first authoring: starter designs, AI prompt builder, query-shape extractor
 import {
     STARTERS,
@@ -427,7 +434,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track newTemplateType = 'Canvas';
     @track newTemplateOutputFormat = 'PDF';
     @track newTemplatePageOrientation = 'Portrait';
-    @track newTemplatePageSize = 'Letter';
+    @track newTemplatePageSize = null;
     @track newTemplatePageMargins = 'Default';
     @track newTemplateCustomMargins = '';
     newTemplateObject = 'Account';
@@ -470,9 +477,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track editTemplateObject;
     @track editTemplateOutputFormat;
     @track editTemplatePageOrientation = 'Portrait';
-    @track editTemplatePageSize = 'Letter';
+    @track editTemplatePageSize = null;
     @track editTemplatePageMargins = 'Default';
     @track editTemplateCustomMargins = '';
+    editTemplatePageSetupTouched = false;
     @track editTemplateWatermarkCvId;
     @track isUploadingWatermark = false;
     editTemplateDesc;
@@ -776,7 +784,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     get pdfAcroFormFilterOptions() {
-        return [
+        const builtins = [
             { label: 'All fields', value: 'all' },
             { label: 'Mapped', value: 'mapped' },
             { label: 'Unmapped', value: 'unmapped' },
@@ -1519,6 +1527,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // the template toggle stays visible until the next load, it never blocks the
         // editor.
         this._refreshOrgHideDecline();
+        this._loadDesignerFonts();
     }
 
     // #367
@@ -2487,7 +2496,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const s = STARTERS.find((x) => x.key === this.newStarterKey);
         if (s && s.page) {
             this.newTemplatePageOrientation = s.page.orientation || 'Portrait';
-            this.newTemplatePageSize = s.page.size || 'Letter';
+            this.newTemplatePageSize = s.page.size || null;
             this.newTemplatePageMargins = s.page.margins || 'Default';
         }
     }
@@ -3273,7 +3282,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplatePageOrientation = event.detail.value;
     }
     handleNewPageSizeChange(event) {
-        this.newTemplatePageSize = event.detail.value;
+        this.newTemplatePageSize = event.detail.value || null;
     }
     handleNewPageMarginsChange(event) {
         this.newTemplatePageMargins = event.detail.value;
@@ -3890,15 +3899,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplateOutputFormat = event.detail.value;
     }
     handleEditPageOrientationChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplatePageOrientation = event.detail.value;
     }
     handleEditPageSizeChange(event) {
-        this.editTemplatePageSize = event.detail.value;
+        this.editTemplatePageSetupTouched = true;
+        this.editTemplatePageSize = event.detail.value || null;
     }
     handleEditPageMarginsChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplatePageMargins = event.detail.value;
     }
     handleEditCustomMarginsChange(event) {
+        this.editTemplatePageSetupTouched = true;
         this.editTemplateCustomMargins = event.detail.value;
     }
     handleEditDescChange(event) {
@@ -4748,6 +4761,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     get pageSizeOptions() {
         return [
+            { label: '-- None --', value: '' },
             { label: 'Letter (8.5 x 11 in)', value: 'Letter' },
             { label: 'Legal (8.5 x 14 in)', value: 'Legal' },
             { label: 'A4 (210 x 297 mm)', value: 'A4' }
@@ -4867,17 +4881,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         fields[CATEGORY_FIELD.fieldApiName] = this.newTemplateCategory;
         fields[TYPE_FIELD.fieldApiName] = this.newTemplateType;
         fields[OUTPUT_FORMAT_FIELD.fieldApiName] = this.newTemplateOutputFormat;
-        // Page setup only meaningful for PDF output. v1.90 — skip for HTML
-        // templates: their @page CSS owns page layout, and engine suppresses
-        // template-level overrides when source @page is present. Saving the
-        // create-wizard defaults would just leave conflicting values that
-        // confuse later editors.
-        if (
-            this.newTemplateOutputFormat === 'PDF' &&
-            (this.newTemplateType !== 'HTML' || this.newAuthoringMode === 'starter')
-        ) {
+        const newTemplatePageSize = this.newTemplatePageSize || 'Letter';
+        // Page setup only meaningful for PDF output. Do not seed a default page
+        // size, but if the author explicitly picked one during create, persist it
+        // so the first designer save/new version can inherit that choice.
+        if (this.newTemplateOutputFormat === 'PDF' && this.newTemplateType !== 'Canvas') {
             fields[PAGE_ORIENTATION_FIELD.fieldApiName] = this.newTemplatePageOrientation;
-            fields[PAGE_SIZE_FIELD.fieldApiName] = this.newTemplatePageSize;
+            fields[PAGE_SIZE_FIELD.fieldApiName] = newTemplatePageSize;
             fields[PAGE_MARGINS_FIELD.fieldApiName] = this.newTemplatePageMargins;
             if (this.newTemplatePageMargins === 'Custom') {
                 fields[CUSTOM_MARGINS_FIELD.fieldApiName] = this.newTemplateCustomMargins;
@@ -4936,7 +4946,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 [F.Type]: this.newTemplateType,
                 [F.OutputFormat]: this.newTemplateOutputFormat,
                 [F.PageOrientation]: this.newTemplatePageOrientation,
-                [F.PageSize]: this.newTemplatePageSize,
+                [F.PageSize]: newTemplatePageSize,
                 [F.PageMargins]: this.newTemplatePageMargins,
                 [F.CustomMargins]: this.newTemplateCustomMargins,
                 [F.BaseObject]: this.newTemplateObject,
@@ -5087,10 +5097,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.htmlEditorDirty = false;
             // Starters declare @page — same handling as an uploaded body that owns it.
             this.editHtmlBodyOwnsPageRule = true;
-            this.editTemplatePageOrientation = null;
-            this.editTemplatePageSize = null;
-            this.editTemplatePageMargins = null;
-            this.editTemplateCustomMargins = '';
+            this._clearPageSetupIfNoExplicitSize();
             // Land the author inside the HTML with the draft loaded.
             this.showHtmlBodyEditor = true;
             this._syncHtmlBodyEditorDom(html);
@@ -5126,10 +5133,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.htmlEditorDirty = false;
             if (/@page\b/i.test(html)) {
                 this.editHtmlBodyOwnsPageRule = true;
-                this.editTemplatePageOrientation = null;
-                this.editTemplatePageSize = null;
-                this.editTemplatePageMargins = null;
-                this.editTemplateCustomMargins = '';
+                this._clearPageSetupIfNoExplicitSize();
             }
             this.showHtmlBodyEditor = true;
             this._syncHtmlBodyEditorDom(html);
@@ -5225,15 +5229,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             this.showToast('Exporting', 'Preparing ' + row.Name + '...', 'info');
             const jsonStr = await exportTemplate({ templateId: row.Id });
-            // application/json is not on the LWS createObjectURL allowlist, so a
-            // Blob URL is refused outright in an LWS-enabled org. A data: URI is.
-            const a = document.createElement('a');
-            a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonStr);
-            a.download = (row.Name || 'template').replace(/[^a-zA-Z0-9_-]/g, '_') + '.docgen.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const fileName = (row.Name || 'template').replace(/[^a-zA-Z0-9_-]/g, '_') + '.docgen.json';
+            downloadBlob(new Blob([jsonStr], { type: 'text/plain' }), fileName);
             this.showToast('Exported', row.Name + ' exported successfully', 'success');
         } catch (error) {
             this.showToast('Export Error', error.body ? error.body.message : error.message, 'error');
@@ -5324,9 +5321,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateObject = row[F.BaseObject];
             this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
             this.editTemplatePageOrientation = row[F.PageOrientation] || 'Portrait';
-            this.editTemplatePageSize = row[F.PageSize] || 'Letter';
+            this.editTemplatePageSize = row[F.PageSize] || null;
             this.editTemplatePageMargins = row[F.PageMargins] || 'Default';
             this.editTemplateCustomMargins = row[F.CustomMargins] || '';
+            this.editTemplatePageSetupTouched = false;
             this.editTemplateDesc = row[F.Desc];
             // Pass the raw stored config to the visual builder. V3 JSON must
             // NOT be flattened to V1 SOQL here — V1 can't represent filtered
@@ -5430,7 +5428,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.activeEditTab = activeTab || 'details';
             }
 
-            this.loadVersions(row.Id);
+            await this.loadVersions(row.Id);
             if (row[F.Type] === 'PDF') {
                 this.loadPdfAcroFormMapping();
             }
@@ -5548,7 +5546,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     loadVersions(templateId) {
-        getTemplateVersions({ templateId })
+        return getTemplateVersions({ templateId })
             .then((data) => {
                 if (!data) {
                     this.versions = [];
@@ -5575,6 +5573,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 });
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
+                this._applyActiveVersionPageSetup(active);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
                 this._watermarkSourceFile = null;
                 // Seed the strength control from what's actually stored, so it
@@ -5614,6 +5613,39 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.versions = [];
                 this.editTemplateWatermarkCvId = null;
             });
+    }
+
+    _applyActiveVersionPageSetup(active) {
+        if (!active) {
+            return;
+        }
+        // The edit form saves a new version from these fields. For existing
+        // templates, the active version snapshot is the source of truth for the
+        // page setup that the next version should inherit. Without this, a stale
+        // template-level default can make Legal/A4 versions reopen as Letter and
+        // then save the wrong snapshot.
+        if (active[F.VerPageOrientation]) {
+            this.editTemplatePageOrientation = active[F.VerPageOrientation];
+        }
+        if (active[F.VerPageSize]) {
+            this.editTemplatePageSize = active[F.VerPageSize];
+        }
+        if (active[F.VerPageMargins]) {
+            this.editTemplatePageMargins = active[F.VerPageMargins];
+        }
+        if (active[F.VerCustomMargins]) {
+            this.editTemplateCustomMargins = active[F.VerCustomMargins];
+        }
+    }
+
+    _clearPageSetupIfNoExplicitSize() {
+        if (this.editTemplatePageSize) {
+            return;
+        }
+        this.editTemplatePageOrientation = null;
+        this.editTemplatePageSize = null;
+        this.editTemplatePageMargins = null;
+        this.editTemplateCustomMargins = '';
     }
 
     async handleRestoreVersion(event) {
@@ -5853,6 +5885,76 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     // --- Save Logic ---
+    /**
+     * Lightning rich-text image inserts are stored as rtaImage/ContentReference
+     * URLs. Those URLs are session/permission-sensitive and can render as
+     * Salesforce's "Image Not Available" placeholder after the template has
+     * aged or is generated by another user. Convert them to the same durable
+     * template-owned ContentVersion URLs used by the HTML body pipeline.
+     *
+     * Extraction uses the existing privileged single-image PDF path because the
+     * browser cannot fetch rtaImage directly under LWS/CORS. If an image cannot
+     * be resolved, keep its original markup so a save never destroys content.
+     */
+    async _materializeRichTextImages(html, templateId, region) {
+        if (!html || !templateId || !/rtaImage/i.test(html)) {
+            return html || '';
+        }
+
+        const urls = [];
+        const seen = new Set();
+        const imageRe = /src\s*=\s*(["'])([^"']*rtaImage[^"']*)\1/gi;
+        let match;
+        while ((match = imageRe.exec(html)) !== null) {
+            const url = match[2];
+            if (!seen.has(url)) {
+                seen.add(url);
+                urls.push(url);
+            }
+        }
+
+        let rewritten = html;
+        for (let i = 0; i < urls.length; i++) {
+            const sourceUrl = urls[i];
+            try {
+                // eslint-disable-next-line no-await-in-loop
+                const pdfB64 = await renderImageAsPdfBase64({ imageUrl: sourceUrl });
+                if (!pdfB64) continue;
+                // eslint-disable-next-line no-await-in-loop
+                const extracted = await extractFirstImageFromPdfBase64(pdfB64);
+                if (!extracted || !extracted.base64) continue;
+                // eslint-disable-next-line no-await-in-loop
+                const saved = await saveHtmlTemplateImage({
+                    templateId,
+                    fileName: 'richtext_' + (region || 'chrome') + '_' + (i + 1) + '.' + (extracted.ext || 'png'),
+                    base64Content: extracted.base64
+                });
+                if (saved && saved.url) {
+                    rewritten = rewritten.split(sourceUrl).join(saved.url);
+                }
+            } catch (error) {
+                // Preserve the original image if the source is no longer
+                // readable. This keeps unrelated template edits saveable.
+                // eslint-disable-next-line no-console
+                console.warn('Portwood: rich-text ' + (region || 'chrome') + ' image migration failed', error);
+            }
+        }
+        return rewritten;
+    }
+
+    async _materializeHeaderFooterImages() {
+        this.editTemplateHeaderHtml = await this._materializeRichTextImages(
+            this.editTemplateHeaderHtml,
+            this.editTemplateId,
+            'header'
+        );
+        this.editTemplateFooterHtml = await this._materializeRichTextImages(
+            this.editTemplateFooterHtml,
+            this.editTemplateId,
+            'footer'
+        );
+    }
+
     async handleSaveOnly() {
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
@@ -5877,12 +5979,14 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // Preview already does, so Save can never persist a stale chrome value.
         try {
             this._liveChrome();
+            await this._materializeHeaderFooterImages();
         } catch (err) {
             const msg = err && err.message ? err.message : String(err);
             this.showToast('Could not read the header/footer', msg, 'error');
             return;
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -5907,7 +6011,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -5922,6 +6026,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false, contentVersionId: null });
             this.showToast('Success', 'Template Details saved.', 'success');
+            this.editTemplatePageSetupTouched = false;
             // The modal stays open after a details save; re-baseline the
             // unsaved-changes snapshot so a following Close doesn't warn about
             // edits that are now persisted on the record (#370).
@@ -5945,6 +6050,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // dropped by a save that looked completely successful.
         try {
             this._liveChrome();
+            await this._materializeHeaderFooterImages();
         } catch (err) {
             const msg = err && err.message ? err.message : String(err);
             this.showToast('Could not read the header/footer', msg, 'error');
@@ -5976,6 +6082,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
         }
 
+        const editTemplatePageSize = this.editTemplatePageSize || 'Letter';
         const fields = {
             Id: this.editTemplateId,
             Name: this.editTemplateName,
@@ -6000,7 +6107,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Header_Html__c: this.editTemplateHeaderHtml,
             Footer_Html__c: this.editTemplateFooterHtml,
             Page_Orientation__c: this.editTemplatePageOrientation,
-            Page_Size__c: this.editTemplatePageSize,
+            Page_Size__c: editTemplatePageSize,
             Page_Margins__c: this.editTemplatePageMargins,
             Custom_Margins__c: this.editTemplateCustomMargins,
             Signer_Verification__c: this.editTemplateSignerVerification,
@@ -6095,6 +6202,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             if (this.editTemplateId) {
                 this.loadVersions(this.editTemplateId);
             }
+            this.editTemplatePageSetupTouched = false;
             this.activeEditTab = this.editTemplateType === 'PDF' ? 'pdfFields' : 'document';
             // "Save as New Version" deliberately leaves the modal open (authors
             // want to preview/test the new version straight away). Re-baseline the
@@ -6139,6 +6247,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             return;
         }
 
+        let stagedDraftForGeneration = false;
+
         // Auto-heal sample query config
         if (
             this.editTemplateName === 'Sample Quote Template' &&
@@ -6149,8 +6259,38 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 ', (SELECT Product2.Name, Description, Quantity, UnitPrice, TotalPrice FROM QuoteLineItems)';
         }
 
-        // Save first
-        await this.handleSaveOnly();
+        // Save the live Visual designer body before generation. handleSaveOnly()
+        // persists template fields only; without this step Generate used the last
+        // staged ContentVersion, so a newly selected custom font appeared in the
+        // editor/preview but disappeared from the generated PDF.
+        if (this.activeMainTab === 'design' && this.editTemplateType === 'HTML') {
+            const draft = (this._currentDraftHtml() || '').trim();
+            const lastStaged = (this._lastUploadedHtmlText || '').trim();
+            const norm = (value) => value.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
+            if (draft && (this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
+                try {
+                    const base = (this.uploadedFileName || 'template.html').replace(/\.(html?|zip)$/i, '');
+                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, base + '.html', null, 'editor');
+                    this.htmlEditorDirty = false;
+                    stagedDraftForGeneration = true;
+                } catch (err) {
+                    const msg =
+                        err && err.body && err.body.message ? err.body.message : (err && err.message) || String(err);
+                    this.showToast('Generation Failed', 'Could not stage your designer edits. ' + msg, 'error');
+                    return;
+                }
+            }
+        }
+
+        // A staged HTML body is a loose ContentVersion until Save as New Version
+        // links it to the template. Generation reads the active version, so use
+        // the full save path here whenever this run staged live designer edits;
+        // otherwise metadata-only generation keeps the existing lightweight save.
+        if (stagedDraftForGeneration) {
+            await this.handleSaveAndClose();
+        } else {
+            await this.handleSaveOnly();
+        }
 
         this.isLoadingVersions = true;
 
@@ -6800,9 +6940,27 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.lintFindings && this.lintFindings.length > 0;
     }
 
+    get blockingLintCount() {
+        return (this.lintFindings || []).filter((finding) => finding.isBlocking).length;
+    }
+
+    get hasBlockingLintFindings() {
+        return this.blockingLintCount > 0;
+    }
+
+    get lintReportHeading() {
+        return this.hasBlockingLintFindings ? 'Fix before generating' : 'Notes on how this renders';
+    }
+
+    get lintReportIntro() {
+        return this.hasBlockingLintFindings
+            ? 'Your template saved, but the red findings can prevent generation. Fix those before generating; the remaining notes describe PDF-engine differences.'
+            : 'Your template saved. These notes identify PDF-engine differences that may change what a reader sees.';
+    }
+
     /**
-     * Fidelity report (#272): server Finding DTOs → badge rows, the same shape
-     * the Agentforce report renders. Lint actions are always 'warning'.
+     * Fidelity report (#272/#318): server Finding DTOs → badge rows. The linter
+     * uses 'error' only for syntax findings known to prevent generation.
      */
     _mapLintFindings(warnings) {
         return (warnings || []).map((f, i) => ({
@@ -6810,9 +6968,24 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             rule: f.rule,
             detail: f.detail,
             occurrences: f.occurrences,
-            badge: f.action === 'repaired' ? 'Repaired' : f.action === 'removed' ? 'Removed' : 'Check this',
+            occurrenceLabel: f.occurrences === 1 ? '1 match in source' : `${f.occurrences || 0} matches in source`,
+            isBlocking: f.action === 'error',
+            badge:
+                f.action === 'error'
+                    ? 'Fix before generating'
+                    : f.action === 'repaired'
+                      ? 'Repaired'
+                      : f.action === 'removed'
+                        ? 'Removed'
+                        : 'Review',
             badgeClass:
-                f.action === 'warning' ? 'slds-theme_warning' : f.action === 'repaired' ? 'slds-theme_success' : ''
+                f.action === 'error'
+                    ? 'slds-theme_error'
+                    : f.action === 'warning'
+                      ? 'slds-theme_warning'
+                      : f.action === 'repaired'
+                        ? 'slds-theme_success'
+                        : ''
         }));
     }
 
@@ -6820,9 +6993,21 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // itself already got its own success toast.
     _toastLintFindings() {
         const n = this.lintFindings.length;
+        const blockers = this.blockingLintCount;
+        if (blockers > 0) {
+            this.showToast(
+                'Saved — ' + blockers + ' issue' + (blockers === 1 ? '' : 's') + ' can stop generation',
+                'The template was saved. Fix the red finding' +
+                    (blockers === 1 ? '' : 's') +
+                    ' before generating; the fidelity report has the details.',
+                'warning',
+                'sticky'
+            );
+            return;
+        }
         this.showToast(
-            'Saved — ' + n + ' template warning' + (n === 1 ? '' : 's'),
-            'This will still render. The fidelity report in the edit view lists what the PDF engine handles differently — nothing was blocked.',
+            'Saved — ' + n + ' rendering note' + (n === 1 ? '' : 's'),
+            'The template saved. Review the fidelity report for PDF-engine differences that may change the output.',
             'warning',
             'sticky'
         );
@@ -7011,10 +7196,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // re-introduce conflicting values.
         this.editHtmlBodyOwnsPageRule = this.htmlContainsPageRule(rewritten);
         if (this.editHtmlBodyOwnsPageRule) {
-            this.editTemplatePageOrientation = null;
-            this.editTemplatePageSize = null;
-            this.editTemplatePageMargins = null;
-            this.editTemplateCustomMargins = '';
+            this._clearPageSetupIfNoExplicitSize();
         }
         const pageMsg = this.editHtmlBodyOwnsPageRule
             ? ' Your HTML defines its own @page CSS — template page-layout fields cleared.'
@@ -7061,9 +7243,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
             tpl.innerHTML = target;
             const root = tpl.content;
-            for (const marker of root.querySelectorAll('.dg-drop-marker')) {
-                marker.remove();
-            }
+            this._stripEditorLayer(root);
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
@@ -7072,9 +7252,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // pv.innerHTML. Reading the inner HTML discards every sibling of
                 // the preview — which on a flattened document is where the
                 // author's <style>, <title> and <meta> are sitting (#319).
-                for (const styleEl of pv.querySelectorAll(':scope > style')) {
-                    styleEl.remove();
-                }
                 // insertBefore/remove, not replaceWith — LWS proxied nodes are
                 // missing ChildNode.replaceWith (the v3.39 lesson).
                 while (pv.firstChild) {
@@ -7415,9 +7592,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         ];
     }
 
-    /** The PDF engine ships exactly four fonts — the picker offers exactly those. */
+    /** The PDF engine ships exactly four fonts plus approved Asset font faces. */
     get fontChoices() {
-        return [
+        const builtins = [
             {
                 key: 'f_helv',
                 label: 'Helvetica',
@@ -7447,6 +7624,179 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 title: 'Arial Unicode MS — widest character coverage (international text)'
             }
         ];
+        const custom = (this.designerFontFaces || [])
+            .filter((face) => face.selectable)
+            .map((face) => ({
+                key: 'f_' + face.key,
+                label: face.label,
+                value: 'face:' + face.key,
+                style:
+                    "font-family:'" + face.family + "';font-weight:" + face.weight + ';font-style:' + face.style + ';',
+                title: face.label + ' — approved Asset font'
+            }));
+        return [...builtins, ...custom].map((font) => ({
+            ...font,
+            selected: font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif'),
+            itemClass:
+                font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif')
+                    ? 'dg-fmt-menu-item dg-fmt-menu-item_selected'
+                    : 'dg-fmt-menu-item',
+            check: font.value === (this.fmtState.fontValue || 'Helvetica, Arial, sans-serif') ? '✓' : ''
+        }));
+    }
+
+    get selectedFontLabel() {
+        const value = this.fmtState?.fontValue || 'Helvetica, Arial, sans-serif';
+        const choice = this.fontChoices.find((font) => font.value === value);
+        return choice ? choice.label : 'Helvetica';
+    }
+
+    @track designerFontFaces = [];
+    designerFontError;
+    _designerFontPromise;
+    _pendingDesignerFont;
+
+    async _loadDesignerFonts() {
+        if (this._designerFontPromise) return this._designerFontPromise;
+        this._designerFontPromise = getFontFaces()
+            .then((faces) => {
+                this.designerFontFaces = faces || [];
+                this.designerFontError = undefined;
+                return Promise.allSettled(
+                    this.designerFontFaces
+                        .filter((face) => face.selectable)
+                        .map((face) => loadFontFace({ ...face, key: 'admin-' + face.key, previewFamily: face.family }))
+                );
+            })
+            .catch((error) => {
+                this.designerFontFaces = [];
+                this.designerFontError = error?.body?.message || error.message;
+                return [];
+            });
+        return this._designerFontPromise;
+    }
+
+    _applyCustomDesignerFont(value) {
+        const face = this.designerFontFaces.find((item) => 'face:' + item.key === value);
+        if (!face) return false;
+        this._restoreCaret();
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount) {
+            this.showToast('Select some text first', 'Highlight text in the page, then choose a custom font.', 'info');
+            return true;
+        }
+        const range = selection.getRangeAt(0);
+        const collapsed = selection.isCollapsed;
+        const surface = this._surfaceContaining(range.startContainer) || this._canvas();
+        if (!surface) {
+            this.showToast('Select some text first', 'Highlight text in the page, then choose a custom font.', 'info');
+            return true;
+        }
+        try {
+            if (collapsed) {
+                const span = document.createElement('span');
+                span.setAttribute('data-pw-font-caret', 'true');
+                // Keep the revision binding in a data attribute while the
+                // author is editing. `-pw-font-face` is an intentional
+                // renderer marker, not a valid browser CSS property, and
+                // CSSStyleDeclaration may silently discard it when assigned
+                // through style.setProperty(). _unpillifyTags materialises it
+                // into the staged HTML before preview/save.
+                span.setAttribute('data-pw-font-face', face.key);
+                span.style.fontFamily = '"' + face.family + '"';
+                span.style.fontWeight = String(face.weight);
+                span.style.fontStyle = face.style;
+                span.textContent = '\u200b';
+                range.insertNode(span);
+                const caret = document.createRange();
+                caret.selectNodeContents(span);
+                caret.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(caret);
+                this._pendingDesignerFont = {
+                    key: face.key,
+                    family: face.family,
+                    weight: face.weight,
+                    style: face.style,
+                    surface
+                };
+                this._recordCaret(span, surface);
+                this.htmlEditorDirty = true;
+                this._refreshFmtState();
+                return true;
+            }
+            this._pendingDesignerFont = null;
+            document.execCommand('styleWithCSS', false, 'true');
+            document.execCommand('fontName', false, face.family);
+            const elements = [surface, ...surface.querySelectorAll('*')];
+            for (const element of elements) {
+                if (element === surface || !element.isConnected) continue;
+                let intersects = false;
+                try {
+                    intersects = range.intersectsNode(element);
+                } catch (_e) {
+                    continue;
+                }
+                if (!intersects) continue;
+                const family = (element.style.fontFamily || '').replace(/[\"']/g, '').toLowerCase();
+                const faceAttr = (element.getAttribute('face') || '').toLowerCase();
+                if (
+                    family.includes(String(face.family).toLowerCase()) ||
+                    faceAttr === String(face.family).toLowerCase()
+                ) {
+                    element.removeAttribute('face');
+                    element.setAttribute('data-pw-font-face', face.key);
+                    element.style.fontFamily = '\"' + face.family + '\"';
+                    element.style.fontWeight = String(face.weight);
+                    element.style.fontStyle = face.style;
+                }
+            }
+            this.htmlEditorDirty = true;
+            this._refreshFmtState();
+        } catch (error) {
+            this.showToast('Font could not be applied', error?.message || 'Select text and try again.', 'error');
+        }
+        return true;
+    }
+
+    /**
+     * Insert ordinary typed characters directly into the active custom-font span.
+     * Some browsers split an inline span when it contains only a zero-width seed;
+     * handling beforeinput avoids that browser-dependent behavior entirely.
+     */
+    _handlePendingDesignerFontInput(event, surface) {
+        const pending = this._pendingDesignerFont;
+        if (!pending || pending.surface !== surface || !event) {
+            return false;
+        }
+        if (!['insertText', 'insertCompositionText'].includes(event.inputType) || !event.data) {
+            return false;
+        }
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount || !selection.isCollapsed) {
+            this._pendingDesignerFont = null;
+            return false;
+        }
+        const range = selection.getRangeAt(0);
+        const start = range.startContainer;
+        const owner = start && start.nodeType === 3 ? start.parentElement : start;
+        const bound = owner && owner.closest ? owner.closest('[data-pw-font-face]') : null;
+        if (!bound || bound.getAttribute('data-pw-font-face') !== pending.key) {
+            this._pendingDesignerFont = null;
+            return false;
+        }
+        event.preventDefault();
+        const text = document.createTextNode(event.data);
+        range.insertNode(text);
+        const caret = document.createRange();
+        caret.setStartAfter(text);
+        caret.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(caret);
+        this._lastCanvasRange = caret.cloneRange();
+        this.htmlEditorDirty = true;
+        this._refreshFmtState();
+        return true;
     }
 
     /** Keep the page's text selection alive while clicking toolbar controls. */
@@ -8009,6 +8359,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
     get isAlignMenuOpen() {
         return this.openFmtMenu === 'align';
+    }
+
+    get formatBarClass() {
+        return this.openFmtMenu ? 'dg-format-bar dg-format-bar_menu-open' : 'dg-format-bar';
     }
 
     /** Current text colour, painted as the underbar on the trigger. */
@@ -8969,6 +9323,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // mutates the DOM, the only moment the pre-edit state still exists.
         surface.addEventListener('beforeinput', (e) => {
             this._pushUndo('type:' + ((e && e.inputType) || 'text'));
+            this._handlePendingDesignerFontInput(e, surface);
         });
     }
 
@@ -10890,7 +11245,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * flat, Flying Saucer-safe styling the PDF engine renders.
      */
     // --- Active-format indication: B/I/U/S read as pressed at the caret ---
-    @track fmtState = { bold: false, italic: false, underline: false, strike: false };
+    @track fmtState = {
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        fontValue: 'Helvetica, Arial, sans-serif'
+    };
     // Google-Docs-style size box: shows the size at the caret, sets any pt.
     @track fmtSizePt = 11;
 
@@ -11002,11 +11363,66 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.fmtState.strike ? 'dg-fmt-btn dg-fmt-on' : 'dg-fmt-btn';
     }
 
+    /** Resolve the font represented by the caret/selection to a picker value. */
+    _fontValueAtNode(node) {
+        const fallback = 'Helvetica, Arial, sans-serif';
+        if (!node) {
+            return fallback;
+        }
+        const element = node.nodeType === 3 ? node.parentElement : node;
+        if (!element) {
+            return fallback;
+        }
+        const marked = element.closest && element.closest('[data-pw-font-face]');
+        const markedKey = marked && marked.getAttribute('data-pw-font-face');
+        if (markedKey) {
+            const markedFace = (this.designerFontFaces || []).find((face) => face.selectable && face.key === markedKey);
+            if (markedFace) {
+                return 'face:' + markedFace.key;
+            }
+        }
+        let family = '';
+        try {
+            family = window.getComputedStyle(element).fontFamily || '';
+        } catch (e) {
+            family = element.style?.fontFamily || element.getAttribute('face') || '';
+        }
+        const normalized = family.replace(/["']/g, '').toLowerCase();
+        const custom = (this.designerFontFaces || []).find(
+            (face) =>
+                face.selectable &&
+                normalized.indexOf(
+                    String(face.family || '')
+                        .replace(/["']/g, '')
+                        .toLowerCase()
+                ) !== -1
+        );
+        if (custom) {
+            return 'face:' + custom.key;
+        }
+        if (normalized.indexOf('arial unicode') !== -1) {
+            return "'Arial Unicode MS', Arial, sans-serif";
+        }
+        if (normalized.indexOf('courier') !== -1 || normalized.indexOf('monospace') !== -1) {
+            return "'Courier New', Courier, monospace";
+        }
+        if (normalized.indexOf('times') !== -1 || normalized.indexOf('serif') !== -1) {
+            return "'Times New Roman', Times, serif";
+        }
+        return fallback;
+    }
+
     _refreshFmtState() {
         if (!this.showHtmlBodyVisual) {
             return;
         }
-        const next = { bold: false, italic: false, underline: false, strike: false };
+        const next = {
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            fontValue: this.fmtState.fontValue || 'Helvetica, Arial, sans-serif'
+        };
         try {
             const sel = window.getSelection();
             let node = sel && sel.anchorNode;
@@ -11022,6 +11438,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
             if (node && pv && pv.contains(node)) {
                 const cs = window.getComputedStyle(node);
+                next.fontValue = this._fontValueAtNode(node);
                 next.bold = cs.fontWeight === 'bold' || parseInt(cs.fontWeight, 10) >= 600;
                 next.italic = cs.fontStyle === 'italic';
                 const px = parseFloat(cs.fontSize);
@@ -11058,7 +11475,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             cur.bold !== next.bold ||
             cur.italic !== next.italic ||
             cur.underline !== next.underline ||
-            cur.strike !== next.strike
+            cur.strike !== next.strike ||
+            cur.fontValue !== next.fontValue
         ) {
             this.fmtState = next;
         }
@@ -11071,6 +11489,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const cmd = event.currentTarget.dataset.cmd;
         const value = event.currentTarget.dataset.value || null;
         if (!cmd) {
+            return;
+        }
+        if (cmd === 'fontName' && value && value.indexOf('face:') === 0) {
+            this._pushUndo('fmt:fontName');
+            this._applyCustomDesignerFont(value);
+            this.closeFmtMenu();
             return;
         }
         // Undo/redo are the designer's own stack, not execCommand's. execCommand
@@ -11327,6 +11751,42 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * "t.replaceWith is not a function" for subscribers, hanging the
      * designer). replaceChild via the parent works everywhere.
      */
+    /**
+     * Remove only editor-owned preview elements from a serialized canvas copy.
+     * Author styles are parked inert while Visual mode is open, then restored
+     * before the clean document is returned to Source/save/PDF preview (#464).
+     */
+    _stripEditorLayer(root) {
+        const doc = root.ownerDocument || document;
+        for (const el of root.querySelectorAll('style[data-dg-editor]')) {
+            el.remove();
+        }
+        // Compatibility for a canvas produced by a pre-#464 cached bundle.
+        // Its injected sheet was unmarked, but it was always the first child of
+        // .dg-pv and targeted that reserved editor class. Do not remove any
+        // other unmarked style element.
+        for (const pv of root.querySelectorAll('div.dg-pv')) {
+            const first = pv.firstElementChild;
+            if (
+                first &&
+                first.tagName === 'STYLE' &&
+                !first.hasAttribute('data-dg-authored') &&
+                /(^|})\s*\.dg-pv\b/.test(first.textContent || '')
+            ) {
+                first.remove();
+            }
+        }
+        for (const marker of root.querySelectorAll('.dg-drop-marker')) {
+            marker.remove();
+        }
+        for (const parked of root.querySelectorAll('style[data-dg-authored]')) {
+            const restored = doc.createElement('style');
+            restored.textContent = parked.textContent;
+            this._safeReplace(parked, restored);
+        }
+    }
+
+    /** Replace a node through the LWS-safe parent API fallback. */
     _safeReplace(node, replacement) {
         try {
             if (typeof node.replaceWith === 'function') {
@@ -12271,7 +12731,120 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    /**
+     * Turn browser/editor font markup back into the exact revision binding the
+     * PDF renderer needs.  execCommand('fontName') is not consistent across
+     * browsers: one version emits an inline style, another emits <font
+     * face="...">, and pasted HTML can put the family on the paragraph itself.
+     * The browser can display all of those, but the native PDF path cannot
+     * identify a custom revision from family alone.  Resolve every inline
+     * custom-family occurrence before the editor tree is serialized.
+     */
+    _normalizeCustomDesignerBindings(root) {
+        const faces = (this.designerFontFaces || []).filter(
+            (face) => face && /^[a-f0-9]{64}$/i.test(face.key || '') && face.family
+        );
+        if (!faces.length) {
+            return;
+        }
+        const familyKey = (value) =>
+            String(value || '')
+                .split(',')[0]
+                .replace(/["']/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        const weightKey = (value) => {
+            const text = String(value || '')
+                .trim()
+                .toLowerCase();
+            if (text === 'normal') return 400;
+            if (text === 'bold') return 700;
+            const parsed = parseInt(text, 10);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+        const styleKey = (value) =>
+            String(value || '')
+                .trim()
+                .toLowerCase() === 'italic'
+                ? 'italic'
+                : 'normal';
+        const candidatesFor = (family) => {
+            const wanted = familyKey(family);
+            if (!wanted) return [];
+            return faces.filter(
+                (face) =>
+                    familyKey(face.family) === wanted ||
+                    familyKey(face.preferredFamily) === wanted ||
+                    familyKey(face.label) === wanted
+            );
+        };
+        const chooseFace = (family, weight, style) => {
+            const candidates = candidatesFor(family);
+            if (!candidates.length) return null;
+            const wantedWeight = weightKey(weight);
+            const wantedStyle = styleKey(style);
+            return (
+                candidates.find(
+                    (face) =>
+                        (wantedWeight == null || weightKey(face.weight) === wantedWeight) &&
+                        styleKey(face.style) === wantedStyle
+                ) ||
+                candidates.find((face) => wantedWeight == null || weightKey(face.weight) === wantedWeight) ||
+                candidates.find((face) => styleKey(face.style) === wantedStyle) ||
+                candidates[0]
+            );
+        };
+        const applyFace = (element, face) => {
+            element.removeAttribute('face');
+            element.setAttribute('data-pw-font-face', face.key);
+            element.style.fontFamily = '"' + face.family + '"';
+            element.style.fontWeight = String(face.weight);
+            element.style.fontStyle = face.style || 'normal';
+        };
+
+        // Existing editor markers are authoritative.  Re-apply the exact
+        // metadata as well, so a marker that came from older editor markup is
+        // still renderable even when its inline style was incomplete.
+        for (const element of root.querySelectorAll('[data-pw-font-face]')) {
+            const face = faces.find((item) => item.key === element.getAttribute('data-pw-font-face'));
+            if (face) applyFace(element, face);
+        }
+
+        // Recover bindings from ordinary browser markup and pasted HTML.
+        for (const element of root.querySelectorAll('*')) {
+            if (element.hasAttribute('data-pw-font-face')) continue;
+            const family = element.style?.fontFamily || element.getAttribute('face') || '';
+            if (!family) continue;
+            const face = chooseFace(family, element.style?.fontWeight, element.style?.fontStyle);
+            if (face) applyFace(element, face);
+        }
+    }
+
     _unpillifyTags(root) {
+        // A custom font chosen at an empty caret uses a zero-width seed so the
+        // browser keeps future typing inside the font-bound span. Remove only the
+        // editor seed before staging; keep the font marker and any text typed into it.
+        for (const el of root.querySelectorAll('[data-pw-font-caret]')) {
+            el.removeAttribute('data-pw-font-caret');
+            el.textContent = (el.textContent || '').replace(/\u200b/g, '');
+            if (!el.textContent && !el.children.length) el.remove();
+        }
+        this._normalizeCustomDesignerBindings(root);
+        // Convert the editor-safe binding into the pinned marker consumed by
+        // DocGenFontService.prepare(). Do this on the serialized staging tree
+        // so the browser never needs to retain the nonstandard CSS property.
+        for (const el of root.querySelectorAll('[data-pw-font-face]')) {
+            const key = el.getAttribute('data-pw-font-face');
+            if (!/^[a-f0-9]{64}$/i.test(key || '')) {
+                continue;
+            }
+            el.removeAttribute('data-pw-font-face');
+            const style = el.getAttribute('style') || '';
+            if (!/(?:^|;)\s*-pw-font-face\s*:/i.test(style)) {
+                el.setAttribute('style', style.replace(/\s*$/, '') + ';-pw-font-face:' + key + ';');
+            }
+        }
         // Editor-only selection chrome must never reach saved HTML.
         for (const el of root.querySelectorAll('[data-dg-selcell]')) {
             el.removeAttribute('data-dg-selcell');
@@ -12480,12 +13053,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- string round-trip of the live canvas; re-cleaned below, never cloneNode (LWS drops browser-inserted nodes)
         tpl.innerHTML = pv.innerHTML;
         const root = tpl.content;
-        for (const styleEl of root.querySelectorAll('style')) {
-            styleEl.remove();
-        }
-        for (const markerEl of root.querySelectorAll('.dg-drop-marker')) {
-            markerEl.remove();
-        }
+        this._stripEditorLayer(root);
         this._unpillifyTags(root);
         const container = document.createElement('div');
         container.appendChild(root);
@@ -15427,7 +15995,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplateQuery = '';
         this.newTemplateOutputFormat = 'PDF';
         this.newTemplatePageOrientation = 'Portrait';
-        this.newTemplatePageSize = 'Letter';
+        this.newTemplatePageSize = null;
         this.newTemplatePageMargins = 'Default';
         this.newTemplateCustomMargins = '';
         this.newTemplateObject = 'Account';

@@ -1245,27 +1245,77 @@ const LIST_AND_PARAGRAPH_CSS =
     // gap between list items that the canvas does not show.
     'p { margin: 0 0 0.06in 0; }\n';
 
+/** Remove inline rich-text face overrides when a whole box face is selected. */
+export function applyFontFaceToInline(html) {
+    return String(html || '')
+        .replace(/\sstyle=(['"])(.*?)\1/gi, (_all, quote, css) => {
+            const clean = css.replace(/(?:^|;)\s*font-(?:family|weight|style)\s*:[^;]*/gi, '').trim();
+            return clean ? ' style=' + quote + clean + quote : '';
+        })
+        .replace(/<(\/?)\s*(?:strong|b|em|i)(?=[\s>])/gi, '<$1span');
+}
+
+/** A private marker is expanded to the verified native font by DocGenFontService. */
+export function fontBindingCss(st) {
+    if (!st?.fontFaceKey) return '';
+    return (
+        ' -pw-font-face:' +
+        st.fontFaceKey +
+        '; font-family:' +
+        st.font +
+        '; font-weight:' +
+        st.fontWeight +
+        '; font-style:' +
+        st.fontStyle +
+        ';'
+    );
+}
+
+function faceTypography(st, fallbackFont) {
+    return st?.fontFaceKey
+        ? fontBindingCss(st)
+        : ' font-family: ' +
+              (st?.font || fallbackFont || DEFAULT_STYLE.font) +
+              '; font-weight: ' +
+              (st?.bold && canRenderBold(st?.font || fallbackFont) ? 'bold' : 'normal') +
+              ';';
+}
+
+function readFontBinding(style) {
+    const key = readCss(style, '-pw-font-face');
+    return key
+        ? {
+              fontFaceKey: key,
+              font: readCss(style, 'font-family'),
+              fontWeight: Number(readCss(style, 'font-weight')),
+              fontStyle: readCss(style, 'font-style'),
+              bold: false,
+              italic: false
+          }
+        : {};
+}
+
 /** Box styling as inline CSS. Only properties the engine honours are emitted. */
 function styleCss(box) {
     const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
     // A null property means "the document already says this" — emitting it would
     // override the source's own stylesheet with a canvas default.
     let css = '';
-    if (st.font) css += 'font-family: ' + st.font + '; ';
+    if (st.font && !st.fontFaceKey) css += 'font-family: ' + st.font + '; ';
     if (st.size) css += 'font-size: ' + st.size + 'pt; ';
     if (st.color) css += 'color: ' + st.color + '; ';
     if (st.align) css += 'text-align: ' + st.align + '; ';
     css += 'padding: ' + (st.padding || 0) + 'pt;';
     // Arial Unicode MS has no bold face in the PDF engine, so a bold it emits would
     // silently print regular — the canvas promises a weight the PDF cannot deliver.
-    if (st.bold && canRenderBold(st.font)) css += ' font-weight: bold;';
-    if (st.italic) css += ' font-style: italic;';
+    if (!st.fontFaceKey && st.bold && canRenderBold(st.font)) css += ' font-weight: bold;';
+    if (!st.fontFaceKey && st.italic) css += ' font-style: italic;';
     if (st.underline) css += ' text-decoration: underline;';
     // A flat hex, never rgba(): rgba resolves to nothing in this engine and the fill
     // disappears completely rather than degrading to a solid colour.
     if (st.fill) css += ' background: ' + st.fill + ';';
     if (st.borderWidth > 0) css += ' border: ' + st.borderWidth + 'pt solid ' + st.borderColor + ';';
-    return css;
+    return css + fontBindingCss(st);
 }
 
 /** Escapes only what would break the markup — merge tags must survive verbatim. */
@@ -1361,7 +1411,7 @@ function totalsCell(t, tt, frame, value, span) {
         '; text-align: ' +
         tt.align +
         ';' +
-        (tt.bold && canRenderBold(tt.font) ? ' font-weight: bold;' : ' font-weight: normal;') +
+        faceTypography(tt, DEFAULT_STYLE.font) +
         fill;
     return '<td' + (span || '') + ' style="' + css + '">' + (value || '') + '</td>';
 }
@@ -1385,16 +1435,14 @@ function subLoopRow(t, parentColCount, boxFont) {
     const indent = t.subIndent == null ? 12 : t.subIndent;
     const base =
         frame +
-        ' font-family: ' +
-        (stx.font || boxFont || DEFAULT_STYLE.font) +
-        '; font-size: ' +
+        faceTypography(stx, boxFont) +
+        ' font-size: ' +
         stx.size +
         'pt; color: ' +
         stx.color +
         '; text-align: ' +
         stx.align +
         ';' +
-        (stx.bold && canRenderBold(stx.font || boxFont) ? ' font-weight: bold;' : ' font-weight: normal;') +
         (t.subFill ? ' background: ' + t.subFill + ';' : '');
     const cells = subs
         .map((c, i) => {
@@ -1468,16 +1516,14 @@ function tableToHtml(box) {
     // different face from its data is an ordinary thing to want, and the font was the
     // one typographic property these sections could not set.
     const typo = (x) =>
-        ' font-family: ' +
-        (x.font || st.font) +
-        '; font-size: ' +
+        faceTypography(x, st.font) +
+        ' font-size: ' +
         x.size +
         'pt; color: ' +
         x.color +
         '; text-align: ' +
         x.align +
-        ';' +
-        (x.bold && canRenderBold(x.font || st.font) ? ' font-weight: bold;' : ' font-weight: normal;');
+        ';';
     const frame = gridCss(t, 'body');
     const cellCss = frame + typo(rt);
     const headCss = gridCss(t, 'head') + typo(ht);
@@ -1831,6 +1877,16 @@ const SAFE_STYLE = [
     'vertical-align'
 ];
 
+function normalizeRgbColors(value) {
+    // Lightning's colour toolbar emits rgb(). Store the equivalent hex colour so
+    // the editor, canvas and PDF share the same supported representation (#469).
+    return value.replace(/\brgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)/gi, (match, r, g, b) => {
+        const channels = [r, g, b].map(Number);
+        if (channels.some((channel) => channel > 255)) return match;
+        return '#' + channels.map((channel) => channel.toString(16).padStart(2, '0')).join('');
+    });
+}
+
 function dropUnsafeStyle(value) {
     // A colour the engine cannot resolve is worse than no colour: rgba() makes the
     // whole background disappear rather than degrading.
@@ -1943,8 +1999,9 @@ export function sanitizeInline(html) {
             if (style) {
                 for (const prop of SAFE_STYLE) {
                     const m = new RegExp('(?:^|;)\\s*' + prop + '\\s*:\\s*([^;]+)').exec(style);
-                    if (m && !dropUnsafeStyle(m[1])) {
-                        keep.push(prop + ': ' + m[1].trim());
+                    const value = m ? normalizeRgbColors(m[1].trim()) : null;
+                    if (m && !dropUnsafeStyle(value)) {
+                        keep.push(prop + ': ' + value);
                     }
                 }
             }
@@ -1993,12 +2050,41 @@ function escapeRe(v) {
 /**
  * Expands inline marks into tags. Runs on ALREADY-ESCAPED text, so a literal "<" the
  * author typed stays escaped and only the marks become markup.
+ *
+ * A merge tag is an atom: marks are never applied INSIDE `{…}`. The underline mark
+ * `__` collides with the double underscores every Salesforce relationship and custom
+ * field carries (`__r` / `__c`), so a box holding two tags — `{Client__r.Name} …
+ * {Contact__c.FirstName}` — used to pair the underscores across the two tags into one
+ * `<u>` span, corrupting both so they printed raw in the PDF.
+ *
+ * Each tag is masked to a placeholder that carries no mark character, marks are
+ * expanded across the whole masked string, then the tags are restored verbatim. This
+ * keeps the tags atomic WITHOUT cutting the string into slices, so a mark that SPANS
+ * a tag — `**Total: {Amount__c}**` — still expands, while `__` inside a tag can never
+ * pair with a delimiter outside it. (A hard slice at every tag boundary would fix the
+ * collision but silently print a bare `**` for every mark wrapped around a tag, which
+ * is a more common authoring shape than two adjacent `__` tags.) Root cause for every
+ * mark, not just underline — the documented fix for #282.
  */
+const _MASK_OPEN = '\u0001'; // control chars no author can type and no mark uses
+const _MASK_CLOSE = '\u0002';
+
 function expandMarks(escaped) {
-    let out = escaped;
-    for (const m of INLINE_MARKS) {
-        const re = new RegExp(escapeRe(m.open) + '([\\s\\S]+?)' + escapeRe(m.close), 'g');
-        out = out.replace(re, '<' + m.tag + '>$1</' + m.tag + '>');
+    const tags = [];
+    const masked = String(escaped).replace(/\{[^{}]*\}/g, (t) => _MASK_OPEN + (tags.push(t) - 1) + _MASK_CLOSE);
+    const out = expandMarksInPlainText(masked);
+    return out.replace(
+        new RegExp(escapeRe(_MASK_OPEN) + '(\\d+)' + escapeRe(_MASK_CLOSE), 'g'),
+        (_, i) => tags[Number(i)]
+    );
+}
+
+/** Applies mark expansion to one plain-text run (the masked string has no tags in it). */
+function expandMarksInPlainText(text) {
+    let out = text;
+    for (const mk of INLINE_MARKS) {
+        const re = new RegExp(escapeRe(mk.open) + '([\\s\\S]+?)' + escapeRe(mk.close), 'g');
+        out = out.replace(re, '<' + mk.tag + '>$1</' + mk.tag + '>');
     }
     return out;
 }
@@ -2027,9 +2113,18 @@ function textToHtml(box) {
     // A box edited in the rich-text editor carries `html`, and that is what the author
     // actually sees. Serializing `text` here meant every bold, bullet and colour was
     // dropped on the way to the PDF while the canvas kept showing them — the editor
-    // silently stopped being WYSIWYG. `text` remains the fallback for boxes authored
-    // before the rich-text editor existed, and for a box whose html was cleared.
-    if (box.html != null && String(box.html).trim() !== '') {
+    // silently stopped being WYSIWYG. `text` remains the fallback ONLY for boxes
+    // authored before the rich-text editor existed (html == null) and never carries
+    // the live content once the editor has touched a box.
+    //
+    // html == '' is "the author cleared the box" — the editor writes an empty string on
+    // delete — and must serialize to nothing. Falling through to `text` there resurfaces
+    // stale content (the pre-edit import, or the literal placeholder 'Text'), which the
+    // canvas shows as empty so the loss is invisible until the PDF renders. See #295.
+    if (box.html != null) {
+        if (String(box.html).trim() === '') {
+            return ''; // authored-empty is empty — never resurrect `text`
+        }
         // Guarded so the serializer stays runnable without a DOM — scripts/qa/
         // canvas-serializer-check.mjs is a pure-Node guard on exactly these rules, and
         // a serializer that only runs in a browser cannot be checked before it ships.
@@ -2697,7 +2792,7 @@ function readStyle(style) {
             st.borderColor = bm[2];
         }
     }
-    return st;
+    return { ...st, ...readFontBinding(style) };
 }
 
 /** Recovers a table box's columns and loop binding from the serialized markup. */
@@ -2728,11 +2823,11 @@ function readTable(wrapper, tableEl) {
     // marker and the binding read as blank: open a table template, save, and the
     // {#Rel} was silently gone. The wrapper still holds it wherever the parser moved it.
     // READ, to find the {#Rel} marker the parser may have moved. No write.
-    // eslint-disable-next-line @lwc/lwc/no-inner-html
     // The opener may carry ARGUMENTS — `{#ChartBucket:Rel:Field}` — so this cannot be
     // [A-Za-z0-9_]+ (#310). With the narrow pattern a bucket table read back as an
     // unbound table, which is why the documented string-replace workaround did not
     // survive a round trip through the designer.
+    // eslint-disable-next-line @lwc/lwc/no-inner-html -- READ, not a write; see comment above.
     const m = /\{#([^{}]+)\}/.exec((wrapper && wrapper.innerHTML) || '');
     t.relationship = m ? m[1] : '';
     const count = Math.max(ths.length, tds.length);
@@ -2774,7 +2869,8 @@ function readTable(wrapper, tableEl) {
                     size: parseFloat(readCss(scs, 'font-size')) || DEFAULT_SUB_TEXT.size,
                     color: readCss(scs, 'color') || DEFAULT_SUB_TEXT.color,
                     align: readCss(scs, 'text-align') || DEFAULT_SUB_TEXT.align,
-                    bold: /font-weight:\s*bold/.test(scs)
+                    bold: /font-weight:\s*bold/.test(scs),
+                    ...readFontBinding(scs)
                 };
             }
             continue;
@@ -2791,7 +2887,8 @@ function readTable(wrapper, tableEl) {
                     size: parseFloat(readCss(cs, 'font-size')) || DEFAULT_TOTALS_TEXT.size,
                     color: readCss(cs, 'color') || DEFAULT_TOTALS_TEXT.color,
                     align: readCss(cs, 'text-align') || DEFAULT_TOTALS_TEXT.align,
-                    bold: /font-weight:\s*bold/.test(cs)
+                    bold: /font-weight:\s*bold/.test(cs),
+                    ...readFontBinding(cs)
                 };
             }
         } else {
@@ -2814,6 +2911,12 @@ function readTable(wrapper, tableEl) {
     if (ths[0]) {
         t.headerFill = readCss(ths[0].getAttribute('style'), 'background') || t.headerFill;
         t.headerBold = /font-weight:\s*bold/.test(ths[0].getAttribute('style') || '');
+    }
+    for (const [field, cell] of [
+        ['headerText', ths[0]],
+        ['rowText', tds[0]]
+    ]) {
+        if (cell) t[field] = { ...(t[field] || {}), ...readFontBinding(cell.getAttribute('style') || '') };
     }
     return t;
 }

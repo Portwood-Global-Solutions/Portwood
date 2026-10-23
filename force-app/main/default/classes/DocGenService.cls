@@ -2872,6 +2872,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 applyWatermarkOverride(templateId);
                 String htmlDoc = DocGenHtmlRenderer.injectAdminWatermarkIntoHtml(mr.documentXml);
                 ensureTemplateAssetImageAccessForPdf(templateId, recordId, htmlDoc);
+                htmlDoc = DocGenFontService.injectCss(htmlDoc, DocGenFontService.cssForSource(htmlDoc));
                 lastRenderedHtml = htmlDoc;
                 Blob htmlPdf = Blob.toPdf(htmlDoc);
                 removeTemplateImageLinksAfterRender(templateId, recordId, htmlDoc);
@@ -2885,7 +2886,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
             setNumberingXml(mr);
             applyWatermarkOverride(templateId);
-            String html = DocGenHtmlRenderer.convertToHtml(combineXmlWithHeadersFooters(mr), pdfImages);
+            String sourceXml = combineXmlWithHeadersFooters(mr);
+            String html = DocGenHtmlRenderer.convertToHtml(
+                sourceXml,
+                pdfImages,
+                DocGenFontService.cssForSource(sourceXml)
+            );
             ensureTemplateAssetImageAccessForPdf(templateId, recordId, html);
             lastRenderedHtml = html;
 
@@ -2919,7 +2925,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // HTML templates: documentXml is already the full rendered HTML
         if (mr.templateType == 'HTML') {
-            return mr.documentXml;
+            return DocGenFontService.injectCss(mr.documentXml, DocGenFontService.cssForSource(mr.documentXml));
         }
 
         // Build the same image map the PDF generator uses
@@ -2954,7 +2960,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         setNumberingXml(mr);
         applyWatermarkOverride(templateId);
-        return DocGenHtmlRenderer.convertToHtml(combineXmlWithHeadersFooters(mr), previewImages);
+        String sourceXml = combineXmlWithHeadersFooters(mr);
+        return DocGenHtmlRenderer.convertToHtml(sourceXml, previewImages, DocGenFontService.cssForSource(sourceXml));
     }
 
     /**
@@ -4162,7 +4169,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // wrap layer via @page CSS counter() rules. Flying Saucer can only
                 // resolve counter(page)/counter(pages) inside @page context, so the
                 // tokens have to survive processXml intact for wrapHtmlForPdf to see.
-                if ('PageNumber'.equalsIgnoreCase(tagContent) || 'TotalPages'.equalsIgnoreCase(tagContent)) {
+                if (
+                    'PageNumber'.equalsIgnoreCase(tagContent) ||
+                    'TotalPages'.equalsIgnoreCase(tagContent) ||
+                    tagContent.startsWithIgnoreCase('%font:')
+                ) {
                     output += '{' + rawTag + '}';
                     cursor = tagClose + 1;
                     continue;
@@ -8848,11 +8859,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             assetCvCache.put(key, null);
         }
 
-        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c', 'Is_Active__c' });
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Asset__c.sObjectType,
+            new Set<String>{ 'Asset_Key__c', 'Asset_Type__c', 'Is_Active__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Asset__c> assets = [
             SELECT
                 Asset_Key__c,
+                Asset_Type__c,
                 (
                     SELECT ContentDocument.LatestPublishedVersionId
                     FROM ContentDocumentLinks
@@ -8865,6 +8880,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         ];
 
         for (DocGen_Asset__c asset : assets) {
+            // Font assets are resolved through the font registry ({%font:}), not the
+            // generic {%asset:} image path -- stay null here, same as DocGenController's
+            // getAssets() exclusion, so a font key can never be used as an image tag.
+            if (asset.Asset_Type__c == 'Font') {
+                continue;
+            }
             String cvId = null;
             if (asset.ContentDocumentLinks != null && !asset.ContentDocumentLinks.isEmpty()) {
                 Id latest = asset.ContentDocumentLinks[0].ContentDocument.LatestPublishedVersionId;
@@ -10464,8 +10485,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // stray text by silently discarding the author's CSS.
         bodyContent = stripStyleAndScriptBlocks(bodyContent);
 
-        String headerSrc = String.isBlank(headerHtml) ? null : decodeBraceEntities(headerHtml);
-        String footerSrc = String.isBlank(footerHtml) ? null : decodeBraceEntities(footerHtml);
+        String headerSrc = String.isBlank(headerHtml)
+            ? null
+            : DocGenFontService.expandTags(decodeBraceEntities(headerHtml));
+        String footerSrc = String.isBlank(footerHtml)
+            ? null
+            : DocGenFontService.expandTags(decodeBraceEntities(footerHtml));
         if (String.isNotBlank(headerSrc)) {
             sourceStyles += '\n' + extractHtmlStyleBlocks(headerSrc);
             headerSrc = stripStyleAndScriptBlocks(headerSrc);
@@ -10518,8 +10543,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return html;
         }
-        return html.replaceAll('(?is)<style[^>]*>.*?</style\\s*>', '')
-            .replaceAll('(?is)<script[^>]*>.*?</script\\s*>', '');
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer style = lower.indexOf('<style', cursor);
+            Integer script = lower.indexOf('<script', cursor);
+            Integer start = style == -1 ? script : script == -1 ? style : Math.min(style, script);
+            if (start == -1) {
+                break;
+            }
+            String name = style != -1 && style == start ? 'style' : 'script';
+            Integer boundary = start + 1 + name.length();
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            String closeToken = name == 'style' ? '</style' : '</script';
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf(closeToken, openEnd + 1);
+            Integer closeEnd = closeStart == -1 ? -1 : lower.indexOf('>', closeStart);
+            if (openEnd == -1 || closeEnd == -1) {
+                cursor = start + 1;
+                continue;
+            }
+            parts.add(html.substring(cursor, start));
+            cursor = closeEnd + 1;
+        }
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
     }
 
     // ---------------------------------------------------------------------------
@@ -10785,6 +10837,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
+        html = DocGenFontService.expandTags(decodeBraceEntities(html));
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
         if (bodyOpen == -1) {
@@ -10801,11 +10854,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (openEnd == -1) {
             return html;
         }
+        String bodyTag = html.substring(bodyOpen, openEnd + 1);
         Integer bodyClose = lower.lastIndexOf('</body>');
         if (bodyClose == -1 || bodyClose <= openEnd) {
-            return html.substring(openEnd + 1);
+            return DocGenFontService.retainBodyFont(bodyTag, html.substring(openEnd + 1));
         }
-        return html.substring(openEnd + 1, bodyClose);
+        return DocGenFontService.retainBodyFont(bodyTag, html.substring(openEnd + 1, bodyClose));
     }
 
     /**
@@ -10853,8 +10907,27 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * which preserves arbitrary HTML.
      */
     public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        body = DocGenFontService.expandTags(body);
+        header = DocGenFontService.expandTags(header);
+        footer = DocGenFontService.expandTags(footer);
+        sourceStyles = DocGenFontService.expandTags(sourceStyles);
         Boolean headerHasCounters = hasPageCounterTokens(header);
         Boolean footerHasCounters = hasPageCounterTokens(footer);
+        // A header/footer with a page-counter token is serialized through
+        // buildPageMarginContentCss into an @page margin-box CSS `content:` value,
+        // not rendered as normal in-flow HTML — a -pw-font-face binding never
+        // reaches prepare()'s per-element tag walk on that path, so it either
+        // breaks the CSS-content conversion or leaks as an unexpanded marker.
+        if (headerHasCounters && header.contains('-pw-font-face')) {
+            throw new DocGenException(
+                'A font tag cannot share a header with a page-counter token ({PageNumber}/{TotalPages}); move the font tag and the counter into separate elements.'
+            );
+        }
+        if (footerHasCounters && footer.contains('-pw-font-face')) {
+            throw new DocGenException(
+                'A font tag cannot share a footer with a page-counter token ({PageNumber}/{TotalPages}); move the font tag and the counter into separate elements.'
+            );
+        }
         // v1.90 — when the source HTML already declares @page, suppress the engine's
         // size/margin so author CSS wins cleanly. Header/footer margin-box rules are
         // still emitted because the source @page can't supply them on its own.
@@ -11015,7 +11088,19 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
         html += wrapNonLatinGlyphs(addBreaksToLongHyperlinkText(body == null ? '' : body));
         html += '</body></html>';
-        return html;
+        return DocGenFontService.prepare(html);
+    }
+
+    /** Compatibility overload used by the font proof and giant-query paths. */
+    @TestVisible
+    public static String wrapHtmlForPdf(
+        String body,
+        String sourceStyles,
+        String header,
+        String footer,
+        Boolean prepareFonts
+    ) {
+        return wrapHtmlForPdf(body, sourceStyles, header, footer);
     }
 
     private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
@@ -11027,16 +11112,30 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return html;
         }
 
-        Matcher m = Pattern.compile('(?is)<a\\b[^>]*>.*?</a>').matcher(html);
-        String out = '';
-        Integer last = 0;
-        while (m.find()) {
-            out += html.substring(last, m.start());
-            out += addBreaksToOneLongHyperlink(m.group(0));
-            last = m.end();
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (true) {
+            Integer start = lower.indexOf('<a', cursor);
+            if (start == -1) {
+                break;
+            }
+            Integer boundary = start + 2;
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf('</a>', openEnd + 1);
+            if (openEnd == -1 || closeStart == -1) {
+                break;
+            }
+            parts.add(html.substring(cursor, start));
+            parts.add(addBreaksToOneLongHyperlink(html.substring(start, closeStart + 4)));
+            cursor = closeStart + 4;
         }
-        out += html.substring(last);
-        return out;
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
     }
 
     private static String addBreaksToOneLongHyperlink(String anchorHtml) {
@@ -11411,6 +11510,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private static String wrapNonLatinGlyphs(String s) {
         if (String.isBlank(s))
             return s;
+        if (s.contains('-pw-font-face')) {
+            DocGenFontService.ProtectedRuns protectedRuns = DocGenFontService.protect(s);
+            String result = wrapNonLatinGlyphs(protectedRuns.masked);
+            for (String token : protectedRuns.runs.keySet()) {
+                result = result.replace(token, protectedRuns.runs.get(token));
+            }
+            return result;
+        }
         s = decodeHighCodepointEntities(s);
         s = normalizeLatinCombiningMarks(s);
         Integer len = s.length();

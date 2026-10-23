@@ -94,10 +94,35 @@ const COLUMNS = [
 const ACCEPTED_FORMATS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 
 export default class DocGenAssets extends LightningElement {
+    @track activeSection = 'images';
     @track assets = [];
     columns = COLUMNS;
     acceptedFormats = ACCEPTED_FORMATS;
     wiredAssetsResult;
+
+    get isImagesSection() {
+        return this.activeSection === 'images';
+    }
+
+    get isFontsSection() {
+        return this.activeSection === 'fonts';
+    }
+
+    get imagesSectionClass() {
+        return this.isImagesSection ? 'asset-section-button asset-section-button_active' : 'asset-section-button';
+    }
+
+    get fontsSectionClass() {
+        return this.isFontsSection ? 'asset-section-button asset-section-button_active' : 'asset-section-button';
+    }
+
+    showImagesSection() {
+        this.activeSection = 'images';
+    }
+
+    showFontsSection() {
+        this.activeSection = 'fonts';
+    }
 
     // Create modal state
     @track isCreateModalOpen = false;

@@ -2937,9 +2937,14 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 
 ### 10.1 Sending a signature request
 
+The sender offers **Upload PDF**, **Salesforce file**, and **Portwood template**
+from **New signature request**. For an existing PDF, follow
+[§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased). The steps below cover
+Portwood templates, which continue using signature merge tags.
+
 1. Open any record.
 2. The **Portwood Signature Sender** LWC appears on the page layout (if placed).
-3. Pick one or more templates (packets).
+3. Click **New signature request**, choose **Portwood template**, and pick one or more templates (packets).
 4. Add signers:
     - **Select from Contacts** (picker shows any Contact on the record).
     - **Manual entry** (name + email + role, for people not yet in Salesforce).
@@ -2955,6 +2960,86 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 
 > **Email setup (admin).** Invitation and completion emails send through the Org-Wide Email Address you configure in **Portwood → Signatures settings**. That OWA must have **Allow All Profiles** enabled (guest signers trigger the completion email) and its sending **domain must be DKIM-authenticated** (Setup → Email → DKIM Keys, then publish the CNAME records in your DNS) — Salesforce blocks unauthenticated custom-domain sends. Without these, signing still works but emails won't deliver (the reason is logged on the request's **Email Status** field).
 
+#### 10.1.1 Signing a customer-uploaded PDF (unreleased)
+
+Use this workflow when your PDF is already prepared and you want recipients to
+sign it without recreating it as a Portwood template. Signature merge tags such
+as `{@Signature_Signer:1:Full}` are not required in an uploaded PDF.
+
+**Before you start.** Open the Salesforce record the signed document belongs to.
+Your administrator must place **Portwood Signature Sender** on that record page
+and assign the appropriate Portwood sender permissions, such as **DocGen_User**
+or **DocGen_Admin**. You need access to the record and any existing PDF you select.
+External signing requires a configured public signing site; email invitations
+also require the verified email sender described in [§10.1](#101-sending-a-signature-request).
+
+1. In **Portwood Signature Sender**, click **New signature request**.
+2. Choose the document source:
+    - **Upload PDF** — choose or drop a PDF from your computer.
+    - **Salesforce file** — select a PDF already attached to this record. Portwood
+      keeps a separate original snapshot, so preparing it does not replace the
+      existing Salesforce File.
+3. Click **Continue** and enter each recipient's name and email. You can also
+   search Contacts to fill these details. Add recipients in their signing order;
+   uploaded PDFs currently use **sequential signing**. Each recipient waits until
+   the previous recipient completes. Parallel signing is not available here.
+4. Continue to field placement. Choose a recipient in **Assign fields to**, choose
+   a field type, then click the PDF to place it. Use the page controls for
+   multi-page documents. Drag fields to move them; select a field to adjust its
+   **Width** and **Height**, move it with the arrow keys, or remove it.
+
+| Field           | What the signer supplies                                            |
+| --------------- | ------------------------------------------------------------------- |
+| **Signature**   | A drawn or typed signature. Place at least one for every recipient. |
+| **Initials**    | Drawn or typed initials.                                            |
+| **Date signed** | The date of signing, filled automatically.                          |
+| **Date picker** | A date selected by the signer.                                      |
+
+5. Click **Review request**. Check the positions and recipient assignments, then
+   set the **Document title**, **Signing Brand**, link expiration (1–365 days),
+   and email verification preference. **Use org default** uses your administrator's
+   settings. A selected Brand applies to invitation emails and the guest signing page.
+6. Choose **Delivery**:
+    - **Preview signing in Salesforce** — creates links requiring Salesforce login.
+      Invitation, reminder, and completion emails are suppressed for these requests.
+      Open the first recipient's link, complete signing, then open the next link.
+      This is an actual signing request; completing it creates a signed file on
+      the record.
+    - **Create public signing links** — creates links for external recipients to
+      open through the configured public signing site.
+    - **Email invitations** — enter an optional subject and message, then send
+      through the configured email sender. Invitations follow the sequential
+      signing order. This option requires both a public signing site and an
+      email sender.
+7. Click **Create preview links**, **Create signing links**, or **Send request**,
+   according to the delivery option. The sender lists sent requests under
+   **Recent requests**.
+
+**Save and resume.** Use **Save draft** before leaving preparation. From the same
+record, find the draft under **Continue preparing** and click **Resume**. Drafts
+are private to their creator and bound to that record. If another window saves
+first, reopen the draft before continuing; an older window cannot overwrite the
+newer revision. Once sent, its original document and prepared field placements
+are locked. Create a new request if those need to change.
+
+**What recipients see.** The PDF signing page guides each recipient through their
+assigned fields, accepts drawn or typed signatures, and requires consent before
+submission. Earlier signatures remain in the PDF as the request advances. On
+completion, Portwood retains the original separately, attaches the completed PDF
+to the related record, and retains the signing audit history. See
+[§10.7.1](#1071-guided-sign-spot-signing-on-the-pdf-viewer-drawn-or-typed) for the
+guided signing experience.
+
+**Limits and common problems.** Use an unlocked PDF no larger than **2 MB**, with
+at most **50 pages**, **10 recipients**, and **100 fields**. PDFs with existing
+digital signatures are rejected; obtain an unsigned copy. Every recipient needs
+a name, valid email, and at least one **Signature** field, with all fields inside
+their PDF page. If **Continue** or **Review request** is disabled, check the
+recipient details and missing signatures. If no Salesforce PDFs appear, attach
+the file to this record or choose **Upload PDF**. If public-link or email delivery
+is unavailable, ask your administrator to complete the signing-site and email
+setup, or use the internal Salesforce preview option.
+
 ### 10.2 Signature tag syntax
 
 See [§7.9](#79-signatures).
@@ -2966,6 +3051,9 @@ Send multiple templates in one session. The signer sees all documents and signs 
 Useful for contract bundles (MSA + SOW + NDA), onboarding packets, etc.
 
 ### 10.4 Sequential vs parallel
+
+The choices below apply to template requests. Customer-uploaded PDFs currently
+support sequential signing only; see [§10.1.1](#1011-signing-a-customer-uploaded-pdf-unreleased).
 
 - **Parallel**: everyone gets the invite right away. First to sign = first done. Good for lightweight approvals.
 - **Sequential**: signers are emailed in order (by `Sort_Order__c`). Next signer is automatically emailed when the previous signs. Good for hierarchical approvals (employee → manager → VP → CFO).
@@ -3014,6 +3102,30 @@ Admins with `DocGen_Admin` permission set see a **Sign In Person** button on the
 As of **v3.42+** the **Sign In Person** button is also available on the **Previous Requests** list — so you can bypass the PIN for a request that was sent earlier or after a page refresh, not only on the request you just created. It appears for any signer who hasn't already Signed/Cancelled/Declined, and the same `DocGen_Admin`-only gate and audit logging apply.
 
 ### 10.7 Signing page experience
+
+The public signing experience uses the same resolved branding as the signature workflow. When a
+template has a Sending Brand selected, the verification, signing, success, and error states use
+that brand's company name, logo, brand color, and browser-tab favicon. The signing page keeps one
+consistent branded header; the verification, success, and error states use the branded browser
+tab without adding a duplicate page header.
+
+When no Sending Brand is selected on the template, Portwood preserves the existing default
+experience and uses the org-wide Signature Settings branding. The template/document name remains
+the document context; it is not used as a substitute brand name.
+
+The PDF signing flow supports five signer-facing paths:
+
+1. **Verification** - the signer confirms their email and enters the PIN when required.
+2. **Signing** - the signer reviews the document and enters each signature, initials, or date.
+3. **Confirmation** - the signer reviews the completed fields and gives electronic consent.
+4. **Success** - the signature is recorded and the completed document is processed.
+5. **Error** - the signer receives a clear branded message for an expired, completed, declined,
+   or otherwise unavailable request.
+
+For signature and initials fields, drawing and typing are mutually exclusive. A prefilled signer
+name disables drawing; clearing the name enables drawing. Starting a drawing disables the typed
+name field, additional strokes remain supported, and clearing the drawing restores the available
+input methods.
 
 Guided, mobile-friendly. States: PIN verify → signing → review → submit.
 
@@ -3267,7 +3379,10 @@ _New in v3.57._ A **Portwood Brand** is a reusable sender identity you can point
 
 **Per-brand OWA setup.** Each brand's **Send emails from** address needs the same production setup as the org-wide one (§13.2): a verified Org-Wide Email Address with **Allow All Profiles** enabled, on a DKIM-authenticated sending domain. Until then that brand's emails fall back to the org-wide sender.
 
-**Signing page and certificate.** The public signing page and the verification-certificate PDF stay on the org-wide branding — a brand controls the **emails**, not the guest-facing signing experience.
+**Signing page and certificate.** The guest-facing signing page follows the selected Sending Brand
+when one is assigned. Templates without a selected brand retain the org-wide Signature Settings
+default. The verification-certificate PDF remains part of the signing record and uses the existing
+certificate behavior.
 
 ---
 
@@ -3757,6 +3872,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **Bulk Generation** — mass-generate against a SOQL filter or saved query.
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
 - **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
+- **Custom Fonts** — upload, inspect, approve, select, retire, and remove native-PDF font faces. See [§13.1.1](#1311-custom-fonts).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
 - **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.
@@ -3767,6 +3883,74 @@ Worth knowing inside My Templates:
 - **Copy-Paste Tags** (template editor tab) — every field, loop, aggregate, and image tag for the template's object as ready-to-copy pills, so authors never hand-type tag syntax.
 
 **Runner languages.** The document runner's UI ships translated into 10 languages (Spanish, French, German, Italian, Japanese, Korean, Dutch, Brazilian Portuguese, Simplified + Traditional Chinese). Each user sees their own Salesforce language automatically — nothing to configure.
+
+### 13.1.1 Custom fonts
+
+Custom fonts are managed from **Command Hub → Assets → Custom Fonts**. The feature uses a
+verified Salesforce File revision so the same font bytes are used in browser previews and
+native PDF rendering.
+
+#### Upload and approve a font
+
+1. Give the user the **Manage Portwood Fonts** custom permission (included in the Portwood
+   Admin permission set).
+2. Open **Assets → Custom Fonts** and choose **Upload font** for one static `.ttf` file, or
+   choose **Bulk upload fonts** to select multiple `.ttf` files at once.
+3. For a large collection, upload one `.zip` containing static `.ttf` files. ZIP uploads are
+   limited to 25 MB and 200 font files. The individual-file picker accepts up to 25 files
+   per selection.
+4. Confirm the font license and hosting/PDF-embedding rights. Use a lowercase font key with
+   letters, numbers, and hyphens (maximum 40 characters).
+5. Open the uploaded face, generate its native PDF specimen, and inspect the embedded font,
+   live sample text, layout, and glyph coverage. Select the checkbox confirming that the
+   specimen was reviewed, then click **Approve**. Multiple inspected faces can be selected
+   and approved together.
+
+Only approved faces appear in the designer font lists. A retired face remains available to
+existing template revisions but is removed from new selections. Retired faces can be deleted
+individually or in bulk; approved/active faces cannot be deleted. Retiring is the safe way to
+remove a font from future work without breaking an existing template.
+
+#### Use a custom font in a template
+
+- **Canvas:** select a text box, open the PDF font picker, search for the approved face, and
+  choose it. The picker shows built-in fonts and approved custom faces. Apply the selection
+  before typing or select existing text; the binding is retained in the saved template and in
+  PDF preview.
+- **HTML:** select an approved face from the font picker, or copy the font tag from the font
+  detail panel and place it in an element's inline style:
+
+    ```html
+    <p style="{%font:brand-font:REVISION_KEY};font-size:12pt">Your text</p>
+    ```
+
+    Use one verified font tag per element. The tag must be inside a quoted `style` attribute and
+    must not be combined with a separate `font-family`, `font-weight`, or `font-style` override.
+
+- **Imported Word/HTML PDF templates:** Portwood automatically matches an approved face by
+  family, weight, and style when the source declares that font. If the exact face is not
+  approved, the renderer leaves that declaration alone and uses the normal PDF fallback.
+
+#### Compatibility and failure behavior
+
+Salesforce's native PDF path supports static TrueType fonts whose character map stays in the
+UTF-16 Basic Multilingual Plane (`U+0000` through `U+FFFF`). Upload validation rejects fonts
+containing supplementary-plane characters (`> U+FFFF`) before creating the font asset or
+registry record. Color fonts, variable fonts, collections, malformed TTFs, and fonts without
+the required PDF coverage should be rejected or skipped during inspection; use a static TTF
+face instead.
+
+A document can use up to 16 distinct approved font faces. If one approved face cannot be
+loaded while a document is rendered, Portwood skips that face's embedding and continues with
+the remaining document content. If text requires a glyph the selected face does not contain,
+the PDF renderer may fall back for that glyph; it does not invalidate unrelated paragraphs.
+Review the generated PDF specimen before approving a face.
+
+Custom font assets affect **native PDF rendering and PDF preview** for Word and HTML sources,
+and font selection in Canvas/HTML authoring. PowerPoint and Excel templates remain native
+Office outputs; Portwood does not convert them to PDF or inject a custom font file into the
+Office package. Their existing OOXML font declarations remain intact, and the recipient's
+Office installation must have the referenced font available.
 
 ### 13.2 Signature Settings
 
@@ -3830,16 +4014,28 @@ You can extend `DocGen_Template__c`, `DocGen_Signature_Request__c`, `DocGen_Sign
 
 ### 14.2 PDF font limitations
 
-Salesforce's `Blob.toPdf()` uses Flying Saucer with only four built-in fonts:
+Salesforce's `Blob.toPdf()` still provides these built-in families:
 
 - **Helvetica** (sans-serif) — default
 - **Times** (serif)
 - **Courier** (monospace)
 - **Arial Unicode MS** — for CJK / multibyte character scripts
 
-**Custom fonts cannot be loaded into the PDF engine.** CSS `@font-face` is not supported — not via data URIs, static resource URLs, or ContentVersion URLs. Exhaustively tested, confirmed impossible on the Salesforce platform.
+Portwood also supports approved static TrueType font faces through **Assets → Custom Fonts**.
+The face must pass inspection and its native PDF specimen must be approved before it can be
+selected or automatically matched. Portwood embeds the approved face with the PDF renderer's
+font binding and keeps the revision pinned to the template.
 
-Workaround: if you need custom fonts (branded typefaces, barcode fonts, decorative scripts), generate as **DOCX**. DOCX preserves whatever fonts are in the template — they render correctly in Word or any compatible viewer.
+The native PDF path is limited to the font's UTF-16 Basic Multilingual Plane coverage. Fonts
+that use supplementary Unicode characters above `U+FFFF`, variable/color fonts, font
+collections, malformed files, or missing glyph coverage may not be accepted. Use a separate
+approved face for each exact family/weight/style combination. See [§13.1.1](#1311-custom-fonts)
+for upload, approval, and fallback behavior.
+
+Custom fonts are applied to PDF preview and generated PDFs from Word and HTML templates, and
+can be selected while authoring Canvas/HTML templates. Native PowerPoint and Excel outputs do
+not become PDFs and do not receive an embedded Salesforce font file; the original Office font
+name remains in the package and must be installed on the recipient's computer.
 
 ### 14.3 PowerPoint → PDF not supported
 
@@ -3991,7 +4187,22 @@ For rich text images:
 
 ### 15.7 Custom font doesn't render in PDF
 
-See [§14.2](#142-pdf-font-limitations). Generate as DOCX for custom fonts.
+Check the following in order:
+
+1. The face is **Approved**, not Staged, Published, or Retired.
+2. The template uses the selected face or an approved face with the same family, weight, and
+   style. Imported Word/HTML sources are matched automatically only when the declaration is
+   exact enough to identify that combination.
+3. The font was approved from its current native PDF specimen. Re-upload and approve a new
+   revision if the source file changed.
+4. The character is covered by the face and is not a supplementary Unicode character above
+   `U+FFFF`.
+5. For HTML, the copied `{%font:...}` tag is inside a quoted inline `style` attribute and is
+   not overridden by another `font-family`, `font-weight`, or `font-style` declaration.
+
+If one face is unavailable during rendering, Portwood skips that face and continues rendering
+the rest of the document with the normal PDF fallback. Inspect the generated PDF and the font
+specimen to identify a missing glyph or unsupported face.
 
 ### 15.8 Giant-query job stuck in "Harvesting"
 
