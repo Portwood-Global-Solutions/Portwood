@@ -104,6 +104,20 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   RGB colors are converted to equivalent hex values before sanitization, keeping the selected colors in the
   canvas and saved template. Existing named and hex colors continue to work; unsupported color functions
   remain filtered.
+- **DOCX saves no longer fail with `Regex too complicated` on large or complex templates.**
+  The upload-time DOCX fidelity linter previously applied whole-document regular expressions
+  while scanning text runs, merge tags, table rows, and conditional expressions. Apex could
+  exceed its regex step limit during **Save as New Version**, especially with long paragraphs,
+  repeated tags, and large tables. Those scans now use linear string processing while
+  preserving the existing warning behavior. The focused `DocGenDocxTemplateLinterTest` suite
+  passes all 20 tests. Extremely large files can still be subject to Salesforce heap, CPU, and
+  DOCX/rendering limits.
+- **HTML template processing no longer relies on whole-document regex scans.** Style/script
+  removal, substantive-content detection, merge-tag detection, and long-link handling now use
+  bounded linear scans, preventing the same regex limit from being reached by large HTML
+  templates while preserving styles and normal merge behavior. Large uploads also bypass the
+  regex-heavy advisory fidelity report, preventing that optional scan from rolling back the
+  upload when Apex reaches its regex step limit.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

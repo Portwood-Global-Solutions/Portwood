@@ -150,14 +150,45 @@ public with sharing class DocGenDocxTemplateLinter {
 
     private static VisibleStream buildVisibleText(String xml) {
         VisibleStream vs = new VisibleStream();
-        Matcher m = Pattern.compile('<[wa]:t(?:\\s[^>]*)?>([^<]*)</[wa]:t>').matcher(xml);
         List<String> buf = new List<String>();
-        while (m.find()) {
-            String text = m.group(1);
-            Integer contentStart = xml.indexOf('>', m.start()) + 1;
-            for (Integer k = 0; k < text.length(); k++) {
-                buf.add(text.substring(k, k + 1));
-                vs.mapping.add(contentStart + k);
+        Integer scan = 0;
+        while (scan < xml.length()) {
+            Integer lt = xml.indexOf('<', scan);
+            if (lt == -1 || lt + 5 > xml.length()) {
+                break;
+            }
+            String name = xml.substring(lt + 1, lt + 4);
+            if (!name.equals('w:t') && !name.equals('a:t')) {
+                scan = lt + 1;
+                continue;
+            }
+            Integer afterName = lt + 4;
+            String next = xml.substring(afterName, afterName + 1);
+            Integer gt;
+            if (next == '>') {
+                gt = afterName;
+            } else if (next == ' ' || next == '\t' || next == '\n' || next == '\r') {
+                gt = xml.indexOf('>', afterName);
+                if (gt == -1) {
+                    break;
+                }
+            } else {
+                scan = lt + 1;
+                continue;
+            }
+            Integer contentEnd = xml.indexOf('<', gt + 1);
+            if (contentEnd == -1) {
+                break;
+            }
+            String close = contentEnd + 6 <= xml.length() ? xml.substring(contentEnd, contentEnd + 6) : '';
+            if (close.equals('</w:t>') || close.equals('</a:t>')) {
+                for (Integer k = gt + 1; k < contentEnd; k++) {
+                    buf.add(xml.substring(k, k + 1));
+                    vs.mapping.add(k);
+                }
+                scan = contentEnd + 6;
+            } else {
+                scan = gt + 1;
             }
         }
         vs.text = String.join(buf, '');
@@ -166,15 +197,31 @@ public with sharing class DocGenDocxTemplateLinter {
 
     private static List<RawTag> tagsFromVisibleText(VisibleStream vs) {
         List<RawTag> tags = new List<RawTag>();
-        Matcher m = Pattern.compile('\\{[^{}]+\\}').matcher(vs.text);
-        while (m.find()) {
+        Integer scan = 0;
+        while (scan < vs.text.length()) {
+            Integer open = vs.text.indexOf('{', scan);
+            if (open == -1) {
+                break;
+            }
+            Integer close = vs.text.indexOf('}', open + 1);
+            if (close == -1) {
+                break;
+            }
+            // The old pattern rejects a candidate containing another opening
+            // brace; resume at that later brace to preserve its find() behavior.
+            Integer nested = vs.text.indexOf('{', open + 1);
+            if (nested != -1 && nested < close) {
+                scan = nested;
+                continue;
+            }
             RawTag t = new RawTag();
-            t.raw = m.group(0);
-            t.visStart = m.start();
-            t.visEnd = m.end();
-            t.xmlStart = vs.mapping[m.start()];
-            t.xmlEnd = vs.mapping[m.end() - 1] + 1;
+            t.raw = vs.text.substring(open, close + 1);
+            t.visStart = open;
+            t.visEnd = close + 1;
+            t.xmlStart = vs.mapping[open];
+            t.xmlEnd = vs.mapping[close] + 1;
             tags.add(t);
+            scan = close + 1;
         }
         return tags;
     }
@@ -310,16 +357,51 @@ public with sharing class DocGenDocxTemplateLinter {
     /** Nearest <w:tr> that fully encloses both tags, or null. Mirrors extractLoopBody. */
     private static Integer[] findEnclosingRow(String xml, Integer openOffset, Integer closeEnd) {
         List<Integer[]> ranges = new List<Integer[]>();
-        List<Integer> stack = new List<Integer>();
-        Matcher m = Pattern.compile('<(/)?(w:tr|a:tr)(?=[\\s>])').matcher(xml);
-        while (m.find()) {
-            if (m.group(1) == null) {
-                stack.add(m.start());
-            } else if (!stack.isEmpty()) {
-                Integer start = stack.remove(stack.size() - 1);
-                Integer endIdx = m.start() + ('</' + m.group(2) + '>').length();
-                ranges.add(new List<Integer>{ start, endIdx });
+        List<String> stackNames = new List<String>();
+        List<Integer> stackStarts = new List<Integer>();
+        Integer scan = 0;
+        while (scan < xml.length()) {
+            Integer lt = xml.indexOf('<', scan);
+            if (lt == -1 || lt + 4 > xml.length()) {
+                break;
             }
+            Boolean closing = lt + 1 < xml.length() && xml.substring(lt + 1, lt + 2) == '/';
+            Integer nameStart = closing ? lt + 2 : lt + 1;
+            String name = xml.substring(nameStart, Math.min(nameStart + 4, xml.length()));
+            if (!name.equals('w:tr') && !name.equals('a:tr')) {
+                scan = lt + 1;
+                continue;
+            }
+            Integer boundary = nameStart + 4;
+            if (boundary >= xml.length()) {
+                break;
+            }
+            String boundaryChar = xml.substring(boundary, boundary + 1);
+            if (
+                boundaryChar != '>' &&
+                boundaryChar != ' ' &&
+                boundaryChar != '\t' &&
+                boundaryChar != '\n' &&
+                boundaryChar != '\r'
+            ) {
+                scan = lt + 1;
+                continue;
+            }
+            Integer gt = xml.indexOf('>', boundary);
+            if (gt == -1) {
+                break;
+            }
+            if (closing) {
+                if (!stackNames.isEmpty() && stackNames[stackNames.size() - 1].equals(name)) {
+                    Integer start = stackStarts.remove(stackStarts.size() - 1);
+                    stackNames.remove(stackNames.size() - 1);
+                    ranges.add(new List<Integer>{ start, gt + 1 });
+                }
+            } else if (!xml.substring(Math.max(lt, gt - 1), gt + 1).endsWith('/>')) {
+                stackNames.add(name);
+                stackStarts.add(lt);
+            }
+            scan = gt + 1;
         }
         Integer[] best = null;
         for (Integer[] r : ranges) {
@@ -353,9 +435,26 @@ public with sharing class DocGenDocxTemplateLinter {
     }
 
     private static Integer countOpenMinusClose(String s, String tag) {
-        Integer open = countMatches(s, Pattern.compile('<' + tag + '(?=[\\s>])'));
-        Integer close = countMatches(s, Pattern.compile('</' + tag + '>'));
+        Integer open = countTagOccurrences(s, '<' + tag, false);
+        Integer close = countTagOccurrences(s, '</' + tag + '>', true);
         return open - close;
+    }
+
+    private static Integer countTagOccurrences(String s, String token, Boolean exact) {
+        Integer count = 0;
+        Integer scan = 0;
+        while (scan < s.length()) {
+            Integer hit = s.indexOf(token, scan);
+            if (hit == -1) {
+                break;
+            }
+            Integer tokenEnd = hit + token.length();
+            if (exact || tokenEnd >= s.length() || ' \t\n\r>'.contains(s.substring(tokenEnd, tokenEnd + 1))) {
+                count++;
+            }
+            scan = Math.max(tokenEnd, hit + 1);
+        }
+        return count;
     }
 
     // -----------------------------------------------------------------------
@@ -465,22 +564,45 @@ public with sharing class DocGenDocxTemplateLinter {
     // -----------------------------------------------------------------------
 
     private static void checkEntityEncodedIf(String xml, List<DocGenAiHtmlValidator.Finding> findings) {
-        Matcher m = Pattern.compile('\\{#[Ii][Ff]\\s+[^}]*?(&gt;|&lt;)[^}]*?\\}').matcher(xml);
-        while (m.find()) {
-            String entity = m.group(1);
-            String decoded = entity == '&gt;' ? '>' : '<';
-            addFinding(
-                findings,
-                'HTML-encoded IF operator',
-                'IF expression uses \'' +
-                    decoded +
-                    '\' which is HTML-encoded as \'' +
-                    entity +
-                    '\' in the file — the IF parser does not decode entities before parsing operators, so this expression will always evaluate false: ' +
-                    m.group(0) +
-                    '. Rewrite the condition using \'!=\' or \'=\' (which are not HTML-encoded). Example: instead of {#IF Field > 0}, use {#IF Field != 0}.',
-                1
-            );
+        Integer scan = 0;
+        while (scan < xml.length()) {
+            Integer open = xml.indexOf('{#', scan);
+            if (open == -1) {
+                break;
+            }
+            Integer close = xml.indexOf('}', open + 2);
+            if (close == -1) {
+                break;
+            }
+            String raw = xml.substring(open, close + 1);
+            String body = raw.substring(2, raw.length() - 1);
+            if (
+                body.length() > 3 &&
+                body.substring(0, 2).equalsIgnoreCase('IF') &&
+                ' \t\n\r'.contains(body.substring(2, 3))
+            ) {
+                Integer gt = body.indexOf('&gt;', 3);
+                Integer lt = body.indexOf('&lt;', 3);
+                String entity = gt != -1 && (lt == -1 || gt < lt) ? '&gt;' : lt != -1 ? '&lt;' : null;
+                if (entity == null) {
+                    scan = close + 1;
+                    continue;
+                }
+                String decoded = entity == '&gt;' ? '>' : '<';
+                addFinding(
+                    findings,
+                    'HTML-encoded IF operator',
+                    'IF expression uses \'' +
+                        decoded +
+                        '\' which is HTML-encoded as \'' +
+                        entity +
+                        '\' in the file — the IF parser does not decode entities before parsing operators, so this expression will always evaluate false: ' +
+                        raw +
+                        '. Rewrite the condition using \'!=\' or \'=\' (which are not HTML-encoded). Example: instead of {#IF Field > 0}, use {#IF Field != 0}.',
+                    1
+                );
+            }
+            scan = close + 1;
         }
     }
 
@@ -534,15 +656,6 @@ public with sharing class DocGenDocxTemplateLinter {
         Integer occurrences
     ) {
         findings.add(new DocGenAiHtmlValidator.Finding('warning', rule, occurrences, detail));
-    }
-
-    private static Integer countMatches(String s, Pattern p) {
-        Integer n = 0;
-        Matcher m = p.matcher(s);
-        while (m.find()) {
-            n++;
-        }
-        return n;
     }
 
     // -----------------------------------------------------------------------

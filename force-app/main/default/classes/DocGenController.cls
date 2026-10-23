@@ -3761,7 +3761,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // Drop head/style/script FIRST. A CSS rule body (`p{color:red}`) is textually
         // indistinguishable from a merge tag, so checking for tags before stripping
         // made every styled-but-empty document look like it had content.
-        String cleaned = html.replaceAll('(?is)<(head|style|script)\\b[^>]*>.*?</\\1\\s*>', ' ');
+        String cleaned = stripHtmlBlocksLinear(html);
 
         // Structural content counts regardless of text.
         String lower = cleaned.toLowerCase();
@@ -3769,17 +3769,117 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             return true;
         }
         // A merge tag is authored content even if the document is otherwise bare.
-        if (Pattern.compile('\\{[#^/%@]?[A-Za-z_][^}]*\\}').matcher(cleaned).find()) {
+        if (containsMergeTagLinear(cleaned)) {
             return true;
         }
-        String text = cleaned.replaceAll('(?s)<[^>]*>', ' ');
-        text = text.replaceAll('&nbsp;|&#160;', ' ').replaceAll('\\s+', ' ').trim();
+        String text = stripHtmlTagsAndCollapseWhitespace(cleaned);
         if (String.isBlank(text)) {
             return false;
         }
         // The Designer's seed copy for a blank canvas is not authored content — if it
         // is all that is being saved, the editor never loaded a real body.
         return !text.startsWithIgnoreCase('Start typing your document here');
+    }
+
+    /** Removes head/style/script blocks without matching across the whole HTML body with regex. */
+    private static String stripHtmlBlocksLinear(String html) {
+        String lower = html.toLowerCase();
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer head = lower.indexOf('<head', cursor);
+            Integer style = lower.indexOf('<style', cursor);
+            Integer script = lower.indexOf('<script', cursor);
+            Integer start = -1;
+            String name = '';
+            if (head != -1 && (start == -1 || head < start)) {
+                start = head;
+                name = 'head';
+            }
+            if (style != -1 && (start == -1 || style < start)) {
+                start = style;
+                name = 'style';
+            }
+            if (script != -1 && (start == -1 || script < start)) {
+                start = script;
+                name = 'script';
+            }
+            if (start == -1) {
+                break;
+            }
+            Integer boundary = start + 1 + name.length();
+            if (boundary < html.length() && !' \t\n\r>'.contains(lower.substring(boundary, boundary + 1))) {
+                cursor = boundary;
+                continue;
+            }
+            Integer openEnd = lower.indexOf('>', boundary);
+            Integer closeStart = openEnd == -1 ? -1 : lower.indexOf('</' + name, openEnd + 1);
+            Integer closeEnd = closeStart == -1 ? -1 : lower.indexOf('>', closeStart);
+            if (openEnd == -1 || closeEnd == -1) {
+                cursor = start + 1;
+                continue;
+            }
+            parts.add(html.substring(cursor, start));
+            parts.add(' ');
+            cursor = closeEnd + 1;
+        }
+        parts.add(html.substring(cursor));
+        return String.join(parts, '');
+    }
+
+    /** Finds merge tags without a whole-body matcher. */
+    private static Boolean containsMergeTagLinear(String html) {
+        Integer scan = 0;
+        while (scan < html.length()) {
+            Integer open = html.indexOf('{', scan);
+            if (open == -1) {
+                return false;
+            }
+            Integer p = open + 1;
+            if (p < html.length() && '#^/%@'.contains(html.substring(p, p + 1))) {
+                p++;
+            }
+            if (p < html.length()) {
+                Integer cp = html.charAt(p);
+                if ((cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122) || cp == 95) {
+                    if (html.indexOf('}', p + 1) != -1) {
+                        return true;
+                    }
+                }
+            }
+            scan = open + 1;
+        }
+        return false;
+    }
+
+    /** Removes markup and collapses whitespace without regex backtracking. */
+    private static String stripHtmlTagsAndCollapseWhitespace(String html) {
+        List<String> textParts = new List<String>();
+        Boolean inWhitespace = false;
+        Integer i = 0;
+        while (i < html.length()) {
+            if (html.substring(i, i + 1) == '<') {
+                Integer tagEnd = html.indexOf('>', i + 1);
+                if (tagEnd != -1) {
+                    inWhitespace = true;
+                    i = tagEnd + 1;
+                    continue;
+                }
+            }
+            Integer cp = html.charAt(i);
+            Boolean whitespace = cp <= 32 || cp == 160;
+            if (whitespace) {
+                inWhitespace = true;
+            } else {
+                if (inWhitespace && !textParts.isEmpty()) {
+                    textParts.add(' ');
+                }
+                textParts.add(html.substring(i, i + 1));
+                inWhitespace = false;
+            }
+            i++;
+        }
+        return String.join(textParts, '').replace('&nbsp;', ' ').replace('&#160;', ' ').trim();
     }
 
     @AuraEnabled
