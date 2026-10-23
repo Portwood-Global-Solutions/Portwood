@@ -176,10 +176,22 @@
         <apexClass>DocGenAuthenticatorController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenFontController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenFontOperation</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <customMetadataTypeAccesses>
         <name>DocGen_Button__mdt</name>
         <enabled>true</enabled>
     </customMetadataTypeAccesses>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Manage_DocGen_Fonts</name>
+    </customPermissions>
     <description>Full access to all Document Generation features and administration.</description>
     <fieldPermissions>
         <editable>true</editable>
@@ -1066,6 +1078,26 @@
         <field>DocGen_Error_Log__c.User_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.License_Text__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Metadata_JSON__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Proof_CV_Id__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Revision_Key__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Source_CV_Id__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Source_Checksum__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Status__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Verified_At__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Verified_By__c</field><readable
+        >true</readable></fieldPermissions>
+    <fieldPermissions><editable>false</editable><field>ContentDistribution.ContentDownloadUrl</field><readable
+        >true</readable></fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Portwood Admin</label>
     <pageAccesses>
@@ -1076,6 +1108,26 @@
         <apexPage>DocGenVerify</apexPage>
         <enabled>true</enabled>
     </pageAccesses>
+    <objectPermissions>
+        <allowCreate>false</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>ContentDistribution</object>
+        <viewAllFields>false</viewAllFields>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>DocGen_Font_Face__c</object>
+        <viewAllFields>true</viewAllFields>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
     <objectPermissions>
         <allowCreate>true</allowCreate>
         <allowDelete>true</allowDelete>

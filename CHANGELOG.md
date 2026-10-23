@@ -9,6 +9,24 @@
   browsers. The same HTML ZIP failed before the fix with an **Upload Failed** decompression
   error and reached **Ready to Save** after the fix, including image extraction.
 
+### Added
+
+- **Custom font assets for native PDF output.** Command Hub → Assets now has a Custom Fonts
+  section for uploading static TrueType faces individually, in batches of up to 25 files, or
+  as a ZIP archive of up to 200 `.ttf` files / 25 MB. Each face is inspected, stored as a
+  Salesforce File revision, and must pass a native PDF specimen review before approval.
+- **Custom font selection in Canvas and HTML authoring.** Approved faces appear beside the
+  built-in fonts, preview with their real browser font, and can be pinned to text using a
+  copied `{%font:asset-key:revision-key}` inline-style tag. Imported Word/HTML PDF templates
+  automatically match approved faces by family, weight, and style.
+- **Per-face lifecycle controls.** Admins can approve multiple inspected faces, retire approved
+  faces so existing template revisions keep working, and delete retired faces individually or
+  in bulk. Active/approved faces cannot be deleted.
+- **Native PDF font safety checks.** Upload inspection rejects unsupported supplementary-plane
+  Unicode coverage before creating the font registry record. If an already-approved face is
+  unavailable during rendering, Portwood skips that face and continues the document with the
+  normal PDF fallback instead of failing the entire document.
+
 ### Fixed
 
 - **The HTML fidelity report now separates rendering notes from generation blockers

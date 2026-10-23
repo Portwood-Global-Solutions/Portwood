@@ -3757,6 +3757,7 @@ App Launcher → **Portwood**. The Command Hub is the single entry point for adm
 - **Bulk Generation** — mass-generate against a SOQL filter or saved query.
 - **Signatures** — the public Site URL, the OWA sender, reminders, signer-verification defaults, and the setup checklist (§13.2).
 - **Assets** — central image library; reference any asset from any template with `{%asset:<key>}` (§7.7.1).
+- **Custom Fonts** — upload, inspect, approve, select, retire, and remove native-PDF font faces. See [§13.1.1](#1311-custom-fonts).
 - **Email Templates** — customize and brand the 7 signature-flow emails (§10.14).
 - **Brands** — reusable sender identities (address, logo, color, company name, footer) a template can point at via its **Sending Brand** field (§10.15).
 - **Learning Center** — links straight to [portwood.dev/guide](https://portwood.dev/guide) so docs are always current.
@@ -3767,6 +3768,74 @@ Worth knowing inside My Templates:
 - **Copy-Paste Tags** (template editor tab) — every field, loop, aggregate, and image tag for the template's object as ready-to-copy pills, so authors never hand-type tag syntax.
 
 **Runner languages.** The document runner's UI ships translated into 10 languages (Spanish, French, German, Italian, Japanese, Korean, Dutch, Brazilian Portuguese, Simplified + Traditional Chinese). Each user sees their own Salesforce language automatically — nothing to configure.
+
+### 13.1.1 Custom fonts
+
+Custom fonts are managed from **Command Hub → Assets → Custom Fonts**. The feature uses a
+verified Salesforce File revision so the same font bytes are used in browser previews and
+native PDF rendering.
+
+#### Upload and approve a font
+
+1. Give the user the **Manage Portwood Fonts** custom permission (included in the Portwood
+   Admin permission set).
+2. Open **Assets → Custom Fonts** and choose **Upload font** for one static `.ttf` file, or
+   choose **Bulk upload fonts** to select multiple `.ttf` files at once.
+3. For a large collection, upload one `.zip` containing static `.ttf` files. ZIP uploads are
+   limited to 25 MB and 200 font files. The individual-file picker accepts up to 25 files
+   per selection.
+4. Confirm the font license and hosting/PDF-embedding rights. Use a lowercase font key with
+   letters, numbers, and hyphens (maximum 40 characters).
+5. Open the uploaded face, generate its native PDF specimen, and inspect the embedded font,
+   live sample text, layout, and glyph coverage. Select the checkbox confirming that the
+   specimen was reviewed, then click **Approve**. Multiple inspected faces can be selected
+   and approved together.
+
+Only approved faces appear in the designer font lists. A retired face remains available to
+existing template revisions but is removed from new selections. Retired faces can be deleted
+individually or in bulk; approved/active faces cannot be deleted. Retiring is the safe way to
+remove a font from future work without breaking an existing template.
+
+#### Use a custom font in a template
+
+- **Canvas:** select a text box, open the PDF font picker, search for the approved face, and
+  choose it. The picker shows built-in fonts and approved custom faces. Apply the selection
+  before typing or select existing text; the binding is retained in the saved template and in
+  PDF preview.
+- **HTML:** select an approved face from the font picker, or copy the font tag from the font
+  detail panel and place it in an element's inline style:
+
+    ```html
+    <p style="{%font:brand-font:REVISION_KEY};font-size:12pt">Your text</p>
+    ```
+
+    Use one verified font tag per element. The tag must be inside a quoted `style` attribute and
+    must not be combined with a separate `font-family`, `font-weight`, or `font-style` override.
+
+- **Imported Word/HTML PDF templates:** Portwood automatically matches an approved face by
+  family, weight, and style when the source declares that font. If the exact face is not
+  approved, the renderer leaves that declaration alone and uses the normal PDF fallback.
+
+#### Compatibility and failure behavior
+
+Salesforce's native PDF path supports static TrueType fonts whose character map stays in the
+UTF-16 Basic Multilingual Plane (`U+0000` through `U+FFFF`). Upload validation rejects fonts
+containing supplementary-plane characters (`> U+FFFF`) before creating the font asset or
+registry record. Color fonts, variable fonts, collections, malformed TTFs, and fonts without
+the required PDF coverage should be rejected or skipped during inspection; use a static TTF
+face instead.
+
+A document can use up to 16 distinct approved font faces. If one approved face cannot be
+loaded while a document is rendered, Portwood skips that face's embedding and continues with
+the remaining document content. If text requires a glyph the selected face does not contain,
+the PDF renderer may fall back for that glyph; it does not invalidate unrelated paragraphs.
+Review the generated PDF specimen before approving a face.
+
+Custom font assets affect **native PDF rendering and PDF preview** for Word and HTML sources,
+and font selection in Canvas/HTML authoring. PowerPoint and Excel templates remain native
+Office outputs; Portwood does not convert them to PDF or inject a custom font file into the
+Office package. Their existing OOXML font declarations remain intact, and the recipient's
+Office installation must have the referenced font available.
 
 ### 13.2 Signature Settings
 
@@ -3830,16 +3899,28 @@ You can extend `DocGen_Template__c`, `DocGen_Signature_Request__c`, `DocGen_Sign
 
 ### 14.2 PDF font limitations
 
-Salesforce's `Blob.toPdf()` uses Flying Saucer with only four built-in fonts:
+Salesforce's `Blob.toPdf()` still provides these built-in families:
 
 - **Helvetica** (sans-serif) — default
 - **Times** (serif)
 - **Courier** (monospace)
 - **Arial Unicode MS** — for CJK / multibyte character scripts
 
-**Custom fonts cannot be loaded into the PDF engine.** CSS `@font-face` is not supported — not via data URIs, static resource URLs, or ContentVersion URLs. Exhaustively tested, confirmed impossible on the Salesforce platform.
+Portwood also supports approved static TrueType font faces through **Assets → Custom Fonts**.
+The face must pass inspection and its native PDF specimen must be approved before it can be
+selected or automatically matched. Portwood embeds the approved face with the PDF renderer's
+font binding and keeps the revision pinned to the template.
 
-Workaround: if you need custom fonts (branded typefaces, barcode fonts, decorative scripts), generate as **DOCX**. DOCX preserves whatever fonts are in the template — they render correctly in Word or any compatible viewer.
+The native PDF path is limited to the font's UTF-16 Basic Multilingual Plane coverage. Fonts
+that use supplementary Unicode characters above `U+FFFF`, variable/color fonts, font
+collections, malformed files, or missing glyph coverage may not be accepted. Use a separate
+approved face for each exact family/weight/style combination. See [§13.1.1](#1311-custom-fonts)
+for upload, approval, and fallback behavior.
+
+Custom fonts are applied to PDF preview and generated PDFs from Word and HTML templates, and
+can be selected while authoring Canvas/HTML templates. Native PowerPoint and Excel outputs do
+not become PDFs and do not receive an embedded Salesforce font file; the original Office font
+name remains in the package and must be installed on the recipient's computer.
 
 ### 14.3 PowerPoint → PDF not supported
 
@@ -3991,7 +4072,22 @@ For rich text images:
 
 ### 15.7 Custom font doesn't render in PDF
 
-See [§14.2](#142-pdf-font-limitations). Generate as DOCX for custom fonts.
+Check the following in order:
+
+1. The face is **Approved**, not Staged, Published, or Retired.
+2. The template uses the selected face or an approved face with the same family, weight, and
+   style. Imported Word/HTML sources are matched automatically only when the declaration is
+   exact enough to identify that combination.
+3. The font was approved from its current native PDF specimen. Re-upload and approve a new
+   revision if the source file changed.
+4. The character is covered by the face and is not a supplementary Unicode character above
+   `U+FFFF`.
+5. For HTML, the copied `{%font:...}` tag is inside a quoted inline `style` attribute and is
+   not overridden by another `font-family`, `font-weight`, or `font-style` declaration.
+
+If one face is unavailable during rendering, Portwood skips that face and continues rendering
+the rest of the document with the normal PDF fallback. Inspect the generated PDF and the font
+specimen to identify a missing glyph or unsupported face.
 
 ### 15.8 Giant-query job stuck in "Harvesting"
 

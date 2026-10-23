@@ -8493,6 +8493,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // version number (VersionNumber) without an N+1 per asset.
         Set<Id> latestCvIds = new Set<Id>();
         for (DocGen_Asset__c a : assets) {
+            if (a.Asset_Type__c == 'Font') {
+                continue;
+            }
             if (a.ContentDocumentLinks != null && !a.ContentDocumentLinks.isEmpty()) {
                 Id cvId = a.ContentDocumentLinks[0].ContentDocument.LatestPublishedVersionId;
                 if (cvId != null) {
@@ -8516,6 +8519,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         List<Map<String, Object>> result = new List<Map<String, Object>>();
         for (DocGen_Asset__c a : assets) {
+            if (a.Asset_Type__c == 'Font') {
+                continue;
+            }
             String latestCvId = null;
             Datetime lastModified = null;
             if (a.ContentDocumentLinks != null && !a.ContentDocumentLinks.isEmpty()) {

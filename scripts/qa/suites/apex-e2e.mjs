@@ -42,6 +42,7 @@ export const E2E_SEQUENCE = [
     ['e2e-07-syntax5.apex', 'Merge-tag syntax', SEVERITY.BLOCKER],
     ['e2e-07-syntax6.apex', 'Merge-tag syntax', SEVERITY.BLOCKER],
     ['e2e-09-images.apex', 'Images', SEVERITY.MAJOR],
+    ['e2e-10-custom-fonts.apex', 'Custom fonts', SEVERITY.BLOCKER],
     ['e2e-08-cleanup.apex', 'Cleanup', SEVERITY.MINOR]
 ];
 

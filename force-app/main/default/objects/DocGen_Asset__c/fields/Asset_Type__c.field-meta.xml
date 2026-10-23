@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Asset_Type__c</fullName>
-    <description
-    >Kind of shared asset. Only Image is supported in v1; the picklist is left open so text/HTML snippet types can be added later without a schema change.</description>
+    <description>Kind of shared asset, including images and licensed font faces.</description>
     <label>Asset Type</label>
     <required>false</required>
     <type>Picklist</type>
@@ -13,6 +12,11 @@
                 <fullName>Image</fullName>
                 <default>true</default>
                 <label>Image</label>
+            </value>
+            <value>
+                <fullName>Font</fullName>
+                <default>false</default>
+                <label>Font</label>
             </value>
         </valueSetDefinition>
     </valueSet>

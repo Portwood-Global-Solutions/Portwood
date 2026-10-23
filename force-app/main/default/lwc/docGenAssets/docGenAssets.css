@@ -11,3 +11,42 @@
 .category-filter {
     min-width: 12rem;
 }
+
+.asset-sections {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid #dddbda;
+}
+
+.asset-section-button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    color: #5c5c5c;
+    cursor: pointer;
+    display: inline-flex;
+    gap: 0.4rem;
+    padding: 0.65rem 1rem;
+}
+
+.asset-section-button:hover,
+.asset-section-button:focus {
+    color: #0176d3;
+}
+
+.asset-section-button_active {
+    border-bottom-color: #0176d3;
+    color: #032d60;
+    font-weight: 700;
+}
+
+.font-section {
+    border: 1px solid #e5e5e5;
+    border-radius: 0.25rem;
+    background: #fff;
+}
+
+.section-heading {
+    padding: 1rem 1rem 0;
+}

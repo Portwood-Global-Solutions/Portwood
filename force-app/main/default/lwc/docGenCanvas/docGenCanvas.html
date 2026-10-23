@@ -81,6 +81,16 @@
                     </p>
                 </template>
                 <template lwc:if={showRichEditor}>
+                    <c-doc-gen-font-picker
+                        label="PDF font"
+                        value={selFont}
+                        options={fontOptions}
+                        onchange={handleFontChange}
+                    ></c-doc-gen-font-picker>
+                    <p class="dg-panel-note">
+                        Choose a built-in or approved custom font from Assets. This font applies to the text box and
+                        generated PDF.
+                    </p>
                     <div class="dg-editor-wrap" style={editorStyle}>
                         <lightning-input-rich-text
                             label="Content"
@@ -197,14 +207,14 @@
                 </template>
 
                 <template lwc:if={showBoxTypography}>
-                    <lightning-combobox
-                        label="Font"
-                        variant="label-stacked"
-                        value={selFont}
-                        options={fontOptions}
-                        onchange={handleFontChange}
-                        field-level-help="Only these three resolve in the PDF engine. Named families like Arial or Georgia silently render as serif, so they are not offered."
-                    ></lightning-combobox>
+                    <template lwc:if={selectedIsTable}>
+                        <c-doc-gen-font-picker
+                            label="Font"
+                            value={selFont}
+                            options={fontOptions}
+                            onchange={handleFontChange}
+                        ></c-doc-gen-font-picker>
+                    </template>
 
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size (pt)</label>
@@ -418,15 +428,14 @@
                     </p>
 
                     <h4 class="dg-panel-sub">Header text</h4>
-                    <lightning-combobox
+                    <c-doc-gen-font-picker
                         label="Font"
-                        variant="label-stacked"
                         value={selHeaderFont}
                         options={fontOptions}
                         data-which="header"
                         data-key="font"
                         onchange={handleRowTextChange}
-                    ></lightning-combobox>
+                    ></c-doc-gen-font-picker>
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size</label>
                         <input
@@ -461,15 +470,14 @@
                     </div>
 
                     <h4 class="dg-panel-sub">Row text</h4>
-                    <lightning-combobox
+                    <c-doc-gen-font-picker
                         label="Font"
-                        variant="label-stacked"
                         value={selRowFont}
                         options={fontOptions}
                         data-which="row"
                         data-key="font"
                         onchange={handleRowTextChange}
-                    ></lightning-combobox>
+                    ></c-doc-gen-font-picker>
                     <div class="dg-prop-row">
                         <label class="dg-prop-label">Size</label>
                         <input

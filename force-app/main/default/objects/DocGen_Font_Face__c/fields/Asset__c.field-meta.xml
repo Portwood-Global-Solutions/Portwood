@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata"><fullName>Asset__c</fullName><description
+    >Stable family asset. Font faces use a separate publication path from image assets.</description><label
+    >Font asset</label><referenceTo>DocGen_Asset__c</referenceTo><relationshipLabel
+    >Font faces</relationshipLabel><relationshipName>Font_Faces</relationshipName><deleteConstraint
+    >Restrict</deleteConstraint><required>true</required><type>Lookup</type></CustomField>

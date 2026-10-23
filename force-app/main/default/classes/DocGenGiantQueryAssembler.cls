@@ -703,7 +703,8 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * Aggregate tags ({SUM:...}, {COUNT:...}, etc.) are handled separately by
      * resolveGiantAggregateTags and are skipped here.
      */
-    private String resolveParentMergeTags(String html) {
+    @TestVisible
+    public String resolveParentMergeTags(String html) {
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Base_Object_API__c' });
             /* code-analyzer-suppress ApexFlsViolation */

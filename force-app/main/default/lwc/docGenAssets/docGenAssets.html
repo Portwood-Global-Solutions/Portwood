@@ -1,76 +1,103 @@
 <template>
     <div class="slds-var-p-around_small">
-        <!-- Toolbar -->
-        <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_x-small">
-            <div class="slds-text-body_small slds-text-color_weak slds-align-middle">
-                Upload a logo or footer once, then reference it in any template with its merge tag.
-            </div>
-            <lightning-button
-                label="New Asset"
-                variant="brand"
-                icon-name="utility:add"
-                onclick={handleOpenCreate}
-            ></lightning-button>
+        <div class="asset-sections slds-tabs_default slds-var-m-bottom_medium" role="tablist">
+            <button class={imagesSectionClass} role="tab" aria-selected={isImagesSection} onclick={showImagesSection}>
+                <lightning-icon icon-name="utility:image" size="x-small"></lightning-icon>
+                <span>Images</span>
+            </button>
+            <button class={fontsSectionClass} role="tab" aria-selected={isFontsSection} onclick={showFontsSection}>
+                <lightning-icon icon-name="utility:font" size="x-small"></lightning-icon>
+                <span>Custom Fonts</span>
+            </button>
         </div>
-        <template if:true={hasAssets}>
-            <div class="slds-grid slds-gutters_x-small slds-var-m-bottom_small">
-                <div class="slds-col slds-grow">
-                    <lightning-input
-                        type="search"
-                        label="Search"
-                        variant="label-hidden"
-                        placeholder="Search by name, tag, or category…"
-                        value={searchTerm}
-                        onchange={handleSearchChange}
-                    ></lightning-input>
-                </div>
-                <template if:true={showCategoryFilter}>
-                    <div class="slds-col slds-grow-none category-filter">
-                        <lightning-combobox
-                            label="Category"
-                            variant="label-hidden"
-                            value={categoryFilter}
-                            options={categoryOptions}
-                            onchange={handleCategoryFilterChange}
-                        ></lightning-combobox>
+
+        <template if:true={isFontsSection}>
+            <section class="font-section" aria-label="Custom fonts">
+                <div class="section-heading">
+                    <div>
+                        <h2 class="slds-text-heading_small">Custom Fonts</h2>
+                        <p class="slds-text-body_small slds-text-color_weak">
+                            Upload, review, and approve licensed TrueType fonts for native PDF output.
+                        </p>
                     </div>
-                </template>
-            </div>
+                </div>
+                <c-doc-gen-font-assets></c-doc-gen-font-assets>
+            </section>
         </template>
 
-        <!-- Empty state -->
-        <template if:false={hasAssets}>
-            <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_large">
-                <lightning-icon
-                    icon-name="utility:image"
-                    size="small"
-                    class="slds-var-m-bottom_x-small"
-                ></lightning-icon>
-                <p class="slds-text-body_regular">No shared assets yet.</p>
-                <p class="slds-text-body_small slds-text-color_weak">
-                    Create one to share a logo or footer across all your templates.
-                </p>
+        <template if:true={isImagesSection}>
+            <!-- Toolbar -->
+            <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_x-small">
+                <div class="slds-text-body_small slds-text-color_weak slds-align-middle">
+                    Upload a logo or footer once, then reference it in any template with its merge tag.
+                </div>
+                <lightning-button
+                    label="New Asset"
+                    variant="brand"
+                    icon-name="utility:add"
+                    onclick={handleOpenCreate}
+                ></lightning-button>
             </div>
-        </template>
+            <template if:true={hasAssets}>
+                <div class="slds-grid slds-gutters_x-small slds-var-m-bottom_small">
+                    <div class="slds-col slds-grow">
+                        <lightning-input
+                            type="search"
+                            label="Search"
+                            variant="label-hidden"
+                            placeholder="Search by name, tag, or category…"
+                            value={searchTerm}
+                            onchange={handleSearchChange}
+                        ></lightning-input>
+                    </div>
+                    <template if:true={showCategoryFilter}>
+                        <div class="slds-col slds-grow-none category-filter">
+                            <lightning-combobox
+                                label="Category"
+                                variant="label-hidden"
+                                value={categoryFilter}
+                                options={categoryOptions}
+                                onchange={handleCategoryFilterChange}
+                            ></lightning-combobox>
+                        </div>
+                    </template>
+                </div>
+            </template>
 
-        <!-- Asset list. The wrapper caps height (long lists scroll inside the
+            <!-- Empty state -->
+            <template if:false={hasAssets}>
+                <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_large">
+                    <lightning-icon
+                        icon-name="utility:image"
+                        size="small"
+                        class="slds-var-m-bottom_x-small"
+                    ></lightning-icon>
+                    <p class="slds-text-body_regular">No shared assets yet.</p>
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        Create one to share a logo or footer across all your templates.
+                    </p>
+                </div>
+            </template>
+
+            <!-- Asset list. The wrapper caps height (long lists scroll inside the
              card) and scrolls horizontally when the tab is narrow. -->
-        <template if:true={hasVisibleAssets}>
-            <div class="asset-table-container">
-                <c-doc-gen-image-datatable
-                    key-field="id"
-                    data={visibleAssets}
-                    columns={columns}
-                    onrowaction={handleRowAction}
-                    hide-checkbox-column
-                >
-                </c-doc-gen-image-datatable>
-            </div>
-        </template>
-        <template if:true={showNoMatches}>
-            <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_medium">
-                <p class="slds-text-body_regular">No assets match your search.</p>
-            </div>
+            <template if:true={hasVisibleAssets}>
+                <div class="asset-table-container">
+                    <c-doc-gen-image-datatable
+                        key-field="id"
+                        data={visibleAssets}
+                        columns={columns}
+                        onrowaction={handleRowAction}
+                        hide-checkbox-column
+                    >
+                    </c-doc-gen-image-datatable>
+                </div>
+            </template>
+            <template if:true={showNoMatches}>
+                <div class="slds-box slds-theme_shade slds-text-align_center slds-var-p-around_medium">
+                    <p class="slds-text-body_regular">No assets match your search.</p>
+                </div>
+            </template>
         </template>
     </div>
 
