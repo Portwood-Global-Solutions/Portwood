@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
+
 ### Added - branded guest signing experience
 
 - Applied reusable brand company name, logo, color, and favicon behavior across the signing
@@ -90,6 +92,11 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   longer linked to the Job record's Files related list. The cache is still cleaned up
   automatically when the job finishes, and combined/individual output documents are
   unaffected.
+- **Legacy Designer preserves authored HTML and CSS when switching between Source and Visual
+  modes (#464).** Custom `<style>` blocks, including `@page`, font, spacing, and layout rules, are
+  no longer stripped during editor round trips. Conditional tags still appear as editor-only pills
+  in Visual mode, but their green pill styling and other preview chrome are removed from saved HTML
+  and generated PDF input.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

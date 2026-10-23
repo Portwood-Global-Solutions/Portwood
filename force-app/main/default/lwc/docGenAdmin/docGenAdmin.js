@@ -7171,9 +7171,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
             tpl.innerHTML = target;
             const root = tpl.content;
-            for (const marker of root.querySelectorAll('.dg-drop-marker')) {
-                marker.remove();
-            }
+            this._stripEditorLayer(root);
             this._unpillifyTags(root);
             const pv = root.querySelector('div.dg-pv');
             if (pv) {
@@ -7182,9 +7180,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 // pv.innerHTML. Reading the inner HTML discards every sibling of
                 // the preview — which on a flattened document is where the
                 // author's <style>, <title> and <meta> are sitting (#319).
-                for (const styleEl of pv.querySelectorAll(':scope > style')) {
-                    styleEl.remove();
-                }
                 // insertBefore/remove, not replaceWith — LWS proxied nodes are
                 // missing ChildNode.replaceWith (the v3.39 lesson).
                 while (pv.firstChild) {
@@ -11684,6 +11679,42 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * "t.replaceWith is not a function" for subscribers, hanging the
      * designer). replaceChild via the parent works everywhere.
      */
+    /**
+     * Remove only editor-owned preview elements from a serialized canvas copy.
+     * Author styles are parked inert while Visual mode is open, then restored
+     * before the clean document is returned to Source/save/PDF preview (#464).
+     */
+    _stripEditorLayer(root) {
+        const doc = root.ownerDocument || document;
+        for (const el of root.querySelectorAll('style[data-dg-editor]')) {
+            el.remove();
+        }
+        // Compatibility for a canvas produced by a pre-#464 cached bundle.
+        // Its injected sheet was unmarked, but it was always the first child of
+        // .dg-pv and targeted that reserved editor class. Do not remove any
+        // other unmarked style element.
+        for (const pv of root.querySelectorAll('div.dg-pv')) {
+            const first = pv.firstElementChild;
+            if (
+                first &&
+                first.tagName === 'STYLE' &&
+                !first.hasAttribute('data-dg-authored') &&
+                /(^|})\s*\.dg-pv\b/.test(first.textContent || '')
+            ) {
+                first.remove();
+            }
+        }
+        for (const marker of root.querySelectorAll('.dg-drop-marker')) {
+            marker.remove();
+        }
+        for (const parked of root.querySelectorAll('style[data-dg-authored]')) {
+            const restored = doc.createElement('style');
+            restored.textContent = parked.textContent;
+            this._safeReplace(parked, restored);
+        }
+    }
+
+    /** Replace a node through the LWS-safe parent API fallback. */
     _safeReplace(node, replacement) {
         try {
             if (typeof node.replaceWith === 'function') {
@@ -12950,12 +12981,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- string round-trip of the live canvas; re-cleaned below, never cloneNode (LWS drops browser-inserted nodes)
         tpl.innerHTML = pv.innerHTML;
         const root = tpl.content;
-        for (const styleEl of root.querySelectorAll('style')) {
-            styleEl.remove();
-        }
-        for (const markerEl of root.querySelectorAll('.dg-drop-marker')) {
-            markerEl.remove();
-        }
+        this._stripEditorLayer(root);
         this._unpillifyTags(root);
         const container = document.createElement('div');
         container.appendChild(root);
