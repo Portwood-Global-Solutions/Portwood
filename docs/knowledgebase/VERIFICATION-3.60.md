@@ -68,3 +68,9 @@ These checks validate the local reader and source/capture artifacts. They are no
 ## Prepublication legacy audit
 
 All 225 substantive headings in the pre-overhaul guide have mapped destinations in `legacy-coverage.json`. The review added four searchable developer articles and corrected the ambiguities listed in `LEGACY-AUDIT.md`. The 73-article reader and all 297 legacy routes passed the same browser suite with the current production static header/footer shell. The public site uses Namecheap; Salesforce-only deployment would not publish it.
+
+## Published table correction
+
+The merge-tag directory contained an unescaped pipe in the inline-code example `{?poNumber|N/A}`. That produced a four-column delimiter under a three-column header, so the directory rendered as paragraph text. The source now escapes the literal pipe, and the generated catalog/Markdown have been rebuilt.
+
+Build validation now checks table column counts in every article and retained reference. Browser validation checks all 55 article tables for actual HTML table output, expected header columns, expected data-row counts, and the complete signer-input fallback tag. The previous route/image checks did not establish table structure; these assertions cover that missing check.

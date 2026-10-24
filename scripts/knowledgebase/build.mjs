@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import prettier from 'prettier';
 import { apexSurface } from './apex-surface.mjs';
+import { markdownTables } from './markdown-tables.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -35,6 +36,7 @@ const articles = config.articles.map((article) => {
     assert(fs.existsSync(path.join(root, file)), `${article.slug}: article file is missing.`);
     const sourceText = fs.existsSync(path.join(root, file)) ? read(file).trim() : '';
     const body = expand(sourceText);
+    for (const error of markdownTables(body).errors) assert(false, `${file}: ${error}`);
     assert(groupIds.has(article.group), `${article.slug}: unknown group.`);
     assert(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(article.slug), `${article.slug}: use a stable lowercase slug.`);
     assert(
@@ -83,6 +85,9 @@ const articles = config.articles.map((article) => {
     }
     return { ...article, file, body };
 });
+for (const file of fs.readdirSync(path.join(root, 'docs/reference')).filter((file) => file.endsWith('.md')))
+    for (const error of markdownTables(read(`docs/reference/${file}`)).errors)
+        assert(false, `docs/reference/${file}: ${error}`);
 for (const learningPath of config.learningPaths)
     for (const slug of learningPath.articles)
         assert(slugs.has(slug), `Learning path ${learningPath.id}: missing ${slug}`);

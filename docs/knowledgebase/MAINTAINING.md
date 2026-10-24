@@ -37,6 +37,12 @@ An article contains its body only. Its title comes from `guide.json`. Use H4 (`#
 
 Link to another lesson with its stable slug, for example `[Make a table that grows](#repeating-tables)`. Use a full GitHub URL for a developer reference or a downloadable example. The builder validates local article links, source dependencies, image existence, provenance, and generated-output freshness.
 
+## Markdown tables
+
+Escape a literal pipe as `\|` inside a table cell, including inside an inline code span. For example, the source for a signer-input fallback in a table is `` `{?poNumber\|N/A}` ``; readers should see `{?poNumber|N/A}`. An unescaped pipe creates another table column even when surrounded by backticks.
+
+The builder validates column counts in every article and retained reference. The browser suite also checks that each source table becomes an actual HTML table with the expected header columns and data rows, and that the signer-input fallback renders intact. Run both checks after editing a reference table; formatting alone does not prove valid Markdown structure.
+
 ## Writing a lesson
 
 Start with a real task a reader wants to finish. Use the exact labels in the current UI.
