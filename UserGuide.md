@@ -4528,7 +4528,7 @@ Read all inputs before rendering; keep preceding DML out of the render transacti
 
 #### Handle access and failures deliberately
 
-The standard retrieval path uses user-mode queries. Prepared maps and custom providers bypass that retrieval, so caller code must enforce access on the data it supplies. `with sharing` alone does not enforce field access.
+The standard retrieval path uses user-mode queries. A prepared map skips the source-record retrieval; template, file, font, and other supporting queries can still consume SOQL budget. Prepared maps and custom providers bypass that retrieval, so caller code must enforce access on the data it supplies. `with sharing` alone does not enforce field access.
 
 Catch `portwoodglobal.DocGenException` for Portwood validation failures, and handle other platform/transaction failures in your job framework. Log safe identifiers and the failure reason; do not write entire documents, signing URLs, or sensitive merged values into logs.
 
