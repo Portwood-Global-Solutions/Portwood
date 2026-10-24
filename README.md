@@ -4,7 +4,7 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
-[![Version](https://img.shields.io/badge/version-3.59.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-3.60.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -40,6 +40,13 @@ it optional is what lets Portwood install everywhere. See
 [UserGuide § 5.7.11](UserGuide.md#5711-generate-the-template-with-agentforce-v346).
 
 ---
+
+## User guide
+
+Follow the [visual user guide](https://portwood.dev/guide) or read the complete
+[knowledgebase](UserGuide.md): first document, template design, worked examples, bulk
+generation, signatures, and troubleshooting. Documentation contributors edit the small
+[task articles](docs/knowledgebase/MAINTAINING.md) and regenerate the guide.
 
 ## Quick Start
 

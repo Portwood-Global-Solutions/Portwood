@@ -1,0 +1,45 @@
+name: Knowledgebase
+
+on:
+    pull_request:
+        paths:
+            - UserGuide.md
+            - docs/knowledgebase/**
+            - docs/images/userguide/**
+            - docs/reference/**
+            - scripts/knowledgebase/**
+            - force-app/**
+            - agentforce-ext/**
+            - sfdx-project.json
+            - package.json
+            - .github/workflows/knowledgebase.yml
+    push:
+        branches: [main]
+        paths:
+            - UserGuide.md
+            - docs/knowledgebase/**
+            - scripts/knowledgebase/**
+            - sfdx-project.json
+
+permissions:
+    contents: read
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run guide:check
+            - name: Report lessons affected by product changes
+              if: github.event_name == 'pull_request'
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: npm run guide:affected -- "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"

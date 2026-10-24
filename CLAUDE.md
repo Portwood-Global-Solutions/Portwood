@@ -1,5 +1,15 @@
 # CLAUDE.md — Portwood
 
+## Knowledgebase source
+
+`UserGuide.md` and `docs/knowledgebase/catalog.json` are generated. Edit the small task
+articles under `docs/knowledgebase/articles/` and metadata in `guide.json`, then run
+`npm run guide:build` and `npm run guide:check`. Release install links resolve the
+confirmed released `release.packageAlias` through `sfdx-project.json`; update that key
+instead of patching generated install URLs. Run `npm run guide:affected -- <base> <head>`
+for product changes. See `docs/knowledgebase/MAINTAINING.md` for review records,
+screenshots, legacy anchors, and the separate website reader.
+
 ## Skills
 
 `.claude/skills/` packages the project's working knowledge as Claude Code skills — they load automatically when relevant, and read as plain Markdown otherwise. Prefer them over re-deriving from this file:

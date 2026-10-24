@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  QA-ONLY FIXTURE. Never shipped.
+
+  docGenRunner and docGenSignatureSender are lightning__RecordPage components, and
+  the package deliberately ships no FlexiPage — customers place them themselves.
+  That left the two components a customer actually touches with ZERO browser
+  coverage, because there is no supported URL that renders an LWC on a record
+  without a page assignment.
+
+  This page exists only to give the QA suite somewhere to reach them. It lives
+  outside force-app (the sole packageDirectory), so it cannot be picked up by a
+  package build. It is deployed to the verify org by
+  scripts/qa/fixtures/deploy.sh and nowhere else.
+-->
+<FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
+    <flexiPageRegions>
+        <itemInstances>
+            <componentInstance>
+                <componentName>portwoodglobal:docGenRunner</componentName>
+                <identifier>qaDocGenRunner</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
+                <componentName>portwoodglobal:docGenSignatureSender</componentName>
+                <identifier>qaDocGenSignatureSender</identifier>
+            </componentInstance>
+        </itemInstances>
+        <name>main</name>
+        <type>Region</type>
+    </flexiPageRegions>
+    <flexiPageRegions>
+        <!--
+          force:highlightsPanel is what renders QUICK ACTIONS. Without it the
+          page looks complete and the actions simply are not there — the layout
+          can carry a perfectly valid platformActionList entry and nothing
+          appears, which reads as "the quick action failed to deploy" when the
+          action is sitting in the org exactly as intended. This is the only
+          route to docGenButton, a lightning__RecordAction that cannot be placed
+          in a region like the other two components.
+        -->
+        <itemInstances>
+            <componentInstance>
+                <componentName>force:highlightsPanel</componentName>
+                <identifier>qaHighlightsPanel</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
+                <componentName>force:detailPanel</componentName>
+                <identifier>qaDetailPanel</identifier>
+            </componentInstance>
+        </itemInstances>
+        <name>header</name>
+        <type>Region</type>
+    </flexiPageRegions>
+    <masterLabel>Account with Portwood</masterLabel>
+    <sobjectType>Account</sobjectType>
+    <template>
+        <name>flexipage:recordHomeTemplateDesktop</name>
+    </template>
+    <type>RecordPage</type>
+</FlexiPage>

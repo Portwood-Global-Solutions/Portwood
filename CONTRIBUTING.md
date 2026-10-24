@@ -109,6 +109,17 @@ sf code-analyzer run --workspace "force-app/" --rule-selector "Security" --rule-
 - **Clear description.** What changed, why, and how you tested it.
 - **No unrelated changes.** Don't refactor surrounding code or add comments to files you didn't change.
 
+## Knowledgebase changes
+
+Edit task articles in `docs/knowledgebase/articles/` and their metadata in
+`docs/knowledgebase/guide.json`, then run `npm run guide:build` and
+`npm run guide:check`. `UserGuide.md` and the website catalog are generated outputs.
+Use `npm run guide:affected -- <base-ref> <head-ref>` to find lessons that need review
+after a product change. Keep stable article slugs and screenshot provenance.
+
+See [Maintaining the knowledgebase](docs/knowledgebase/MAINTAINING.md) for the writing
+pattern, fresh subscriber-org setup, release checklist, and website preview workflow.
+
 ## Architecture overview
 
 Apex:

@@ -1,0 +1,1581 @@
+{
+    "sourceCommit": "8fd56843",
+    "sourceFile": "UserGuide.md",
+    "sections": [
+        {
+            "heading": "1. Five-minute quick start",
+            "githubAnchor": "1-five-minute-quick-start",
+            "siteAnchor": "1-five-minute-quick-start",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 1 \u2014 Install",
+            "githubAnchor": "step-1--install",
+            "siteAnchor": "step-1-install",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 2 \u2014 Assign yourself the admin permission set",
+            "githubAnchor": "step-2--assign-yourself-the-admin-permission-set",
+            "siteAnchor": "step-2-assign-yourself-the-admin-permission-set",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 3 \u2014 Enable the PDF rendering release update",
+            "githubAnchor": "step-3--enable-the-pdf-rendering-release-update",
+            "siteAnchor": "step-3-enable-the-pdf-rendering-release-update",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 4 \u2014 Make your first template",
+            "githubAnchor": "step-4--make-your-first-template",
+            "siteAnchor": "step-4-make-your-first-template",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 5 \u2014 Generate",
+            "githubAnchor": "step-5--generate",
+            "siteAnchor": "step-5-generate",
+            "article": "first-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "2. What Portwood does",
+            "githubAnchor": "2-what-portwood-does",
+            "siteAnchor": "2-what-portwood-does",
+            "article": "choose-format",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "3. Install & post-install setup",
+            "githubAnchor": "3-install--post-install-setup",
+            "siteAnchor": "3-install-post-install-setup",
+            "article": "install-portwood",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Install the package",
+            "githubAnchor": "install-the-package",
+            "siteAnchor": "install-the-package",
+            "article": "install-portwood",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Post-install checklist",
+            "githubAnchor": "post-install-checklist",
+            "siteAnchor": "post-install-checklist",
+            "article": "install-portwood",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "4. Permission sets",
+            "githubAnchor": "4-permission-sets",
+            "siteAnchor": "4-permission-sets",
+            "article": "manage-access",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Assigning a permission set",
+            "githubAnchor": "assigning-a-permission-set",
+            "siteAnchor": "assigning-a-permission-set",
+            "article": "manage-access",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Assigning DocGen_Guest_Signature to a Site guest user",
+            "githubAnchor": "assigning-docgen_guest_signature-to-a-site-guest-user",
+            "siteAnchor": "assigning-docgen_guest_signature-to-a-site-guest-user",
+            "article": "manage-access",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Adding custom fields to Portwood objects?",
+            "githubAnchor": "adding-custom-fields-to-portwood-objects",
+            "siteAnchor": "adding-custom-fields-to-portwood-objects",
+            "article": "manage-access",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5. Templates",
+            "githubAnchor": "5-templates",
+            "siteAnchor": "5-templates",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.1 Creating a template",
+            "githubAnchor": "51-creating-a-template",
+            "siteAnchor": "51-creating-a-template",
+            "article": "choose-format",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Fillable PDF templates (PDF-to-PDF, testing)",
+            "githubAnchor": "fillable-pdf-templates-pdf-to-pdf-testing",
+            "siteAnchor": "fillable-pdf-templates-pdf-to-pdf-testing",
+            "article": "choose-format",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.1.1 API Name \u2014 a stable key for automation (v3.28+)",
+            "githubAnchor": "511-api-name--a-stable-key-for-automation-v328",
+            "siteAnchor": "511-api-name-a-stable-key-for-automation-v328",
+            "article": "move-templates",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.1.2 The Visual Designer (Beta)",
+            "githubAnchor": "512-the-visual-designer-beta",
+            "siteAnchor": "512-the-visual-designer-beta",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.1.3 Canvas templates (Beta)",
+            "githubAnchor": "513-canvas-templates-beta",
+            "siteAnchor": "513-canvas-templates-beta",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Show sample data",
+            "githubAnchor": "show-sample-data",
+            "siteAnchor": "show-sample-data",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "What you place is what prints",
+            "githubAnchor": "what-you-place-is-what-prints",
+            "siteAnchor": "what-you-place-is-what-prints",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Tables that grow",
+            "githubAnchor": "tables-that-grow",
+            "siteAnchor": "tables-that-grow",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Charts",
+            "githubAnchor": "charts",
+            "siteAnchor": "charts",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Naming a block",
+            "githubAnchor": "naming-a-block",
+            "siteAnchor": "naming-a-block",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Element linking \u2014 blocks that travel together",
+            "githubAnchor": "element-linking--blocks-that-travel-together",
+            "siteAnchor": "element-linking-blocks-that-travel-together",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Variant groups \u2014 conditional alternatives in one flow slot",
+            "githubAnchor": "variant-groups--conditional-alternatives-in-one-flow-slot",
+            "siteAnchor": "variant-groups-conditional-alternatives-in-one-flow-slot",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Import and export",
+            "githubAnchor": "import-and-export",
+            "siteAnchor": "import-and-export",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Multiple pages",
+            "githubAnchor": "multiple-pages",
+            "siteAnchor": "multiple-pages",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Known limits (Beta)",
+            "githubAnchor": "known-limits-beta",
+            "siteAnchor": "known-limits-beta",
+            "article": "canvas-design",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.2 Template versions",
+            "githubAnchor": "52-template-versions",
+            "siteAnchor": "52-template-versions",
+            "article": "template-versions",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.2.1 Cloning a template (v3.29+)",
+            "githubAnchor": "521-cloning-a-template-v329",
+            "siteAnchor": "521-cloning-a-template-v329",
+            "article": "template-versions",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.2.2 Exporting & importing templates",
+            "githubAnchor": "522-exporting--importing-templates",
+            "siteAnchor": "522-exporting-importing-templates",
+            "article": "move-templates",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.3 Test record",
+            "githubAnchor": "53-test-record",
+            "siteAnchor": "53-test-record",
+            "article": "choose-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.4 Output format locking",
+            "githubAnchor": "54-output-format-locking",
+            "siteAnchor": "54-output-format-locking",
+            "article": "choose-format",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.5 Template visibility (audience control)",
+            "githubAnchor": "55-template-visibility-audience-control",
+            "siteAnchor": "55-template-visibility-audience-control",
+            "article": "organize-templates",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.6 Template sharing",
+            "githubAnchor": "56-template-sharing",
+            "siteAnchor": "56-template-sharing",
+            "article": "organize-templates",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7 HTML templates (Google Docs, Notion, any HTML source)",
+            "githubAnchor": "57-html-templates-google-docs-notion-any-html-source",
+            "siteAnchor": "57-html-templates-google-docs-notion-any-html-source",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.1 Authoring in Google Docs",
+            "githubAnchor": "571-authoring-in-google-docs",
+            "siteAnchor": "571-authoring-in-google-docs",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.2 Other authoring tools",
+            "githubAnchor": "572-other-authoring-tools",
+            "siteAnchor": "572-other-authoring-tools",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.3 CSS rules \u2014 what works, what doesn't, and an LLM prompt",
+            "githubAnchor": "573-css-rules--what-works-what-doesnt-and-an-llm-prompt",
+            "siteAnchor": "573-css-rules-what-works-what-doesnt-and-an-llm-prompt",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Quick reference",
+            "githubAnchor": "quick-reference",
+            "siteAnchor": "quick-reference",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Rounded corners, shadows and tints \u2014 the honest answer",
+            "githubAnchor": "rounded-corners-shadows-and-tints--the-honest-answer",
+            "siteAnchor": "rounded-corners-shadows-and-tints-the-honest-answer",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Long values overflow a table cell \u2014 and no CSS fixes it",
+            "githubAnchor": "long-values-overflow-a-table-cell--and-no-css-fixes-it",
+            "siteAnchor": "long-values-overflow-a-table-cell-and-no-css-fixes-it",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "How to draw a circle (bullets, status dots, timeline markers)",
+            "githubAnchor": "how-to-draw-a-circle-bullets-status-dots-timeline-markers",
+            "siteAnchor": "how-to-draw-a-circle-bullets-status-dots-timeline-markers",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Paste-ready LLM prompt",
+            "githubAnchor": "paste-ready-llm-prompt",
+            "siteAnchor": "paste-ready-llm-prompt",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Skeleton template (copy + adapt)",
+            "githubAnchor": "skeleton-template-copy--adapt",
+            "siteAnchor": "skeleton-template-copy-adapt",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Common conversion patterns",
+            "githubAnchor": "common-conversion-patterns",
+            "siteAnchor": "common-conversion-patterns",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "`@page` rules \u2014 don't double-declare",
+            "githubAnchor": "page-rules--dont-double-declare",
+            "siteAnchor": "page-rules-dont-double-declare",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.4 Header / Footer fields",
+            "githubAnchor": "574-header--footer-fields",
+            "siteAnchor": "574-header-footer-fields",
+            "article": "running-headers-footers",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.5 Page numbers",
+            "githubAnchor": "575-page-numbers",
+            "siteAnchor": "575-page-numbers",
+            "article": "running-headers-footers",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.6 Images",
+            "githubAnchor": "576-images",
+            "siteAnchor": "576-images",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.7 Loops in tables",
+            "githubAnchor": "577-loops-in-tables",
+            "siteAnchor": "577-loops-in-tables",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.8 Bulk generation + Giant Query",
+            "githubAnchor": "578-bulk-generation--giant-query",
+            "siteAnchor": "578-bulk-generation-giant-query",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.9 Known limitations",
+            "githubAnchor": "579-known-limitations",
+            "siteAnchor": "579-known-limitations",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.10 Troubleshooting",
+            "githubAnchor": "5710-troubleshooting",
+            "siteAnchor": "5710-troubleshooting",
+            "article": "import-html",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.7.11 Generate the template with Agentforce (v3.46+)",
+            "githubAnchor": "5711-generate-the-template-with-agentforce-v346",
+            "siteAnchor": "5711-generate-the-template-with-agentforce-v346",
+            "article": "ai-authoring",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Setup \u2014 install the extension",
+            "githubAnchor": "setup--install-the-extension",
+            "siteAnchor": "setup-install-the-extension",
+            "article": "ai-authoring",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Setup \u2014 bring your own provider (alternative)",
+            "githubAnchor": "setup--bring-your-own-provider-alternative",
+            "siteAnchor": "setup-bring-your-own-provider-alternative",
+            "article": "ai-authoring",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Using it",
+            "githubAnchor": "using-it",
+            "siteAnchor": "using-it",
+            "article": "ai-authoring",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "What the report tells you",
+            "githubAnchor": "what-the-report-tells-you",
+            "siteAnchor": "what-the-report-tells-you",
+            "article": "ai-authoring",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Troubleshooting",
+            "githubAnchor": "troubleshooting",
+            "siteAnchor": "troubleshooting",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.8 Word template authoring tips",
+            "githubAnchor": "58-word-template-authoring-tips",
+            "siteAnchor": "58-word-template-authoring-tips",
+            "article": "upload-word",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.8.1 Aligning columns across multiple tables \u2014 the \"phantom width\" trap",
+            "githubAnchor": "581-aligning-columns-across-multiple-tables--the-phantom-width-trap",
+            "siteAnchor": "581-aligning-columns-across-multiple-tables-the-phantom-width-trap",
+            "article": "upload-word",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.8.2 AutoFit settings \u2014 what each option does to the PDF",
+            "githubAnchor": "582-autofit-settings--what-each-option-does-to-the-pdf",
+            "siteAnchor": "582-autofit-settings-what-each-option-does-to-the-pdf",
+            "article": "upload-word",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.8.3 Inspecting a problematic `.docx`",
+            "githubAnchor": "583-inspecting-a-problematic-docx",
+            "siteAnchor": "583-inspecting-a-problematic-docx",
+            "article": "upload-word",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "5.8.4 Other Word authoring gotchas worth remembering",
+            "githubAnchor": "584-other-word-authoring-gotchas-worth-remembering",
+            "siteAnchor": "584-other-word-authoring-gotchas-worth-remembering",
+            "article": "upload-word",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6. Query builder",
+            "githubAnchor": "6-query-builder",
+            "siteAnchor": "6-query-builder",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.1 V1 \u2014 Legacy flat string",
+            "githubAnchor": "61-v1--legacy-flat-string",
+            "siteAnchor": "61-v1-legacy-flat-string",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.2 V2 \u2014 JSON flat (junction support)",
+            "githubAnchor": "62-v2--json-flat-junction-support",
+            "siteAnchor": "62-v2-json-flat-junction-support",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.3 V3 \u2014 Query tree (multi-object, any depth)",
+            "githubAnchor": "63-v3--query-tree-multi-object-any-depth",
+            "siteAnchor": "63-v3-query-tree-multi-object-any-depth",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.4 Using the visual builder",
+            "githubAnchor": "64-using-the-visual-builder",
+            "siteAnchor": "64-using-the-visual-builder",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.5 Per-child filters, order by, limit",
+            "githubAnchor": "65-per-child-filters-order-by-limit",
+            "siteAnchor": "65-per-child-filters-order-by-limit",
+            "article": "query-config",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.6 Apex Data Provider (V4 \u2014 class-backed templates)",
+            "githubAnchor": "66-apex-data-provider-v4--class-backed-templates",
+            "siteAnchor": "66-apex-data-provider-v4-class-backed-templates",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 1 \u2014 write the provider class in your org",
+            "githubAnchor": "step-1--write-the-provider-class-in-your-org",
+            "siteAnchor": "step-1-write-the-provider-class-in-your-org",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 2 \u2014 bind a template to the class",
+            "githubAnchor": "step-2--bind-a-template-to-the-class",
+            "siteAnchor": "step-2-bind-a-template-to-the-class",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Step 3 \u2014 generate",
+            "githubAnchor": "step-3--generate",
+            "siteAnchor": "step-3-generate",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Common patterns",
+            "githubAnchor": "common-patterns",
+            "siteAnchor": "common-patterns",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "6.6.1 JSON Data (from Flow) \u2014 template authoring mode",
+            "githubAnchor": "661-json-data-from-flow--template-authoring-mode",
+            "siteAnchor": "661-json-data-from-flow-template-authoring-mode",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7. Merge tag reference",
+            "githubAnchor": "7-merge-tag-reference",
+            "siteAnchor": "7-merge-tag-reference",
+            "article": "merge-tags",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.1 Field merge",
+            "githubAnchor": "71-field-merge",
+            "siteAnchor": "71-field-merge",
+            "article": "tag-fields",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.2 Format specifiers",
+            "githubAnchor": "72-format-specifiers",
+            "siteAnchor": "72-format-specifiers",
+            "article": "tag-fields",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Date formatting",
+            "githubAnchor": "date-formatting",
+            "siteAnchor": "date-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Currency formatting",
+            "githubAnchor": "currency-formatting",
+            "siteAnchor": "currency-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Auto-detecting the currency from the record",
+            "githubAnchor": "auto-detecting-the-currency-from-the-record",
+            "siteAnchor": "auto-detecting-the-currency-from-the-record",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Totalling across currencies",
+            "githubAnchor": "totalling-across-currencies",
+            "siteAnchor": "totalling-across-currencies",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Number formatting",
+            "githubAnchor": "number-formatting",
+            "siteAnchor": "number-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Percent formatting",
+            "githubAnchor": "percent-formatting",
+            "siteAnchor": "percent-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Checkbox formatting",
+            "githubAnchor": "checkbox-formatting",
+            "siteAnchor": "checkbox-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Picklist label formatting",
+            "githubAnchor": "picklist-label-formatting",
+            "siteAnchor": "picklist-label-formatting",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.3 Loops",
+            "githubAnchor": "73-loops",
+            "siteAnchor": "73-loops",
+            "article": "tag-loops",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.4 Conditionals",
+            "githubAnchor": "74-conditionals",
+            "siteAnchor": "74-conditionals",
+            "article": "tag-conditions",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Boolean conditional",
+            "githubAnchor": "boolean-conditional",
+            "siteAnchor": "boolean-conditional",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Inverse conditional",
+            "githubAnchor": "inverse-conditional",
+            "siteAnchor": "inverse-conditional",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "IF comparison expressions",
+            "githubAnchor": "if-comparison-expressions",
+            "siteAnchor": "if-comparison-expressions",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "AND / OR / NOT",
+            "githubAnchor": "and--or--not",
+            "siteAnchor": "and-or-not",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Live example \u2014 Project Status Showcase",
+            "githubAnchor": "live-example--project-status-showcase",
+            "siteAnchor": "live-example-project-status-showcase",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Nested IF blocks",
+            "githubAnchor": "nested-if-blocks",
+            "siteAnchor": "nested-if-blocks",
+            "article": "conditional-content",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.5 Aggregates",
+            "githubAnchor": "75-aggregates",
+            "siteAnchor": "75-aggregates",
+            "article": "tag-totals",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6 Charts",
+            "githubAnchor": "76-charts",
+            "siteAnchor": "76-charts",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.0 One-line `{Chart:...}` blocks",
+            "githubAnchor": "760-one-line-chart-blocks",
+            "siteAnchor": "760-one-line-chart-blocks",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.1 Complete modifier reference",
+            "githubAnchor": "761-complete-modifier-reference",
+            "siteAnchor": "761-complete-modifier-reference",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.2 Output-format matrix \u2014 what flows where",
+            "githubAnchor": "762-output-format-matrix--what-flows-where",
+            "siteAnchor": "762-output-format-matrix-what-flows-where",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.2.1 Charts on large datasets \u2014 client-side rendering (v3.55+)",
+            "githubAnchor": "7621-charts-on-large-datasets--client-side-rendering-v355",
+            "siteAnchor": "7621-charts-on-large-datasets-client-side-rendering-v355",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.3 LLM authoring prompt \u2014 copy this to generate a template",
+            "githubAnchor": "763-llm-authoring-prompt--copy-this-to-generate-a-template",
+            "siteAnchor": "763-llm-authoring-prompt-copy-this-to-generate-a-template",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.4 Reference templates",
+            "githubAnchor": "764-reference-templates",
+            "siteAnchor": "764-reference-templates",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.5 Resolution paths \u2014 `Query_Config__c` setup",
+            "githubAnchor": "765-resolution-paths--query_config__c-setup",
+            "siteAnchor": "765-resolution-paths-query_config__c-setup",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.6 Security \u2014 FLS, sharing, and SOQL injection",
+            "githubAnchor": "766-security--fls-sharing-and-soql-injection",
+            "siteAnchor": "766-security-fls-sharing-and-soql-injection",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.7 Governor budget",
+            "githubAnchor": "767-governor-budget",
+            "siteAnchor": "767-governor-budget",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.8 Hand-authored `{#ChartBucket:...}` loops",
+            "githubAnchor": "768-hand-authored-chartbucket-loops",
+            "siteAnchor": "768-hand-authored-chartbucket-loops",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.9 CSS 2.1 reminders (PDF output)",
+            "githubAnchor": "769-css-21-reminders-pdf-output",
+            "siteAnchor": "769-css-21-reminders-pdf-output",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.6.10 Word templates \u2014 supported as of v1.92",
+            "githubAnchor": "7610-word-templates--supported-as-of-v192",
+            "siteAnchor": "7610-word-templates-supported-as-of-v192",
+            "article": "tag-charts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.7 Images",
+            "githubAnchor": "77-images",
+            "siteAnchor": "77-images",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.7.1 Shared assets (`{%asset:<key>}`)",
+            "githubAnchor": "771-shared-assets-assetkey",
+            "siteAnchor": "771-shared-assets-assetkey",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.7.2 Sizing images in HTML \u2192 PDF",
+            "githubAnchor": "772-sizing-images-in-html--pdf",
+            "siteAnchor": "772-sizing-images-in-html-pdf",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.8 Barcodes & QR codes",
+            "githubAnchor": "78-barcodes--qr-codes",
+            "siteAnchor": "78-barcodes-qr-codes",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.9 Signatures",
+            "githubAnchor": "79-signatures",
+            "siteAnchor": "79-signatures",
+            "article": "tag-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Signature loop block \u2014 `{#Signatures}` (variable signer count)",
+            "githubAnchor": "signature-loop-block--signatures-variable-signer-count",
+            "siteAnchor": "signature-loop-block-signatures-variable-signer-count",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.10 Rich text fields",
+            "githubAnchor": "710-rich-text-fields",
+            "siteAnchor": "710-rich-text-fields",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.11 Watermarks / page backgrounds (PDF output)",
+            "githubAnchor": "711-watermarks--page-backgrounds-pdf-output",
+            "siteAnchor": "711-watermarks-page-backgrounds-pdf-output",
+            "article": "tag-media",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.12 Built-in date/time tags",
+            "githubAnchor": "712-built-in-datetime-tags",
+            "siteAnchor": "712-built-in-datetime-tags",
+            "article": "tag-fields",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.13 Running user tags (Prepared by:)",
+            "githubAnchor": "713-running-user-tags-prepared-by",
+            "siteAnchor": "713-running-user-tags-prepared-by",
+            "article": "tag-fields",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.14 Checkmarks & symbols (PDF-safe)",
+            "githubAnchor": "714-checkmarks--symbols-pdf-safe",
+            "siteAnchor": "714-checkmarks-symbols-pdf-safe",
+            "article": "tag-fields",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Copy-paste symbol palette",
+            "githubAnchor": "copy-paste-symbol-palette",
+            "siteAnchor": "copy-paste-symbol-palette",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Conditional checkbox pattern",
+            "githubAnchor": "conditional-checkbox-pattern",
+            "siteAnchor": "conditional-checkbox-pattern",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "What does NOT work",
+            "githubAnchor": "what-does-not-work",
+            "siteAnchor": "what-does-not-work",
+            "article": "format-values",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.15 Classic Approvals related list \u2014 `{#Approvals}` (v1.92+)",
+            "githubAnchor": "715-classic-approvals-related-list--approvals-v192",
+            "siteAnchor": "715-classic-approvals-related-list-approvals-v192",
+            "article": "tag-approvals",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "7.16 Not implemented",
+            "githubAnchor": "716-not-implemented",
+            "siteAnchor": "716-not-implemented",
+            "article": "custom-fonts",
+            "disposition": "Corrected obsolete unsupported-font claim"
+        },
+        {
+            "heading": "8. Document generation",
+            "githubAnchor": "8-document-generation",
+            "siteAnchor": "8-document-generation",
+            "article": "generate-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.1 From a record page (single doc)",
+            "githubAnchor": "81-from-a-record-page-single-doc",
+            "siteAnchor": "81-from-a-record-page-single-doc",
+            "article": "generate-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.2 What happens behind the scenes",
+            "githubAnchor": "82-what-happens-behind-the-scenes",
+            "siteAnchor": "82-what-happens-behind-the-scenes",
+            "article": "generate-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.3 Output format override",
+            "githubAnchor": "83-output-format-override",
+            "siteAnchor": "83-output-format-override",
+            "article": "generate-document",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.4 PDF merge (combine with existing PDFs)",
+            "githubAnchor": "84-pdf-merge-combine-with-existing-pdfs",
+            "siteAnchor": "84-pdf-merge-combine-with-existing-pdfs",
+            "article": "document-packets",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.5 Document packets",
+            "githubAnchor": "85-document-packets",
+            "siteAnchor": "85-document-packets",
+            "article": "document-packets",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.6 One-click quick action button (v3.28+)",
+            "githubAnchor": "86-one-click-quick-action-button-v328",
+            "siteAnchor": "86-one-click-quick-action-button-v328",
+            "article": "document-buttons",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "8.7 Document naming \u2014 Document Title Format tokens",
+            "githubAnchor": "87-document-naming--document-title-format-tokens",
+            "siteAnchor": "87-document-naming-document-title-format-tokens",
+            "article": "name-documents",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9. Bulk generation",
+            "githubAnchor": "9-bulk-generation",
+            "siteAnchor": "9-bulk-generation",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.1 Running a bulk job",
+            "githubAnchor": "91-running-a-bulk-job",
+            "siteAnchor": "91-running-a-bulk-job",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.1.1 Sort order \u2014 controlling document order",
+            "githubAnchor": "911-sort-order--controlling-document-order",
+            "siteAnchor": "911-sort-order-controlling-document-order",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.1.2 Duplex Padding \u2014 every document starts on a fresh sheet",
+            "githubAnchor": "912-duplex-padding--every-document-starts-on-a-fresh-sheet",
+            "siteAnchor": "912-duplex-padding-every-document-starts-on-a-fresh-sheet",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.2 Saved queries",
+            "githubAnchor": "92-saved-queries",
+            "siteAnchor": "92-saved-queries",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.3 Job history",
+            "githubAnchor": "93-job-history",
+            "siteAnchor": "93-job-history",
+            "article": "job-history",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.4 What bulk supports, by template type",
+            "githubAnchor": "94-what-bulk-supports-by-template-type",
+            "siteAnchor": "94-what-bulk-supports-by-template-type",
+            "article": "bulk-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.5 Governor-limit analysis",
+            "githubAnchor": "95-governor-limit-analysis",
+            "siteAnchor": "95-governor-limit-analysis",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "9.6 Oversized records \u2014 automatic giant-query recovery",
+            "githubAnchor": "96-oversized-records--automatic-giant-query-recovery",
+            "siteAnchor": "96-oversized-records-automatic-giant-query-recovery",
+            "article": "job-history",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10. E-signatures (v3)",
+            "githubAnchor": "10-e-signatures-v3",
+            "siteAnchor": "10-e-signatures-v3",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.1 Sending a signature request",
+            "githubAnchor": "101-sending-a-signature-request",
+            "siteAnchor": "101-sending-a-signature-request",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.1.1 Signing a customer-uploaded PDF",
+            "githubAnchor": "1011-signing-a-customer-uploaded-pdf",
+            "siteAnchor": "1011-signing-a-customer-uploaded-pdf",
+            "article": "sign-uploaded-pdf",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.2 Signature tag syntax",
+            "githubAnchor": "102-signature-tag-syntax",
+            "siteAnchor": "102-signature-tag-syntax",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.3 Packets (multi-template signing)",
+            "githubAnchor": "103-packets-multi-template-signing",
+            "siteAnchor": "103-packets-multi-template-signing",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.4 Sequential vs parallel",
+            "githubAnchor": "104-sequential-vs-parallel",
+            "siteAnchor": "104-sequential-vs-parallel",
+            "article": "sign-template",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.5 PIN verification",
+            "githubAnchor": "105-pin-verification",
+            "siteAnchor": "105-pin-verification",
+            "article": "setup-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Making verification configurable (on/off, pre-fill)",
+            "githubAnchor": "making-verification-configurable-onoff-pre-fill",
+            "siteAnchor": "making-verification-configurable-onoff-pre-fill",
+            "article": "setup-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.6 In-person signing (PIN bypass)",
+            "githubAnchor": "106-in-person-signing-pin-bypass",
+            "siteAnchor": "106-in-person-signing-pin-bypass",
+            "article": "manage-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.7 Signing page experience",
+            "githubAnchor": "107-signing-page-experience",
+            "siteAnchor": "107-signing-page-experience",
+            "article": "signer-experience",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.7.1 Guided sign-spot signing on the PDF viewer (drawn or typed)",
+            "githubAnchor": "1071-guided-sign-spot-signing-on-the-pdf-viewer-drawn-or-typed",
+            "siteAnchor": "1071-guided-sign-spot-signing-on-the-pdf-viewer-drawn-or-typed",
+            "article": "signer-experience",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.7.2 Stamp card vs. inline \u2014 how a signature renders",
+            "githubAnchor": "1072-stamp-card-vs-inline--how-a-signature-renders",
+            "siteAnchor": "1072-stamp-card-vs-inline-how-a-signature-renders",
+            "article": "signer-experience",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.8 Link expiration, reminders & request management",
+            "githubAnchor": "108-link-expiration-reminders--request-management",
+            "siteAnchor": "108-link-expiration-reminders-request-management",
+            "article": "manage-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.9 Audit trail",
+            "githubAnchor": "109-audit-trail",
+            "siteAnchor": "109-audit-trail",
+            "article": "manage-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.10 Signed PDF",
+            "githubAnchor": "1010-signed-pdf",
+            "siteAnchor": "1010-signed-pdf",
+            "article": "manage-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.11 Decline flow",
+            "githubAnchor": "1011-decline-flow",
+            "siteAnchor": "1011-decline-flow",
+            "article": "manage-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.12 Admin setup (one-time)",
+            "githubAnchor": "1012-admin-setup-one-time",
+            "siteAnchor": "1012-admin-setup-one-time",
+            "article": "setup-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Assigning the guest permission set",
+            "githubAnchor": "assigning-the-guest-permission-set",
+            "siteAnchor": "assigning-the-guest-permission-set",
+            "article": "setup-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.13 Email branding",
+            "githubAnchor": "1013-email-branding",
+            "siteAnchor": "1013-email-branding",
+            "article": "brands-and-emails",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.14 Email Templates (Command Hub tab)",
+            "githubAnchor": "1014-email-templates-command-hub-tab",
+            "siteAnchor": "1014-email-templates-command-hub-tab",
+            "article": "email-tokens",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Changing a widget's wording or styling",
+            "githubAnchor": "changing-a-widgets-wording-or-styling",
+            "siteAnchor": "changing-a-widgets-wording-or-styling",
+            "article": "email-tokens",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "10.15 Brands (Command Hub tab)",
+            "githubAnchor": "1015-brands-command-hub-tab",
+            "siteAnchor": "1015-brands-command-hub-tab",
+            "article": "brands-and-emails",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11. Flow automation cookbook",
+            "githubAnchor": "11-flow-automation-cookbook",
+            "siteAnchor": "11-flow-automation-cookbook",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.1 Picking the right action",
+            "githubAnchor": "111-picking-the-right-action",
+            "siteAnchor": "111-picking-the-right-action",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.2 Recipe \u2014 When an Opportunity closes won, generate a PDF and attach it",
+            "githubAnchor": "112-recipe--when-an-opportunity-closes-won-generate-a-pdf-and-attach-it",
+            "siteAnchor": "112-recipe-when-an-opportunity-closes-won-generate-a-pdf-and-attach-it",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.3 Recipe \u2014 Email a generated PDF without keeping a copy",
+            "githubAnchor": "113-recipe--email-a-generated-pdf-without-keeping-a-copy",
+            "siteAnchor": "113-recipe-email-a-generated-pdf-without-keeping-a-copy",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.4 Recipe \u2014 Mass-generate quarterly statements",
+            "githubAnchor": "114-recipe--mass-generate-quarterly-statements",
+            "siteAnchor": "114-recipe-mass-generate-quarterly-statements",
+            "article": "flow-bulk",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.5 Recipe \u2014 Generate when dataset size is unpredictable",
+            "githubAnchor": "115-recipe--generate-when-dataset-size-is-unpredictable",
+            "siteAnchor": "115-recipe-generate-when-dataset-size-is-unpredictable",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.6 Recipe \u2014 Send a contract for signature on Opportunity approval",
+            "githubAnchor": "116-recipe--send-a-contract-for-signature-on-opportunity-approval",
+            "siteAnchor": "116-recipe-send-a-contract-for-signature-on-opportunity-approval",
+            "article": "flow-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.6.1 Sign in-session \u2014 capture the signature in your own portal or screen Flow",
+            "githubAnchor": "1161-sign-in-session--capture-the-signature-in-your-own-portal-or-screen-flow",
+            "siteAnchor": "1161-sign-in-session-capture-the-signature-in-your-own-portal-or-screen-flow",
+            "article": "flow-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.7 Recipe \u2014 Send a document for signature on the PDF viewer page",
+            "githubAnchor": "117-recipe--send-a-document-for-signature-on-the-pdf-viewer-page",
+            "siteAnchor": "117-recipe-send-a-document-for-signature-on-the-pdf-viewer-page",
+            "article": "flow-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.7.1 Signer form fields \u2014 collect input during signing, write it back",
+            "githubAnchor": "1171-signer-form-fields--collect-input-during-signing-write-it-back",
+            "siteAnchor": "1171-signer-form-fields-collect-input-during-signing-write-it-back",
+            "article": "signer-inputs",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.8 Recipe \u2014 Pass pre-built JSON data instead of querying",
+            "githubAnchor": "118-recipe--pass-pre-built-json-data-instead-of-querying",
+            "siteAnchor": "118-recipe-pass-pre-built-json-data-instead-of-querying",
+            "article": "custom-data",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.9 Recipe \u2014 Custom signing UI (advanced, legacy requests only)",
+            "githubAnchor": "119-recipe--custom-signing-ui-advanced-legacy-requests-only",
+            "siteAnchor": "119-recipe-custom-signing-ui-advanced-legacy-requests-only",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.9.1 Compatibility \u2014 which tokens these actions accept",
+            "githubAnchor": "1191-compatibility--which-tokens-these-actions-accept",
+            "siteAnchor": "1191-compatibility-which-tokens-these-actions-accept",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.9.2 Not supported \u2014 injecting a captured signature image into a v3 signer",
+            "githubAnchor": "1192-not-supported--injecting-a-captured-signature-image-into-a-v3-signer",
+            "siteAnchor": "1192-not-supported-injecting-a-captured-signature-image-into-a-v3-signer",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.9.3 Legacy custom-screen Flow",
+            "githubAnchor": "1193-legacy-custom-screen-flow",
+            "siteAnchor": "1193-legacy-custom-screen-flow",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.10 Polling an async job from a screen Flow",
+            "githubAnchor": "1110-polling-an-async-job-from-a-screen-flow",
+            "siteAnchor": "1110-polling-an-async-job-from-a-screen-flow",
+            "article": "async-jobs",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "11.11 Error handling",
+            "githubAnchor": "1111-error-handling",
+            "siteAnchor": "1111-error-handling",
+            "article": "flow-generate",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12. Apex API reference",
+            "githubAnchor": "12-apex-api-reference",
+            "siteAnchor": "12-apex-api-reference",
+            "article": "apex-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.1 `DocGenService` \u2014 synchronous generation",
+            "githubAnchor": "121-docgenservice--synchronous-generation",
+            "siteAnchor": "121-docgenservice-synchronous-generation",
+            "article": "apex-generation",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.2 `DocGenController` \u2014 LWC / Aura endpoints",
+            "githubAnchor": "122-docgencontroller--lwc--aura-endpoints",
+            "siteAnchor": "122-docgencontroller-lwc-aura-endpoints",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.3 `DocGenBulkController` \u2014 bulk generation",
+            "githubAnchor": "123-docgenbulkcontroller--bulk-generation",
+            "siteAnchor": "123-docgenbulkcontroller-bulk-generation",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.4 Flow invocable actions (full signatures)",
+            "githubAnchor": "124-flow-invocable-actions-full-signatures",
+            "siteAnchor": "124-flow-invocable-actions-full-signatures",
+            "article": "apex-actions",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.5 `DocGenDataProvider` interface \u2014 custom data source",
+            "githubAnchor": "125-docgendataprovider-interface--custom-data-source",
+            "siteAnchor": "125-docgendataprovider-interface-custom-data-source",
+            "article": "apex-data-provider",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "12.6 Namespace prefix",
+            "githubAnchor": "126-namespace-prefix",
+            "siteAnchor": "126-namespace-prefix",
+            "article": "developer-reference",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13. Admin & settings",
+            "githubAnchor": "13-admin--settings",
+            "siteAnchor": "13-admin-settings",
+            "article": "find-your-way",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.1 The Command Hub",
+            "githubAnchor": "131-the-command-hub",
+            "siteAnchor": "131-the-command-hub",
+            "article": "find-your-way",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.1.1 Custom fonts",
+            "githubAnchor": "1311-custom-fonts",
+            "siteAnchor": "1311-custom-fonts",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Upload and approve a font",
+            "githubAnchor": "upload-and-approve-a-font",
+            "siteAnchor": "upload-and-approve-a-font",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Use a custom font in a template",
+            "githubAnchor": "use-a-custom-font-in-a-template",
+            "siteAnchor": "use-a-custom-font-in-a-template",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "Compatibility and failure behavior",
+            "githubAnchor": "compatibility-and-failure-behavior",
+            "siteAnchor": "compatibility-and-failure-behavior",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.2 Signature Settings",
+            "githubAnchor": "132-signature-settings",
+            "siteAnchor": "132-signature-settings",
+            "article": "setup-signatures",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.2.1 Error Logs",
+            "githubAnchor": "1321-error-logs",
+            "siteAnchor": "1321-error-logs",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.3 Blob.toPdf Release Update",
+            "githubAnchor": "133-blobtopdf-release-update",
+            "siteAnchor": "133-blobtopdf-release-update",
+            "article": "install-portwood",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "13.4 Custom fields on Portwood objects",
+            "githubAnchor": "134-custom-fields-on-portwood-objects",
+            "siteAnchor": "134-custom-fields-on-portwood-objects",
+            "article": "manage-access",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14. Limits & known constraints",
+            "githubAnchor": "14-limits--known-constraints",
+            "siteAnchor": "14-limits-known-constraints",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.1 Apex heap limits",
+            "githubAnchor": "141-apex-heap-limits",
+            "siteAnchor": "141-apex-heap-limits",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.2 PDF font limitations",
+            "githubAnchor": "142-pdf-font-limitations",
+            "siteAnchor": "142-pdf-font-limitations",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.3 PowerPoint \u2192 PDF not supported",
+            "githubAnchor": "143-powerpoint--pdf-not-supported",
+            "siteAnchor": "143-powerpoint-pdf-not-supported",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.4 `{Today}` / `{Now}`",
+            "githubAnchor": "144-today--now",
+            "siteAnchor": "144-today-now",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.5 Browser payload limit",
+            "githubAnchor": "145-browser-payload-limit",
+            "siteAnchor": "145-browser-payload-limit",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.6 Lightning Web Security (LWS)",
+            "githubAnchor": "146-lightning-web-security-lws",
+            "siteAnchor": "146-lightning-web-security-lws",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.7 Guest user constraints (signing page)",
+            "githubAnchor": "147-guest-user-constraints-signing-page",
+            "siteAnchor": "147-guest-user-constraints-signing-page",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.8 Template & output size guidance",
+            "githubAnchor": "148-template--output-size-guidance",
+            "siteAnchor": "148-template-output-size-guidance",
+            "article": "limits",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "14.9 Excel templates \u2014 alpha limitations",
+            "githubAnchor": "149-excel-templates--alpha-limitations",
+            "siteAnchor": "149-excel-templates-alpha-limitations",
+            "article": "office-formats",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15. Troubleshooting",
+            "githubAnchor": "15-troubleshooting",
+            "siteAnchor": "15-troubleshooting",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.1 Generation fails with \"Error generating document\"",
+            "githubAnchor": "151-generation-fails-with-error-generating-document",
+            "siteAnchor": "151-generation-fails-with-error-generating-document",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.2 Raw CSS appears at the top of generated PDFs",
+            "githubAnchor": "152-raw-css-appears-at-the-top-of-generated-pdfs",
+            "siteAnchor": "152-raw-css-appears-at-the-top-of-generated-pdfs",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.3 Heap size too large",
+            "githubAnchor": "153-heap-size-too-large",
+            "siteAnchor": "153-heap-size-too-large",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.4 Merge tags render as literal text (e.g., `{Name}` appears in the output)",
+            "githubAnchor": "154-merge-tags-render-as-literal-text-eg-name-appears-in-the-output",
+            "siteAnchor": "154-merge-tags-render-as-literal-text-eg-name-appears-in-the-output",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.5 Signature emails don't arrive",
+            "githubAnchor": "155-signature-emails-dont-arrive",
+            "siteAnchor": "155-signature-emails-dont-arrive",
+            "article": "fix-signing",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.6 PDF image is broken / doesn't render",
+            "githubAnchor": "156-pdf-image-is-broken--doesnt-render",
+            "siteAnchor": "156-pdf-image-is-broken-doesnt-render",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.7 Custom font doesn't render in PDF",
+            "githubAnchor": "157-custom-font-doesnt-render-in-pdf",
+            "siteAnchor": "157-custom-font-doesnt-render-in-pdf",
+            "article": "custom-fonts",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.8 Giant-query job stuck in \"Harvesting\"",
+            "githubAnchor": "158-giant-query-job-stuck-in-harvesting",
+            "siteAnchor": "158-giant-query-job-stuck-in-harvesting",
+            "article": "job-history",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.9 Signing preview is blank / \"Document unavailable\" on an Experience Cloud site",
+            "githubAnchor": "159-signing-preview-is-blank--document-unavailable-on-an-experience-cloud-site",
+            "siteAnchor": "159-signing-preview-is-blank-document-unavailable-on-an-experience-cloud-site",
+            "article": "fix-signing",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.10 Signing link opens to \"Invalid page\" on an Experience Cloud site",
+            "githubAnchor": "1510-signing-link-opens-to-invalid-page-on-an-experience-cloud-site",
+            "siteAnchor": "1510-signing-link-opens-to-invalid-page-on-an-experience-cloud-site",
+            "article": "fix-signing",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.11 Long text breaks out of a table cell",
+            "githubAnchor": "1511-long-text-breaks-out-of-a-table-cell",
+            "siteAnchor": "1511-long-text-breaks-out-of-a-table-cell",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.12 A value is missing from the Type picklist (Canvas, HTML, Excel)",
+            "githubAnchor": "1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel",
+            "siteAnchor": "1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel",
+            "article": "upgrade-portwood",
+            "disposition": "Covered in task article or linked detailed reference"
+        },
+        {
+            "heading": "15.13 Still stuck?",
+            "githubAnchor": "1513-still-stuck",
+            "siteAnchor": "1513-still-stuck",
+            "article": "troubleshooting",
+            "disposition": "Covered in task article or linked detailed reference"
+        }
+    ]
+}

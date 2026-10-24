@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Opportunity summary</title>
+        <style>
+            @page {
+                size: letter;
+                margin: 0.75in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 11pt;
+                color: #203447;
+                line-height: 1.6;
+            }
+            h1 {
+                font-size: 26pt;
+                color: #173d61;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            td {
+                padding: 10pt;
+                border-bottom: 1px solid #d8e3ec;
+            }
+            .label {
+                width: 30%;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Opportunity summary</h1>
+        <p>{Name}</p>
+        <table>
+            <tr>
+                <td class="label">Customer</td>
+                <td>{Account.Name}</td>
+            </tr>
+            <tr>
+                <td class="label">Amount</td>
+                <td>{Amount:currency}</td>
+            </tr>
+            <tr>
+                <td class="label">Stage</td>
+                <td>{StageName:label}</td>
+            </tr>
+            <tr>
+                <td class="label">Close date</td>
+                <td>{CloseDate:MMMM d, yyyy}</td>
+            </tr>
+        </table>
+        <p>{#IF IsWon = true}Thank you for your business.{:else}We look forward to working with you.{/IF}</p>
+        <p>Prepared on {Today:MMMM d, yyyy}.</p>
+        <p>Portwood knowledgebase example. This is a demonstration document.</p>
+    </body>
+</html>

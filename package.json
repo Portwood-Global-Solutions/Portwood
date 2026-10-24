@@ -17,7 +17,12 @@
         "qa": "node scripts/qa/run-all.mjs",
         "qa:offline": "node scripts/qa/run-all.mjs --offline",
         "org:setup": "./scripts/qa/setup-org.sh",
-        "org:new": "./scripts/qa/setup-org.sh docgen-verify --create"
+        "org:new": "./scripts/qa/setup-org.sh docgen-verify --create",
+        "guide:build": "node scripts/knowledgebase/build.mjs",
+        "guide:check": "node scripts/knowledgebase/build.mjs --check",
+        "guide:affected": "node scripts/knowledgebase/affected.mjs",
+        "guide:preview": "node scripts/knowledgebase/preview.mjs",
+        "guide:test-reader": "node scripts/knowledgebase/check-reader.mjs"
     },
     "devDependencies": {
         "@prettier/plugin-xml": "3.4.2",
