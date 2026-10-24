@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Account brief</title>
+        <style>
+            @page {
+                size: letter;
+                margin: 0.7in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                color: #203447;
+                font-size: 11pt;
+                line-height: 1.5;
+            }
+            h1 {
+                font-size: 28pt;
+                color: #173d61;
+                margin: 0 0 6pt;
+            }
+            h2 {
+                font-size: 14pt;
+                color: #173d61;
+                margin-top: 24pt;
+            }
+            .intro {
+                color: #53677b;
+                margin-bottom: 24pt;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th {
+                text-align: left;
+                background: #eaf3fa;
+                color: #173d61;
+            }
+            th,
+            td {
+                padding: 9pt;
+                border-bottom: 1px solid #d8e3ec;
+                vertical-align: top;
+            }
+            .label {
+                width: 30%;
+                font-weight: bold;
+            }
+            .foot {
+                margin-top: 28pt;
+                color: #53677b;
+                font-size: 9pt;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>{Name}</h1>
+        <p class="intro">Account brief prepared on {Today:MMMM d, yyyy}</p>
+        <table>
+            <tr>
+                <td class="label">Industry</td>
+                <td>{Industry:label}</td>
+            </tr>
+            <tr>
+                <td class="label">Phone</td>
+                <td>{Phone}</td>
+            </tr>
+            <tr>
+                <td class="label">Location</td>
+                <td>{BillingCity}, {BillingState}</td>
+            </tr>
+            <tr>
+                <td class="label">Annual revenue</td>
+                <td>{AnnualRevenue:currency}</td>
+            </tr>
+        </table>
+        <h2>People to know</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Contacts}{FirstName} {LastName}</td>
+                    <td>{Title}</td>
+                    <td>{Email}{/Contacts}</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>{^Contacts}No contacts are listed yet.{/Contacts}</p>
+        <h2>Opportunities</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Opportunity</th>
+                    <th>Stage</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Opportunities}{Name}</td>
+                    <td>{StageName:label}</td>
+                    <td>{Amount:currency}{/Opportunities}</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>{^Opportunities}No opportunities are listed yet.{/Opportunities}</p>
+        <p><strong>Total opportunity value: {SUM:Opportunities.Amount:currency}</strong></p>
+        <p class="foot">Portwood knowledgebase example. All example businesses and people are fictional.</p>
+    </body>
+</html>

@@ -1,0 +1,333 @@
+[
+    {
+        "name": "DocGenAiProvider",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenAiProvider.cls",
+        "declarations": [
+            "global interface DocGenAiProvider",
+            "Boolean isAvailable()",
+            "String getName()",
+            "String generateHtml(String prompt)"
+        ]
+    },
+    {
+        "name": "DocGenBulkFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenBulkFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenBulkFlowAction",
+            "global class Request",
+            "global Id templateId",
+            "global String templateApiName",
+            "global String queryCondition",
+            "global List<String> recordIds",
+            "global String sortOrder",
+            "global String jobLabel",
+            "global Boolean combinedPdfOnly",
+            "global Boolean keepIndividualFiles",
+            "global Boolean duplexPadding",
+            "global Integer batchSize",
+            "global class Response",
+            "global Id jobId",
+            "global String errorMessage",
+            "global Boolean success",
+            "global static List<Response> generateBulkDocuments(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenChartCvReaper",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenChartCvReaper.cls",
+        "declarations": [
+            "global with sharing class DocGenChartCvReaper implements Schedulable",
+            "global void execute(SchedulableContext ctx)",
+            "global static Integer reap()"
+        ]
+    },
+    {
+        "name": "DocGenDataProvider",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenDataProvider.cls",
+        "declarations": [
+            "global interface DocGenDataProvider",
+            "Map<String, Object> getData(Id recordId)",
+            "List<String> getFieldNames()"
+        ]
+    },
+    {
+        "name": "DocGenEmailTemplateInstall",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenEmailTemplateInstall.cls",
+        "declarations": [
+            "global with sharing class DocGenEmailTemplateInstall implements InstallHandler",
+            "global void onInstall(InstallContext context)",
+            "global static Integer seedDefaults()"
+        ]
+    },
+    {
+        "name": "DocGenEmailTemplateService",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenEmailTemplateService.cls",
+        "declarations": [
+            "global with sharing class DocGenEmailTemplateService",
+            "global static final String TYPE_REQUEST = 'Signature_Request'",
+            "global static final String TYPE_REMINDER = 'Signature_Reminder'",
+            "global static final String TYPE_PIN = 'Verification_PIN'",
+            "global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed'",
+            "global static final String TYPE_ALL_SIGNED = 'All_Signed'",
+            "global static final String TYPE_DECLINED = 'Signer_Declined'",
+            "global static final String TYPE_COMPLETION = 'Completion_Confirmation'",
+            "global static final List<String> ALL_TYPES = new List<String>",
+            "global static final String MODE_MANAGED = 'Managed'",
+            "global static final String MODE_FULL_HTML = 'Full_Html'",
+            "global class RenderedEmail",
+            "global String subject",
+            "global String htmlBody",
+            "global String plainBody",
+            "global static RenderedEmail render(String type, Map<String, String> tokens)",
+            "global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride)",
+            "global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride, Id brandId)",
+            "global static String renderSubject(String subjectTemplate, Map<String, String> tokens)"
+        ]
+    },
+    {
+        "name": "DocGenException",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenException.cls",
+        "declarations": ["global with sharing class DocGenException extends Exception"]
+    },
+    {
+        "name": "DocGenFieldWritebackService",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenFieldWritebackService.cls",
+        "declarations": [
+            "global without sharing class DocGenFieldWritebackService",
+            "global class WritebackRequest",
+            "global String requestId",
+            "global WritebackRequest()",
+            "global static void writeBackFields(List<WritebackRequest> requests)"
+        ]
+    },
+    {
+        "name": "DocGenFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenFlowAction",
+            "global class Request",
+            "global Id templateId",
+            "global String templateApiName",
+            "global Id recordId",
+            "global Boolean saveToRecord",
+            "global String documentTitle",
+            "global String outputFormatOverride",
+            "global String jsonData",
+            "global class Response",
+            "global Id contentDocumentId",
+            "global Id contentVersionId",
+            "global String errorMessage",
+            "global Boolean success",
+            "global static List<Response> generateDocument(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenGiantQueryFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenGiantQueryFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenGiantQueryFlowAction",
+            "global class Request",
+            "global Id templateId",
+            "global Id recordId",
+            "global Boolean saveToRecord",
+            "global class Response",
+            "global Id contentDocumentId",
+            "global Id contentVersionId",
+            "global Id jobId",
+            "global Boolean isGiantQuery",
+            "global String errorMessage",
+            "global Boolean success",
+            "global static List<Response> generateDocument(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenPdfMerger",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenPdfMerger.cls",
+        "declarations": [
+            "global with sharing class DocGenPdfMerger",
+            "global class DocGenPdfMergeException extends Exception",
+            "global static Blob mergePdfs(List<Blob> pdfs, Boolean padOddDocuments)",
+            "global static Blob mergePdfCvs(List<Id> partCvIds, Boolean padOddDocuments)",
+            "global static Integer pageCount(Blob pdf)"
+        ]
+    },
+    {
+        "name": "DocGenService",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenService.cls",
+        "declarations": [
+            "global with sharing class DocGenService",
+            "global static Map<String, Object> generatePdfBlob(Id templateId, Id recordId)",
+            "global static Id generateDocument(Id templateId, Id recordId)",
+            "global static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride)",
+            "global static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride, String documentTitle)",
+            "global static Id generateDocument( Id templateId, Id recordId, String outputFormatOverride, String documentTitle, Id attachmentRecordId )",
+            "global static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData)",
+            "global static Map<String, Object> generatePdfBlobFromData( Id templateId, Id recordId, Map<String, Object> preloadedRecordData )",
+            "global static Map<String, Object> generatePdfBlobFromData(Id templateId, Map<String, Object> dataMap)",
+            "global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride )",
+            "global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride, String documentTitle )",
+            "global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride, String documentTitle, Id fileAttachmentTarget )"
+        ]
+    },
+    {
+        "name": "DocGenSignatureFinalizer",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignatureFinalizer.cls",
+        "declarations": [
+            "global without sharing class DocGenSignatureFinalizer",
+            "global class FinalizeRequest",
+            "global String token",
+            "global String base64Image",
+            "global static void finalizeSignature(List<FinalizeRequest> requests)"
+        ]
+    },
+    {
+        "name": "DocGenSignatureFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignatureFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenSignatureFlowAction",
+            "global class Signer",
+            "global Signer()",
+            "global String name",
+            "global String email",
+            "global String role",
+            "global Id contactId",
+            "global class Request",
+            "global Id templateId",
+            "global String templateApiName",
+            "global Id relatedRecordId",
+            "global List<Signer> signers",
+            "global List<DocGenSigner> signerRecords",
+            "global List<String> signerNames",
+            "global List<String> signerEmails",
+            "global List<String> signerRoles",
+            "global List<String> signerContactIds",
+            "global Boolean sendEmails",
+            "global String signingOrder",
+            "global String emailMessage",
+            "global String emailSubject",
+            "global Boolean requireEmailVerification",
+            "global Boolean prefillSignerEmail",
+            "global Integer expirationDays",
+            "global class Result",
+            "global Id signatureRequestId",
+            "global List<String> signerUrls",
+            "global List<String> signerNames",
+            "global List<String> signerEmails",
+            "global List<String> signerRoles",
+            "global String emailStatus",
+            "global Boolean success",
+            "global String errorMessage",
+            "global static List<Result> generate(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenSignaturePdfFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignaturePdfFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenSignaturePdfFlowAction",
+            "global class Request",
+            "global Id templateId",
+            "global Id contentVersionId",
+            "global Id relatedRecordId",
+            "global List<DocGenSigner> signerRecords",
+            "global String signingOrder",
+            "global String documentTitleFormat",
+            "global class Result",
+            "global Id signatureRequestId",
+            "global List<String> signerUrls",
+            "global List<String> signerNames",
+            "global List<String> signerEmails",
+            "global List<String> signerRoles",
+            "global Boolean success",
+            "global String errorMessage",
+            "global static List<Result> send(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenSignaturePreparationController",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignaturePreparationController.cls",
+        "declarations": [
+            "global with sharing class DocGenSignaturePreparationController",
+            "global static List<Contact> searchContacts(Id recordId, String search)",
+            "global static Map<String, Object> getContext(Id recordId)",
+            "global static Map<String, Object> uploadPdf(Id recordId, String fileName, String base64Pdf)",
+            "global static Map<String, Object> selectPdf(Id recordId, Id contentVersionId)",
+            "global static Map<String, Object> loadDraft(Id recordId, Id draftId)",
+            "global static Integer saveDraft(Id recordId, Id draftId, Integer expectedRevision, String configJson)",
+            "global static Map<String, Object> sendDraft(Id recordId, Id draftId, Integer expectedRevision, String configJson)"
+        ]
+    },
+    {
+        "name": "DocGenSignatureSubmitter",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignatureSubmitter.cls",
+        "declarations": [
+            "global without sharing class DocGenSignatureSubmitter",
+            "global class FlowInput",
+            "global String token",
+            "global String signatureData",
+            "global class FlowOutput",
+            "global Boolean isSuccess",
+            "global String errorMessage",
+            "global static List<FlowOutput> submitSignature(List<FlowInput> inputs)"
+        ]
+    },
+    {
+        "name": "DocGenSignatureValidator",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSignatureValidator.cls",
+        "declarations": [
+            "global without sharing class DocGenSignatureValidator",
+            "global class FlowInput",
+            "global String token",
+            "global class FlowOutput",
+            "global Boolean isValid",
+            "global String errorMessage",
+            "global String signerName",
+            "global String documentTitle",
+            "global String documentUrl",
+            "global static List<FlowOutput> validateToken(List<FlowInput> inputs)"
+        ]
+    },
+    {
+        "name": "DocGenSigner",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenSigner.cls",
+        "declarations": [
+            "global class DocGenSigner",
+            "global DocGenSigner()",
+            "global String name",
+            "global String email",
+            "global String role",
+            "global Id contactId"
+        ]
+    },
+    {
+        "name": "DocGenEinsteinProvider",
+        "package": "Optional Agentforce extension",
+        "file": "agentforce-ext/main/default/classes/DocGenEinsteinProvider.cls",
+        "declarations": [
+            "global with sharing class DocGenEinsteinProvider implements DocGenAiProvider",
+            "global String getName()",
+            "global Boolean isAvailable()",
+            "global String generateHtml(String prompt)",
+            "global class DocGenAiException extends Exception"
+        ]
+    }
+]

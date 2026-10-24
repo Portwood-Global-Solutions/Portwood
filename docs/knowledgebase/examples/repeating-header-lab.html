@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+    <head>
+        <style>
+            @page {
+                size: letter;
+                margin: 0.8in 0.6in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 10pt;
+                color: #193b57;
+            }
+            h1 {
+                font-size: 20pt;
+            }
+            .quote-table {
+                -fs-table-paginate: paginate;
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+            .quote-table thead {
+                display: table-header-group;
+            }
+            .quote-table tbody {
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+            .quote-table tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            .quote-table th,
+            .quote-table td {
+                border: 0.5px solid #808080;
+                padding: 5px 6px;
+            }
+            .quote-table th {
+                background: #eaf3fa;
+                text-align: left;
+            }
+            .pw-page-number:before {
+                content: counter(page);
+            }
+            .pw-total-pages:before {
+                content: counter(pages);
+            }
+        </style>
+    </head>
+    <body>
+        <h1>{Name}: contact directory</h1>
+        <table class="quote-table">
+            <thead>
+                <tr>
+                    <th style="width: 10%">No.</th>
+                    <th style="width: 35%">Contact name</th>
+                    <th style="width: 55%">Email address</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Contacts}{RowNumber}</td>
+                    <td>{Name}</td>
+                    <td>{Email}{/Contacts}</td>
+                </tr>
+            </tbody>
+        </table>
+    </body>
+</html>

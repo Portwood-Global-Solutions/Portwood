@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Signing practice</title>
+        <style>
+            @page {
+                size: letter;
+                margin: 0.8in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 11pt;
+                color: #203447;
+                line-height: 1.6;
+            }
+            h1 {
+                font-size: 26pt;
+                color: #173d61;
+            }
+            .note {
+                padding: 12pt;
+                background: #eaf3fa;
+            }
+            table {
+                width: 100%;
+                margin-top: 42pt;
+                border-collapse: collapse;
+            }
+            td {
+                width: 50%;
+                padding: 16pt;
+                vertical-align: top;
+            }
+            .space {
+                height: 55pt;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Let's practice signing</h1>
+        <p>Prepared for {Name}.</p>
+        <p class="note">
+            This fictional document is for learning Portwood. Signing it acknowledges a practice exercise only.
+        </p>
+        <p>
+            Review the document, add your signature, and finish the consent step. Then return to Salesforce to find the
+            completed PDF.
+        </p>
+        <table>
+            <tr>
+                <td>
+                    <strong>Customer signature</strong>
+                    <div class="space"></div>
+                    {@Signature_Customer:1:Full}
+                </td>
+                <td>
+                    <strong>Date signed</strong>
+                    <div class="space"></div>
+                    {@Signature_Customer:1:Date}
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>

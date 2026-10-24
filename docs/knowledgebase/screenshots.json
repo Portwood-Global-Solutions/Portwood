@@ -1,0 +1,191 @@
+[
+    {
+        "file": "docs/images/userguide/v3.60/account-brief-result.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Real generated Account Brief PDF with two Contacts, two Opportunities, and a verified total."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/assets-and-fonts.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Assets workspace showing image and custom-font tabs before assets are added."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/canvas-first-document.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Saved Canvas Account brief with a rich-text editor, real sample values, and preview controls."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/choose-data.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Canvas Data panel with the fictional Northstar Bikes preview record and selected fields."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/create-template.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Current two-choice template wizard in the installed managed package."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/custom-fonts.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Custom Fonts workspace showing upload and specimen-approval instructions."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/first-document-result.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Top portion of the real first-document PDF rendered with Poppler."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/record-runner.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Account Brief selected in the record runner before successful save and download."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signature-completed-request.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Source record shows the fictional request as Signed."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signature-fields.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Uploaded PDF preparation with Signature and Date signed fields for a fictional recipient."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signature-review.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Review screen set to Salesforce-only preview delivery and no email code."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signature-settings.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Fresh-org signing setup checklist with missing public site, sender, and guest assignment."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signature-source.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "The current signature sender document-source picker."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signer-complete.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Plain success screen after the request completed."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signer-consent.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Consent step after completing both required fields."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signer-document.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Real guided signing page for the internally delivered fictional request."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/signer-enter-signature.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Typed-signature field dialog during the fictional signing test."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/template-library.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Template library containing the Canvas lesson and three seeded HTML examples."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/brand-editor.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "A reusable Northstar Bikes brand is configured without a production email sender."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/bulk-completed.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "The practice batch completed with three successes and zero errors."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/bulk-ready.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Validated filter selects three fictional Accounts, with Individual Files output before submission."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/email-templates.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Installed signature email template editor and live preview with built-in sample values."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/repeating-header-result.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Page two of a real four-page PDF with all 90 rows, repeating table headers, and two-line CSS-counter footer."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/site-details.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "New active Salesforce signing Site with a default URL path and packaged signing home page."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/site-enabled-pages.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Guest profile enabled-page list contains all four packaged public signing Visualforce pages."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/site-guest-permission.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org with fictional example data",
+        "description": "Correct Site Guest User permission assignment editor with Portwood Guest Signature selected."
+    },
+    {
+        "file": "docs/images/userguide/v3.60/site-public-preview.png",
+        "release": "3.60.0",
+        "capturedOn": "2026-10-24",
+        "environment": "Fresh subscriber scratch org, unauthenticated browser, fictional example data",
+        "description": "Public signing link loads the real practice PDF, named role, and required signature/date placements; invitations and verification were disabled for the test."
+    }
+]
