@@ -2831,7 +2831,7 @@ There is no single fixed list of every Salesforce field tag. Your org supplies s
 #### Tag directory
 
 | I want to…                                                                 | Start with                                                           | Full instructions                                          |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------- |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Print a field or a parent record value                                     | `{Name}`, `{Account.Name}`                                           | [Fields and formatting](#tag-fields)                       |
 | Format money, numbers, dates, percent, checkbox, or picklist labels        | `{Amount:currency}`, `{CloseDate:MMMM d, yyyy}`, `{StageName:label}` | [Fields and formatting](#tag-fields)                       |
 | Print today's date, the current time, or the person preparing the document | `{Today}`, `{Now}`, `{RunningUser.Name}`                             | [Built-in and user tags](#tag-fields)                      |
@@ -2845,7 +2845,7 @@ There is no single fixed list of every Salesforce field tag. Your org supplies s
 | Print classic approvals                                                    | `{#Approvals}…{/Approvals}`                                          | [Approval history](#tag-approvals)                         |
 | Repeat a Word table header                                                 | `{RepeatHeader}` in the header row                                   | [Repeating table headers](#repeat-table-headers)           |
 | Number PDF pages                                                           | `{PageNumber}`, `{TotalPages}` in Header/Footer HTML                 | [Page headers and footers](#running-headers-footers)       |
-| Collect an answer from the signer                                          | `{?poNumber}`, `{?poNumber                                           | N/A}`                                                      | [Signer inputs and writeback](#signer-inputs) |
+| Collect an answer from the signer                                          | `{?poNumber}`, `{?poNumber\|N/A}`                                    | [Signer inputs and writeback](#signer-inputs)              |
 | Customize a signing email                                                  | `{SignerName}`, `{SignatureUrl}`, `{VerificationCode}`               | [Email tokens by type](#email-tokens)                      |
 | Use an approved custom PDF font                                            | `{%font:asset-key:revision}` inside `style`                          | [Font tags](#tag-media) and [font approval](#custom-fonts) |
 

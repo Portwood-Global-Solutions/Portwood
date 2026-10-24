@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startPreview } from './preview.mjs';
+import { markdownTables } from './markdown-tables.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
@@ -42,6 +43,26 @@ try {
             await page.goto(`${url}#${article.slug}`);
             await page.getByRole('heading', { name: article.title, exact: true }).waitFor();
             assert.ok((await page.locator('#pg-prose').innerText()).length > 80, article.slug);
+            const expected = markdownTables(article.body);
+            assert.deepEqual(expected.errors, [], article.slug);
+            const tables = page.locator('#pg-prose table');
+            assert.equal(
+                await tables.count(),
+                expected.tables.length,
+                `${article.slug}: Markdown tables must render as tables`
+            );
+            for (let i = 0; i < expected.tables.length; i++) {
+                assert.equal(
+                    await tables.nth(i).locator('thead th').count(),
+                    expected.tables[i].columns,
+                    `${article.slug}: table header columns`
+                );
+                assert.equal(
+                    await tables.nth(i).locator('tbody tr').count(),
+                    expected.tables[i].rows,
+                    `${article.slug}: table data rows`
+                );
+            }
             const broken = await page.locator('#pg-prose img').evaluateAll(async (images) => {
                 await Promise.all(
                     images.map((img) => {
@@ -53,6 +74,10 @@ try {
             });
             assert.deepEqual(broken, [], article.slug);
         }
+        await page.goto(`${url}#merge-tags`);
+        await page.getByRole('heading', { name: 'Find the right merge tag', exact: true }).waitFor();
+        assert.equal(await page.locator('#pg-prose table').first().locator('thead th').count(), 3);
+        assert.ok((await page.locator('#pg-prose table').first().innerText()).includes('{?poNumber|N/A}'));
         await page.goto(`${url}#first-document`);
         assert.ok((await page.locator('#pg-prose').innerText()).includes('{Name}'));
     });
@@ -78,6 +103,11 @@ try {
         assert.ok((await page.locator('.pg-result').count()) > 0);
         await page.locator('.pg-result a').first().click();
         await page.locator('#pg-prose').waitFor();
+        // Fragment navigation dispatches both popstate and hashchange. Let the
+        // navigation finish before starting another query in the same input.
+        await page.evaluate(
+            () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        );
         assert.equal(await search.inputValue(), '');
         await search.fill('zqxvnonexistent');
         await page.getByText('No exact match yet.', { exact: false }).waitFor();
