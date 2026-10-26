@@ -1521,13 +1521,20 @@
                         var brandHeader = document.getElementById('brand-header');
                         // The brand header never shows on 'pdf' (its own inline brand block
                         // covers it), 'verify' (the brand name is already in the title),
+                        // 'decline' (keep the confirmation form free of the header),
                         // 'error' (brand identity is tab title/favicon only — see the
                         // comment at the validateToken error path below), or the
                         // post-signing confirmation cards 'waiting'/'success' (kept
                         // deliberately unbranded, matching the generic confirmation
                         // look across both the "waiting for other signers" and final
                         // "Signature Complete" screens).
-                        var unbrandedStates = { verify: true, error: true, success: true, waiting: true };
+                        var unbrandedStates = {
+                            verify: true,
+                            error: true,
+                            success: true,
+                            waiting: true,
+                            decline: true
+                        };
                         if (name === 'pdf') {
                             pw.style.justifyContent = 'flex-start';
                             if (brandHeader) brandHeader.style.display = 'none';
@@ -2177,22 +2184,9 @@
                             return { x: cx * (canvas.width / r.width), y: cy * (canvas.height / r.height) };
                         }
                         function start(e) {
-                            var nameInput = document.getElementById('modal-typed-name');
-                            var currentName = nameInput.value.trim();
-                            // The typed field is disabled while drawing is active; that
-                            // must not prevent the signer from starting another stroke.
-                            // Only reject drawing when the user has an active typed value.
-                            if (currentName) {
-                                signatureInputSource = 'typed';
-                                syncSignatureInputState();
-                                return;
-                            }
                             drawing = true;
                             drawStarted = true;
                             signatureInputSource = 'draw';
-                            // Disable typed signing immediately on the first pointer
-                            // event, before validation/state refresh can run.
-                            lockTypedInputForDrawing();
                             var p = pos(e);
                             ctx.beginPath();
                             ctx.moveTo(p.x, p.y);
@@ -2200,19 +2194,11 @@
                         }
                         function move(e) {
                             if (!drawing) return;
-                            // Keep this fallback on the first actual stroke event as well;
-                            // it covers browsers that delay repainting after touchstart.
-                            lockTypedInputForDrawing();
                             var p = pos(e);
                             ctx.lineTo(p.x, p.y);
                             ctx.stroke();
                             inked = true;
                             if (e.cancelable) e.preventDefault();
-                        }
-                        function lockTypedInputForDrawing() {
-                            var input = document.getElementById('modal-typed-name');
-                            if (input) input.disabled = true;
-                            if (typeof syncSignatureInputState === 'function') syncSignatureInputState('draw');
                         }
                         function end() {
                             drawing = false;
@@ -3087,6 +3073,7 @@
                         var drawGroup = document.getElementById('modal-draw-group');
                         var allowDraw = type === 'Full' || type === 'Initials';
                         DrawPad.clear();
+                        signatureInputSource = null;
                         drawGroup.style.display = allowDraw ? '' : 'none';
 
                         if (type === 'Date') {
@@ -3119,9 +3106,7 @@
                                 nameLabel.textContent = 'Type your full name to sign';
                                 nameInput.placeholder = 'e.g., John Smith';
                                 nameInput.value = signerData && signerData.signerName ? signerData.signerName : '';
-                                // A prefilled signer name counts as the typed method;
-                                // drawing remains disabled until this value is cleared.
-                                signatureInputSource = nameInput.value.trim() ? 'typed' : null;
+                                // Keep drawing available alongside the default signer name.
                             }
                             updateSignSubmitState();
                         }
@@ -3452,10 +3437,8 @@
                         document.getElementById('btn-sign-submit').textContent = 'Save & Next';
                         // Prefill the confirmed name from validateToken.signerName.
                         var nameInput = document.getElementById('modal-typed-name');
-                        // Show the verified signer name as the default and disable drawing
-                        // while that value remains present.
+                        // Show the verified signer name without claiming the typed method.
                         nameInput.value = signerData && signerData.signerName ? signerData.signerName : '';
-                        signatureInputSource = nameInput.value.trim() ? 'typed' : null;
                         document.getElementById('modal-consent-checkbox').checked = false;
                         // Form fields were collected up front — don't ask again here.
                         hideFormFields();
@@ -3471,20 +3454,16 @@
                         document.getElementById('sign-modal').style.display = 'none';
                     }
 
-                    // Drawing and typed signing are mutually exclusive. A programmatic
-                    // prefilled signer name does not claim the typed method; only actual
-                    // user input does. Clearing either method makes both available again.
+                    // Both inputs remain editable; captured ink takes precedence on Save.
                     function syncSignatureInputState(source) {
                         var input = document.getElementById('modal-typed-name');
                         var drawGroup = document.getElementById('modal-draw-group');
                         if (!input || !drawGroup) return;
-                        if (source === 'draw') signatureInputSource = input.value.trim() ? 'typed' : 'draw';
-                        var typedActive = signatureInputSource === 'typed' && !!input.value.trim();
-                        var drawActive = signatureInputSource === 'draw' && (DrawPad.hasInk() || DrawPad.isStarted());
-                        input.disabled = drawActive;
-                        drawGroup.classList.toggle('is-disabled', typedActive);
+                        if (source === 'draw') signatureInputSource = 'draw';
+                        input.disabled = false;
+                        drawGroup.classList.remove('is-disabled');
                         var canvas = document.getElementById('modal-draw-canvas');
-                        if (canvas) canvas.setAttribute('aria-disabled', typedActive ? 'true' : 'false');
+                        if (canvas) canvas.setAttribute('aria-disabled', 'false');
                     }
 
                     function updateSignSubmitState() {
