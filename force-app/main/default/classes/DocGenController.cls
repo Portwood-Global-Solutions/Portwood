@@ -3320,12 +3320,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     copyPdfAcroFormSnapshot(templateId, priorVersionId, version.Id);
                 }
 
-                // Decompose DOCX/PPTX into per-image and per-XML ContentVersions for
-                // heap-light PDF rendering. Runs in a Queueable (12 MB async heap)
-                // rather than inline (6 MB sync heap) so it survives real-world
-                // templates with iPhone-sized images that previously silently
-                // failed save-time decomposition.
-                DocGenService.enqueueTemplateImageExtraction(templateId, version.Id);
+                // Decompose only Office packages. HTML/Canvas bodies are plain text
+                // (or are unpacked by the browser before they reach this method), so
+                // sending them through the Office decomposition queue is unnecessary
+                // and can expose large imported HTML/XML to regex-heavy legacy work.
+                // Keep the guard here as well as in the queueable: this prevents an
+                // HTML/ZIP upload from ever entering that pipeline during Save as
+                // New Version.
+                if (isDocxBodyType((String) fields.get('Type__c'))) {
+                    DocGenService.enqueueTemplateImageExtraction(templateId, version.Id);
+                }
 
                 // HTML templates (v1.61+): if the upload was a Google Docs
                 // "Download → Web Page" zip, extract images + rewrite src refs.
