@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx000001BOsrIAG --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001BaZ3IAK --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BaZ3IAK) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BaZ3IAK)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -461,6 +461,7 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 | Version     | Headline                                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                         |
 | **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                    |
 | **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records              |
 | **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                  |
@@ -481,6 +482,16 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.61.0 — Hotfix: parallel-signing emails, signing-page UX, and large-HTML template saves**: a
+Parallel signature request could email the "signer completed" notification under the wrong
+signer's name when two or more people signed out of order — fixed by identifying the actual
+signer from the event instead of list order. The signing page keeps the typed-name field and
+drawing canvas usable together instead of one disabling the other, and hides the brand header on
+the decline screen for consistency with the other confirmation screens. Large HTML template saves
+no longer risk an Apex regex-limit failure. The Send Email wizard's record-email picker gained a
+**None** option to clear a selection and type a recipient manually, and the Email Subject field is
+now plain text.
 
 **v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding**: send any PDF your customer uploads out for signature — no Portwood template required — with the same guided drag-and-drop field placement, sequential multi-signer flow, and brand identity as a template-based request. Pick a Portwood Brand on a signing request and your company name, logo and color now carry through the whole signer journey consistently; the post-signing confirmation screens stay generic by design, matching the rest of the flow. Upload your own TrueType fonts in Command Hub → Assets and pin them to text in Canvas or HTML templates for native PDF output that matches your brand exactly. See the CHANGELOG for details.
 
@@ -583,7 +594,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | **Latest (Released)**                   | `04tVx000001BOsrIAG` |
+| v3.61.0 | **Latest (Released)**                   | `04tVx000001BaZ3IAK` |
+| v3.60.0 | Released                                | `04tVx000001BOsrIAG` |
 | v3.59.0 | Released                                | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |
