@@ -299,6 +299,43 @@ private class DocGenHtmlTemplateTest {
     }
 
     @IsTest
+    static void saveTemplate_htmlVersionDoesNotQueueOfficeDecomposition() {
+        DocGen_Template__c tmpl = new DocGen_Template__c(
+            Name = 'HTML version ' + Datetime.now().getTime(),
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Query_Config__c = 'Name'
+        );
+        insert tmpl;
+
+        Map<String, Object> body = DocGenController.saveHtmlTemplateBody(
+            tmpl.Id,
+            'import.zip',
+            '<html><body><p>{Name}</p></body></html>'
+        );
+        Id bodyCvId = (Id) body.get('contentVersionId');
+
+        Test.startTest();
+        Map<String, Object> saved = DocGenController.saveTemplate(
+            new Map<String, Object>{
+                'Id' => tmpl.Id,
+                'Name' => tmpl.Name,
+                'Type__c' => 'HTML',
+                'Output_Format__c' => 'PDF',
+                'Base_Object_API__c' => 'Account',
+                'Query_Config__c' => 'Name'
+            },
+            true,
+            bodyCvId
+        );
+        System.assertEquals(0, Limits.getQueueableJobs(), 'HTML saves must not enqueue Office decomposition');
+        Test.stopTest();
+
+        System.assertNotEquals(null, saved.get('createdVersionId'));
+    }
+
+    @IsTest
     static void saveAndPublishHtmlBodyUsesTemplatePageSetupWhenActiveVersionHasNone() {
         DocGen_Template__c tmpl = new DocGen_Template__c(
             Name = 'Canvas Legal ' + Datetime.now().getTime(),

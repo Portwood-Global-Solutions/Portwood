@@ -7113,18 +7113,51 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // data URIs, so each inline image becomes its own ContentVersion
         // with the src rewritten to /sfc/... just like zipped images.
         const dataUriMatches = [];
-        const dataUriRe = /src\s*=\s*(["'])(data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s]+?))\1/g;
-        let m;
-        while ((m = dataUriRe.exec(htmlText)) !== null) {
-            const dataUri = m[2];
-            let ext = m[3].toLowerCase();
+        const lowerHtmlText = htmlText.toLowerCase();
+        let scan = 0;
+        while (scan < htmlText.length) {
+            const srcStart = lowerHtmlText.indexOf('src=', scan);
+            if (srcStart === -1) {
+                break;
+            }
+            const quoteStart = srcStart + 4;
+            const quote = htmlText[quoteStart];
+            if (quote !== '"' && quote !== "'") {
+                scan = quoteStart + 1;
+                continue;
+            }
+            const valueStart = quoteStart + 1;
+            const valueEnd = htmlText.indexOf(quote, valueStart);
+            if (valueEnd === -1) {
+                break;
+            }
+            scan = valueEnd + 1;
+            const dataUri = htmlText.slice(valueStart, valueEnd);
+            const dataUriLower = dataUri.toLowerCase();
+            if (!dataUriLower.startsWith('data:image/')) {
+                continue;
+            }
+            const separator = dataUriLower.indexOf(';base64,');
+            if (separator === -1) {
+                continue;
+            }
+            let ext = dataUri.slice(11, separator).toLowerCase();
             if (ext === 'jpeg') {
                 ext = 'jpg';
             }
             if (ext === 'svg+xml') {
                 ext = 'svg';
             }
-            const base64 = m[4].replace(/\s+/g, '');
+            // Strip whitespace without a regex; the payload itself may be several
+            // megabytes and Salesforce/LWS can reject a regex pass over it.
+            const rawBase64 = dataUri.slice(separator + 8);
+            let base64 = '';
+            for (let i = 0; i < rawBase64.length; i++) {
+                const ch = rawBase64[i];
+                if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+                    base64 += ch;
+                }
+            }
             dataUriMatches.push({ dataUri, ext, base64 });
         }
 
