@@ -39,6 +39,23 @@ private class DocGenEmailTemplateTest {
         System.assert(r.plainBody.contains('https://sign.example.com/?token=ABC123'), 'url in plain part');
     }
 
+    @IsTest
+    static void revokedEmail_usesBrandedFallbackAndNoActionButton() {
+        DocGenEmailTemplateService.clearCache();
+        Map<String, String> tokens = sampleTokens(DocGenEmailTemplateService.TYPE_REVOKED);
+        tokens.put('SenderName', 'Sender User');
+        DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
+            DocGenEmailTemplateService.TYPE_REVOKED,
+            tokens
+        );
+        System.assert(rendered.subject.contains('revoked'), 'revoked subject should be used');
+        System.assert(rendered.htmlBody.contains('has been revoked'), 'revocation message should be rendered');
+        System.assert(
+            !rendered.htmlBody.contains('Review &amp; Sign Document'),
+            'revocation must not include a signing action'
+        );
+        System.assert(rendered.htmlBody.contains('<!DOCTYPE html>'), 'revocation uses the branded email chrome');
+    }
     // ---- Service: merge values are HTML-escaped (no injection) ----
     @IsTest
     static void mergeValues_areEscaped() {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added - signature request resend and revoke controls
+
+- Added **Resend** and **Revoke** actions beside **View** in Recent Signature Requests for Sent and In Progress requests.
+- Revoke invalidates outstanding unsigned links and sends a branded, customizable **Signature Revoked** email only to signers who have not signed.
+- Added the Signature Revoked email type to the Email Templates editor with branding controls and a red-highlighted **revoked** status by default.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
