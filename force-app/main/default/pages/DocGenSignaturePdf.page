@@ -2184,6 +2184,7 @@
                             return { x: cx * (canvas.width / r.width), y: cy * (canvas.height / r.height) };
                         }
                         function start(e) {
+                            if (isTypeOnly()) return;
                             drawing = true;
                             drawStarted = true;
                             signatureInputSource = 'draw';
@@ -2245,10 +2246,10 @@
                                 drawStarted = false;
                             },
                             hasInk: function () {
-                                return inked;
+                                return !isTypeOnly() && inked;
                             },
                             isStarted: function () {
-                                return drawStarted;
+                                return !isTypeOnly() && drawStarted;
                             },
                             toPng: function () {
                                 return canvas.toDataURL('image/png');
@@ -3071,7 +3072,7 @@
 
                         // Draw-pad: offer free-hand capture for signature + initials fields.
                         var drawGroup = document.getElementById('modal-draw-group');
-                        var allowDraw = type === 'Full' || type === 'Initials';
+                        var allowDraw = !isTypeOnly() && (type === 'Full' || type === 'Initials');
                         DrawPad.clear();
                         signatureInputSource = null;
                         drawGroup.style.display = allowDraw ? '' : 'none';
@@ -3427,13 +3428,14 @@
                         modalMode = 'pdf';
                         legacyConsentStep = false;
                         signatureInputSource = null;
-                        // Re-show both drawing and typed signature inputs.
-                        document.getElementById('modal-draw-group').style.display = '';
+                        // Respect the input restriction in the no-placement flow too.
+                        document.getElementById('modal-draw-group').style.display = isTypeOnly() ? 'none' : '';
                         document.getElementById('modal-typed-name').parentNode.style.display = '';
                         document.getElementById('modal-consent-checkbox').parentNode.style.display = 'none';
                         document.querySelector('#sign-modal .modal-header h2').textContent = 'Sign Document';
-                        document.querySelector('#sign-modal .modal-subtitle').textContent =
-                            'Choose how you want to sign this document.';
+                        document.querySelector('#sign-modal .modal-subtitle').textContent = isTypeOnly()
+                            ? 'Type your full name to sign this document.'
+                            : 'Choose how you want to sign this document.';
                         document.getElementById('btn-sign-submit').textContent = 'Save & Next';
                         // Prefill the confirmed name from validateToken.signerName.
                         var nameInput = document.getElementById('modal-typed-name');
@@ -3454,16 +3456,21 @@
                         document.getElementById('sign-modal').style.display = 'none';
                     }
 
+                    function isTypeOnly() {
+                        return !!(signerData && signerData.typeOnly === true);
+                    }
+
                     // Both inputs remain editable; captured ink takes precedence on Save.
                     function syncSignatureInputState(source) {
                         var input = document.getElementById('modal-typed-name');
                         var drawGroup = document.getElementById('modal-draw-group');
                         if (!input || !drawGroup) return;
-                        if (source === 'draw') signatureInputSource = 'draw';
+                        if (isTypeOnly()) drawGroup.style.display = 'none';
+                        if (source === 'draw' && !isTypeOnly()) signatureInputSource = 'draw';
                         input.disabled = false;
                         drawGroup.classList.remove('is-disabled');
                         var canvas = document.getElementById('modal-draw-canvas');
-                        if (canvas) canvas.setAttribute('aria-disabled', 'false');
+                        if (canvas) canvas.setAttribute('aria-disabled', isTypeOnly() ? 'true' : 'false');
                     }
 
                     function updateSignSubmitState() {

@@ -54,7 +54,26 @@ public with sharing class DocGenSetupController {
         // (unchecked = Decline shown), which is exactly the intended default and
         // needs no reliance on a custom-setting defaultValue.
         result.put('Signature_Hide_Decline__c', s != null && s.Signature_Hide_Decline__c == true);
+        result.put('Signature_Type_Only__c', s != null && s.Signature_Type_Only__c == true);
         return result;
+    }
+
+    /** Saves the org-wide typed-signature restriction. Unchecked preserves Draw or Type. */
+    @AuraEnabled
+    public static void saveSignatureInputSettings(Boolean typeOnly) {
+        if (
+            !FeatureManagement.checkPermission('DocGen_Admin_Access') &&
+            !Schema.sObjectType.DocGen_Settings__c.isUpdateable()
+        ) {
+            throw DocGenService.ahe('Insufficient privileges to modify Portwood settings.');
+        }
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Type_Only__c = (typeOnly == true);
+        Set<String> inputFields = new Set<String>{ 'Signature_Type_Only__c' };
+        DocGenFlsGuard.assertCreateable(settings, inputFields);
+        DocGenFlsGuard.assertUpdateable(settings, inputFields);
+        /* code-analyzer-suppress ApexFlsViolation */
+        Database.upsert(settings, AccessLevel.SYSTEM_MODE);
     }
 
     /**

@@ -251,6 +251,23 @@
                     </div>
                 </div>
 
+                <div class="slds-section slds-is-open slds-m-top_medium">
+                    <h3 class="slds-section__title slds-theme_shade slds-p-around_x-small">
+                        <span class="slds-text-title_caps">Signature Input Method</span>
+                    </h3>
+                    <div class="slds-section__content slds-p-top_small">
+                        <lightning-input
+                            type="toggle"
+                            label="Allow Typed Signatures Only"
+                            checked={typeOnly}
+                            onchange={handleTypeOnlyChange}
+                            message-toggle-active="Drawing is disabled"
+                            message-toggle-inactive="Draw or type by default"
+                            field-level-help="Require typed signatures and initials on every signing page and hide the drawing pad. When off, individual templates can still disable drawing."
+                        ></lightning-input>
+                    </div>
+                </div>
+
                 <!-- Save feedback -->
                 <template if:true={saveMessage}>
                     <div class={saveMessageClass}>{saveMessage}</div>

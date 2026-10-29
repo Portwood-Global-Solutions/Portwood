@@ -957,6 +957,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Template__c.Signature_Type_Only__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
         <readable>true</readable>
     </fieldPermissions>

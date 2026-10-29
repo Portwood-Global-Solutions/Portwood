@@ -141,6 +141,8 @@ public without sharing class DocGenSignatureController {
         // also applies to already-sent pending requests. Shows by default.
         @AuraEnabled
         public Boolean showDecline;
+        @AuraEnabled
+        public Boolean typeOnly;
         // Signer form fields to render during e-signing. PUBLIC-SAFE projection
         // only — {key,label,type,required,choices}. The writeback flags and the
         // base-object field API names from the template config are deliberately
@@ -376,7 +378,7 @@ public without sharing class DocGenSignatureController {
         // SYSTEM_MODE on the SOQL below; documented FLS describe signal here.
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Name', 'Form_Fields_Config__c', 'Hide_Signer_Decline__c' }
+            new Set<String>{ 'Name', 'Form_Fields_Config__c', 'Hide_Signer_Decline__c', 'Signature_Type_Only__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
@@ -401,7 +403,8 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Template__c,
                 Signature_Request__r.Template__r.Name,
                 Signature_Request__r.Template__r.Form_Fields_Config__c,
-                Signature_Request__r.Template__r.Hide_Signer_Decline__c
+                Signature_Request__r.Template__r.Hide_Signer_Decline__c,
+                Signature_Request__r.Template__r.Signature_Type_Only__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -435,6 +438,7 @@ public without sharing class DocGenSignatureController {
                 'Signer_Name__c',
                 'Source_Document_Id__c',
                 'Related_Record_Id__c',
+                'Template__c',
                 'CreatedDate',
                 'Secure_Token__c',
                 'Expires_At__c'
@@ -448,6 +452,8 @@ public without sharing class DocGenSignatureController {
                 Signer_Name__c,
                 Source_Document_Id__c,
                 Related_Record_Id__c,
+                Template__c,
+                Template__r.Signature_Type_Only__c,
                 CreatedDate,
                 Expires_At__c
             FROM DocGen_Signature_Request__c
@@ -813,6 +819,7 @@ public without sharing class DocGenSignatureController {
             parentReq.Template__r != null &&
             parentReq.Template__r.Hide_Signer_Decline__c == true;
         res.showDecline = !orgHidesDecline && !templateHidesDecline;
+        res.typeOnly = requiresTypedSignature(parentReq);
 
         // Count total and signed signers
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
@@ -880,6 +887,15 @@ public without sharing class DocGenSignatureController {
         return res;
     }
 
+    // Both checkboxes are additive: a template cannot relax the org-wide restriction.
+    private static Boolean requiresTypedSignature(DocGen_Signature_Request__c request) {
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        return (settings != null && settings.Signature_Type_Only__c == true) ||
+            (request.Template__c != null &&
+            request.Template__r != null &&
+            request.Template__r.Signature_Type_Only__c == true);
+    }
+
     private static SignatureInitResponse validateLegacyRequest(DocGen_Signature_Request__c req) {
         SignatureInitResponse res = new SignatureInitResponse();
         res.isValid = false;
@@ -914,6 +930,7 @@ public without sharing class DocGenSignatureController {
         // Reads false when unset, so an upgrade never silently drops the button.
         DocGen_Settings__c legacyDeclineSettings = DocGen_Settings__c.getOrgDefaults();
         res.showDecline = !(legacyDeclineSettings != null && legacyDeclineSettings.Signature_Hide_Decline__c == true);
+        res.typeOnly = requiresTypedSignature(req);
 
         // SYSTEM_MODE required: guest profile has no Portwood CRUD by design; access is gated by token-bound lookup. See DocGenSignatureGuestSecurity for the security model.
         DocGenFlsGuard.guestAssertAccessible(ContentVersion.sObjectType, new Set<String>{ 'Title' });
@@ -2285,6 +2302,10 @@ public without sharing class DocGenSignatureController {
             DocGen_Signer__c.sObjectType,
             new Set<String>{ 'CreatedDate', 'PIN_Verified_At__c', 'Status__c', 'Secure_Token__c' }
         );
+        DocGenFlsGuard.guestAssertAccessible(
+            DocGen_Template__c.sObjectType,
+            new Set<String>{ 'Signature_Type_Only__c' }
+        );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signer__c> signers = [
             SELECT
@@ -2293,7 +2314,9 @@ public without sharing class DocGenSignatureController {
                 PIN_Verified_At__c,
                 Status__c,
                 Signature_Request__c,
-                Signature_Request__r.Expires_At__c
+                Signature_Request__r.Expires_At__c,
+                Signature_Request__r.Template__c,
+                Signature_Request__r.Template__r.Signature_Type_Only__c
             FROM DocGen_Signer__c
             WHERE Secure_Token__c = :token
             WITH SYSTEM_MODE
@@ -2334,6 +2357,17 @@ public without sharing class DocGenSignatureController {
         if (plc.Status__c == 'Signed') {
             // Already signed — return current state (idempotent)
             return getSignerPlacements(token);
+        }
+
+        if (
+            (plc.Placement_Type__c == 'Full' ||
+            plc.Placement_Type__c == 'Initials') &&
+            requiresTypedSignature(signer.Signature_Request__r) &&
+            (String.isBlank(value) ||
+            value == 'Signed (drawn)' ||
+            value.startsWith('data:image/'))
+        ) {
+            throw new AuraHandledException('Please type your signature or initials. Drawing is disabled.');
         }
 
         // For Date type, auto-fill with server timestamp
