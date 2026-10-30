@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **Reusable Terms & Snippets assets.** Command Hub → Assets now includes reusable HTML fragments and {%snippet:key} tags.
+- **Shared-content documentation and QA coverage.** Added the shared-content guide, examples, and QA coverage.
+
+### Fixed
+
+- **Shared-content layout and editing stability.** The editor stays inside its parent card, preserves its frame across modes, and preserves pasted text spacing.
+- **Custom fonts in shared content.** Approved font tags carry through preview and supported generated formats.
+- **PowerPoint output selection.** PDF is no longer offered for PowerPoint templates; they use native PPTX output only.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,

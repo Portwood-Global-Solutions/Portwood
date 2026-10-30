@@ -2364,8 +2364,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
     handleTypeChange(event) {
         this.newTemplateType = event.detail.value;
-        // Excel only supports Native output — auto-switch from PDF
-        if (event.detail.value === 'Excel' && this.newTemplateOutputFormat === 'PDF') {
+        // Excel and PowerPoint only support native Office output.
+        if (['Excel', 'PowerPoint'].includes(event.detail.value) && this.newTemplateOutputFormat === 'PDF') {
             this.newTemplateOutputFormat = 'Native';
         }
         if (event.detail.value === 'HTML' || event.detail.value === 'PDF') {
@@ -3870,7 +3870,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
     handleEditTypeChange(event) {
         this.editTemplateType = event.detail.value;
-        if (event.detail.value === 'Excel' && this.editTemplateOutputFormat === 'PDF') {
+        if (['Excel', 'PowerPoint'].includes(event.detail.value) && this.editTemplateOutputFormat === 'PDF') {
             this.editTemplateOutputFormat = 'Native';
         }
         if (event.detail.value === 'HTML' || event.detail.value === 'PDF') {
@@ -4728,6 +4728,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (type === 'Excel') {
             return [{ label: 'Native (.xlsx / .xlsm)', value: 'Native' }];
         }
+        if (type === 'PowerPoint') {
+            return [{ label: 'Native (.pptx)', value: 'Native' }];
+        }
         // Canvas belongs here: it renders through the HTML path, which sets PDF
         // unconditionally. Offering "Native (.docx)" was offering a format the engine
         // will never produce for it.
@@ -5319,7 +5322,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateBrand = row[F.Brand] || '';
             this.editTemplateType = row[F.Type];
             this.editTemplateObject = row[F.BaseObject];
-            this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
+            const loadedOutputFormat = row[F.OutputFormat] || 'Native';
+            this.editTemplateOutputFormat = this.editTemplateType === 'PowerPoint' ? 'Native' : loadedOutputFormat;
             this.editTemplatePageOrientation = row[F.PageOrientation] || 'Portrait';
             this.editTemplatePageSize = row[F.PageSize] || null;
             this.editTemplatePageMargins = row[F.PageMargins] || 'Default';

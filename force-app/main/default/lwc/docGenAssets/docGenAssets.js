@@ -534,6 +534,18 @@ export default class DocGenAssets extends LightningElement {
         }
     }
 
+    get isSnippetsSection() {
+        return this.activeSection === 'snippets';
+    }
+
+    get snippetsSectionClass() {
+        return this.isSnippetsSection ? 'asset-section-button asset-section-button_active' : 'asset-section-button';
+    }
+
+    showSnippetsSection() {
+        this.activeSection = 'snippets';
+    }
+
     // ===== Helpers =====
 
     errMsg(error) {

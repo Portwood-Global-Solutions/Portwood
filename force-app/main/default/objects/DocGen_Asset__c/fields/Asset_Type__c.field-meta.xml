@@ -18,6 +18,11 @@
                 <default>false</default>
                 <label>Font</label>
             </value>
+            <value>
+                <fullName>HTMLSnippet</fullName>
+                <default>false</default>
+                <label>Terms / HTML snippet</label>
+            </value>
         </valueSetDefinition>
     </valueSet>
 </CustomField>

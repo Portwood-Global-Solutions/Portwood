@@ -104,7 +104,7 @@ public with sharing class DocGenAcroFormService {
             if (field.get('buttonOnValue') != null) {
                 buttonOnValues.put(objectNumber, String.valueOf(field.get('buttonOnValue')));
             }
-            Object value = resolveValue(data, fieldName);
+            Object value = resolvePdfFieldValue(data, fieldName);
             if (value != null) {
                 String formatted = fieldType == 'Btn'
                     ? buttonPdfValue(value, buttonOnValues.get(objectNumber))
@@ -365,7 +365,7 @@ public with sharing class DocGenAcroFormService {
             if (String.isBlank(fieldName)) {
                 continue;
             }
-            Object value = resolveValue(data, fieldName);
+            Object value = resolvePdfFieldValue(data, fieldName);
             if (value != null) {
                 String fieldType = extractName(fieldObj.body, '/FT');
                 String buttonOnValue = extractFirstButtonOnValue(fieldObj.body);
@@ -1533,6 +1533,41 @@ public with sharing class DocGenAcroFormService {
             }
         }
         return maxNum;
+    }
+
+    /**
+     * AcroForm fields are scalar text fields, but a mapped field may point
+     * directly at a shared-content tag. Resolve that tag and flatten its HTML
+     * safely instead of leaving the literal tag in the generated PDF.
+     */
+    private static Object resolvePdfFieldValue(Object data, String path) {
+        if (isSnippetTag(path)) {
+            return plainTextFromSnippet(path);
+        }
+        Object value = resolveValue(data, path);
+        if (value instanceof String && isSnippetTag((String) value)) {
+            return plainTextFromSnippet((String) value);
+        }
+        return value;
+    }
+
+    private static Boolean isSnippetTag(String value) {
+        if (String.isBlank(value)) {
+            return false;
+        }
+        String trimmed = value.trim().toLowerCase();
+        return trimmed.startsWith('{%snippet:') && trimmed.endsWith('}');
+    }
+
+    private static String plainTextFromSnippet(String tag) {
+        String html = DocGenSnippetService.expand(tag.trim());
+        String text = html.replace('&nbsp;', ' ')
+            .replaceAll('(?i)<\\s*br\\s*/?\\s*>', '\\n')
+            .replaceAll('(?i)</\\s*(p|div|li|h[1-6]|tr|table|blockquote)\\s*>', '\\n')
+            .replaceAll('(?i)<\\s*li\\b[^>]*>', '• ')
+            .replaceAll('<[^>]+>', '');
+        text = DocGenHtmlRenderer.decodeNumericEntities(text);
+        return text.replaceAll('[ \\t]+\\n', '\\n').replaceAll('\\n{3,}', '\\n\\n').trim();
     }
 
     private static Object resolveValue(Object data, String path) {
