@@ -158,7 +158,9 @@ export default class DocGenAssets extends LightningElement {
     wiredAssets(result) {
         this.wiredAssetsResult = result;
         if (result.data) {
-            this.assets = result.data.map((row) => this.decorateRow(row));
+            this.assets = result.data
+                .filter((row) => String(row.assetType || '').toLowerCase() !== 'htmlsnippet')
+                .map((row) => this.decorateRow(row));
         } else if (result.error) {
             this.showToast('Error loading assets', this.errMsg(result.error), 'error');
         }

@@ -2252,10 +2252,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async _loadWizardAssets() {
         try {
             const assets = (await getAssets()) || [];
-            this.wizardAssets = assets.map((a) => ({
+            // The Images tool is intentionally image-only. Shared HTML snippets
+            // use the separate Terms & Snippets asset experience and must never
+            // appear in image pickers, logo selectors, or the slash menu.
+            const imageAssets = assets.filter((a) => String(a.assetType || '').toLowerCase() !== 'htmlsnippet');
+            this.wizardAssets = imageAssets.map((a) => ({
                 id: a.id,
                 name: a.name,
                 assetKey: a.assetKey,
+                assetType: a.assetType,
                 mergeTag: a.mergeTag || '{%asset:' + a.assetKey + '}',
                 previewUrl: a.latestVersionCvId ? '/sfc/servlet.shepherd/version/download/' + a.latestVersionCvId : null
             }));
