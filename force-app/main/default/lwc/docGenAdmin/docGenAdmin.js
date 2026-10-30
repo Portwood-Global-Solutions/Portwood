@@ -66,6 +66,7 @@ import getVersionBodyFileInfo from '@salesforce/apex/DocGenController.getVersion
 import deleteTemplateVersion from '@salesforce/apex/DocGenController.deleteTemplateVersion';
 import generateDocumentParts from '@salesforce/apex/DocGenController.generateDocumentParts';
 import getContentVersionBase64 from '@salesforce/apex/DocGenController.getContentVersionBase64';
+import getVersionBody from '@salesforce/apex/DocGenController.getVersionBody';
 import getLatestContentVersionId from '@salesforce/apex/DocGenController.getLatestContentVersionId';
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
 import previewDraftPdf from '@salesforce/apex/DocGenController.previewDraftPdf';
@@ -617,6 +618,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // Last HTML body text this session touched (upload, starter, or Apply) so
     // reopening the editor doesn't need a server round-trip.
     _lastUploadedHtmlText = null;
+    // Monotonic suffix for HTML body files staged by the legacy designer. The
+    // version list can refresh asynchronously, so do not rely on its length alone.
+    _lastLegacyHtmlVersionNumber = 0;
+    _legacyHtmlVersionStem = null;
 
     @track currentFileId;
     @track uploadedFileName = '';
@@ -5078,7 +5083,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     return chosenHasSize || !size ? logoTag : logoTag.slice(0, -1) + size + '}';
                 });
             }
-            const fileName = (this.selectedStarterLabelFor(starterKey) || 'Starter').replace(/[^\w]+/g, '_') + '.html';
+            const fileName = this._legacyHtmlVersionFileName(
+                (this.selectedStarterLabelFor(starterKey) || 'Starter').replace(/[^\w]+/g, '_') + '.html'
+            );
             // PUBLISHED as the active version, not left as a loose body CV.
             //
             // The canvas reads the active version's body — deliberately, so the editor
@@ -5123,7 +5130,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      */
     async _applyPastedBody(templateId, html, templateName) {
         try {
-            const fileName = (templateName || 'AI_Template').replace(/[^\w]+/g, '_') + '.html';
+            const fileName = this._legacyHtmlVersionFileName(
+                (templateName || 'AI_Template').replace(/[^\w]+/g, '_') + '.html'
+            );
             const bodyResult = await saveHtmlTemplateBody({ templateId, fileName, htmlContent: html });
             this.currentFileId = bodyResult.contentDocumentId;
             this.uploadedContentVersionId = bodyResult.contentVersionId;
@@ -5391,6 +5400,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // HTML body editor state is per-template too.
             this.showHtmlBodyEditor = false;
             this._lastUploadedHtmlText = null;
+            this._lastLegacyHtmlVersionNumber = 0;
+            this._legacyHtmlVersionStem = null;
             this.isLoadingHtmlBody = false;
             this.isApplyingHtmlBody = false;
             this.stagedBodySource = null;
@@ -5557,6 +5568,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     const isActive = v[F.VerIsActive];
                     return {
                         ...v,
+                        isActive,
                         // Show the real version record name (e.g. V-0024), not a synthetic index.
                         VersionNumber: v.Name,
                         CreatedByName: v.CreatedBy ? v.CreatedBy.Name : '',
@@ -5648,6 +5660,39 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplateCustomMargins = '';
     }
 
+    async _refreshLegacyDesignerAfterActivation() {
+        if (this.isCanvasTemplate) {
+            return;
+        }
+        // Activation changes the server-side pointer. Discard every client-side
+        // staged-body reference so the designer cannot keep showing the version
+        // that was active before the restore.
+        this._lastUploadedHtmlText = null;
+        this.uploadedContentVersionId = null;
+        this.uploadedFileName = '';
+        this.stagedBodySource = null;
+        this.htmlEditorDirty = false;
+        this.lintFindings = [];
+        const wasVisual = this.showHtmlBodyVisual;
+        if (wasVisual) {
+            this.showHtmlBodyVisual = false;
+            this._visualOriginalCode = null;
+            this._visualEnteredDom = null;
+        }
+        await this._loadBodyIntoEditor();
+        const body = this._lastUploadedHtmlText || '';
+        if (!body.trim()) {
+            return;
+        }
+        if (wasVisual) {
+            // Let the source/visual DOM unmount before painting the newly active body.
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            setTimeout(() => this._enterVisualMode(body), 0);
+        } else {
+            this._syncHtmlBodyEditorDom(body);
+        }
+    }
+
     async handleRestoreVersion(event) {
         const action = event.detail.action.name;
         const row = event.detail.row;
@@ -5664,7 +5709,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 this.editTemplateDesc = row[F.Desc];
                 this.editTemplateType = row[F.Type];
 
-                this.loadVersions(this.editTemplateId);
+                await this.loadVersions(this.editTemplateId);
+                await this._refreshLegacyDesignerAfterActivation();
                 refreshApex(this.wiredTemplatesResult);
             } catch (error) {
                 this.showToast('Error activating version', error.body ? error.body.message : error.message, 'error');
@@ -6068,10 +6114,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // Whitespace-insensitive: serialize/pretty-print round-trips shift
             // formatting without changing the document.
             const norm = (x) => x.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
-            if (draft && (this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
+            const needsNewBodyFile = !this.uploadedContentVersionId;
+            if (draft && (needsNewBodyFile || this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
                 try {
-                    const base = (this.uploadedFileName || 'template.html').replace(/\.(html?|zip)$/i, '');
-                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, base + '.html', null, 'editor');
+                    const fileName = this._legacyHtmlVersionFileName(this.uploadedFileName || 'template.html');
+                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, fileName, null, 'editor');
                     this.htmlEditorDirty = false;
                 } catch (err) {
                     const msg =
@@ -6267,10 +6314,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             const draft = (this._currentDraftHtml() || '').trim();
             const lastStaged = (this._lastUploadedHtmlText || '').trim();
             const norm = (value) => value.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
-            if (draft && (this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
+            const needsNewBodyFile = !this.uploadedContentVersionId;
+            if (draft && (needsNewBodyFile || this.htmlEditorDirty || norm(draft) !== norm(lastStaged))) {
                 try {
-                    const base = (this.uploadedFileName || 'template.html').replace(/\.(html?|zip)$/i, '');
-                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, base + '.html', null, 'editor');
+                    const fileName = this._legacyHtmlVersionFileName(this.uploadedFileName || 'template.html');
+                    await this._processAndSaveHtmlBody(this.editTemplateId, draft, fileName, null, 'editor');
                     this.htmlEditorDirty = false;
                     stagedDraftForGeneration = true;
                 } catch (err) {
@@ -7082,6 +7130,28 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
+    _legacyHtmlVersionFileName(fileName) {
+        if (this.uploadedContentVersionId && fileName === this.uploadedFileName) {
+            return fileName;
+        }
+        const raw = (fileName || 'template.html').replace(/\.(html?|zip)$/i, '');
+        if (!this._legacyHtmlVersionStem) {
+            const generatedSuffix = raw.match(/(\d+)$/);
+            this._legacyHtmlVersionStem =
+                generatedSuffix && (this.versions || []).length > 0
+                    ? raw.substring(0, raw.length - generatedSuffix[1].length)
+                    : raw;
+        }
+        const existing = (this.versions || []).map((version) => {
+            const match = String(version.Name || '').match(/(\d+)$/);
+            return match ? Number(match[1]) : 0;
+        });
+        const knownMax = Math.max(0, ...existing);
+        const next = Math.max(knownMax + 1, this._lastLegacyHtmlVersionNumber + 1);
+        this._lastLegacyHtmlVersionNumber = next;
+        return this._legacyHtmlVersionStem + next + '.html';
+    }
+
     /**
      * Shared HTML-body pipeline (file upload, paste-back editor, starter):
      * extract inline data: URI images, upload every image part, rewrite
@@ -7089,6 +7159,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      * state. Throws on failure — callers own the error toast.
      */
     async _processAndSaveHtmlBody(templateId, htmlText, fileName, zipImages, source) {
+        // File uploads arrive before a version exists. Give their staged body the
+        // same per-version filename as editor saves; otherwise every legacy save
+        // appears as the same template.html in Files.
+        if (source !== 'editor' && this.editTemplateType === 'HTML') {
+            fileName = this._legacyHtmlVersionFileName(fileName);
+        }
         // A new save invalidates whatever the last fidelity report said — never
         // leave stale findings showing for a body they were not run against.
         this.lintFindings = [];
@@ -13291,7 +13367,14 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // No body touched this session — pull the latest stored body.
         this.isLoadingHtmlBody = true;
         try {
-            const body = await getHtmlTemplateBody({ templateId: this.editTemplateId });
+            const activeVersion = (this.versions || []).find((version) => version.isActive);
+            // Version bodies are immutable and are what generation reads. Keep the
+            // legacy editor on that same pointer; only fall back to the old loose
+            // template body for pre-version records.
+            let body = activeVersion ? await getVersionBody({ versionId: activeVersion.Id }) : null;
+            if (body == null) {
+                body = await getHtmlTemplateBody({ templateId: this.editTemplateId });
+            }
             this._lastUploadedHtmlText = body || '';
             this._syncHtmlBodyEditorDom(this._lastUploadedHtmlText);
             this.htmlEditorDirty = false;
@@ -13411,9 +13494,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.showDocxHtmlViewer = false;
             // Stage the tuned HTML as the body through the standard pipeline.
             // Keep the Word file's identity: Sales_Quote.docx → Sales_Quote.html.
-            const htmlName =
+            const htmlName = this._legacyHtmlVersionFileName(
                 ((this.uploadedFileName || this.editTemplateName || 'template').replace(/\.(docx?|html?|zip)$/i, '') ||
-                    'template') + '.html';
+                    'template') + '.html'
+            );
             await this._processAndSaveHtmlBody(this.editTemplateId, text, htmlName, null, 'editor');
             this.showHtmlBodyEditor = true;
             this._syncHtmlBodyEditorDom(text);
@@ -13587,18 +13671,25 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
      *  when the author saves — loading changes nothing by itself). */
     async handleLoadVersionIntoDesigner(event) {
         const cvId = event.currentTarget.dataset.cvid;
+        const versionId = event.currentTarget.dataset.versionId;
         const verName = event.currentTarget.dataset.ver;
-        if (!cvId) {
+        if (!cvId && !versionId) {
             return;
         }
         try {
-            const b64 = await getContentVersionBase64({ contentVersionId: cvId });
-            const bin = atob(b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) {
-                bytes[i] = bin.charCodeAt(i);
+            // Read through the version pointer first so the designer and renderer
+            // use the same immutable body. The CV fallback keeps older rows without
+            // a usable version pointer loadable.
+            let text = versionId ? await getVersionBody({ versionId }) : null;
+            if (text == null && cvId) {
+                const b64 = await getContentVersionBase64({ contentVersionId: cvId });
+                const bin = atob(b64);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) {
+                    bytes[i] = bin.charCodeAt(i);
+                }
+                text = new TextDecoder('utf-8').decode(bytes);
             }
-            const text = new TextDecoder('utf-8').decode(bytes);
             if (!/</.test(text.slice(0, 500))) {
                 this.showToast(
                     'Not an HTML body',
@@ -15967,8 +16058,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
         this.isApplyingHtmlBody = true;
         try {
-            const base = (this.uploadedFileName || 'template.html').replace(/\.(html?|zip)$/i, '');
-            await this._processAndSaveHtmlBody(this.editTemplateId, text, base + '.html', null, 'editor');
+            const fileName = this._legacyHtmlVersionFileName(this.uploadedFileName || 'template.html');
+            await this._processAndSaveHtmlBody(this.editTemplateId, text, fileName, null, 'editor');
             this.htmlEditorDirty = false;
             if (this.showHtmlBodyVisual) {
                 // Staged text is the new baseline: Source view and the
@@ -16004,6 +16095,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     resetForm() {
         this.uploadedFileName = '';
         this.uploadedContentVersionId = null;
+        this._lastLegacyHtmlVersionNumber = 0;
+        this._legacyHtmlVersionStem = null;
         this.uploadedPdfAcroFormSnapshot = null;
         this.uploadedPdfAcroFormSnapshotJson = null;
         this._resetEditFileUploadWidget();

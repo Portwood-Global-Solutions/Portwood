@@ -2855,6 +2855,40 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         ];
     }
 
+    /** Returns the next unique legacy-designer HTML body filename for a template. */
+    private static String nextLegacyHtmlBodyFileName(Id templateId) {
+        String titlePrefix = 'docgen_html_body_' + templateId + '_';
+        String titleLike = titlePrefix + '%';
+        Set<String> existingNames = new Set<String>();
+        Integer highest = 0;
+        /* code-analyzer-suppress ApexFlsViolation */
+        for (ContentVersion body : [
+            SELECT PathOnClient
+            FROM ContentVersion
+            WHERE Title LIKE :titleLike
+            WITH SYSTEM_MODE
+        ]) {
+            String path = body.PathOnClient;
+            if (String.isBlank(path)) {
+                continue;
+            }
+            existingNames.add(path.toLowerCase());
+            String stem = path.substringBeforeLast('.');
+            if (stem.toLowerCase().startsWith('template')) {
+                String suffix = stem.substring('template'.length());
+                if (suffix.isNumeric()) {
+                    highest = Math.max(highest, Integer.valueOf(suffix));
+                }
+            }
+        }
+        Integer next = highest + 1;
+        String candidate = 'template' + next + '.html';
+        while (existingNames.contains(candidate.toLowerCase())) {
+            next++;
+            candidate = 'template' + next + '.html';
+        }
+        return candidate;
+    }
     /**
      * Saves template field updates and optionally creates a new template version.
      * @param fields Map of field API names to values for the template record
@@ -3218,6 +3252,41 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     ];
                     if (!links.isEmpty()) {
                         cvId = links[0].ContentDocument.LatestPublishedVersionId;
+                    }
+                }
+
+                // Legacy HTML designer saves must never make two template
+                // versions point at the same body file. The client can submit
+                // the prior CV when no new body was uploaded, so make an
+                // immutable copy here and give it its own filename instead of
+                // reusing the prior ContentVersion pointer.
+                if (
+                    DocGenService.isHtmlBacked((String) fields.get('Type__c')) &&
+                    String.isNotBlank(priorContentVersionId) &&
+                    (String.isBlank(contentVersionId) || contentVersionId == priorContentVersionId)
+                ) {
+                    Id priorBodyId = (Id) priorContentVersionId;
+                    DocGenFlsGuard.assertAccessible(
+                        ContentVersion.sObjectType,
+                        new Set<String>{ 'PathOnClient', 'VersionData' }
+                    );
+                    /* code-analyzer-suppress ApexFlsViolation */
+                    List<ContentVersion> priorBodies = [
+                        SELECT PathOnClient, VersionData
+                        FROM ContentVersion
+                        WHERE Id = :priorBodyId
+                        WITH SYSTEM_MODE
+                        LIMIT 1
+                    ];
+                    if (!priorBodies.isEmpty()) {
+                        ContentVersion copy = new ContentVersion();
+                        copy.Title = 'docgen_html_body_' + templateId + '_' + Datetime.now().getTime();
+                        copy.PathOnClient = nextLegacyHtmlBodyFileName(templateId);
+                        copy.VersionData = priorBodies[0].VersionData;
+                        copy.FirstPublishLocationId = templateId;
+                        /* code-analyzer-suppress ApexFlsViolation */
+                        Database.insert(copy, AccessLevel.SYSTEM_MODE);
+                        cvId = copy.Id;
                     }
                 }
 
@@ -4283,8 +4352,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * HTML template body read-back for the admin editor (paste-back surface).
      *
-     * Returns the most recent docgen_html_body_* ContentVersion attached to
-     * the template, or null when no body has been uploaded yet. The CV read
+     * Returns the body referenced by the active template version, or (for legacy
+     * records that have no version body pointer yet) the most recent
+     * docgen_html_body_* ContentVersion attached to the template. The CV read
      * runs WITH SYSTEM_MODE after an explicit FLS/CRUD gate on the template —
      * template-internal CVs can carry Visibility=InternalUsers ContentDocumentLinks,
      * which USER_MODE reads silently drop (the #114 quirk).
@@ -4316,6 +4386,41 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         if (!DocGenService.isHtmlBacked(tpls[0].Type__c)) {
             throw new DocGenException('getHtmlTemplateBody is for HTML-backed templates only.');
+        }
+
+        // The legacy designer used to read the newest loose body attached to the
+        // template. After Save as New Version, that is not necessarily the body of
+        // the active version: an older version can still point at its own immutable
+        // ContentVersion while the loose lookup returns a later edit. Reading that
+        // shared file made every version appear to contain the same document and
+        // could overwrite the wrong version on the next designer save.
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template_Version__c.sObjectType,
+            new Set<String>{ 'Template__c', 'Is_Active__c', 'Content_Version_Id__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> activeVersions = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        if (!activeVersions.isEmpty() && String.isNotBlank(activeVersions[0].Content_Version_Id__c)) {
+            Id bodyCvId = (Id) activeVersions[0].Content_Version_Id__c;
+            DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<ContentVersion> versionBodies = [
+                SELECT VersionData
+                FROM ContentVersion
+                WHERE Id = :bodyCvId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            if (!versionBodies.isEmpty()) {
+                return versionBodies[0].VersionData.toString();
+            }
         }
 
         // Scope the read by the template's linked documents, NOT by a bare Title LIKE.
