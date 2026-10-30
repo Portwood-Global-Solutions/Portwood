@@ -576,6 +576,12 @@ Use the template's **Design** action to open the HTML designer. Its toolbar and 
 
 Use **Save as New Version** to activate edits. **Download Sample** or **PDF Preview** helps you check the rendered result.
 
+#### Return to the Designer Beta library
+
+When an HTML template is open in the legacy designer, click **Back to Library** to return to the **Designer (Beta)** template picker. This lets you choose another HTML or Canvas template without going back to the main **Your Templates** table.
+
+If the designer has unsaved changes, Portwood opens an **Unsaved changes** confirmation. Choose **OK** to discard the changes and return to the Designer Beta picker. Close or cancel the dialog to keep editing. Use **Save as New Version** before leaving when you want the changes to become the active template version.
+
 #### Why the PDF can look different
 
 Salesforce's PDF renderer supports a smaller set of layout features than a web browser. Plain paragraphs, tables, fixed widths, and common fonts are reliable starting points. Modern web layouts using flexbox or grid can change or disappear.

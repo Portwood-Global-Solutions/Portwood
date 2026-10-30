@@ -6190,6 +6190,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             // save doesn't double-attach the same file, refresh the version list,
             // and keep PDF authors on the mapping tab so the saved fields remain in view.
             this.uploadedContentVersionId = null;
+            this.stagedBodySource = null;
+            this.htmlEditorDirty = false;
             this._resetEditFileUploadWidget();
             if (this.editTemplateType === 'PDF' && versionId && savedPdfSnapshotJson) {
                 this.pdfAcroFormSnapshotVersionId = versionId;
@@ -14299,22 +14301,32 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.activeMainTab = 'design';
     }
 
-    handleCloseDesigner() {
+    async handleCloseDesigner(event) {
+        // Prevent the click from being interpreted as another designer-tab activation.
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (this.htmlEditorDirty || this.stagedBodySource) {
+            const discard = await LightningConfirm.open({
+                message:
+                    'You have unsaved changes. Click OK to discard them and return to the Designer Beta library, or Close to keep editing.',
+                label: 'Unsaved changes',
+                theme: 'warning'
+            });
+            if (!discard) {
+                return;
+            }
+        }
         if (this.showHtmlBodyVisual) {
             this._exitVisualMode();
         }
         this.handleClosePdfPreview();
         this.activePanel = null;
-        if (this.htmlEditorDirty || this.stagedBodySource) {
-            this.showToast(
-                'Heads up',
-                this.stagedBodySource
-                    ? 'Your staged body is kept — reopen the designer or the template editor to Save as New Version.'
-                    : 'Unapplied editor changes were left un-staged.',
-                'info'
-            );
-        }
-        this.activeMainTab = 'list';
+        // Return to the Designer (Beta) picker, not the main template table.
+        this.editTemplateId = null;
+        this.editTemplateType = null;
+        this.activeMainTab = 'design';
     }
 
     // --- Blocks palette (drag-in layout pieces) ---
