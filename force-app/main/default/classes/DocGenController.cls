@@ -4168,11 +4168,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         DocGenFlsGuard.assertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Type__c', 'Page_Size__c', 'Page_Orientation__c', 'Page_Margins__c', 'Custom_Margins__c' }
+            new Set<String>{
+                'Type__c',
+                'Base_Object_API__c',
+                'Page_Size__c',
+                'Page_Orientation__c',
+                'Page_Margins__c',
+                'Custom_Margins__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Template__c tpl = [
-            SELECT Type__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
+            SELECT Type__c, Base_Object_API__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -4225,7 +4232,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (!active.isEmpty()) {
                 fresh = active[0].clone(false, true, false, false);
             } else {
-                fresh = new DocGen_Template_Version__c(Template__c = templateId, Type__c = tpl.Type__c);
+                fresh = new DocGen_Template_Version__c(
+                    Template__c = templateId,
+                    Type__c = tpl.Type__c,
+                    Base_Object_API__c = tpl.Base_Object_API__c
+                );
             }
             fresh.Template__c = templateId;
             fresh.Content_Version_Id__c = cvId;
@@ -4260,11 +4271,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Template__c = templateId,
                 Content_Version_Id__c = cvId,
                 Is_Active__c = true,
-                Type__c = tpl.Type__c
+                Type__c = tpl.Type__c,
+                Base_Object_API__c = tpl.Base_Object_API__c
             );
             DocGenFlsGuard.assertCreateable(
                 v,
-                new Set<String>{ 'Template__c', 'Content_Version_Id__c', 'Is_Active__c', 'Type__c' }
+                new Set<String>{
+                    'Template__c',
+                    'Content_Version_Id__c',
+                    'Is_Active__c',
+                    'Type__c',
+                    'Base_Object_API__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(v, AccessLevel.SYSTEM_MODE);
@@ -4977,7 +4995,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (String.isNotBlank(version.Type__c)) {
                 template.Type__c = version.Type__c;
             }
-            template.Base_Object_API__c = version.Base_Object_API__c;
+            // Early Canvas saves could create versions without a base-object
+            // snapshot. Preserve the required template value for those historical
+            // versions instead of attempting to update it with null.
+            if (String.isNotBlank(version.Base_Object_API__c)) {
+                template.Base_Object_API__c = version.Base_Object_API__c;
+            }
 
             // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
             DocGenFlsGuard.assertUpdateable(
