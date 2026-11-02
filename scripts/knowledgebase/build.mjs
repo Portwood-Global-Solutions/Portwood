@@ -15,6 +15,7 @@ const errors = [];
 const assert = (condition, message) => {
     if (!condition) errors.push(message);
 };
+const normalizeNewlines = (text) => text.replace(/\r\n?/g, '\n');
 assert(
     /^04t\w{12,15}$/.test(packageId || ''),
     'Release packageAlias must resolve to a package version in sfdx-project.json.'
@@ -194,7 +195,7 @@ for (const [file, content] of outputs) {
     });
     if (check)
         assert(
-            fs.existsSync(path.join(root, file)) && read(file) === formatted,
+            fs.existsSync(path.join(root, file)) && normalizeNewlines(read(file)) === normalizeNewlines(formatted),
             `${file} is out of date. Run npm run guide:build.`
         );
     else fs.writeFileSync(path.join(root, file), formatted);
