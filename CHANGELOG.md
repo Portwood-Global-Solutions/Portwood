@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Activating an older template version now restores its complete configuration.** The Edit
+  Template Configuration modal now reloads the active version's query, base object, output
+  format, page setup, title format, and header/footer settings after activation and when the
+  modal opens, instead of retaining values from the first or previously active version.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,

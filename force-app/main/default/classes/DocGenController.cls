@@ -4172,7 +4172,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Template__c tpl = [
-            SELECT Type__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
+            SELECT Type__c, Base_Object_API__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -4225,7 +4225,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (!active.isEmpty()) {
                 fresh = active[0].clone(false, true, false, false);
             } else {
-                fresh = new DocGen_Template_Version__c(Template__c = templateId, Type__c = tpl.Type__c);
+                fresh = new DocGen_Template_Version__c(
+                    Template__c = templateId,
+                    Type__c = tpl.Type__c,
+                    Base_Object_API__c = tpl.Base_Object_API__c
+                );
             }
             fresh.Template__c = templateId;
             fresh.Content_Version_Id__c = cvId;
@@ -4260,11 +4264,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Template__c = templateId,
                 Content_Version_Id__c = cvId,
                 Is_Active__c = true,
-                Type__c = tpl.Type__c
+                Type__c = tpl.Type__c,
+                Base_Object_API__c = tpl.Base_Object_API__c
             );
             DocGenFlsGuard.assertCreateable(
                 v,
-                new Set<String>{ 'Template__c', 'Content_Version_Id__c', 'Is_Active__c', 'Type__c' }
+                new Set<String>{
+                    'Template__c',
+                    'Content_Version_Id__c',
+                    'Is_Active__c',
+                    'Type__c',
+                    'Base_Object_API__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(v, AccessLevel.SYSTEM_MODE);
@@ -4690,6 +4701,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Page_Size__c',
                 'Page_Margins__c',
                 'Custom_Margins__c',
+                'Output_Format__c',
+                'Document_Title_Format__c',
+                'Header_Html__c',
+                'Footer_Html__c',
                 'Template__c'
             }
         );
@@ -4711,7 +4726,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Page_Orientation__c,
                 Page_Size__c,
                 Page_Margins__c,
-                Custom_Margins__c
+                Custom_Margins__c,
+                Output_Format__c,
+                Document_Title_Format__c,
+                Header_Html__c,
+                Footer_Html__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId
             WITH SYSTEM_MODE
@@ -4914,7 +4933,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Category__c',
                     'Description__c',
                     'Type__c',
-                    'Base_Object_API__c'
+                    'Base_Object_API__c',
+                    'Output_Format__c',
+                    'Document_Title_Format__c',
+                    'Header_Html__c',
+                    'Footer_Html__c',
+                    'Page_Orientation__c',
+                    'Page_Size__c',
+                    'Page_Margins__c',
+                    'Custom_Margins__c'
                 }
             );
             /* code-analyzer-suppress ApexFlsViolation */
@@ -4926,7 +4953,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Category__c,
                     Description__c,
                     Type__c,
-                    Base_Object_API__c
+                    Base_Object_API__c,
+                    Output_Format__c,
+                    Document_Title_Format__c,
+                    Header_Html__c,
+                    Footer_Html__c,
+                    Page_Orientation__c,
+                    Page_Size__c,
+                    Page_Margins__c,
+                    Custom_Margins__c
                 FROM DocGen_Template_Version__c
                 WHERE Id = :versionId
                 WITH SYSTEM_MODE
@@ -4977,12 +5012,60 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (String.isNotBlank(version.Type__c)) {
                 template.Type__c = version.Type__c;
             }
-            template.Base_Object_API__c = version.Base_Object_API__c;
+            // Early versions may not contain a base-object snapshot. Do not overwrite
+            // the required template value with null when activating those records.
+            if (String.isNotBlank(version.Base_Object_API__c)) {
+                template.Base_Object_API__c = version.Base_Object_API__c;
+            }
+            // Restore the render settings captured by this version as well. These
+            // fields are nullable for versions created before the snapshot fields
+            // shipped, so leave the live template value alone when no snapshot is
+            // available. Without this, activating an older version changed the
+            // body/query headline but left Settings showing the previously active
+            // version's output/page/chrome configuration.
+            if (version.Output_Format__c != null) {
+                template.Output_Format__c = version.Output_Format__c;
+            }
+            if (version.Document_Title_Format__c != null) {
+                template.Document_Title_Format__c = version.Document_Title_Format__c;
+            }
+            if (version.Header_Html__c != null) {
+                template.Header_Html__c = version.Header_Html__c;
+            }
+            if (version.Footer_Html__c != null) {
+                template.Footer_Html__c = version.Footer_Html__c;
+            }
+            if (version.Page_Orientation__c != null) {
+                template.Page_Orientation__c = version.Page_Orientation__c;
+            }
+            if (version.Page_Size__c != null) {
+                template.Page_Size__c = version.Page_Size__c;
+            }
+            if (version.Page_Margins__c != null) {
+                template.Page_Margins__c = version.Page_Margins__c;
+            }
+            if (version.Custom_Margins__c != null) {
+                template.Custom_Margins__c = version.Custom_Margins__c;
+            }
 
             // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
             DocGenFlsGuard.assertUpdateable(
                 template,
-                new Set<String>{ 'Query_Config__c', 'Category__c', 'Description__c', 'Type__c', 'Base_Object_API__c' }
+                new Set<String>{
+                    'Query_Config__c',
+                    'Category__c',
+                    'Description__c',
+                    'Type__c',
+                    'Base_Object_API__c',
+                    'Output_Format__c',
+                    'Document_Title_Format__c',
+                    'Header_Html__c',
+                    'Footer_Html__c',
+                    'Page_Orientation__c',
+                    'Page_Size__c',
+                    'Page_Margins__c',
+                    'Custom_Margins__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.update(template, AccessLevel.SYSTEM_MODE);
