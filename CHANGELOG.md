@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Legacy Designer keeps HTML template version content isolated (#489, PR #520).** Each saved
+  version now receives its own HTML body file, and activating another version refreshes the
+  designer with that version's content instead of reusing the newest body.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
