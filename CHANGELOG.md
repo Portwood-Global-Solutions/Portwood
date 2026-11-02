@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **Salesforce standard fonts in Canvas.** The Canvas font picker now has a dedicated
+  Salesforce standard fonts section with Helvetica, Times, and Courier options. These
+  choices use the verified PDF renderer faces, remain consistent between the canvas and
+  generated PDF, and persist after saving and reopening a template.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
