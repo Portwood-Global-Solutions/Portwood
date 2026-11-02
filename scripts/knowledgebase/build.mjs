@@ -35,7 +35,7 @@ const expand = (text) =>
 const articles = config.articles.map((article) => {
     const file = `docs/knowledgebase/articles/${article.slug}.md`;
     assert(fs.existsSync(path.join(root, file)), `${article.slug}: article file is missing.`);
-    const sourceText = fs.existsSync(path.join(root, file)) ? read(file).trim() : '';
+    const sourceText = fs.existsSync(path.join(root, file)) ? normalizeNewlines(read(file).trim()) : '';
     const body = expand(sourceText);
     for (const error of markdownTables(body).errors) assert(false, `${file}: ${error}`);
     assert(groupIds.has(article.group), `${article.slug}: unknown group.`);
