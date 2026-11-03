@@ -3,12 +3,24 @@ public with sharing class DocGenFontOperation implements Queueable {
     private String operation;
     private Id versionId;
     private String key;
+    private String apiName;
     private String argument;
     private String namespacePrefix;
     public DocGenFontOperation(String operation, Id versionId, String key, String argument, String namespacePrefix) {
+        this(operation, versionId, key, null, argument, namespacePrefix);
+    }
+    public DocGenFontOperation(
+        String operation,
+        Id versionId,
+        String key,
+        String apiName,
+        String argument,
+        String namespacePrefix
+    ) {
         this.operation = operation;
         this.versionId = versionId;
         this.key = key;
+        this.apiName = apiName;
         this.argument = argument;
         this.namespacePrefix = namespacePrefix;
     }
@@ -20,7 +32,7 @@ public with sharing class DocGenFontOperation implements Queueable {
                 'Large font imports require the Winter 27 Apex heap limits. Check Apex Settings.'
             );
         if (operation == 'Import') {
-            DocGenFontController.inspectUploadedFont(versionId, key, argument);
+            DocGenFontController.inspectUploadedFontWithApiName(versionId, key, apiName, argument);
         } else if (operation == 'ImportArchive') {
             DocGenFontController.inspectUploadedFontArchive(versionId, argument);
         } else if (operation == 'Proof') {

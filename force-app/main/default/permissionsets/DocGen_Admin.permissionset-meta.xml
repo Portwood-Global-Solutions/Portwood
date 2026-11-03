@@ -392,6 +392,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Font_Face__c.API_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Font_Face__c.License_Text__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -1095,6 +1100,8 @@
         <field>DocGen_Signature_Request__c.Brand__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.API_Name__c</field><readable
+        >true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.License_Text__c</field><readable
         >true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Metadata_JSON__c</field><readable
