@@ -190,7 +190,8 @@ const check = process.argv.includes('--check');
 for (const [file, content] of outputs) {
     const formatted = await prettier.format(content, {
         ...(await prettier.resolveConfig(path.join(root, file))),
-        filepath: path.join(root, file)
+        filepath: path.join(root, file),
+        endOfLine: 'lf'
     });
     if (check)
         assert(
