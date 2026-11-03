@@ -7,7 +7,7 @@ import { apexSurface } from './apex-surface.mjs';
 import { markdownTables } from './markdown-tables.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const config = JSON.parse(read('docs/knowledgebase/guide.json'));
 const project = JSON.parse(read('sfdx-project.json'));
 const packageId = project.packageAliases[config.release.packageAlias];
