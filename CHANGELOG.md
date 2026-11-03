@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- **Salesforce Custom Label merge tags.** Templates can now use
+  `{!$Label.Your_Label_Name}` to resolve subscriber or namespaced Custom Labels at generation
+  time, including the running user's translated value. Custom labels also work in document title
+  formats.
+
+### Fixed
+
+- **Custom font field-level security.** Portwood User and Portwood Admin permission sets now grant
+  read access to `DocGen_Font_Face__c.Revision_Key__c`, allowing approved font tags to resolve for
+  assigned users.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,

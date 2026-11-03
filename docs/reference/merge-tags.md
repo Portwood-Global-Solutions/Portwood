@@ -6,6 +6,16 @@ Every tag Portwood recognizes. Tags are case-insensitive for functions (`{SUM:..
 
 ### 7.1 Field merge
 
+#### Salesforce Custom Labels
+
+Use a Salesforce Custom Label anywhere a normal scalar merge tag is accepted:
+
+```text
+{!$Label.Your_Label_Name}
+```
+
+Portwood resolves the label at generation time using the running user's Salesforce language, so translations are honored without changing the template. Labels created in the subscriber org use the form above; a namespaced label may use `{!$Label.namespace.Label_Name}`. A missing label renders as an empty value, matching an unknown field tag.
+
 ```
 {FieldName}
 {!FieldName}              Salesforce-style prefix — treated identically to {FieldName}

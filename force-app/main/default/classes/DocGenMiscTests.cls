@@ -4616,6 +4616,48 @@ private class DocGenMiscTests {
         System.assertEquals('Status - Qualified Lead', title, 'Document title formats should support :label.');
     }
 
+    @IsTest
+    static void customLabelMergeTagResolvesAtRuntime() {
+        String result = DocGenService.processXmlForTest(
+            'Before {!$Label.DocGenRunner_Subtitle} after',
+            new Map<String, Object>()
+        );
+
+        System.assertEquals(
+            'Before Create or combine documents for this record. after',
+            result,
+            'Salesforce custom-label merge tags should resolve through the runtime label API.'
+        );
+    }
+
+    @IsTest
+    static void unknownCustomLabelMergeTagRendersEmpty() {
+        String result = DocGenService.processXmlForTest(
+            'Before {!$Label.Portwood_Label_That_Does_Not_Exist} after',
+            new Map<String, Object>()
+        );
+
+        System.assertEquals(
+            'Before  after',
+            result,
+            'An unknown custom label should follow unknown-field behavior and render empty.'
+        );
+    }
+
+    @IsTest
+    static void customLabelWorksInDocumentTitleFormat() {
+        String result = DocGenService.generateDocTitle(
+            '{!$Label.DocGenRunner_Category} - {Name}',
+            new Map<String, Object>{ 'Name' => 'Example' }
+        );
+
+        System.assertEquals(
+            'Category - Example',
+            result,
+            'Document title formats should support Salesforce custom-label merge tags.'
+        );
+    }
+
     // ── Issue #97: French locale was incorrectly bucketed with German for
     // thousands separator (dot) when CLDR specifies space for fr_FR. These
     // regression assertions lock the distinction in place.
