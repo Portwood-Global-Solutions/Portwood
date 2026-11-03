@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **Portable custom-font tags across orgs.** Custom font faces now support a user-defined API name in the upload form. Use stable tags such as {%font:poppins-bold} when moving templates between Salesforce orgs; each org resolves the name to its local approved font revision. Existing revision-pinned tags remain supported.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,

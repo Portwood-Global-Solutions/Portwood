@@ -1162,9 +1162,10 @@ Use your organization's approved font in generated PDFs.
 2. Choose **Upload font** for one face, or **Bulk upload fonts** for several.
 3. Upload the static TrueType file and confirm its usage rights.
 4. Set a clear font key using lowercase letters, numbers, and hyphens.
-5. Open the face and generate its **native PDF specimen**.
-6. Check the letters, numbers, accents, symbols, weight, and spacing your documents need.
-7. Confirm you reviewed the specimen, then **Approve** the face.
+5. Set a unique **font tag API name** for this face, such as `poppins-bold`. Reuse this API name when moving the same face to another environment.
+6. Open the face and generate its **native PDF specimen**.
+7. Check the letters, numbers, accents, symbols, weight, and spacing your documents need.
+8. Confirm you reviewed the specimen, then **Approve** the face.
 
 Only approved faces become available for new selections. Upload regular, bold, and italic faces separately when your documents need them.
 
@@ -1174,7 +1175,7 @@ Only approved faces become available for new selections. Upload regular, bold, a
 
 - **Canvas:** Select the text box and choose the face in **PDF font**.
 - **HTML designer:** Select the face in the font picker.
-- **HTML source:** Copy the face's verified font tag from its detail panel and use it in a quoted inline `style` attribute.
+- **HTML source:** Copy the face's verified font tag from its detail panel and use it in a quoted inline `style` attribute. API-name tags such as `{%font:poppins-bold}` remain portable across environments.
 - **Imported Word/HTML:** Portwood can match an approved face to the declared family, weight, and style. Check the generated PDF to confirm the match.
 
 #### Replace or stop using a face
@@ -3982,6 +3983,8 @@ Other limitations (apply to both options):
 - **DOCX output preserves whatever Word would render natively** — these constraints only apply to PDF output.
 
 #### Approved PDF font tags
+
+Use the stable `{%font:api-name}` form for portable templates. Set the API name on the approved face and reuse it when importing that face into another environment. Existing `{%font:asset-key:revision}` tags remain supported for backward compatibility.
 
 Use `{%font:asset-key:revision}` only inside a quoted inline `style` attribute, as a complete style declaration. Copy the real tag from the approved face in **Assets → Custom Fonts**; the revision pins the exact face instead of choosing a mutable latest font.
 
