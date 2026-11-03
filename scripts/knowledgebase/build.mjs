@@ -194,8 +194,14 @@ for (const [file, content] of outputs) {
         endOfLine: 'lf'
     });
     if (check)
+        // JSON formatting can vary between Prettier runtimes while preserving
+        // the same catalog data. Compare the parsed value for JSON artifacts;
+        // generated Markdown remains byte-for-byte validated below.
         assert(
-            fs.existsSync(path.join(root, file)) && read(file) === formatted,
+            fs.existsSync(path.join(root, file)) &&
+                (file.endsWith('.json')
+                    ? JSON.stringify(JSON.parse(read(file))) === JSON.stringify(JSON.parse(formatted))
+                    : read(file) === formatted),
             `${file} is out of date. Run npm run guide:build.`
         );
     else fs.writeFileSync(path.join(root, file), formatted);
