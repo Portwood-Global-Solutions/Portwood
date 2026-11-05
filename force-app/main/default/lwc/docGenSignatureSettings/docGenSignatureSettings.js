@@ -7,6 +7,7 @@ import validateSignatureSetup from '@salesforce/apex/DocGenSetupController.valid
 import saveReminderSettings from '@salesforce/apex/DocGenSetupController.saveReminderSettings';
 import saveVerificationSettings from '@salesforce/apex/DocGenSetupController.saveVerificationSettings';
 import saveDeclineSettings from '@salesforce/apex/DocGenSetupController.saveDeclineSettings';
+import saveSignatureInputSettings from '@salesforce/apex/DocGenSetupController.saveSignatureInputSettings';
 
 export default class DocGenSignatureSettings extends LightningElement {
     @track isLoaded = false;
@@ -36,6 +37,7 @@ export default class DocGenSignatureSettings extends LightningElement {
 
     // #367 — org-wide "Hide Decline Button" switch, unchecked by default (Decline shown).
     @track hideDecline = false;
+    @track typeOnly = false;
 
     // Setup checks
     @track setupChecks = [];
@@ -65,6 +67,7 @@ export default class DocGenSignatureSettings extends LightningElement {
             this.requireVerification = data.Signature_Require_Email_Verification__c !== false;
             this.prefillEmail = data.Signature_Prefill_Signer_Email__c === true;
             this.hideDecline = data.Signature_Hide_Decline__c === true;
+            this.typeOnly = data.Signature_Type_Only__c === true;
         } catch (_err) {
             // Settings not yet created — use defaults
         }
@@ -111,6 +114,9 @@ export default class DocGenSignatureSettings extends LightningElement {
     }
     handlePrefillEmailChange(e) {
         this.prefillEmail = e.target.checked;
+    }
+    handleTypeOnlyChange(e) {
+        this.typeOnly = e.target.checked;
     }
     handleHideDeclineChange(e) {
         this.hideDecline = e.target.checked;
@@ -177,6 +183,7 @@ export default class DocGenSignatureSettings extends LightningElement {
             });
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveDeclineSettings({ hideDecline: this.hideDecline });
+            await saveSignatureInputSettings({ typeOnly: this.typeOnly });
             this.saveSuccess = true;
             this.saveMessage =
                 'Settings saved successfully.' + (this.reminderEnabled ? ' Reminders scheduled hourly.' : '');

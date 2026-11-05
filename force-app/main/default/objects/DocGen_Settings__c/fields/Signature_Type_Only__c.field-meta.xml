@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signature_Type_Only__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Require typed signatures and initials across the organization. When unchecked, individual templates can still require Type Only. Defaults to false to preserve drawing and typing.</description>
+    <externalId>false</externalId>
+    <label>Type Only</label>
+    <type>Checkbox</type>
+</CustomField>

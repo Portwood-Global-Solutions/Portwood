@@ -3800,6 +3800,16 @@
                                             field-level-help="When verification is on, auto-send the code to the signer's known email and skip the 'type your email' step. Inherit uses the org default."
                                             class="slds-var-m-top_medium"
                                         ></lightning-combobox>
+                                        <lightning-input
+                                            type="toggle"
+                                            label="Allow Typed Signatures Only"
+                                            checked={editTemplateTypeOnly}
+                                            onchange={handleTypeOnlyChange}
+                                            message-toggle-active="Drawing is disabled for this template"
+                                            message-toggle-inactive="Uses the organization signature setting"
+                                            field-level-help="Require typed signatures and initials for this template and hide the drawing pad. The organization setting applies even when this toggle is off."
+                                            class="slds-var-m-top_medium"
+                                        ></lightning-input>
                                         <!-- #367 — hidden entirely once the org-wide switch already hides
                                              Decline everywhere, since this toggle would then be a no-op. -->
                                         <template if:false={orgHideDecline}>
