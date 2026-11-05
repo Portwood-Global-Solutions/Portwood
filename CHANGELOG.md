@@ -211,6 +211,24 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   Parallel signing for uploaded PDFs is not yet supported. See
   [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf).
 
+### Added
+
+- **Portwood: Merge PDFs** Flow action accepts an ordered Text collection of
+  ContentVersion IDs or a single Text value of comma/semicolon/whitespace-separated
+  IDs and creates a merged Salesforce File, with optional record attachment
+  and duplex padding. Returns the new ContentVersion/ContentDocument IDs and a
+  per-request success/error result. Reads and writes enforce user permissions;
+  metadata size checks precede blob loading, and successful outputs use one bulk
+  insert. No external service, browser, or additional Salesforce license. Includes
+  a draft **Portwood: PDF Merge Demo** Screen Flow and a script that creates its
+  one-page welcome letter and two-page project brief.
+- Native PDF merger now reads active cross-reference chains, compressed object
+  and cross-reference streams (FlateDecode, including PNG prediction), nonzero
+  generations, and inherited page attributes. Ordinary AcroForm values and
+  appearances survive under per-document field namespaces. Encrypted, signed,
+  XFA, and scripted/calculation forms are rejected. Flow input budgets: 384 KiB
+  synchronous / 768 KiB asynchronous, subject to available heap.
+
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 
 Released 2026-10-09 · `04tVx0000019Ki5IAE` (build 3.59.0-2) · ancestor 3.58.0 · 2,156 tests,

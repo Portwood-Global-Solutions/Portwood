@@ -5,6 +5,10 @@
         <visible>true</visible>
     </applicationVisibilities>
     <classAccesses>
+        <apexClass>DocGenPdfMergeFlowAction</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>DocGenGettingStartedController</apexClass>
         <enabled>true</enabled>
     </classAccesses>

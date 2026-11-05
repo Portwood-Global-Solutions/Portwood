@@ -72,6 +72,8 @@ docs/appexchange/
 *.py
 # Exception: the python-docx builder for the chart Word reference template
 !scripts/build-word-chart-template.py
+# Reproducible native PDF merger capacity probe
+!scripts/qa/pdf-merge-stress/stress.py
 
 # Python Salesforce Functions
 **/__pycache__/
