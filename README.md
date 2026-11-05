@@ -4,11 +4,11 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
-[![Version](https://img.shields.io/badge/version-3.60.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-3.63.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2156_passing-brightgreen)](#security)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2292_passing-brightgreen)](#security)
 [![Coverage](https://img.shields.io/badge/Coverage-80%25-brightgreen)](#security)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0%2F0%2F0-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwood.dev-blue)](https://portwood.dev)
@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx000001CeFdIAK --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001CfejIAC --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CeFdIAK) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CeFdIAK)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -464,6 +464,7 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 | Version     | Headline                                                                                                                                            |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.63.0** | Hotfix: upgrading to 3.62.0 from an earlier version failed with "The post install script failed"                                                    |
 | **v3.62.0** | Resend and revoke signatures, typed-signatures-only mode, reusable terms and snippets, a native PDF-merge Flow action, and version-activation fixes |
 | **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                                             |
 | **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                                        |
@@ -486,6 +487,8 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.63.0 — Hotfix: upgrading to 3.62.0 failed**: upgrading an existing install to 3.62.0 failed with "The post install script failed" and was rolled back; fresh installs were not affected. The script that creates the default email templates after an install can no longer fail an install or upgrade. If you are on 3.61 or earlier, upgrade straight to 3.63.0. On an org that upgraded (rather than installed fresh), an admin who wants to customize the new **Signature Request Revoked** email adds the value `Signature_Revoked` to **Email Template → Type** in Setup; the email still sends with its built-in text and every other email type is unaffected.
 
 **v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes**: signature senders can **Resend** or **Revoke** a request straight from the Recent requests list on a record, and revoking emails the signers who had not signed. An org, or a single template, can require **typed signatures only** and hide the drawing pad. Command Hub → Assets now holds reusable **Terms & HTML Snippets** that any template can insert with a snippet tag, kept versioned in one place. A new **Portwood: Merge PDFs** Flow action combines uploaded PDFs into one File without a screen or an outside service. Templates can use Salesforce **Custom Labels** as merge tags (including the signed-in user's translated value), and custom font tags take a stable **API name** so a template moves between orgs without rewriting its tags. Activating an older template version now restores its whole configuration, Canvas and the legacy designer reload the active version, each legacy-designer version keeps its own body, and the legacy designer gained a **Back to Library** button. Canvas text boxes wrap long text and no longer leak typed text into a table.
 
@@ -600,7 +603,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.62.0 | **Latest (Released)**                   | `04tVx000001CeFdIAK` |
+| v3.63.0 | **Latest (Released)**                   | `04tVx000001CfejIAC` |
+| v3.62.0 | Released — upgrade fails, use 3.63.0    | `04tVx000001CeFdIAK` |
 | v3.61.0 | Released                                | `04tVx000001BaZ3IAK` |
 | v3.60.0 | Released                                | `04tVx000001BOsrIAG` |
 | v3.59.0 | Released                                | `04tVx0000019Ki5IAE` |
