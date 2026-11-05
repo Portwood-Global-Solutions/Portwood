@@ -265,7 +265,9 @@ private class DocGenSnippetTest {
             '<thead><tr><th>Name</th></tr></thead>'
         );
         System.assert(rows.contains('</table><table>'));
-        System.assertEquals(2, rows.countMatches('</tr>'));
+        // 2 data rows + the <thead> row reprinted after the break so headers repeat per page.
+        System.assertEquals(3, rows.countMatches('</tr>'));
+        System.assertEquals(1, rows.countMatches('<thead>'));
     }
 
     @IsTest
@@ -441,5 +443,21 @@ private class DocGenSnippetTest {
         } catch (DocGenException e) {
             System.assert(e.getMessage().contains('too large'));
         }
+    }
+    // Image assets saved before Asset_Type__c existed have a blank type. They must stay visible
+    // as images (main treats only Font as non-image); an Image-only filter silently hides them.
+    @IsTest
+    static void legacyBlankTypeImageAssetsStayVisible() {
+        DocGen_Asset__c legacy = new DocGen_Asset__c(Name = 'Legacy Logo', Asset_Key__c = 'legacy-logo', Is_Active__c = true);
+        insert legacy;
+        legacy.Asset_Type__c = null;
+        update legacy;
+        Boolean listed = false;
+        for (Map<String, Object> asset : DocGenController.getAssets()) {
+            if (asset.get('assetKey') == 'legacy-logo' || asset.get('key') == 'legacy-logo') {
+                listed = true;
+            }
+        }
+        System.assert(listed, 'blank-type legacy image asset must still be listed');
     }
 }
