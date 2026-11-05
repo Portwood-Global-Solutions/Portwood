@@ -15,7 +15,15 @@
  */
 global with sharing class DocGenEmailTemplateInstall implements InstallHandler {
     global void onInstall(InstallContext context) {
-        seedDefaults();
+        // A post-install script that throws fails the whole install or upgrade ("The post install script
+        // failed"). Seeding is optional — the service falls back to the built-in markup at send time —
+        // so nothing here may be allowed to do that. Record the reason and carry on.
+        try {
+            seedDefaults();
+        } catch (Exception e) {
+            DocGenErrorLogger.log('DocGenEmailTemplateInstall.onInstall', e);
+        }
+        DocGenErrorLogger.flush();
     }
 
     /** Friendly record names per type (the Name field is a label only). */
@@ -47,9 +55,24 @@ global with sharing class DocGenEmailTemplateInstall implements InstallHandler {
             existing.add(t.Type__c);
         }
 
+        // Type__c is a restricted picklist. A type this org's field does not list yet (an upgrade
+        // that adds a value) cannot be inserted; skip it and say so rather than failing.
+        Set<String> allowedTypes = new Set<String>();
+        for (Schema.PicklistEntry entry : DocGen_Email_Template__c.Type__c.getDescribe().getPicklistValues()) {
+            allowedTypes.add(entry.getValue());
+        }
+
         List<DocGen_Email_Template__c> toInsert = new List<DocGen_Email_Template__c>();
         for (String type : DocGenEmailTemplateService.ALL_TYPES) {
             if (existing.contains(type)) {
+                continue;
+            }
+            if (!allowedTypes.contains(type)) {
+                DocGenErrorLogger.warn(
+                    'DocGenEmailTemplateInstall.seedDefaults',
+                    'seed',
+                    'Skipped default email template for type ' + type + ': it is not a value of Type__c in this org.'
+                );
                 continue;
             }
             DocGenEmailTemplateService.TemplateDef def = DocGenEmailTemplateService.builtInDef(type);
