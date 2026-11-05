@@ -326,7 +326,7 @@ global with sharing class DocGenEmailTemplateService {
                         LIMIT 1
                     )
                 FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey AND Asset_Type__c = 'Image'
+                WHERE Asset_Key__c = :assetKey AND (Asset_Type__c = 'Image' OR Asset_Type__c = null)
                 WITH SYSTEM_MODE
                 LIMIT 1
             ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
