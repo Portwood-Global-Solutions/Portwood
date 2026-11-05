@@ -173,6 +173,10 @@ import VER_PAGE_ORIENTATION_FIELD from '@salesforce/schema/DocGen_Template_Versi
 import VER_PAGE_SIZE_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Page_Size__c';
 import VER_PAGE_MARGINS_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Page_Margins__c';
 import VER_CUSTOM_MARGINS_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Custom_Margins__c';
+import VER_OUTPUT_FORMAT_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Output_Format__c';
+import VER_DOCUMENT_TITLE_FORMAT_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Document_Title_Format__c';
+import VER_HEADER_HTML_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Header_Html__c';
+import VER_FOOTER_HTML_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Footer_Html__c';
 
 // Field API name map — resolves namespace automatically
 // #236 — every Type__c picklist value this build knows about, mapped to the release
@@ -291,7 +295,11 @@ const F = {
     VerPageOrientation: VER_PAGE_ORIENTATION_FIELD.fieldApiName,
     VerPageSize: VER_PAGE_SIZE_FIELD.fieldApiName,
     VerPageMargins: VER_PAGE_MARGINS_FIELD.fieldApiName,
-    VerCustomMargins: VER_CUSTOM_MARGINS_FIELD.fieldApiName
+    VerCustomMargins: VER_CUSTOM_MARGINS_FIELD.fieldApiName,
+    VerOutputFormat: VER_OUTPUT_FORMAT_FIELD.fieldApiName,
+    VerDocumentTitleFormat: VER_DOCUMENT_TITLE_FORMAT_FIELD.fieldApiName,
+    VerHeaderHtml: VER_HEADER_HTML_FIELD.fieldApiName,
+    VerFooterHtml: VER_FOOTER_HTML_FIELD.fieldApiName
 };
 
 const COLUMNS = [
@@ -5582,6 +5590,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 });
                 // Sync watermark CV from the active version so the tab shows current state
                 const active = data.find((v) => v[F.VerIsActive]);
+                this._applyActiveVersionSettings(active);
                 this._applyActiveVersionPageSetup(active);
                 this.editTemplateWatermarkCvId = active ? active[F.VerWatermarkCv] || null : null;
                 this._watermarkSourceFile = null;
@@ -5624,6 +5633,41 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             });
     }
 
+    _applyActiveVersionSettings(active) {
+        if (!active) {
+            return;
+        }
+        // Version history stores the render-affecting settings separately from the
+        // template headline. Reapply them whenever the active version changes so
+        // the open modal never keeps displaying the prior version's values.
+        if (active[F.QueryConfig] != null) {
+            this.editTemplateQuery = active[F.QueryConfig];
+        }
+        if (active[F.Category] != null) {
+            this.editTemplateCategory = active[F.Category];
+        }
+        if (active[F.Desc] != null) {
+            this.editTemplateDesc = active[F.Desc];
+        }
+        if (active[F.Type] != null) {
+            this.editTemplateType = active[F.Type];
+        }
+        if (active[F.BaseObject] != null) {
+            this.editTemplateObject = active[F.BaseObject];
+        }
+        if (active[F.VerOutputFormat] != null) {
+            this.editTemplateOutputFormat = active[F.VerOutputFormat];
+        }
+        if (active[F.VerDocumentTitleFormat] != null) {
+            this.editTemplateTitleFormat = active[F.VerDocumentTitleFormat];
+        }
+        if (active[F.VerHeaderHtml] != null) {
+            this.editTemplateHeaderHtml = active[F.VerHeaderHtml];
+        }
+        if (active[F.VerFooterHtml] != null) {
+            this.editTemplateFooterHtml = active[F.VerFooterHtml];
+        }
+    }
     _applyActiveVersionPageSetup(active) {
         if (!active) {
             return;
@@ -5668,12 +5712,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
                 this.showToast('Success', 'Version activated.', 'success');
 
-                this.editTemplateQuery = row[F.QueryConfig]; // raw — preserves V3 alias slots
-                this.editTemplateCategory = row[F.Category];
-                this.editTemplateDesc = row[F.Desc];
-                this.editTemplateType = row[F.Type];
-
-                this.loadVersions(this.editTemplateId);
+                // Reload from the server after activation. The active version carries
+                // its own settings snapshot; using the clicked row alone left fields
+                // outside this small headline set stale.
+                await this.loadVersions(this.editTemplateId);
+                this._editSnapshot = this._editFieldSignature();
                 refreshApex(this.wiredTemplatesResult);
             } catch (error) {
                 this.showToast('Error activating version', error.body ? error.body.message : error.message, 'error');
@@ -5809,12 +5852,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             if (!this.previewVersion[F.VerIsActive]) {
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await activateVersion({ versionId: this.previewVersion.Id });
-                // Sync version config to local edit state
-                this.editTemplateQuery = this.previewVersion[F.QueryConfig]; // raw — preserves V3 alias slots
-                this.editTemplateCategory = this.previewVersion[F.Category];
-                this.editTemplateDesc = this.previewVersion[F.Desc];
-                this.editTemplateType = this.previewVersion[F.Type];
-                this.loadVersions(this.editTemplateId);
+                // Reload the active version snapshot into every edit field before
+                // generating, not only the query/category/description headline.
+                await this.loadVersions(this.editTemplateId);
                 refreshApex(this.wiredTemplatesResult);
             }
 
