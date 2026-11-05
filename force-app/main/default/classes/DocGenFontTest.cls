@@ -601,6 +601,29 @@ private class DocGenFontTest {
         }
     }
     @IsTest
+    static void stableApiNameFontTagSurvivesRevisionChanges() {
+        System.runAs(fontAdmin()) {
+            String apiName = 'parisienne-regular';
+            String key = DocGenFontController.stageFontWithApiName(
+                'PWTestScript-Regular.ttf',
+                EncodingUtil.base64Encode(DocGenFontTestData.regular()),
+                'parisienne',
+                apiName,
+                'SIL OFL 1.1 - test fixture; original license retained in DocGenFontTestData',
+                true
+            );
+            String proof = DocGenFontController.createFontProof(key);
+            DocGenFontController.verifyFont(key, proof, true);
+            DocGen_Font_Face__c face = DocGenFontController.load(key);
+            System.assertEquals(apiName, face.API_Name__c);
+            String tag = DocGenFontService.mergeTag(face.API_Name__c, 'parisienne', key);
+            System.assertEquals('{%font:' + apiName + '}', tag);
+            String expanded = DocGenFontService.expandTags('<p style="' + tag + ';font-size:12pt">Text</p>');
+            System.assert(expanded.contains('-pw-font-face:' + key));
+            System.assert(!expanded.contains('{%font:'));
+        }
+    }
+    @IsTest
     static void htmlTemplateFontTagMergesBodyAndChrome() {
         System.runAs(fontAdmin()) {
             String key = verified(), tag = fontTag(key);

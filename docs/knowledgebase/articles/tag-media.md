@@ -171,6 +171,8 @@ Other limitations (apply to both options):
 
 #### Approved PDF font tags
 
+Use the stable `{%font:api-name}` form for portable templates. Set the API name on the approved face and reuse it when importing that face into another environment. Existing `{%font:asset-key:revision}` tags remain supported for backward compatibility.
+
 Use `{%font:asset-key:revision}` only inside a quoted inline `style` attribute, as a complete style declaration. Copy the real tag from the approved face in **Assets → Custom Fonts**; the revision pins the exact face instead of choosing a mutable latest font.
 
 ```html
