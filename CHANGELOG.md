@@ -2,14 +2,6 @@
 
 ## Unreleased
 
-### Fixed
-
-- **Upgrading from 3.61.0 to 3.62.0 failed with "The post install script failed."** The post-install script seeds a default email template for each email type, and 3.62.0 added a **Signature Request Revoked** type. Salesforce does not add new values to an existing packaged picklist on upgrade, so inserting that record was rejected by the restricted **Type** picklist and the whole upgrade was rolled back. Fresh installs were not affected. The script can no longer fail an install or upgrade: it skips a type the org's picklist does not list, logs a warning to the error log, and catches and logs any other exception. Seeding is optional, because emails fall back to the built-in text.
-
-### Upgrade note
-
-- On an org that **upgraded** (rather than installed fresh), the **Signature Request Revoked** email type is not in the **Type** picklist, so that one template cannot be customized until an admin adds the value `Signature_Revoked` to **Email Template → Type** in Setup. The revoke email still sends with its built-in text, and every other email type is unaffected. See _Upgraded from an earlier version? Add the Signature Request Revoked type_ in the guide's email tokens article.
-
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
