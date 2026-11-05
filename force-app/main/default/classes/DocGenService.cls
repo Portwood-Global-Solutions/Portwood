@@ -9483,7 +9483,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE AND (Asset_Type__c = 'Image' OR Asset_Type__c = null)
+            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE AND (Asset_Type__c = 'Image' OR Asset_Type__c = NULL)
             WITH SYSTEM_MODE
         ];
 

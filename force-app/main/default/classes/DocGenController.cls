@@ -8894,7 +8894,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE (Asset_Type__c = 'Image' OR Asset_Type__c = null)
+            WHERE Asset_Type__c = 'Image' OR Asset_Type__c = NULL
             WITH SYSTEM_MODE
             ORDER BY Name ASC
         ];
@@ -9324,7 +9324,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<DocGen_Asset__c> assets = [
             SELECT Id
             FROM DocGen_Asset__c
-            WHERE Id = :assetId AND (Asset_Type__c = 'Image' OR Asset_Type__c = null)
+            WHERE Id = :assetId AND (Asset_Type__c = 'Image' OR Asset_Type__c = NULL)
             WITH SYSTEM_MODE
             LIMIT 1
         ];

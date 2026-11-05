@@ -448,7 +448,11 @@ private class DocGenSnippetTest {
     // as images (main treats only Font as non-image); an Image-only filter silently hides them.
     @IsTest
     static void legacyBlankTypeImageAssetsStayVisible() {
-        DocGen_Asset__c legacy = new DocGen_Asset__c(Name = 'Legacy Logo', Asset_Key__c = 'legacy-logo', Is_Active__c = true);
+        DocGen_Asset__c legacy = new DocGen_Asset__c(
+            Name = 'Legacy Logo',
+            Asset_Key__c = 'legacy-logo',
+            Is_Active__c = true
+        );
         insert legacy;
         legacy.Asset_Type__c = null;
         update legacy;
