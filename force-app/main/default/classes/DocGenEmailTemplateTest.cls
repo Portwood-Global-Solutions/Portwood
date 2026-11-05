@@ -49,7 +49,11 @@ private class DocGenEmailTemplateTest {
             tokens
         );
         System.assert(rendered.subject.contains('revoked'), 'revoked subject should be used');
-        System.assert(rendered.htmlBody.contains('has been revoked'), 'revocation message should be rendered');
+        // The default body wraps the word in a red <span>, so "has been revoked" is never contiguous.
+        System.assert(
+            rendered.htmlBody.contains('has been <span') && rendered.htmlBody.contains('>revoked</span>'),
+            'revocation message should be rendered'
+        );
         System.assert(
             !rendered.htmlBody.contains('Review &amp; Sign Document'),
             'revocation must not include a signing action'
