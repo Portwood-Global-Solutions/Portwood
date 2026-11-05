@@ -35,6 +35,11 @@
   format, page setup, title format, and header/footer settings after activation and when the
   modal opens, instead of retaining values from the first or previously active version.
 
+### Fixed
+
+- **Legacy designer navigation now returns to the Designer (Beta) library.** The new **Back to Library** action clears the open template and shows the Designer picker, so users can switch templates without returning to the main template table.
+- **Unsaved legacy-designer edits are protected when leaving.** Back to Library now opens an **Unsaved changes** confirmation: **OK** discards the edits and returns to the Designer picker, while closing or cancelling the dialog keeps the designer open.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
