@@ -267,7 +267,7 @@ private class DocGenCanvasSaveTests {
             'A version should be created rather than saving into a void'
         );
         List<DocGen_Template_Version__c> versions = [
-            SELECT Id, Is_Active__c, Type__c, Content_Version_Id__c
+            SELECT Id, Is_Active__c, Type__c, Base_Object_API__c, Content_Version_Id__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :tpl.Id
         ];
@@ -278,6 +278,7 @@ private class DocGenCanvasSaveTests {
             'And it must be active, or the renderer will never read it'
         );
         System.assertEquals('Canvas', versions[0].Type__c, 'It should inherit the template type');
+        System.assertEquals('Account', versions[0].Base_Object_API__c, 'It should inherit the template base object');
         System.assertEquals(
             (Id) res.get('contentVersionId'),
             (Id) versions[0].Content_Version_Id__c,

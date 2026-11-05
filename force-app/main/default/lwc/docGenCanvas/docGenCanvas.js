@@ -2424,6 +2424,25 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     /**
+     * Reloads the body selected by the template's current active version.
+     *
+     * The admin configuration modal can be opened over an already-mounted Canvas.
+     * Activating a version there changes Salesforce state, not this component's
+     * one-shot load state, so reopening the Canvas otherwise keeps showing its old
+     * in-memory document.
+     */
+    @api
+    async reloadActiveVersion() {
+        if (!this.templateId) {
+            return;
+        }
+        this._loaded = false;
+        this._docLoaded = false;
+        this.activeVersionId = null;
+        await this.loadBody();
+    }
+
+    /**
      * True when the canvas differs from what is stored.
      *
      * Compared by serializing rather than by tracking a dirty flag through every

@@ -14228,6 +14228,14 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     async handleOpenDesignerFromModal() {
         this.isEditModalOpen = false;
         await this._openDesignerSurface();
+        // The Canvas can remain mounted behind the configuration modal. Force it
+        // to reread the active version after the modal's Activate action changed
+        // Salesforce state; otherwise its one-shot load keeps the previous body.
+        await Promise.resolve();
+        const canvas = this.template.querySelector('c-doc-gen-canvas');
+        if (canvas) {
+            await canvas.reloadActiveVersion();
+        }
     }
 
     async _openDesignerSurface() {

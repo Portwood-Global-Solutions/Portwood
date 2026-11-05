@@ -23,6 +23,11 @@
   choices use the verified PDF renderer faces, remain consistent between the canvas and
   generated PDF, and persist after saving and reopening a template.
 
+### Fixed
+
+- **Canvas version switching now reloads the activated body.** Reopening Canvas from the Edit Template Configuration modal now refreshes an already-mounted designer from the active version instead of showing the previously loaded body.
+- **Older Canvas versions with incomplete snapshots can be reactivated.** Activation preserves the template's existing required Base Object when historical version metadata is blank, and new fallback versions snapshot that value.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
