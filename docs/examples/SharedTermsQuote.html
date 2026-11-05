@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            @page {
+                size: letter portrait;
+                margin: 0.6in;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                color: #183452;
+                font-size: 10pt;
+                line-height: 1.5;
+            }
+            h1 {
+                font-size: 30pt;
+                margin: 6pt 0;
+            }
+            h2 {
+                font-size: 16pt;
+                margin: 8pt 0;
+            }
+            p {
+                margin: 6pt 0;
+            }
+            .eyebrow {
+                color: #206b72;
+                font-size: 9pt;
+                letter-spacing: 2pt;
+            }
+            .muted {
+                color: #526475;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 18pt 0 12pt;
+            }
+            th {
+                text-align: left;
+                background: #edf5f3;
+                padding: 8pt;
+                font-size: 9pt;
+            }
+            td {
+                padding: 8pt;
+                border-bottom: 1pt solid #d8e1ea;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+            .amount {
+                text-align: right;
+                white-space: nowrap;
+            }
+        </style>
+    </head>
+    <body>
+        <p class="eyebrow">PORTWOOD · CUSTOMER PROPOSAL</p>
+        <h1>Let’s build what’s next.</h1>
+        <p class="muted">Prepared for <strong>{Account.Name}</strong></p>
+        <p>Quote {QuoteNumber} · {Name}</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Products &amp; services</th>
+                    <th class="amount">Qty</th>
+                    <th class="amount">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    {#QuoteLineItems}
+                    <td>{Product2.Name}</td>
+                    <td class="amount">{Quantity:#,##0.##}</td>
+                    <td class="amount">{TotalPrice:currency}</td>
+                    {/QuoteLineItems}
+                </tr>
+            </tbody>
+        </table>
+        <p class="amount"><strong>Grand total · {GrandTotal:currency}</strong></p>
+        <div>{%snippet:demo-standard-terms}</div>
+        <div>{%snippet:demo-closing-note}</div>
+    </body>
+</html>

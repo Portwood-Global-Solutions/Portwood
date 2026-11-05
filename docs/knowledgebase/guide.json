@@ -443,6 +443,26 @@
             }
         },
         {
+            "slug": "shared-content",
+            "title": "Reuse terms and HTML snippets",
+            "group": "data",
+            "audience": "Template builders",
+            "minutes": 5,
+            "summary": "Create, format, version, and insert reusable document sections.",
+            "sources": [
+                "force-app/main/default/lwc/docGenSnippetAssets",
+                "force-app/main/default/classes/DocGenSnippetController.cls",
+                "force-app/main/default/classes/DocGenSnippetService.cls"
+            ],
+            "related": ["images-and-assets", "custom-fonts", "template-versions"],
+            "aliases": [],
+            "review": {
+                "version": "3.60.0",
+                "date": "2026-10-30",
+                "method": "source"
+            }
+        },
+        {
             "slug": "images-and-assets",
             "title": "Add logos and pictures",
             "group": "data",

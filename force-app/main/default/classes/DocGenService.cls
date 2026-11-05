@@ -4031,6 +4031,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             rootDataContext = data;
         }
         try {
+            if (ownsRootTagPass && xml != null && xml.toLowerCase().contains('{%snippet:')) {
+                // HTML/Canvas bodies can accept the fragment directly. Native
+                // Office formats expand each snippet at its tag below so the
+                // HTML fragment can be translated into the target XML safely.
+                if (isHtmlBacked(currentTemplateType)) {
+                    xml = DocGenSnippetService.expand(xml);
+                }
+            }
             return processXmlInner(xml, data, ownsRootTagPass);
         } finally {
             if (ownsRootTagPass) {
@@ -4690,6 +4698,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 } else if (tagContent.startsWith('%')) {
                     // Image tag: {%FieldName} or {%FieldName:WxH} or {%Image:N} or {%Image:N:SIZE}
                     String imageTagSpec = tagContent.substring(1).trim();
+
+                    // Shared content tag: expand the saved HTML fragment and
+                    // translate it for the current output format. HTML/Canvas
+                    // templates are expanded in the root pass; this branch also
+                    // handles snippets introduced by a field value or nested
+                    // processing call.
+                    if (imageTagSpec.startsWithIgnoreCase('snippet:')) {
+                        String snippetTag = '{' + rawTag + '}';
+                        if (
+                            currentTemplateType == 'Excel' &&
+                            hasOpenExcelTextContext(output) &&
+                            isStandaloneExcelSnippet(xml, tagClose)
+                        ) {
+                            Integer closeText = xml.indexOf('</t>', tagClose + 1);
+                            output = removeOpenExcelTextElement(output);
+                            String expandedSnippet = DocGenSnippetService.expand(snippetTag);
+                            String mergedSnippet = expandSharedSnippetHtml(expandedSnippet, data);
+                            output += convertSharedSnippetToOfficeRuns(mergedSnippet, false);
+                            cursor = closeText + 4;
+                        } else {
+                            output += renderSharedSnippet(snippetTag, data, output);
+                            cursor = tagClose + 1;
+                        }
+                        continue;
+                    }
 
                     // Shared-asset image tag: {%asset:<key>} or {%asset:<key>:SIZE}.
                     // The key resolves at generation time to the asset's latest
@@ -6755,6 +6788,229 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /**
+     * Expands one shared HTML fragment for a native output format.
+     *
+     * Word uses the existing rich-text-to-DOCX converter so paragraphs,
+     * emphasis, lists, links, and images remain usable. Excel and PowerPoint
+     * text runs cannot contain arbitrary HTML, so those formats receive a
+     * readable, XML-escaped text version with paragraph breaks preserved.
+     */
+    private static String renderSharedSnippet(String tag, Map<String, Object> data, String context) {
+        String expanded = DocGenSnippetService.expand(tag);
+        if (currentTemplateType == 'HTML')
+            return expanded;
+
+        String savedTemplateType = currentTemplateType;
+        String mergedHtml = expandSharedSnippetHtml(expanded, data);
+        if (savedTemplateType == 'Word') {
+            return convertRichTextToDocxXml(mergedHtml);
+        }
+        if (savedTemplateType == 'PowerPoint' && hasOpenDrawingTextContext(context)) {
+            String runs = convertSharedSnippetToOfficeRuns(mergedHtml, true);
+            if (String.isNotBlank(runs)) {
+                // Close the template's text run, insert formatted DrawingML runs,
+                // and reopen a run so the original trailing XML remains valid.
+                return '</a:t></a:r>' + runs + '<a:r><a:rPr lang="en-US"/><a:t>';
+            }
+        }
+        return plainTextFromHtml(mergedHtml).escapeXml();
+    }
+
+    private static String expandSharedSnippetHtml(String expanded, Map<String, Object> data) {
+        String savedTemplateType = currentTemplateType;
+        String mergedHtml;
+        try {
+            currentTemplateType = 'HTML';
+            expanded = DocGenFontService.expandTags(decodeBraceEntities(expanded));
+            mergedHtml = processXml(expanded, data);
+        } finally {
+            currentTemplateType = savedTemplateType;
+        }
+        return mergedHtml;
+    }
+
+    private static Boolean hasOpenDrawingTextContext(String context) {
+        if (String.isBlank(context))
+            return false;
+        Integer open = context.lastIndexOf('<a:t>');
+        Integer spacedOpen = context.lastIndexOf('<a:t ');
+        if (spacedOpen > open)
+            open = spacedOpen;
+        return open > context.lastIndexOf('</a:t>');
+    }
+
+    private static Boolean hasOpenExcelTextContext(String context) {
+        if (String.isBlank(context))
+            return false;
+        Integer open = context.lastIndexOf('<t>');
+        Integer spacedOpen = context.lastIndexOf('<t ');
+        if (spacedOpen > open)
+            open = spacedOpen;
+        return open > context.lastIndexOf('</t>');
+    }
+
+    private static Boolean isStandaloneExcelSnippet(String xml, Integer tagClose) {
+        if (xml == null || tagClose == null)
+            return false;
+        Integer closeText = xml.indexOf('</t>', tagClose + 1);
+        if (closeText == -1)
+            return false;
+        return String.isBlank(xml.substring(tagClose + 1, closeText));
+    }
+
+    private static String removeOpenExcelTextElement(String output) {
+        Integer open = output.lastIndexOf('<t>');
+        Integer spacedOpen = output.lastIndexOf('<t ');
+        if (spacedOpen > open)
+            open = spacedOpen;
+        return open == -1 ? output : output.substring(0, open);
+    }
+
+    /**
+     * Converts the DOCX runs produced by the rich-text converter into either
+     * DrawingML runs (PowerPoint) or SpreadsheetML runs (Excel).
+     */
+    private static String convertSharedSnippetToOfficeRuns(String html, Boolean powerPoint) {
+        String docx = convertRichTextToDocxXml(html);
+        if (String.isBlank(docx))
+            return '';
+
+        Integer firstRun = docx.indexOf('<w:r>');
+        Integer reopenedRun = docx.lastIndexOf('<w:r><w:t xml:space="preserve">');
+        if (firstRun == -1 || reopenedRun <= firstRun)
+            return '';
+
+        String body = docx.substring(firstRun, reopenedRun);
+        String result = '';
+        Integer cursor = 0;
+        while (cursor < body.length()) {
+            Integer runStart = body.indexOf('<w:r>', cursor);
+            if (runStart == -1)
+                break;
+            String between = body.substring(cursor, runStart);
+            if (between.contains('</w:p><w:p>')) {
+                result += powerPoint ? '<a:br/>' : '<r><t xml:space="preserve">' + '\n' + '</t></r>';
+            }
+            Integer runEnd = body.indexOf('</w:r>', runStart);
+            if (runEnd == -1)
+                break;
+            String runXml = body.substring(runStart, runEnd + 6);
+            Integer textStart = runXml.indexOf('<w:t');
+            if (textStart != -1) {
+                Integer textTagEnd = runXml.indexOf('>', textStart);
+                Integer textEnd = runXml.indexOf('</w:t>', textTagEnd);
+                if (textTagEnd != -1 && textEnd != -1) {
+                    String text = runXml.substring(textTagEnd + 1, textEnd);
+                    String rPr = extractWordRunProperties(runXml);
+                    result += powerPoint ? buildPowerPointRun(text, rPr) : buildExcelRichRun(text, rPr);
+                }
+            }
+            cursor = runEnd + 6;
+        }
+        return result;
+    }
+
+    private static String extractWordRunProperties(String runXml) {
+        Integer start = runXml.indexOf('<w:rPr');
+        if (start == -1)
+            return '';
+        Integer elementEnd = runXml.indexOf('</w:rPr>', start);
+        return elementEnd == -1 ? '' : runXml.substring(start, elementEnd + 8);
+    }
+
+    private static String wordRunAttribute(String rPr, String element, String attribute) {
+        if (String.isBlank(rPr))
+            return null;
+        Integer start = rPr.indexOf('<' + element);
+        if (start == -1)
+            return null;
+        Integer elementEnd = rPr.indexOf('>', start);
+        if (elementEnd == -1)
+            return null;
+        return extractAttribute(rPr.substring(start, elementEnd + 1), attribute);
+    }
+
+    private static String buildPowerPointRun(String text, String rPr) {
+        String attrs = 'lang="en-US"';
+        if (rPr.contains('<w:b/>') || rPr.contains('<w:b '))
+            attrs += ' b="1"';
+        if (rPr.contains('<w:i/>') || rPr.contains('<w:i '))
+            attrs += ' i="1"';
+        if (rPr.contains('<w:u '))
+            attrs += ' u="sng"';
+        if (rPr.contains('<w:strike'))
+            attrs += ' strike="sng"';
+
+        String size = wordRunAttribute(rPr, 'w:sz', 'w:val');
+        if (String.isNotBlank(size)) {
+            try {
+                attrs += ' sz="' + (Integer.valueOf(size) * 50) + '"';
+            } catch (Exception e) {
+                // Ignore malformed size and keep the inherited size.
+            }
+        }
+
+        String font = wordRunAttribute(rPr, 'w:rFonts', 'w:ascii');
+        if (String.isBlank(font))
+            font = wordRunAttribute(rPr, 'w:rFonts', 'w:hAnsi');
+
+        String fill = '';
+        String color = wordRunAttribute(rPr, 'w:color', 'w:val');
+        if (String.isNotBlank(color) && color != 'auto') {
+            fill = '<a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill>';
+        }
+        String latin = String.isNotBlank(font) ? '<a:latin typeface="' + font.escapeXml() + '"/>' : '';
+        return '<a:r><a:rPr ' + attrs + '>' + fill + latin + '</a:rPr><a:t>' + text + '</a:t></a:r>';
+    }
+
+    private static String buildExcelRichRun(String text, String rPr) {
+        String props = '';
+        String font = wordRunAttribute(rPr, 'w:rFonts', 'w:ascii');
+        if (String.isBlank(font))
+            font = wordRunAttribute(rPr, 'w:rFonts', 'w:hAnsi');
+        if (String.isNotBlank(font))
+            props += '<rFont val="' + font.escapeXml() + '"/>';
+
+        String size = wordRunAttribute(rPr, 'w:sz', 'w:val');
+        if (String.isNotBlank(size)) {
+            try {
+                props += '<sz val="' + (Decimal.valueOf(size) / 2) + '"/>';
+            } catch (Exception e) {
+                // Ignore malformed size and keep the inherited size.
+            }
+        }
+        if (rPr.contains('<w:b/>') || rPr.contains('<w:b '))
+            props += '<b/>';
+        if (rPr.contains('<w:i/>') || rPr.contains('<w:i '))
+            props += '<i/>';
+        if (rPr.contains('<w:u '))
+            props += '<u/>';
+        if (rPr.contains('<w:strike'))
+            props += '<strike/>';
+
+        String color = wordRunAttribute(rPr, 'w:color', 'w:val');
+        if (String.isNotBlank(color) && color != 'auto')
+            props += '<color rgb="FF' + color + '"/>';
+        String rPrXml = String.isBlank(props) ? '' : '<rPr>' + props + '</rPr>';
+        return '<r>' + rPrXml + '<t xml:space="preserve">' + text + '</t></r>';
+    }
+    /** Converts a shared fragment to text for DrawingML and SpreadsheetML. */
+    private static String plainTextFromHtml(String html) {
+        if (String.isBlank(html)) {
+            return '';
+        }
+        String text = html.replace('&nbsp;', ' ')
+            .replaceAll('(?i)<\\s*br\\s*/?\\s*>', '\\n')
+            .replaceAll('(?i)</\\s*(p|div|li|h[1-6]|tr|table|blockquote)\\s*>', '\\n')
+            .replaceAll('(?i)<\\s*li\\b[^>]*>', '• ')
+            .replaceAll('<[^>]+>', '');
+        text = DocGenHtmlRenderer.decodeNumericEntities(text);
+        // Keep the author's spaces at the edges of text nodes.  Trimming here
+        // changes pasted content when a line ends with intentional spacing.
+        return text.replaceAll('\n{3,}', '\n\n');
+    }
+
+    /**
      * Converts rich text HTML to DOCX XML (w:p, w:r, w:t elements).
      * Preserves text, basic formatting (bold/italic/underline), multiple images, and paragraphs.
      * Returns DOCX XML that closes the current run/paragraph context and reopens it after.
@@ -6783,6 +7039,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         normalized = normalized.replaceAll('(?i)<br\\s*/?>', delim);
         normalized = normalized.replaceAll('(?i)</?p[^>]*>', delim);
         normalized = normalized.replaceAll('(?i)</?div[^>]*>', delim);
+        for (String heading : new List<String>{ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' }) {
+            normalized = normalized.replaceAll('(?i)<' + heading, delim + '<' + heading);
+            normalized = normalized.replaceAll('(?i)</' + heading + '>', '</' + heading + '>' + delim);
+        }
 
         List<String> paragraphs = normalized.split(delim);
 
@@ -6791,12 +7051,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Boolean firstPara = true;
         for (String para : paragraphs) {
-            String trimmed = para.trim();
-            if (String.isBlank(trimmed)) {
+            // Do not trim pasted paragraph text.  The rich-text editor stores
+            // leading/trailing spaces and non-breaking spaces as content.
+            if (para == null || para.length() == 0) {
                 continue;
             }
 
             if (!firstPara) {
+                // Let the source/template paragraph styling control spacing;
+                // adding a fixed 6pt gap changes the pasted layout.
                 result += '</w:p><w:p>'; // new paragraph
             } else {
                 // Continue in the same paragraph as the merge tag
@@ -6804,7 +7067,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
 
             // Process inline content within this paragraph
-            result += processInlineHtml(trimmed);
+            result += processInlineHtml(para);
         }
 
         // If we never output anything, just return empty text
@@ -6825,12 +7088,26 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String result = '';
         Integer cursor = 0;
 
-        // Track formatting state
+        // Preserve nested inline styles so shared snippets keep the formatting
+        // authored in the rich-text editor when converted to DOCX/PDF.
         Boolean isBold = false;
         Boolean isItalic = false;
         Boolean isUnderline = false;
+        Boolean isStrike = false;
+        String fontFamily;
+        String fontSize;
+        String fontColor;
+        String backgroundColor;
+        List<String> formatStack = new List<String>();
+        List<Boolean> boldStack = new List<Boolean>();
+        List<Boolean> italicStack = new List<Boolean>();
+        List<Boolean> underlineStack = new List<Boolean>();
+        List<Boolean> strikeStack = new List<Boolean>();
+        List<String> familyStack = new List<String>();
+        List<String> sizeStack = new List<String>();
+        List<String> colorStack = new List<String>();
+        List<String> backgroundStack = new List<String>();
 
-        // Track list nesting: 'ul' or 'ol' per level. Counter parallel for ordered numbering.
         List<String> listStack = new List<String>();
         List<Integer> listCounters = new List<Integer>();
 
@@ -6838,80 +7115,203 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             Integer nextTag = html.indexOf('<', cursor);
 
             if (nextTag == -1) {
-                // Remaining plain text
-                String text = html.substring(cursor).trim();
-                if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                String text = html.substring(cursor);
+                if (text != null && text.length() > 0) {
+                    result += buildRun(
+                        decodeInlineText(stripTags(text)),
+                        isBold,
+                        isItalic,
+                        isUnderline,
+                        isStrike,
+                        fontFamily,
+                        fontSize,
+                        fontColor,
+                        backgroundColor
+                    );
                 }
                 break;
             }
 
-            // Text before the tag
             if (nextTag > cursor) {
                 String text = html.substring(cursor, nextTag);
-                if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                if (text != null && text.length() > 0) {
+                    result += buildRun(
+                        decodeInlineText(stripTags(text)),
+                        isBold,
+                        isItalic,
+                        isUnderline,
+                        isStrike,
+                        fontFamily,
+                        fontSize,
+                        fontColor,
+                        backgroundColor
+                    );
                 }
             }
 
-            // Find end of tag
             Integer tagEnd = html.indexOf('>', nextTag);
             if (tagEnd == -1) {
                 break;
             }
             tagEnd++;
+            String originalTag = html.substring(nextTag, tagEnd);
+            String tag = originalTag.toLowerCase();
 
-            String tag = html.substring(nextTag, tagEnd).toLowerCase();
+            if (tag.startsWith('</')) {
+                String closingName = tag.substring(2).replaceAll('[^a-z0-9].*', '');
+                if (!formatStack.isEmpty() && formatStack[formatStack.size() - 1] == closingName) {
+                    Integer last = formatStack.size() - 1;
+                    isBold = boldStack[last];
+                    isItalic = italicStack[last];
+                    isUnderline = underlineStack[last];
+                    isStrike = strikeStack[last];
+                    fontFamily = familyStack[last];
+                    fontSize = sizeStack[last];
+                    fontColor = colorStack[last];
+                    backgroundColor = backgroundStack[last];
+                    formatStack.remove(last);
+                    boldStack.remove(last);
+                    italicStack.remove(last);
+                    underlineStack.remove(last);
+                    strikeStack.remove(last);
+                    familyStack.remove(last);
+                    sizeStack.remove(last);
+                    colorStack.remove(last);
+                    backgroundStack.remove(last);
+                }
+            } else if (
+                tag.startsWith('<b>') ||
+                tag.startsWith('<b ') ||
+                tag.startsWith('<strong') ||
+                tag.startsWith('<i>') ||
+                tag.startsWith('<i ') ||
+                tag.startsWith('<em') ||
+                tag.startsWith('<u>') ||
+                tag.startsWith('<u ') ||
+                tag.startsWith('<s>') ||
+                tag.startsWith('<s ') ||
+                tag.startsWith('<strike') ||
+                tag.startsWith('<del') ||
+                tag.startsWith('<span') ||
+                tag.startsWith('<font') ||
+                tag.startsWith('<h1>') ||
+                tag.startsWith('<h1 ') ||
+                tag.startsWith('<h2>') ||
+                tag.startsWith('<h2 ') ||
+                tag.startsWith('<h3>') ||
+                tag.startsWith('<h3 ') ||
+                tag.startsWith('<h4>') ||
+                tag.startsWith('<h4 ') ||
+                tag.startsWith('<h5>') ||
+                tag.startsWith('<h5 ') ||
+                tag.startsWith('<h6>') ||
+                tag.startsWith('<h6 ')
+            ) {
+                String name = tag.substring(1).replaceAll('[^a-z0-9].*', '');
+                formatStack.add(name);
+                boldStack.add(isBold);
+                italicStack.add(isItalic);
+                underlineStack.add(isUnderline);
+                strikeStack.add(isStrike);
+                familyStack.add(fontFamily);
+                sizeStack.add(fontSize);
+                colorStack.add(fontColor);
+                backgroundStack.add(backgroundColor);
 
-            // Handle formatting tags
-            if (tag.startsWith('<b>') || tag.startsWith('<b ') || tag.startsWith('<strong')) {
-                isBold = true;
-            } else if (tag.startsWith('</b>') || tag.startsWith('</strong')) {
-                isBold = false;
-            } else if (tag.startsWith('<i>') || tag.startsWith('<i ') || tag.startsWith('<em')) {
-                isItalic = true;
-            } else if (tag.startsWith('</i>') || tag.startsWith('</em')) {
-                isItalic = false;
-            } else if (tag.startsWith('<u>') || tag.startsWith('<u ')) {
-                isUnderline = true;
-            } else if (tag.startsWith('</u>')) {
-                isUnderline = false;
+                if (name == 'b' || name == 'strong')
+                    isBold = true;
+                if (name == 'i' || name == 'em')
+                    isItalic = true;
+                if (name == 'u')
+                    isUnderline = true;
+                if (name == 's' || name == 'strike' || name == 'del')
+                    isStrike = true;
+                if (name.startsWith('h')) {
+                    isBold = true;
+                    if (fontSize == null)
+                        fontSize = headingFontSize(name);
+                }
+
+                String style = extractAttribute(originalTag, 'style');
+                if (String.isNotBlank(style)) {
+                    String cssWeight = cssProperty(style, 'font-weight');
+                    String cssStyle = cssProperty(style, 'font-style');
+                    String cssDecoration = cssProperty(style, 'text-decoration');
+                    if (
+                        cssWeight == 'bold' ||
+                        cssWeight == '600' ||
+                        cssWeight == '700' ||
+                        cssWeight == '800' ||
+                        cssWeight == '900'
+                    )
+                        isBold = true;
+                    if (cssStyle == 'italic' || cssStyle == 'oblique')
+                        isItalic = true;
+                    if (cssDecoration != null && cssDecoration.containsIgnoreCase('underline'))
+                        isUnderline = true;
+                    if (
+                        cssDecoration != null &&
+                        (cssDecoration.containsIgnoreCase('line-through') || cssDecoration.containsIgnoreCase('strike'))
+                    )
+                        isStrike = true;
+
+                    String cssFamily = cssProperty(style, 'font-family');
+                    String cssSize = cssProperty(style, 'font-size');
+                    String cssColor = cssProperty(style, 'color');
+                    String cssBackground = cssProperty(style, 'background-color');
+                    if (String.isNotBlank(cssFamily))
+                        fontFamily = cssFamily.replace('"', '').replace('\'', '').trim();
+                    if (String.isNotBlank(cssSize))
+                        fontSize = cssSize;
+                    if (String.isNotBlank(cssColor))
+                        fontColor = normalizeCssColor(cssColor);
+                    if (String.isNotBlank(cssBackground))
+                        backgroundColor = normalizeCssColor(cssBackground);
+                }
+
+                String face = extractAttribute(originalTag, 'face');
+                String size = extractAttribute(originalTag, 'size');
+                String color = extractAttribute(originalTag, 'color');
+                if (String.isNotBlank(face))
+                    fontFamily = face;
+                if (String.isNotBlank(size))
+                    fontSize = size;
+                if (String.isNotBlank(color))
+                    fontColor = normalizeCssColor(color);
             } else if (tag.startsWith('<a ') || tag.startsWith('<a>')) {
-                // Extract href from anchor tag
-                String anchorTag = html.substring(nextTag, tagEnd);
-                String href = extractAttribute(anchorTag, 'href');
-                // Find the closing </a> and get inner text
+                String href = extractAttribute(originalTag, 'href');
                 Integer closeA = html.indexOfIgnoreCase('</a>', tagEnd);
                 if (closeA != -1) {
-                    String linkText = html.substring(tagEnd, closeA);
-                    linkText = linkText.replaceAll('<[^>]+>', '').trim();
-                    if (String.isBlank(linkText)) {
+                    String linkText = decodeInlineText(html.substring(tagEnd, closeA).replaceAll('<[^>]+>', ''));
+                    if (String.isBlank(linkText))
                         linkText = href;
-                    }
                     if (String.isNotBlank(href)) {
-                        // Build w:hyperlink with direct URL attribute for PDF rendering
                         result +=
                             '<w:hyperlink w:docgen-url="' +
                             href.escapeXml() +
-                            '">' +
-                            '<w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>' +
-                            '<w:t xml:space="preserve">' +
+                            '"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' +
                             linkText.escapeXml() +
-                            '</w:t></w:r>' +
-                            '</w:hyperlink>';
+                            '</w:t></w:r></w:hyperlink>';
                     } else {
-                        result += buildRun(linkText, isBold, isItalic, true);
+                        result += buildRun(
+                            linkText,
+                            isBold,
+                            isItalic,
+                            true,
+                            isStrike,
+                            fontFamily,
+                            fontSize,
+                            fontColor,
+                            backgroundColor
+                        );
                     }
-                    cursor = closeA + 4; // skip past </a>
+                    cursor = closeA + 4;
                     continue;
                 }
             } else if (tag.startsWith('<img')) {
-                // Extract image from <img> tag
-                String imgTag = html.substring(nextTag, tagEnd);
-                String imgResult = processRichTextImage(imgTag);
-                if (imgResult != null) {
+                String imgResult = processRichTextImage(originalTag);
+                if (imgResult != null)
                     result += imgResult;
-                }
             } else if (tag.startsWith('<ul>') || tag.startsWith('<ul ')) {
                 listStack.add('ul');
                 listCounters.add(0);
@@ -6924,13 +7324,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     listCounters.remove(listCounters.size() - 1);
                 }
             } else if (tag.startsWith('<li>') || tag.startsWith('<li ')) {
-                // Close current paragraph and open a new one prefixed with a bullet/number marker.
                 String marker;
                 Integer depth = listStack.isEmpty() ? 1 : listStack.size();
                 String indent = '';
-                for (Integer i = 1; i < depth; i++) {
+                for (Integer i = 1; i < depth; i++)
                     indent += '    ';
-                }
                 if (!listStack.isEmpty() && listStack[listStack.size() - 1] == 'ol') {
                     Integer count = listCounters[listCounters.size() - 1] + 1;
                     listCounters[listCounters.size() - 1] = count;
@@ -6938,11 +7336,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 } else {
                     marker = indent + '• ';
                 }
-                result += '</w:p><w:p><w:r><w:t xml:space="preserve">' + marker + '</w:t></w:r>';
-            } else if (tag.startsWith('</li>')) {
-                // No-op; next <li> or list close handles boundaries.
+                result +=
+                    '</w:p><w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:t xml:space="preserve">' +
+                    marker +
+                    '</w:t></w:r>';
             }
-            // Closing </a> tags and other tags (spans, etc.) are skipped — just process their text content
 
             cursor = tagEnd;
         }
@@ -6954,26 +7352,164 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Builds a DOCX w:r (run) element with optional formatting.
      */
     private static String buildRun(String text, Boolean bold, Boolean italic, Boolean underline) {
-        if (String.isBlank(text)) {
+        return buildRun(text, bold, italic, underline, false, null, null, null, null);
+    }
+
+    private static String buildRun(
+        String text,
+        Boolean bold,
+        Boolean italic,
+        Boolean underline,
+        Boolean strike,
+        String fontFamily,
+        String fontSize,
+        String fontColor,
+        String backgroundColor
+    ) {
+        if (text == null || text.length() == 0)
             return '';
-        }
+
         String rPr = '';
-        if (bold || italic || underline) {
+        if (
+            bold ||
+            italic ||
+            underline ||
+            strike ||
+            String.isNotBlank(fontFamily) ||
+            String.isNotBlank(fontSize) ||
+            String.isNotBlank(fontColor) ||
+            String.isNotBlank(backgroundColor)
+        ) {
             rPr = '<w:rPr>';
-            if (bold) {
+            if (String.isNotBlank(fontFamily))
+                rPr += '<w:rFonts w:ascii="' + fontFamily.escapeXml() + '" w:hAnsi="' + fontFamily.escapeXml() + '"/>';
+            Integer halfPoints = cssFontSizeToHalfPoints(fontSize);
+            if (halfPoints != null)
+                rPr += '<w:sz w:val="' + halfPoints + '"/>';
+            if (bold)
                 rPr += '<w:b/>';
-            }
-            if (italic) {
+            if (italic)
                 rPr += '<w:i/>';
-            }
-            if (underline) {
+            if (underline)
                 rPr += '<w:u w:val="single"/>';
-            }
+            if (strike)
+                rPr += '<w:strike/>';
+            if (String.isNotBlank(fontColor))
+                rPr += '<w:color w:val="' + fontColor + '"/>';
+            if (String.isNotBlank(backgroundColor))
+                rPr += '<w:shd w:val="clear" w:fill="' + backgroundColor + '"/>';
             rPr += '</w:rPr>';
         }
         return '<w:r>' + rPr + '<w:t xml:space="preserve">' + text.escapeXml() + '</w:t></w:r>';
     }
 
+    private static String decodeInlineText(String text) {
+        return text.replace('&nbsp;', ' ')
+            .replace('&amp;', '&')
+            .replace('&lt;', '<')
+            .replace('&gt;', '>')
+            .replace('&quot;', '"');
+    }
+
+    private static String cssProperty(String style, String property) {
+        if (String.isBlank(style))
+            return null;
+        for (String declaration : style.split(';')) {
+            Integer colon = declaration.indexOf(':');
+            if (colon == -1)
+                continue;
+            String key = declaration.substring(0, colon).trim().toLowerCase();
+            if (key == property.toLowerCase())
+                return declaration.substring(colon + 1).trim().toLowerCase();
+        }
+        return null;
+    }
+
+    private static String normalizeCssColor(String color) {
+        if (String.isBlank(color))
+            return null;
+        String value = color.trim().toLowerCase();
+        if (value.startsWith('#'))
+            value = value.substring(1);
+        if (value.length() == 3 && value.replaceAll('[0-9a-f]', '').length() == 0) {
+            value =
+                value.substring(0, 1) +
+                value.substring(0, 1) +
+                value.substring(1, 2) +
+                value.substring(1, 2) +
+                value.substring(2, 3) +
+                value.substring(2, 3);
+        }
+        if (value.length() == 6 && value.replaceAll('[0-9a-f]', '').length() == 0)
+            return value.toUpperCase();
+        if (value.startsWith('rgb(') && value.endsWith(')')) {
+            List<String> channels = value.substring(4, value.length() - 1).split(',');
+            if (channels.size() == 3) {
+                try {
+                    Integer red = Integer.valueOf(channels[0].trim());
+                    Integer green = Integer.valueOf(channels[1].trim());
+                    Integer blue = Integer.valueOf(channels[2].trim());
+                    if (red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255) {
+                        return hexColorChannel(red) + hexColorChannel(green) + hexColorChannel(blue);
+                    }
+                } catch (Exception e) {
+                    // Ignore malformed CSS colors and leave the document default.
+                }
+            }
+        }
+        if (value == 'black')
+            return '000000';
+        if (value == 'white')
+            return 'FFFFFF';
+        if (value == 'red')
+            return 'FF0000';
+        if (value == 'blue')
+            return '0000FF';
+        if (value == 'green')
+            return '008000';
+        if (value == 'yellow')
+            return 'FFFF00';
+        return null;
+    }
+
+    private static String hexColorChannel(Integer channel) {
+        String digits = '0123456789ABCDEF';
+        Integer remainder = channel - ((channel / 16) * 16);
+        return digits.substring(channel / 16, channel / 16 + 1) + digits.substring(remainder, remainder + 1);
+    }
+
+    private static Integer cssFontSizeToHalfPoints(String size) {
+        if (String.isBlank(size))
+            return null;
+        String value = size.trim().toLowerCase();
+        try {
+            Decimal numericValue = Decimal.valueOf(value.replaceAll('[^0-9.-]', ''));
+            Decimal points = numericValue;
+            if (value.endsWith('px'))
+                points = numericValue * 0.75;
+            else if (value.endsWith('em') || value.endsWith('rem'))
+                points = numericValue * 12;
+            else if (value.endsWith('%'))
+                points = numericValue * 0.12;
+            return Integer.valueOf(String.valueOf((points * 2).round()));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String headingFontSize(String heading) {
+        if (heading == 'h1')
+            return '24pt';
+        if (heading == 'h2')
+            return '18pt';
+        if (heading == 'h3')
+            return '14pt';
+        if (heading == 'h4')
+            return '12pt';
+        if (heading == 'h5')
+            return '10pt';
+        return '8pt';
+    }
     /**
      * Strips any remaining HTML tags from text content.
      */
@@ -8875,7 +9411,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
-            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE
+            WHERE Asset_Key__c IN :toFetch AND Is_Active__c = TRUE AND Asset_Type__c = 'Image'
             WITH SYSTEM_MODE
         ];
 
@@ -9859,6 +10395,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Merge runs first so we find complete tags
         String xml = mergeRunsInTags(templateXml);
+        // HTML fragments can be expanded here when this helper is used directly
+        // against an HTML body. Native Office XML is left intact: snippets are
+        // translated by processXml at their own tag, and expanding the whole
+        // document here would inject raw HTML into the surrounding XML.
+        if (xml != null && xml.toLowerCase().contains('{%snippet:') && !xml.contains('<w:') && !xml.contains('<a:')) {
+            xml = DocGenSnippetService.expand(xml);
+        }
 
         // Find the opening tag {#relationshipName}
         String openTag = '{#' + relationshipName + '}';
@@ -10017,6 +10560,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         List<String> fieldNames
     ) {
         return renderLoopBodyForRecords(innerXml, relationshipName, records, fieldNames, 0);
+    }
+
+    /** Preserve the source/output context in fresh giant-query batch transactions. */
+    public static String renderLoopBodyForRecords(
+        String innerXml,
+        String relationshipName,
+        List<SObject> records,
+        List<String> fields,
+        Integer rowOffset,
+        String templateType,
+        String outputFormat
+    ) {
+        String previousType = currentTemplateType;
+        String previousOutput = currentOutputFormat;
+        currentTemplateType = templateType;
+        currentOutputFormat = outputFormat;
+        try {
+            return renderLoopBodyForRecords(innerXml, relationshipName, records, fields, rowOffset);
+        } finally {
+            currentTemplateType = previousType;
+            currentOutputFormat = previousOutput;
+        }
     }
 
     /**
@@ -10487,10 +11052,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         String headerSrc = String.isBlank(headerHtml)
             ? null
-            : DocGenFontService.expandTags(decodeBraceEntities(headerHtml));
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(headerHtml)));
         String footerSrc = String.isBlank(footerHtml)
             ? null
-            : DocGenFontService.expandTags(decodeBraceEntities(footerHtml));
+            : DocGenFontService.expandTags(DocGenSnippetService.expand(decodeBraceEntities(footerHtml)));
         if (String.isNotBlank(headerSrc)) {
             sourceStyles += '\n' + extractHtmlStyleBlocks(headerSrc);
             headerSrc = stripStyleAndScriptBlocks(headerSrc);
@@ -10837,6 +11402,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (String.isBlank(html)) {
             return '';
         }
+        html = DocGenSnippetService.expand(decodeBraceEntities(html));
         html = DocGenFontService.expandTags(decodeBraceEntities(html));
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
@@ -10907,6 +11473,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * which preserves arbitrary HTML.
      */
     public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        return wrapHtmlForPdf(body, sourceStyles, header, footer, true);
+    }
+    /** Giant-query rows must be inserted before validating glyphs and pinning their font faces. */
+    public static String wrapHtmlForPdf(
+        String body,
+        String sourceStyles,
+        String header,
+        String footer,
+        Boolean prepareFonts
+    ) {
         body = DocGenFontService.expandTags(body);
         header = DocGenFontService.expandTags(header);
         footer = DocGenFontService.expandTags(footer);
@@ -11090,19 +11666,6 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         html += '</body></html>';
         return DocGenFontService.prepare(html);
     }
-
-    /** Compatibility overload used by the font proof and giant-query paths. */
-    @TestVisible
-    public static String wrapHtmlForPdf(
-        String body,
-        String sourceStyles,
-        String header,
-        String footer,
-        Boolean prepareFonts
-    ) {
-        return wrapHtmlForPdf(body, sourceStyles, header, footer);
-    }
-
     private static final Integer LONG_HYPERLINK_TEXT_THRESHOLD = 48;
     private static final Integer LONG_HYPERLINK_TEXT_CHUNK = 24;
 

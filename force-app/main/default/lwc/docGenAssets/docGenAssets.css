@@ -13,8 +13,9 @@
 }
 
 .asset-sections {
-    display: flex;
-    gap: 0.25rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
     border-bottom: 1px solid #dddbda;
 }
 
@@ -27,7 +28,11 @@
     cursor: pointer;
     display: inline-flex;
     gap: 0.4rem;
+    justify-content: center;
+    min-width: 0;
     padding: 0.65rem 1rem;
+    white-space: nowrap;
+    width: 100%;
 }
 
 .asset-section-button:hover,
@@ -47,6 +52,36 @@
     background: #fff;
 }
 
+.snippet-section {
+    border: 1px solid #e5e5e5;
+    border-radius: 0.25rem;
+    background: #fff;
+    max-width: 100%;
+    overflow: hidden;
+}
+
 .section-heading {
     padding: 1rem 1rem 0;
+}
+
+@media (max-width: 640px) {
+    .asset-sections {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Keep the snippets panel inside the command hub card. */
+.snippet-section {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    height: min(53rem, calc(100dvh - 8rem));
+    max-height: calc(100dvh - 8rem);
+    min-height: 0;
+}
+.snippet-section > c-doc-gen-snippet-assets {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
