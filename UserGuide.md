@@ -4213,19 +4213,32 @@ Signing-email tokens belong to the **Email Templates** editor. They are not the 
 
 Open **Portwood → Email Templates**, pick the **Brand**, then the email type. The editor offers these insertable tokens for each type:
 
-| Email                   | Editor tokens                                                                                                                                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signature Request       | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
-| Signature Reminder      | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
-| Email Verification Code | `{VerificationCode}`, `{Pin}`, `{ExpirationMinutes}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                      |
-| Signer Completed        | `{SignerName}`, `{RoleName}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                               |
-| All Signatures Complete | `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                                             |
-| Signer Declined         | `{SignerName}`, `{RoleName}`, `{Message}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                  |
-| Completion Confirmation | `{SignerName}`, `{DocumentTitle}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                         |
+| Email                     | Editor tokens                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signature Request         | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
+| Signature Reminder        | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
+| Email Verification Code   | `{VerificationCode}`, `{Pin}`, `{ExpirationMinutes}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                      |
+| Signer Completed          | `{SignerName}`, `{RoleName}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                               |
+| All Signatures Complete   | `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                                             |
+| Signer Declined           | `{SignerName}`, `{RoleName}`, `{Message}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                  |
+| Signature Request Revoked | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{RequestId}`, `{LogoUrl}`                                                                               |
+| Completion Confirmation   | `{SignerName}`, `{DocumentTitle}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                         |
 
 `{CompanyName}`, `{BrandColor}`, and `{LogoUrl}` are resolved through branding. `{Message}` is supplied by the send/template message when that email supports it. Missing or unknown ordinary tokens resolve to empty; a value visible in a generic sample preview is not proof that a production sender supplies it for every email type. In particular, do not assume `{DocumentTitle}` is supplied to every sender-notification type.
 
 Values in HTML bodies are HTML-escaped. Shared assets use the separate `{%asset:asset-key}` syntax to resolve to a public image URL. In an email, write the `<img>` yourself; document asset tags use a different image-embedding path.
+
+#### Upgraded from an earlier version? Add the Signature Request Revoked type
+
+The **Signature Request Revoked** email goes to signers who had not signed when a request is revoked. Salesforce does not add new values to an existing packaged picklist when a package is upgraded, so an org that **upgraded** to 3.62 or later, rather than installing fresh, does not list this email type and does not get its default template record. The revoke email still sends, using Portwood's built-in text. A fresh install already has the type and the record.
+
+To customize the revoke email in an upgraded org:
+
+1. In Setup, open **Object Manager → Email Template → Fields & Relationships → Type**.
+2. Under **Values**, add a value with the API name `Signature_Revoked` and the label `Signature Request Revoked (to signers)`. The API name must match exactly.
+3. Open **Portwood → Email Templates**, choose **Signature Request Revoked**, edit it, and save.
+
+Every other email type can be customized without this step.
 
 #### Understand the widgets
 
