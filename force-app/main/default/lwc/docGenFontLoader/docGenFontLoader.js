@@ -14,7 +14,12 @@ export function fontPickerOptions(builtins, faces = []) {
         900: 'Black'
     };
     return [
-        ...builtins.map((font) => ({ ...font, fontFamily: font.value, detail: 'Built-in' })),
+        ...builtins.map((font) => ({
+            ...font,
+            fontFamily: font.fontFamily || font.value,
+            detail: font.detail || 'Built-in',
+            section: font.section || 'Canvas fonts'
+        })),
         ...faces
             .filter((face) => face.selectable && face.key && face.label)
             .map((face) => ({
@@ -23,7 +28,8 @@ export function fontPickerOptions(builtins, faces = []) {
                 fontFace: face,
                 detail: [weights[face.weight] || face.weight, face.style === 'italic' ? 'Italic' : '']
                     .filter(Boolean)
-                    .join(' ')
+                    .join(' '),
+                section: 'Approved custom fonts'
             }))
     ];
 }

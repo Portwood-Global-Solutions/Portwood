@@ -252,6 +252,8 @@
     /* Read-only: content is authored in the panel, so the box is for arranging. */
     cursor: move;
     min-height: 1em;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     font-size: 11pt;
 }
 
