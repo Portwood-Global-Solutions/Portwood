@@ -7,7 +7,7 @@ import { apexSurface } from './apex-surface.mjs';
 import { markdownTables } from './markdown-tables.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const config = JSON.parse(read('docs/knowledgebase/guide.json'));
 const project = JSON.parse(read('sfdx-project.json'));
 const packageId = project.packageAliases[config.release.packageAlias];
@@ -191,11 +191,18 @@ const check = process.argv.includes('--check');
 for (const [file, content] of outputs) {
     const formatted = await prettier.format(content, {
         ...(await prettier.resolveConfig(path.join(root, file))),
-        filepath: path.join(root, file)
+        filepath: path.join(root, file),
+        endOfLine: 'lf'
     });
     if (check)
+        // JSON formatting can vary between Prettier runtimes while preserving
+        // the same catalog data. Compare the parsed value for JSON artifacts;
+        // generated Markdown remains byte-for-byte validated below.
         assert(
-            fs.existsSync(path.join(root, file)) && normalizeNewlines(read(file)) === normalizeNewlines(formatted),
+            fs.existsSync(path.join(root, file)) &&
+                (file.endsWith('.json')
+                    ? JSON.stringify(JSON.parse(read(file))) === JSON.stringify(JSON.parse(formatted))
+                    : normalizeNewlines(read(file)) === normalizeNewlines(formatted)),
             `${file} is out of date. Run npm run guide:build.`
         );
     else fs.writeFileSync(path.join(root, file), formatted);

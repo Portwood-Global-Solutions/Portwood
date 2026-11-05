@@ -121,6 +121,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     // skips DocGenController.generateDocumentData() and uses this data instead. Cleared after each use.
     private static Map<String, Object> preloadedRecordDataOverride;
 
+    // Salesforce Custom Labels are resolved lazily because subscriber-created
+    // labels are not available as compile-time Apex references.
+    @TestVisible
+    private static Map<String, String> customLabelCache = new Map<String, String>();
+
     // Chart pipeline (#117): signature → ContentVersion Id for charts the LWC
     // pre-rasterized to PNG before calling generate(). DocGenChartTagExpander
     // reads this in processXml to substitute {Chart:...} with a CV-referencing
@@ -5651,10 +5656,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     private static Object resolveValue(Map<String, Object> data, String path) {
-        if (data == null) {
+        String normalizedPath = path == null ? null : path.trim();
+        if (isCustomLabelPath(normalizedPath)) {
+            return resolveCustomLabel(normalizedPath);
+        }
+        if (data == null || String.isBlank(normalizedPath)) {
             return null;
         }
-        List<String> parts = path.split('\\.');
+        List<String> parts = normalizedPath.split('\\.');
         Object current = data;
 
         for (Integer i = 0; i < parts.size(); i++) {
@@ -5697,6 +5706,69 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
         return current;
+    }
+
+    /**
+     * Returns true for the Salesforce custom-label merge path used in
+     * templates, e.g. `{!$Label.Invoice_Footer}` after the leading `!` has
+     * been normalized by processXml(). A namespaced form such as
+     * `{!$Label.ns.Invoice_Footer}` is also accepted.
+     */
+    @TestVisible
+    private static Boolean isCustomLabelPath(String path) {
+        return String.isNotBlank(path) && path.startsWithIgnoreCase('$Label.') && path.length() > 7;
+    }
+
+    /**
+     * Resolves an org or namespaced Salesforce Custom Label at runtime.
+     * Missing/invalid labels intentionally resolve to null, which preserves
+     * Portwood's existing behavior for unknown merge fields (render empty).
+     */
+    private static String resolveCustomLabel(String path) {
+        if (!isCustomLabelPath(path)) {
+            return null;
+        }
+
+        String reference = path.substring(7).trim(); // `$Label.`
+        if (String.isBlank(reference)) {
+            return null;
+        }
+
+        String namespace = '';
+        String labelName = reference;
+        Integer separator = reference.indexOf('.');
+        if (separator > 0 && separator < reference.length() - 1) {
+            namespace = reference.substring(0, separator);
+            labelName = reference.substring(separator + 1);
+        }
+
+        String cacheKey = namespace + '.' + labelName;
+        if (customLabelCache.containsKey(cacheKey)) {
+            return customLabelCache.get(cacheKey);
+        }
+
+        String value;
+        try {
+            // An empty namespace means the subscriber/org namespace. Using the
+            // Request the running user's language explicitly so translated
+            // labels behave the same way as statically imported labels.
+            value = System.Label.get(namespace, labelName, UserInfo.getLanguage());
+        } catch (Exception orgLabelError) {
+            value = null;
+            if (String.isEmpty(namespace)) {
+                try {
+                    // In a managed-package execution context, fall back to
+                    // the package namespace for Portwood's own labels. This
+                    // does not shadow a subscriber label because the org lookup
+                    // above is always attempted first.
+                    value = System.Label.get(null, labelName, UserInfo.getLanguage());
+                } catch (Exception packageLabelError) {
+                    value = null;
+                }
+            }
+        }
+        customLabelCache.put(cacheKey, value);
+        return value;
     }
 
     private static String resolvePicklistLabel(Map<String, Object> data, String path, Object rawValue) {
@@ -10215,6 +10287,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 Integer colonIdx = key.indexOf(':');
                 fieldName = key.substring(0, colonIdx).trim();
                 dateFormat = key.substring(colonIdx + 1).trim();
+            }
+            if (fieldName.startsWith('!')) {
+                fieldName = fieldName.substring(1).trim();
             }
 
             // Built-ins parity with processXml: {Today}, {Now}, {RunningUser.X}.
