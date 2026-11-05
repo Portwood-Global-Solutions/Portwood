@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx000001BaZ3IAK --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001CeFdIAK --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BaZ3IAK) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BaZ3IAK)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CeFdIAK) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CeFdIAK)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -458,33 +458,36 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-06**, then 11-20, 12-04.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-20**, then 12-04, 12-18.
 
 Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
-| Version     | Headline                                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                         |
-| **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                    |
-| **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records              |
-| **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                  |
-| **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                              |
-| **v3.56.0** | Set the label size on a chart; bold on Arial Unicode MS no longer silently does nothing                                         |
-| **v3.55.0** | Elements that travel together on the Canvas, named blocks, and charts on datasets that used to be too big                       |
-| **v3.54.0** | **Canvas designer (Beta)** — design a document in the browser, no Word or HTML needed                                           |
-| **v3.53.0** | Excel documents save as `.xlsx`, and a template set to PDF now produces a PDF from Flows too                                    |
-| **v3.52.0** | Runner on any Lightning page with built-in record search; **Show Save & Download** is now its own App Builder checkbox          |
-| **v3.51.0** | Smarter AI template authoring — the prompt now covers `{RowNumber}`, `{#GroupBy}`, `{#IF}`, charts, images, and signature types |
-| **v3.50.0** | Renamed to Portwood — display names only; every API name is unchanged, nothing you built needs updating                         |
-| **v3.49.0** | Bulk sort order, `{RowNumber}`, and **Save & Download** in a single generation                                                  |
-| **v3.48.0** | Bulk generation gets conditionals, charts, multi-column sorting; Template Designer opens for non-admins                         |
-| **v3.47.0** | PowerPoint table loops, GUID preservation, split-run merge tags                                                                 |
-| **v3.46.0** | AI template authoring with Agentforce — validated against the PDF engine before it reaches your canvas                          |
-| **v3.45.0** | Visual Designer editing overhaul, running-header fixes, silent-degradation logging to the Error Log                             |
-| **v3.34.0** | The HTML-first template wizard and the visual Template Designer (Beta)                                                          |
+| Version     | Headline                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.62.0** | Resend and revoke signatures, typed-signatures-only mode, reusable terms and snippets, a native PDF-merge Flow action, and version-activation fixes |
+| **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                                             |
+| **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                                        |
+| **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records                                  |
+| **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                                      |
+| **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                                                  |
+| **v3.56.0** | Set the label size on a chart; bold on Arial Unicode MS no longer silently does nothing                                                             |
+| **v3.55.0** | Elements that travel together on the Canvas, named blocks, and charts on datasets that used to be too big                                           |
+| **v3.54.0** | **Canvas designer (Beta)** — design a document in the browser, no Word or HTML needed                                                               |
+| **v3.53.0** | Excel documents save as `.xlsx`, and a template set to PDF now produces a PDF from Flows too                                                        |
+| **v3.52.0** | Runner on any Lightning page with built-in record search; **Show Save & Download** is now its own App Builder checkbox                              |
+| **v3.51.0** | Smarter AI template authoring — the prompt now covers `{RowNumber}`, `{#GroupBy}`, `{#IF}`, charts, images, and signature types                     |
+| **v3.50.0** | Renamed to Portwood — display names only; every API name is unchanged, nothing you built needs updating                                             |
+| **v3.49.0** | Bulk sort order, `{RowNumber}`, and **Save & Download** in a single generation                                                                      |
+| **v3.48.0** | Bulk generation gets conditionals, charts, multi-column sorting; Template Designer opens for non-admins                                             |
+| **v3.47.0** | PowerPoint table loops, GUID preservation, split-run merge tags                                                                                     |
+| **v3.46.0** | AI template authoring with Agentforce — validated against the PDF engine before it reaches your canvas                                              |
+| **v3.45.0** | Visual Designer editing overhaul, running-header fixes, silent-degradation logging to the Error Log                                                 |
+| **v3.34.0** | The HTML-first template wizard and the visual Template Designer (Beta)                                                                              |
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes**: signature senders can **Resend** or **Revoke** a request straight from the Recent requests list on a record, and revoking emails the signers who had not signed. An org, or a single template, can require **typed signatures only** and hide the drawing pad. Command Hub → Assets now holds reusable **Terms & HTML Snippets** that any template can insert with a snippet tag, kept versioned in one place. A new **Portwood: Merge PDFs** Flow action combines uploaded PDFs into one File without a screen or an outside service. Templates can use Salesforce **Custom Labels** as merge tags (including the signed-in user's translated value), and custom font tags take a stable **API name** so a template moves between orgs without rewriting its tags. Activating an older template version now restores its whole configuration, Canvas and the legacy designer reload the active version, each legacy-designer version keeps its own body, and the legacy designer gained a **Back to Library** button. Canvas text boxes wrap long text and no longer leak typed text into a table.
 
 **v3.61.0 — Hotfix: parallel-signing emails, signing-page UX, and large-HTML template saves**: a
 Parallel signature request could email the "signer completed" notification under the wrong
@@ -597,7 +600,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.61.0 | **Latest (Released)**                   | `04tVx000001BaZ3IAK` |
+| v3.62.0 | **Latest (Released)**                   | `04tVx000001CeFdIAK` |
+| v3.61.0 | Released                                | `04tVx000001BaZ3IAK` |
 | v3.60.0 | Released                                | `04tVx000001BOsrIAG` |
 | v3.59.0 | Released                                | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
