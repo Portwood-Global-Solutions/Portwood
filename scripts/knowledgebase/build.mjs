@@ -15,6 +15,7 @@ const errors = [];
 const assert = (condition, message) => {
     if (!condition) errors.push(message);
 };
+const normalizeNewlines = (text) => text.replace(/\r\n?/g, '\n');
 assert(
     /^04t\w{12,15}$/.test(packageId || ''),
     'Release packageAlias must resolve to a package version in sfdx-project.json.'
@@ -34,7 +35,7 @@ const expand = (text) =>
 const articles = config.articles.map((article) => {
     const file = `docs/knowledgebase/articles/${article.slug}.md`;
     assert(fs.existsSync(path.join(root, file)), `${article.slug}: article file is missing.`);
-    const sourceText = fs.existsSync(path.join(root, file)) ? read(file).trim() : '';
+    const sourceText = fs.existsSync(path.join(root, file)) ? normalizeNewlines(read(file).trim()) : '';
     const body = expand(sourceText);
     for (const error of markdownTables(body).errors) assert(false, `${file}: ${error}`);
     assert(groupIds.has(article.group), `${article.slug}: unknown group.`);
@@ -194,7 +195,7 @@ for (const [file, content] of outputs) {
     });
     if (check)
         assert(
-            fs.existsSync(path.join(root, file)) && read(file) === formatted,
+            fs.existsSync(path.join(root, file)) && normalizeNewlines(read(file)) === normalizeNewlines(formatted),
             `${file} is out of date. Run npm run guide:build.`
         );
     else fs.writeFileSync(path.join(root, file), formatted);

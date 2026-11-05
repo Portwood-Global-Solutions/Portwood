@@ -31,6 +31,7 @@ global with sharing class DocGenEmailTemplateService {
     global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed';
     global static final String TYPE_ALL_SIGNED = 'All_Signed';
     global static final String TYPE_DECLINED = 'Signer_Declined';
+    global static final String TYPE_REVOKED = 'Signature_Revoked';
     global static final String TYPE_COMPLETION = 'Completion_Confirmation';
 
     global static final List<String> ALL_TYPES = new List<String>{
@@ -40,6 +41,7 @@ global with sharing class DocGenEmailTemplateService {
         TYPE_SIGNER_COMPLETED,
         TYPE_ALL_SIGNED,
         TYPE_DECLINED,
+        TYPE_REVOKED,
         TYPE_COMPLETION
     };
 
@@ -833,6 +835,12 @@ global with sharing class DocGenEmailTemplateService {
             d.bodyHtml =
                 '<p><strong>{SignerName}</strong> ({RoleName}) has <span style="color:#ea001e;font-weight:bold;">declined</span> to sign.</p>' +
                 '<p>{Message}</p>' +
+                '<p style="font-size:13px;color:#706e6b;margin-top:16px;">Request ID: {RequestId}</p>';
+        } else if (type == TYPE_REVOKED) {
+            d.subject = 'Signature request revoked: {DocumentTitle}';
+            d.bodyHtml =
+                '<p>Hi {SignerName},</p>' +
+                '<p>The signature request for <strong>{DocumentTitle}</strong> has been <span style="color:#ea001e;font-weight:bold;">revoked</span> by {SenderName}. You no longer need to sign this document.</p>' +
                 '<p style="font-size:13px;color:#706e6b;margin-top:16px;">Request ID: {RequestId}</p>';
         } else if (type == TYPE_COMPLETION) {
             d.subject = 'Signature complete: {DocumentTitle}';

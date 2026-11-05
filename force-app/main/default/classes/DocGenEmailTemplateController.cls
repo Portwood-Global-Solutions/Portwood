@@ -12,6 +12,7 @@ public with sharing class DocGenEmailTemplateController {
         DocGenEmailTemplateService.TYPE_SIGNER_COMPLETED => 'Signer Completed (to sender)',
         DocGenEmailTemplateService.TYPE_ALL_SIGNED => 'All Signatures Complete (to sender)',
         DocGenEmailTemplateService.TYPE_DECLINED => 'Signer Declined (to sender)',
+        DocGenEmailTemplateService.TYPE_REVOKED => 'Signature Request Revoked (to signers)',
         DocGenEmailTemplateService.TYPE_COMPLETION => 'Completion Confirmation (to signers)'
     };
 
@@ -66,6 +67,16 @@ public with sharing class DocGenEmailTemplateController {
             'Message',
             'RequestId',
             'CompanyName',
+            'LogoUrl'
+        },
+        DocGenEmailTemplateService.TYPE_REVOKED => new List<String>{
+            'SignerName',
+            'SenderName',
+            'CompanyName',
+            'DocumentTitle',
+            'RoleName',
+            'Message',
+            'RequestId',
             'LogoUrl'
         },
         DocGenEmailTemplateService.TYPE_COMPLETION => new List<String>{

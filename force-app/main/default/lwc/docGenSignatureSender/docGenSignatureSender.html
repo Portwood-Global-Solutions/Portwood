@@ -35,7 +35,28 @@
             <div class="request-row" key={request.id}>
                 <div class="grow"><strong>{request.documentTitle}</strong><small>{request.name}</small></div>
                 <span class="badge">{request.status}</span>
-                <lightning-button label="View" data-id={request.id} onclick={viewRequest}></lightning-button>
+                <lightning-button-group>
+                    <lightning-button
+                        label="View"
+                        icon-name="utility:open"
+                        data-id={request.id}
+                        onclick={viewRequest}
+                    ></lightning-button>
+                    <template if:true={request.canManage}>
+                        <lightning-button
+                            label="Resend"
+                            icon-name="utility:send"
+                            data-id={request.id}
+                            onclick={resendRequest}
+                        ></lightning-button>
+                        <lightning-button
+                            label="Revoke"
+                            variant="destructive-text"
+                            data-id={request.id}
+                            onclick={revokeRequest}
+                        ></lightning-button>
+                    </template>
+                </lightning-button-group>
             </div>
         </template>
     </section>
