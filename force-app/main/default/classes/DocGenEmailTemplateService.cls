@@ -31,6 +31,7 @@ global with sharing class DocGenEmailTemplateService {
     global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed';
     global static final String TYPE_ALL_SIGNED = 'All_Signed';
     global static final String TYPE_DECLINED = 'Signer_Declined';
+    global static final String TYPE_REVOKED = 'Signature_Revoked';
     global static final String TYPE_COMPLETION = 'Completion_Confirmation';
 
     global static final List<String> ALL_TYPES = new List<String>{
@@ -40,6 +41,7 @@ global with sharing class DocGenEmailTemplateService {
         TYPE_SIGNER_COMPLETED,
         TYPE_ALL_SIGNED,
         TYPE_DECLINED,
+        TYPE_REVOKED,
         TYPE_COMPLETION
     };
 
@@ -324,7 +326,7 @@ global with sharing class DocGenEmailTemplateService {
                         LIMIT 1
                     )
                 FROM DocGen_Asset__c
-                WHERE Asset_Key__c = :assetKey
+                WHERE Asset_Key__c = :assetKey AND (Asset_Type__c = 'Image' OR Asset_Type__c = NULL)
                 WITH SYSTEM_MODE
                 LIMIT 1
             ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
@@ -667,7 +669,10 @@ global with sharing class DocGenEmailTemplateService {
             // read here from guest / Automated Process contexts; a throwing guard
             // silently dropped the logo from those emails (#390). Reads go through
             // the `without sharing` TemplateReader for the same reason.
-            DocGenFlsGuard.advisoryAssertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
+            DocGenFlsGuard.advisoryAssertAccessible(
+                DocGen_Asset__c.sObjectType,
+                new Set<String>{ 'Asset_Key__c', 'Asset_Type__c' }
+            );
             List<DocGen_Asset__c> assets = new TemplateReader().readAssetByKey(assetKey);
             if (assets.isEmpty() || assets[0].ContentDocumentLinks.isEmpty()) {
                 return null;
@@ -833,6 +838,12 @@ global with sharing class DocGenEmailTemplateService {
             d.bodyHtml =
                 '<p><strong>{SignerName}</strong> ({RoleName}) has <span style="color:#ea001e;font-weight:bold;">declined</span> to sign.</p>' +
                 '<p>{Message}</p>' +
+                '<p style="font-size:13px;color:#706e6b;margin-top:16px;">Request ID: {RequestId}</p>';
+        } else if (type == TYPE_REVOKED) {
+            d.subject = 'Signature request revoked: {DocumentTitle}';
+            d.bodyHtml =
+                '<p>Hi {SignerName},</p>' +
+                '<p>The signature request for <strong>{DocumentTitle}</strong> has been <span style="color:#ea001e;font-weight:bold;">revoked</span> by {SenderName}. You no longer need to sign this document.</p>' +
                 '<p style="font-size:13px;color:#706e6b;margin-top:16px;">Request ID: {RequestId}</p>';
         } else if (type == TYPE_COMPLETION) {
             d.subject = 'Signature complete: {DocumentTitle}';

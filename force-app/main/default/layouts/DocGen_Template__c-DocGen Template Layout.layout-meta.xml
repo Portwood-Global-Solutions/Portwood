@@ -96,6 +96,10 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
+                <field>Signature_Type_Only__c</field>
+            </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
                 <field>Hide_Signer_Decline__c</field>
             </layoutItems>
         </layoutColumns>

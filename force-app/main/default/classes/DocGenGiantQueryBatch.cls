@@ -302,7 +302,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                 relationshipName,
                 records,
                 allFields,
-                rowNumberOffset
+                rowNumberOffset,
+                isHtmlSource ? 'HTML' : 'Word',
+                outputFormat
             );
             rowNumberOffset += records.size();
 

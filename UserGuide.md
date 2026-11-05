@@ -28,6 +28,7 @@ Make your first document, build a template, send it for signature, and keep your
     - [Make a table that grows](#repeating-tables)
     - [Format dates, amounts, and labels](#format-values)
     - [Show content only when it applies](#conditional-content)
+    - [Reuse terms and HTML snippets](#shared-content)
     - [Add logos and pictures](#images-and-assets)
     - [Set paper, headers, and page backgrounds](#page-layout)
     - [Add charts, QR codes, and barcodes](#charts-and-codes)
@@ -576,6 +577,12 @@ Use the template's **Design** action to open the HTML designer. Its toolbar and 
 
 Use **Save as New Version** to activate edits. **Download Sample** or **PDF Preview** helps you check the rendered result.
 
+#### Return to the Designer Beta library
+
+When an HTML template is open in the legacy designer, click **Back to Library** to return to the **Designer (Beta)** template picker. This lets you choose another HTML or Canvas template without going back to the main **Your Templates** table.
+
+If the designer has unsaved changes, Portwood opens an **Unsaved changes** confirmation. Choose **OK** to discard the changes and return to the Designer Beta picker. Close or cancel the dialog to keep editing. Use **Save as New Version** before leaving when you want the changes to become the active template version.
+
 #### Why the PDF can look different
 
 Salesforce's PDF renderer supports a smaller set of layout features than a web browser. Plain paragraphs, tables, fixed widths, and common fonts are reliable starting points. Modern web layouts using flexbox or grid can change or disappear.
@@ -998,6 +1005,58 @@ _Template builders · 5 min read · Reviewed for 3.60.0_
 
 ---
 
+<a id="shared-content"></a>
+
+### Reuse terms and HTML snippets
+
+Shared content lets you author a frequently reused section once and insert it into HTML or Canvas templates with a stable merge tag.
+
+#### Create shared content
+
+1. Open **Portwood > Assets > Terms & snippets**.
+2. Select **New shared content**.
+3. Enter a name, optional category, and permanent asset key.
+4. Use **Write** for common formatting, **HTML source** for exact inline styles and tables, or **Preview** to review the rendered section.
+5. Save the content and choose **Copy tag**.
+
+The copied tag looks like this:
+
+    {%snippet:terms-and-conditions}
+
+Insert the tag where the complete section should appear. In HTML or Canvas authoring, use the shared-content insertion control when available. Keep the tag on its own line when the surrounding layout needs a separate paragraph.
+
+#### Revisions and activation
+
+A shared-content asset uses the latest active revision. Changing only **Active for document generation** updates the asset status without creating another content revision. Editing the name, category, or HTML content creates a new revision when you choose **Save new version**.
+
+Use **Revision history** to inspect an earlier version. **Restore as new revision** copies that version into a new revision while retaining the intervening history. Inactive or missing content is reported during generation instead of being silently omitted.
+
+#### Formatting and fonts
+
+Use HTML body fragments with paragraphs, headings, lists, tables, links, alignment, page breaks, and inline styles. The editor keeps the content inside its frame when switching between Write, HTML source, and Preview. Pasted text keeps its meaningful spacing and paragraph breaks.
+
+Approved custom font tags can be used inside the fragment. PDF preview and generated PDF output use the approved embedded font. Native Word, Excel, and PowerPoint output carries the font family and formatting; recipients need the font installed in their Office application for the same typeface to display.
+
+Images and other reusable assets can be referenced with their normal asset tags. Copy the real image or font tag from Assets rather than typing an unapproved key.
+
+#### Supported templates and output
+
+Shared content is designed for HTML and Canvas templates and is also expanded in supported native Office merge paths. Test the actual output format when the fragment contains complex tables, lists, images, or custom fonts.
+
+PowerPoint templates produce native PPTX files. PDF is not an available output choice for PowerPoint templates; use Word, HTML, or Canvas when the finished document must be PDF.
+
+#### Limits and safety
+
+Snippets are body fragments, not full HTML documents. Scripts, event handlers, external stylesheets, executable CSS, data-URI images, and unsafe URLs are rejected. Add document-wide styles and page settings to the template.
+
+Record fields and loops inside a snippet use the current merge context. Include every referenced field and relationship in the template query; creating a snippet does not add fields to a template query automatically.
+
+_Template builders · 5 min read · Reviewed for 3.60.0_
+
+**Next:** [Add logos and pictures](#images-and-assets) · [Use custom PDF fonts](#custom-fonts) · [Save changes and return to an earlier version](#template-versions)
+
+---
+
 <a id="images-and-assets"></a>
 
 ### Add logos and pictures
@@ -1162,9 +1221,10 @@ Use your organization's approved font in generated PDFs.
 2. Choose **Upload font** for one face, or **Bulk upload fonts** for several.
 3. Upload the static TrueType file and confirm its usage rights.
 4. Set a clear font key using lowercase letters, numbers, and hyphens.
-5. Open the face and generate its **native PDF specimen**.
-6. Check the letters, numbers, accents, symbols, weight, and spacing your documents need.
-7. Confirm you reviewed the specimen, then **Approve** the face.
+5. Set a unique **font tag API name** for this face, such as `poppins-bold`. Reuse this API name when moving the same face to another environment.
+6. Open the face and generate its **native PDF specimen**.
+7. Check the letters, numbers, accents, symbols, weight, and spacing your documents need.
+8. Confirm you reviewed the specimen, then **Approve** the face.
 
 Only approved faces become available for new selections. Upload regular, bold, and italic faces separately when your documents need them.
 
@@ -1174,7 +1234,7 @@ Only approved faces become available for new selections. Upload regular, bold, a
 
 - **Canvas:** Select the text box and choose the face in **PDF font**.
 - **HTML designer:** Select the face in the font picker.
-- **HTML source:** Copy the face's verified font tag from its detail panel and use it in a quoted inline `style` attribute.
+- **HTML source:** Copy the face's verified font tag from its detail panel and use it in a quoted inline `style` attribute. API-name tags such as `{%font:poppins-bold}` remain portable across environments.
 - **Imported Word/HTML:** Portwood can match an approved face to the declared family, weight, and style. Check the generated PDF to confirm the match.
 
 #### Replace or stop using a face
@@ -2816,6 +2876,16 @@ Find a tag, understand its inputs, and copy an example.
 
 A merge tag is a small instruction inside braces. Portwood replaces `{Name}` with a name, repeats a row for `{#Contacts}`, or draws a chart for `{Chart:...}`. You can build a useful document with just fields and a loop; the rest are here when you need them.
 
+#### Salesforce Custom Labels
+
+You can place a Salesforce Custom Label directly in a template:
+
+```text
+{!$Label.Your_Label_Name}
+```
+
+Portwood resolves it when the document is generated and uses the running user's Salesforce language. Subscriber-org labels use the form above; namespaced labels can use `{!$Label.namespace.Label_Name}`.
+
 #### Find the tags for your own Salesforce data
 
 1. Open your template and its **Data** or query-builder controls.
@@ -3983,6 +4053,8 @@ Other limitations (apply to both options):
 
 #### Approved PDF font tags
 
+Use the stable `{%font:api-name}` form for portable templates. Set the API name on the approved face and reuse it when importing that face into another environment. Existing `{%font:asset-key:revision}` tags remain supported for backward compatibility.
+
 Use `{%font:asset-key:revision}` only inside a quoted inline `style` attribute, as a complete style declaration. Copy the real tag from the approved face in **Assets → Custom Fonts**; the revision pins the exact face instead of choosing a mutable latest font.
 
 ```html
@@ -4831,6 +4903,7 @@ global static final String TYPE_PIN = 'Verification_PIN'
 global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed'
 global static final String TYPE_ALL_SIGNED = 'All_Signed'
 global static final String TYPE_DECLINED = 'Signer_Declined'
+global static final String TYPE_REVOKED = 'Signature_Revoked'
 global static final String TYPE_COMPLETION = 'Completion_Confirmation'
 global static final List<String> ALL_TYPES = new List<String>
 global static final String MODE_MANAGED = 'Managed'
@@ -4905,6 +4978,26 @@ global Boolean isGiantQuery
 global String errorMessage
 global Boolean success
 global static List<Response> generateDocument(List<Request> requests)
+```
+
+#### DocGenPdfMergeFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenPdfMergeFlowAction.cls)
+
+```apex
+global with sharing class DocGenPdfMergeFlowAction
+global class Request
+global List<String> contentVersionIds
+global String contentVersionIdsText
+global String documentTitle
+global Id relatedRecordId
+global Boolean padOddDocuments
+global class Response
+global Id contentVersionId
+global Id contentDocumentId
+global Boolean success
+global String errorMessage
+global static List<Response> mergePdfs(List<Request> requests)
 ```
 
 #### DocGenPdfMerger

@@ -38,24 +38,29 @@
                 </template>
                 <div class="font-list" role="listbox" aria-label="Fonts">
                     <template for:each={rows} for:item="font">
-                        <button
-                            key={font.value}
-                            class={font.rowClass}
-                            type="button"
-                            role="option"
-                            aria-selected={font.selected}
-                            disabled={font.disabled}
-                            tabindex="-1"
-                            data-value={font.value}
-                            onmousedown={handleKeepSelection}
-                            onclick={handleChoose}
-                        >
-                            <span class="font-name" style={font.previewStyle}>{font.label}</span>
-                            <span class="font-detail">{font.detail}</span>
-                            <template if:true={font.previewError}
-                                ><span class="font-detail">Preview unavailable</span></template
+                        <template if:true={font.isSection}>
+                            <div key={font.value} class="font-section" role="presentation">{font.section}</div>
+                        </template>
+                        <template if:false={font.isSection}>
+                            <button
+                                key={font.value}
+                                class={font.rowClass}
+                                type="button"
+                                role="option"
+                                aria-selected={font.selected}
+                                disabled={font.disabled}
+                                tabindex="-1"
+                                data-value={font.value}
+                                onmousedown={handleKeepSelection}
+                                onclick={handleChoose}
                             >
-                        </button>
+                                <span class="font-name" style={font.previewStyle}>{font.label}</span>
+                                <span class="font-detail">{font.detail}</span>
+                                <template if:true={font.previewError}
+                                    ><span class="font-detail">Preview unavailable</span></template
+                                >
+                            </button>
+                        </template>
                     </template>
                 </div>
                 <template if:true={noResults}><p class="font-notice">No matching fonts.</p></template>

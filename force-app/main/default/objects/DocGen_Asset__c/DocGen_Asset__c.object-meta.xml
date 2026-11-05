@@ -4,7 +4,7 @@
     <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
     <description
-    >Stores shared, org-wide document assets (images in v1) that templates reference by a stable merge tag ({%asset:&lt;key&gt;}); the tag resolves at generation time to the asset's latest ContentVersion.</description>
+    >Stores shared images, registered fonts, and reusable Terms / HTML snippets. Stable tags reference the latest active asset; snippet HTML is stored in private, versioned Salesforce Files.</description>
     <enableActivities>false</enableActivities>
     <enableBulkApi>true</enableBulkApi>
     <enableFeeds>false</enableFeeds>

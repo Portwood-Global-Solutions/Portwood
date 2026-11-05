@@ -2,6 +2,78 @@
 
 ## Unreleased
 
+### Added - signature request resend and revoke controls
+
+- Added **Resend** and **Revoke** actions beside **View** in Recent Signature Requests for Sent and In Progress requests.
+- Revoke invalidates outstanding unsigned links and sends a branded, customizable **Signature Revoked** email only to signers who have not signed.
+- Added the Signature Revoked email type to the Email Templates editor with branding controls and a red-highlighted **revoked** status by default.
+
+### Added
+
+- **Allow typed signatures only across an organization or for individual templates (#500).**
+  Signature Settings and Edit Template now include an **Allow Typed Signatures Only** toggle.
+  Enabling either toggle hides the drawing pad and its Clear button and requires typed
+  signatures and initials. The organization setting applies even when a template's toggle
+  is off. Both toggles default to off, preserving the existing drawing and typing options.
+
+### Added
+
+- **Salesforce standard fonts in Canvas.** The Canvas font picker now has a dedicated
+  Salesforce standard fonts section with Helvetica, Times, and Courier options. These
+  choices use the verified PDF renderer faces, remain consistent between the canvas and
+  generated PDF, and persist after saving and reopening a template.
+
+### Fixed
+
+- **Canvas version switching now reloads the activated body.** Reopening Canvas from the Edit Template Configuration modal now refreshes an already-mounted designer from the active version instead of showing the previously loaded body.
+- **Older Canvas versions with incomplete snapshots can be reactivated.** Activation preserves the template's existing required Base Object when historical version metadata is blank, and new fallback versions snapshot that value.
+
+### Fixed
+
+- **Activating an older template version now restores its complete configuration.** The Edit
+  Template Configuration modal now reloads the active version's query, base object, output
+  format, page setup, title format, and header/footer settings after activation and when the
+  modal opens, instead of retaining values from the first or previously active version.
+
+### Fixed
+
+- **Legacy designer navigation now returns to the Designer (Beta) library.** The new **Back to Library** action clears the open template and shows the Designer picker, so users can switch templates without returning to the main template table.
+- **Unsaved legacy-designer edits are protected when leaving.** Back to Library now opens an **Unsaved changes** confirmation: **OK** discards the edits and returns to the Designer picker, while closing or cancelling the dialog keeps the designer open.
+
+### Fixed
+
+- **Legacy Designer keeps HTML template version content isolated (#489, PR #520).** Each saved
+  version now receives its own HTML body file, and activating another version refreshes the
+  designer with that version's content instead of reusing the newest body.
+
+### Added
+
+- **Reusable Terms & Snippets assets.** Command Hub → Assets now includes reusable HTML fragments and {%snippet:key} tags.
+- **Shared-content documentation and QA coverage.** Added the shared-content guide, examples, and QA coverage.
+
+### Fixed
+
+- **Shared-content layout and editing stability.** The editor stays inside its parent card, preserves its frame across modes, and preserves pasted text spacing.
+- **Custom fonts in shared content.** Approved font tags carry through preview and supported generated formats.
+- **PowerPoint output selection.** PDF is no longer offered for PowerPoint templates; they use native PPTX output only.
+
+### Added
+
+- **Salesforce Custom Label merge tags.** Templates can now use
+  `{!$Label.Your_Label_Name}` to resolve subscriber or namespaced Custom Labels at generation
+  time, including the running user's translated value. Custom labels also work in document title
+  formats.
+
+### Fixed
+
+- **Custom font field-level security.** Portwood User and Portwood Admin permission sets now grant
+  read access to `DocGen_Font_Face__c.Revision_Key__c`, allowing approved font tags to resolve for
+  assigned users.
+
+### Changed
+
+- **Portable custom-font tags across orgs.** Custom font faces now support a user-defined API name in the upload form. Use stable tags such as {%font:poppins-bold} when moving templates between Salesforce orgs; each org resolves the name to its local approved font revision. Existing revision-pinned tags remain supported.
+
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 
 Released 2026-10-23 · `04tVx000001BOsrIAG` (build 3.60.0-1) · ancestor 3.59.0 · 2,230 tests,
@@ -155,6 +227,24 @@ defined` error. Template JSON export, Canvas HTML export, and shared Office-file
   fields; encrypted PDFs and PDFs with existing digital signatures are rejected.
   Parallel signing for uploaded PDFs is not yet supported. See
   [User Guide §10.1.1](UserGuide.md#1011-signing-a-customer-uploaded-pdf).
+
+### Added
+
+- **Portwood: Merge PDFs** Flow action accepts an ordered Text collection of
+  ContentVersion IDs or a single Text value of comma/semicolon/whitespace-separated
+  IDs and creates a merged Salesforce File, with optional record attachment
+  and duplex padding. Returns the new ContentVersion/ContentDocument IDs and a
+  per-request success/error result. Reads and writes enforce user permissions;
+  metadata size checks precede blob loading, and successful outputs use one bulk
+  insert. No external service, browser, or additional Salesforce license. Includes
+  a draft **Portwood: PDF Merge Demo** Screen Flow and a script that creates its
+  one-page welcome letter and two-page project brief.
+- Native PDF merger now reads active cross-reference chains, compressed object
+  and cross-reference streams (FlateDecode, including PNG prediction), nonzero
+  generations, and inherited page attributes. Ordinary AcroForm values and
+  appearances survive under per-document field namespaces. Encrypted, signed,
+  XFA, and scripted/calculation forms are rejected. Flow input budgets: 384 KiB
+  synchronous / 768 KiB asynchronous, subject to available heap.
 
 ## v3.59.0 — Canvas sample data, variant groups, chart tables, and signature audit immutability
 

@@ -3052,6 +3052,7 @@ public with sharing class DocGenSignatureSenderController {
             /* code-analyzer-suppress ApexFlsViolation */
             Database.update(unsignedSigners, false, AccessLevel.SYSTEM_MODE);
         }
+        DocGenSignatureEmailService.sendSignerRevokedEmails(requestId);
     }
 
     private static String getDocumentTitle(Id contentVersionId) {

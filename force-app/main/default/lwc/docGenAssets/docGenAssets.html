@@ -9,6 +9,15 @@
                 <lightning-icon icon-name="utility:font" size="x-small"></lightning-icon>
                 <span>Custom Fonts</span>
             </button>
+            <button
+                class={snippetsSectionClass}
+                role="tab"
+                aria-selected={isSnippetsSection}
+                onclick={showSnippetsSection}
+            >
+                <lightning-icon icon-name="utility:snippet" size="x-small"></lightning-icon>
+                <span>Terms &amp; Snippets</span>
+            </button>
         </div>
 
         <template if:true={isFontsSection}>
@@ -98,6 +107,19 @@
                     <p class="slds-text-body_regular">No assets match your search.</p>
                 </div>
             </template>
+        </template>
+        <template if:true={isSnippetsSection}>
+            <section class="snippet-section" aria-label="Terms and HTML snippets">
+                <div class="section-heading">
+                    <div>
+                        <h2 class="slds-text-heading_small">Terms &amp; HTML Snippets</h2>
+                        <p class="slds-text-body_small slds-text-color_weak">
+                            Create reusable formatted content for HTML and Canvas templates.
+                        </p>
+                    </div>
+                </div>
+                <c-doc-gen-snippet-assets></c-doc-gen-snippet-assets>
+            </section>
         </template>
     </div>
 

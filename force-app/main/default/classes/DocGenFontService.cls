@@ -18,6 +18,10 @@ public with sharing class DocGenFontService {
     public static String mergeTag(String assetKey, String revisionKey) {
         return '{%font:' + assetKey + ':' + revisionKey.substring(0, 16) + '}';
     }
+    /** New tags use a user-defined API name so they survive font re-imports between environments. */
+    public static String mergeTag(String apiName, String assetKey, String revisionKey) {
+        return String.isBlank(apiName) ? mergeTag(assetKey, revisionKey) : '{%font:' + apiName + '}';
+    }
     private static Boolean hasFontTag(String html) {
         return String.isNotBlank(html) && Pattern.compile('(?i)\\{%font:').matcher(html).find();
     }
@@ -60,6 +64,33 @@ public with sharing class DocGenFontService {
             m.get('style') +
             ';';
     }
+    private static String bindingForApiName(String apiName) {
+        String selector = 'api:' + apiName;
+        if (!tagFaces.containsKey(selector)) {
+            DocGenFlsGuard.assertAccessible(
+                DocGen_Font_Face__c.sObjectType,
+                new Set<String>{ 'API_Name__c', 'Revision_Key__c' }
+            );
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Font_Face__c> rows = [
+                SELECT Revision_Key__c
+                FROM DocGen_Font_Face__c
+                WHERE API_Name__c = :apiName
+                WITH SYSTEM_MODE
+                LIMIT 2
+            ];
+            if (rows.size() != 1)
+                throw new DocGenException('Font API name must identify one available revision.');
+            DocGen_Font_Face__c resolved = DocGenFontController.load(rows[0].Revision_Key__c);
+            if (resolved.Status__c != 'Verified' && resolved.Status__c != 'Retired')
+                throw new DocGenException('This font revision has not passed native PDF review.');
+            tagFaces.put(selector, resolved);
+        }
+        DocGen_Font_Face__c f = tagFaces.get(selector);
+        if (f.Status__c != 'Verified' && f.Status__c != 'Retired')
+            throw new DocGenException('This font revision has not passed native PDF review.');
+        return bindingForTag(f.Asset__r.Asset_Key__c, f.Revision_Key__c.substring(0, 16));
+    }
     /** A font tag is a CSS declaration in a quoted inline style, never an image URL or raw stylesheet. */
     public static String expandTags(String html) {
         if (String.isBlank(html) || !html.toLowerCase().contains('%font:'))
@@ -77,7 +108,8 @@ public with sharing class DocGenFontService {
                 if (!styles.find())
                     throw new DocGenException('Place the font tag inside an element’s quoted style attribute.');
                 String style = styles.group(2).unescapeHtml4();
-                Matcher font = Pattern.compile('(?i)\\{%font:([a-z0-9-]{1,40}):([a-f0-9]{16,64})\\}').matcher(style);
+                Matcher font = Pattern.compile('(?i)\\{%font:([a-z0-9-]{1,40})(?::([a-f0-9]{16,64}))?\\}')
+                    .matcher(style);
                 if (!font.find())
                     throw new DocGenException('Invalid font tag. Copy a verified face’s tag from Assets > Fonts.');
                 String before = style.substring(0, font.start());
@@ -92,7 +124,9 @@ public with sharing class DocGenFontService {
                     );
                 String expanded =
                     before +
-                    bindingForTag(font.group(1).toLowerCase(), font.group(2).toLowerCase()) +
+                    (font.group(2) == null
+                        ? bindingForApiName(font.group(1).toLowerCase())
+                        : bindingForTag(font.group(1).toLowerCase(), font.group(2).toLowerCase())) +
                     style.substring(font.end());
                 if (hasFontTag(expanded))
                     throw new DocGenException('Use one verified font tag per element.');
