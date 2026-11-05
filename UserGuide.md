@@ -4967,6 +4967,26 @@ global Boolean success
 global static List<Response> generateDocument(List<Request> requests)
 ```
 
+#### DocGenPdfMergeFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenPdfMergeFlowAction.cls)
+
+```apex
+global with sharing class DocGenPdfMergeFlowAction
+global class Request
+global List<String> contentVersionIds
+global String contentVersionIdsText
+global String documentTitle
+global Id relatedRecordId
+global Boolean padOddDocuments
+global class Response
+global Id contentVersionId
+global Id contentDocumentId
+global Boolean success
+global String errorMessage
+global static List<Response> mergePdfs(List<Request> requests)
+```
+
 #### DocGenPdfMerger
 
 Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenPdfMerger.cls)

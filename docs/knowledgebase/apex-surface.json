@@ -152,6 +152,26 @@
         ]
     },
     {
+        "name": "DocGenPdfMergeFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenPdfMergeFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenPdfMergeFlowAction",
+            "global class Request",
+            "global List<String> contentVersionIds",
+            "global String contentVersionIdsText",
+            "global String documentTitle",
+            "global Id relatedRecordId",
+            "global Boolean padOddDocuments",
+            "global class Response",
+            "global Id contentVersionId",
+            "global Id contentDocumentId",
+            "global Boolean success",
+            "global String errorMessage",
+            "global static List<Response> mergePdfs(List<Request> requests)"
+        ]
+    },
+    {
         "name": "DocGenPdfMerger",
         "package": "Core",
         "file": "force-app/main/default/classes/DocGenPdfMerger.cls",
