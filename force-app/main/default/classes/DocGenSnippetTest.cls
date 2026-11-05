@@ -155,7 +155,9 @@ private class DocGenSnippetTest {
             Header_Html__c = '{%snippet:header-clause}',
             Footer_Html__c = '{%snippet:footer-clause}'
         );
-        insert t;
+        // SYSTEM_MODE test data: optional namespaced fields are inaccessible to the package-build test user
+        // (same reason TestDataFactory inserts this way).
+        Database.insert(t, AccessLevel.SYSTEM_MODE);
         ContentVersion cv = new ContentVersion(
             Title = 'Snippet pipeline',
             PathOnClient = 'template.html',
@@ -165,7 +167,10 @@ private class DocGenSnippetTest {
             FirstPublishLocationId = t.Id
         );
         insert cv;
-        insert new DocGen_Template_Version__c(Template__c = t.Id, Content_Version_Id__c = cv.Id, Is_Active__c = true);
+        Database.insert(
+            new DocGen_Template_Version__c(Template__c = t.Id, Content_Version_Id__c = cv.Id, Is_Active__c = true),
+            AccessLevel.SYSTEM_MODE
+        );
         Test.startTest();
         Map<String, Object> pdf = DocGenService.generatePdfBlob(t.Id, a.Id);
         Test.stopTest();
@@ -453,9 +458,11 @@ private class DocGenSnippetTest {
             Asset_Key__c = 'legacy-logo',
             Is_Active__c = true
         );
-        insert legacy;
+        // SYSTEM_MODE test data: optional namespaced fields are inaccessible to the package-build test user
+        // (same reason TestDataFactory inserts this way).
+        Database.insert(legacy, AccessLevel.SYSTEM_MODE);
         legacy.Asset_Type__c = null;
-        update legacy;
+        Database.update(legacy, AccessLevel.SYSTEM_MODE);
         Boolean listed = false;
         for (Map<String, Object> asset : DocGenController.getAssets()) {
             if (asset.get('assetKey') == 'legacy-logo' || asset.get('key') == 'legacy-logo') {
