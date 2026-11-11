@@ -24,7 +24,12 @@ public with sharing class DocGenHtmlRenderer {
         // nowhere to go under table-layout: fixed and spills across the cell border.
         // Both spellings are emitted: word-wrap is the legacy property Flying Saucer
         // recognizes, overflow-wrap is the standard one.
-        'td, th { padding: 0 4pt; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }' +
+        // box-sizing: border-box for the same reason the page-dims CSS below sets it —
+        // Word's <w:tcW> is the OUTER cell width, so without it the padding above is
+        // added on top of the authored width and multi-column tables overflow the
+        // printable area, where Flying Saucer clips whatever crosses the page edge
+        // (the right-hand border rule first).
+        'td, th { padding: 0 4pt; vertical-align: top; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }' +
         'p { margin: 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
         // v1.97 — no global max-width on images. Inline width/height (emitted from
         // wp:extent or rich-text size tokens) is the authoritative size. Image-field
@@ -983,7 +988,7 @@ public with sharing class DocGenHtmlRenderer {
         css += 'tr { page-break-inside: avoid; page-break-after: auto; }';
         // #245 — see the static prefix: break unbreakable tokens rather than
         // letting them overflow the cell under table-layout: fixed.
-        css += 'td, th { padding: 4pt; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }';
+        css += 'td, th { padding: 4pt; vertical-align: top; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; }';
         css += 'p { margin: 0 0 8pt 0; orphans: 2; widows: 2; page-break-inside: avoid; }';
         css += // v1.97 — no global max-width on images. Inline width/height (emitted from
             // wp:extent or rich-text size tokens) is the authoritative size. Image-field
@@ -2936,8 +2941,15 @@ public with sharing class DocGenHtmlRenderer {
                     tableStyle = 'border-collapse:collapse;width:' + pct + '%';
                     tableWidthSet = true;
                 } else if (tblWType == 'dxa' || tblWType == null) {
+                    // max-width keeps the global `table { width: 100% }` clamp in force.
+                    // That clamp exists because Flying Saucer clips whatever crosses the
+                    // page edge, but an inline width overrides it on specificity — so an
+                    // authored width wider than the printable area (an A4 template
+                    // rendered on Letter, or a table Word itself shrink-to-fits) lost its
+                    // right-hand border. With max-width the table shrinks to the content
+                    // box instead, which is what Word does.
                     Decimal pt = twipsToPt(Integer.valueOf(tblW)).setScale(2);
-                    tableStyle = 'border-collapse:collapse;width:' + pt + 'pt';
+                    tableStyle = 'border-collapse:collapse;width:' + pt + 'pt;max-width:100%';
                     tableWidthSet = true;
                 }
             }

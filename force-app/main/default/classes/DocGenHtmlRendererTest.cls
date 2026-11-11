@@ -497,6 +497,77 @@ private class DocGenHtmlRendererTest {
     }
 
     @IsTest
+    static void testTableDxaWidthIsClampedToPrintableArea() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            // A table authored wider than any printable area: 16000 twips is 800pt,
+            // well past Letter's 612pt page, let alone its content box. The authored
+            // width must still be emitted, but with max-width so the global
+            // `table { width: 100% }` clamp is not defeated on specificity. Without
+            // the clamp Flying Saucer clips whatever crosses the page edge, and the
+            // first thing to go is the right-hand border rule.
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body>' +
+                '<w:tbl><w:tblPr><w:tblW w:w="16000" w:type="dxa"/>' +
+                '<w:tblBorders><w:right w:val="single" w:sz="4" w:color="000000"/></w:tblBorders>' +
+                '</w:tblPr>' +
+                '<w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr>' +
+                '</w:tbl>' +
+                '</w:body></w:document>';
+
+            String html = DocGenHtmlRenderer.convertToHtml(xml);
+            // twipsToPt(...).setScale(2) emits two decimal places: 800.00pt, not 800pt.
+            System.assert(html.contains('width:800.00pt'), 'Authored dxa width should still be emitted');
+            System.assert(
+                html.contains('max-width:100%'),
+                'A dxa width must carry max-width:100% so it cannot overflow the printable area'
+            );
+        }
+    }
+
+    @IsTest
+    static void testCellsUseBorderBoxInEveryCssPath() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            // Word's <w:tcW> is the OUTER cell width. Without box-sizing: border-box the
+            // cell padding is added on top of it, so every cell renders wider than
+            // authored and a multi-column table overflows the printable area. All three
+            // CSS paths must agree on this: the static prefix, the page-dimension CSS,
+            // and the header/footer CSS. It was previously set on only one of them.
+            String xml =
+                '<?xml version="1.0" encoding="UTF-8"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body>' +
+                '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+                '<w:tr>' +
+                '<w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc>' +
+                '<w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc>' +
+                '</w:tr>' +
+                '</w:tbl>' +
+                '</w:body></w:document>';
+
+            String plain = DocGenHtmlRenderer.convertToHtml(xml);
+            System.assert(
+                plain.contains('box-sizing: border-box'),
+                'The static CSS prefix should set box-sizing on cells'
+            );
+
+            String withHeaderFooter = DocGenHtmlRenderer.convertToHtmlWithHeaderFooter(
+                xml,
+                new Map<String, String>(),
+                null,
+                null
+            );
+            System.assert(
+                withHeaderFooter.contains('box-sizing: border-box'),
+                'The header/footer CSS path should set box-sizing on cells too'
+            );
+        }
+    }
+
+    @IsTest
     static void testTableCellWidthTypes() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
