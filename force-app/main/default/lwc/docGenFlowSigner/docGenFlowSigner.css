@@ -1,0 +1,219 @@
+/* Self-contained: an Experience Cloud LWR site does not load SLDS utility classes, so nothing
+   here depends on them. No position:fixed and no 100vh: this sits inside a Flow screen and must
+   not assume it owns the window (the signing page does, which is why it cannot just be dropped in).
+   --pw-brand is set inline from the signing brand (validated in JS), default Salesforce blue. */
+:host {
+    display: block;
+}
+
+.root {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #16324f;
+    /* styling hooks so the base-component brand buttons pick up the signing brand color */
+    --slds-c-button-brand-color-background: var(--pw-brand, #0176d3);
+    --slds-c-button-brand-color-border: var(--pw-brand, #0176d3);
+    --slds-c-button-brand-color-background-hover: var(--pw-brand, #0176d3);
+    --slds-c-button-brand-color-border-hover: var(--pw-brand, #0176d3);
+}
+
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.header-main {
+    min-width: 0;
+}
+
+.header-side {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.brand-logo {
+    max-height: 28px;
+    max-width: 140px;
+    display: block;
+}
+
+.brand-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--pw-brand, #0176d3);
+}
+
+.doc-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.doc-sub {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.85rem;
+    color: #5c6b7a;
+}
+
+.badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: #eaf3fb;
+    color: #014486;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.doc-progress {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: #5c6b7a;
+}
+
+.progress {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--pw-brand, #014486);
+}
+
+.notice {
+    position: relative;
+    margin: 0 0 0.75rem 0;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #c9d3de;
+    background: #f3f6f9;
+}
+
+.notice-info {
+    min-height: 3rem;
+}
+
+.notice-error {
+    border-color: #ea001e;
+    background: #fef1f2;
+}
+
+.notice-success {
+    border-color: #2e844a;
+    background: #f1faf3;
+}
+
+.notice-title {
+    margin: 0 0 0.25rem 0;
+    font-weight: 700;
+}
+
+.notice-text {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.spinner-box {
+    position: relative;
+    height: 2rem;
+}
+
+.panel {
+    margin: 0 0 0.75rem 0;
+    padding: 1rem;
+    border: 1px solid #c9d3de;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.panel-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.panel-title-danger {
+    color: #ba0517;
+}
+
+.form-group {
+    margin-bottom: 0.6rem;
+}
+
+.pin-ok {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.85rem;
+    color: #2e844a;
+}
+
+.pad-label {
+    margin: 0.5rem 0 0.25rem 0;
+    font-weight: 700;
+}
+
+.pad-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.pad-hint {
+    font-size: 0.75rem;
+    color: #5c6b7a;
+}
+
+.pad-wrap {
+    margin-bottom: 0.25rem;
+}
+
+.pad {
+    display: block;
+    width: 100%;
+    height: 160px;
+    border: 1px dashed #8a99a8;
+    border-radius: 4px;
+    background: #fbfcfd;
+    cursor: crosshair;
+    touch-action: none; /* a stroke must not scroll the page on touch devices */
+}
+
+.field-error {
+    margin: 0.25rem 0;
+    font-size: 0.85rem;
+    color: #ba0517;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0.75rem 0;
+}
+
+/* The document scrolls inside its own box so a field can be brought into view without scrolling
+   the page (which would carry the capture panel away). Height is relative to the window, not a
+   fixed 100vh takeover: this still sits inside a Flow screen. */
+.viewer {
+    max-width: 100%;
+    max-height: 70vh;
+    overflow: auto;
+    padding: 0.5rem;
+    border-radius: 4px;
+    background: #6b7785;
+}
+
+.hidden {
+    display: none;
+}

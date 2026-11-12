@@ -1,0 +1,379 @@
+<template>
+    <div class="root" style={rootStyle}>
+        <template lwc:if={isLoading}>
+            <div class="notice notice-info" data-id="loading">
+                <div class="spinner-box">
+                    <lightning-spinner alternative-text="Loading" size="small" variant="brand"></lightning-spinner>
+                </div>
+                <p class="notice-text">{loadingText}</p>
+            </div>
+        </template>
+
+        <template lwc:if={isGuestState}>
+            <div class="notice notice-error" role="alert" data-id="guest">
+                <p class="notice-title">Sign in to continue</p>
+                <p class="notice-text">{errorText}</p>
+            </div>
+        </template>
+
+        <template lwc:if={isErrorState}>
+            <div class="notice notice-error" role="alert" data-id="error">
+                <p class="notice-title">{errorTitle}</p>
+                <p class="notice-text">{errorText}</p>
+                <template lwc:if={canRetry}>
+                    <lightning-button label="Try again" onclick={handleRetry} data-id="retry"></lightning-button>
+                </template>
+            </div>
+        </template>
+
+        <template lwc:if={isSignedState}>
+            <div class="notice notice-success" data-id="already-signed">
+                <p class="notice-title">You have already signed this document</p>
+                <p class="notice-text">{signedDetail}</p>
+                <template lwc:if={showContinueHint}>
+                    <p class="notice-text">Select Next to continue.</p>
+                </template>
+            </div>
+        </template>
+
+        <template lwc:if={isDone}>
+            <div class="notice notice-success" data-id="done">
+                <p class="notice-title">{doneTitle}</p>
+                <p class="notice-text">{doneDetail}</p>
+                <template lwc:if={showContinueHint}>
+                    <p class="notice-text">Select Next to continue.</p>
+                </template>
+            </div>
+        </template>
+
+        <template lwc:if={isDeclinedState}>
+            <div class="notice notice-error" data-id="declined">
+                <p class="notice-title">Request Declined</p>
+                <p class="notice-text">You have declined this signature request.</p>
+                <template lwc:if={showContinueHint}>
+                    <p class="notice-text">Select Next to continue.</p>
+                </template>
+            </div>
+        </template>
+
+        <template lwc:if={isVerifyState}>
+            <div class="panel" data-id="verify">
+                <p class="panel-title">Verify your email to continue</p>
+                <template lwc:if={pinMsg}>
+                    <p class={pinMsgClass} role="status" data-id="pin-msg">{pinMsg}</p>
+                </template>
+                <lightning-input
+                    type="email"
+                    label="Email address"
+                    value={pinEmail}
+                    placeholder={pinPlaceholder}
+                    onchange={handlePinEmail}
+                    data-id="pin-email"
+                ></lightning-input>
+                <template lwc:if={pinSent}>
+                    <lightning-input
+                        type="text"
+                        label="Verification code"
+                        value={pinCode}
+                        maxlength="6"
+                        placeholder="000000"
+                        onchange={handlePinCode}
+                        onkeyup={handlePinKey}
+                        data-id="pin-code"
+                    ></lightning-input>
+                    <div class="actions">
+                        <lightning-button
+                            variant="brand"
+                            label="Verify"
+                            disabled={verifyDisabled}
+                            onclick={handleVerifyPin}
+                            data-id="pin-verify"
+                        ></lightning-button>
+                        <lightning-button
+                            variant="base"
+                            label={resendLabel}
+                            disabled={resendDisabled}
+                            onclick={handleResendPin}
+                            data-id="pin-resend"
+                        ></lightning-button>
+                    </div>
+                </template>
+                <template lwc:else>
+                    <div class="actions">
+                        <lightning-button
+                            variant="brand"
+                            label="Send verification code"
+                            disabled={pinBusy}
+                            onclick={handleSendPin}
+                            data-id="pin-send"
+                        ></lightning-button>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <template lwc:if={showHeader}>
+            <div class="header">
+                <div class="header-main">
+                    <template lwc:if={hasBrand}>
+                        <div class="brand" data-id="brand">
+                            <template lwc:if={brandLogoUrl}>
+                                <img class="brand-logo" src={brandLogoUrl} alt={brandName} />
+                            </template>
+                            <template lwc:if={brandName}>
+                                <span class="brand-name">{brandName}</span>
+                            </template>
+                        </div>
+                    </template>
+                    <p class="doc-title" data-id="doc-title">{documentTitle}</p>
+                    <p class="doc-sub">
+                        Signing as {signerName}
+                        <template lwc:if={hasRole}><span class="badge" data-id="role">{roleName}</span></template>
+                        <template lwc:if={hasProgressLabel}
+                            ><span class="doc-progress" data-id="signer-progress">{signerProgress}</span></template
+                        >
+                    </p>
+                </div>
+                <div class="header-side">
+                    <template lwc:if={showFieldCounter}>
+                        <p class="progress" data-id="progress">{progressText}</p>
+                    </template>
+                    <template lwc:if={showDeclineButton}>
+                        <lightning-button
+                            variant="base"
+                            label="Decline"
+                            onclick={handleDeclineOpen}
+                            data-id="decline-btn"
+                        ></lightning-button>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={bannerText}>
+            <div class="notice notice-error" role="alert" data-id="banner">
+                <p class="notice-text">{bannerText}</p>
+            </div>
+        </template>
+
+        <template lwc:if={noticeText}>
+            <div class="notice notice-info" data-id="notice">
+                <p class="notice-text">{noticeText}</p>
+            </div>
+        </template>
+
+        <template lwc:if={showDeclinePanel}>
+            <div class="panel" data-id="decline-panel">
+                <p class="panel-title panel-title-danger">Decline signature</p>
+                <p class="notice-text">Are you sure you want to decline this signature request?</p>
+                <lightning-textarea
+                    label="Reason (optional)"
+                    value={declineReason}
+                    placeholder="Let the sender know why you're declining..."
+                    onchange={handleDeclineReason}
+                    data-id="decline-reason"
+                ></lightning-textarea>
+                <div class="actions">
+                    <lightning-button
+                        label="Go back"
+                        onclick={handleDeclineCancel}
+                        data-id="decline-cancel"
+                    ></lightning-button>
+                    <lightning-button
+                        variant="destructive"
+                        label="Confirm decline"
+                        disabled={declineBusy}
+                        onclick={handleDeclineConfirm}
+                        data-id="decline-confirm"
+                    ></lightning-button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={formStep}>
+            <div class="panel" data-id="form">
+                <p class="panel-title">Your information</p>
+                <p class="notice-text">Complete these fields, then sign to finish.</p>
+                <template for:each={formFields} for:item="f">
+                    <div key={f.key} class="form-group">
+                        <template lwc:if={f.isCheckbox}>
+                            <lightning-input
+                                type="checkbox"
+                                label={f.labelText}
+                                checked={f.checked}
+                                data-key={f.key}
+                                onchange={handleFormChange}
+                            ></lightning-input>
+                        </template>
+                        <template lwc:elseif={f.isPicklist}>
+                            <lightning-combobox
+                                label={f.labelText}
+                                value={f.value}
+                                options={f.options}
+                                data-key={f.key}
+                                onchange={handleFormChange}
+                            ></lightning-combobox>
+                        </template>
+                        <template lwc:else>
+                            <lightning-input
+                                type={f.htmlType}
+                                label={f.labelText}
+                                value={f.value}
+                                data-key={f.key}
+                                onchange={handleFormChange}
+                            ></lightning-input>
+                        </template>
+                        <template lwc:if={f.error}>
+                            <p class="field-error" role="alert">{f.error}</p>
+                        </template>
+                    </div>
+                </template>
+                <div class="actions">
+                    <lightning-button
+                        variant="brand"
+                        label="Continue"
+                        onclick={handleFormContinue}
+                        data-id="form-continue"
+                    ></lightning-button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={showStart}>
+            <div class="actions">
+                <lightning-button
+                    variant="brand"
+                    label={startLabel}
+                    onclick={handleStart}
+                    data-id="start"
+                ></lightning-button>
+            </div>
+        </template>
+
+        <template lwc:if={showCapture}>
+            <div class="panel" data-id="capture">
+                <p class="panel-title">{captureTitle}</p>
+                <p class="notice-text">{captureSubtitle}</p>
+                <template lwc:if={isDatePick}>
+                    <lightning-input
+                        type="date"
+                        label="Date"
+                        value={dateValue}
+                        onchange={handleDate}
+                        data-id="date-input"
+                    ></lightning-input>
+                </template>
+                <template lwc:if={showPad}>
+                    <p class="pad-label">Draw your signature</p>
+                    <div class="pad-wrap">
+                        <canvas class="pad" aria-label="Signature drawing area"></canvas>
+                    </div>
+                    <div class="pad-foot">
+                        <span class="pad-hint">Draw above, or type below.</span>
+                        <lightning-button
+                            label="Clear"
+                            variant="base"
+                            onclick={handleClearPad}
+                            data-id="clear"
+                        ></lightning-button>
+                    </div>
+                </template>
+                <template lwc:if={showTyped}>
+                    <lightning-input
+                        type="text"
+                        label={typedLabel}
+                        value={typedValue}
+                        maxlength="60"
+                        onchange={handleTyped}
+                        data-id="typed"
+                    ></lightning-input>
+                </template>
+                <template lwc:if={captureError}>
+                    <p class="field-error" role="alert" data-id="capture-error">{captureError}</p>
+                </template>
+                <div class="actions">
+                    <lightning-button label="Cancel" onclick={handleCancelCapture} data-id="cancel"></lightning-button>
+                    <lightning-button
+                        label="Save"
+                        disabled={saveDisabled}
+                        onclick={handleSave}
+                        data-id="save"
+                    ></lightning-button>
+                    <lightning-button
+                        variant="brand"
+                        label="Save &amp; Next"
+                        disabled={saveDisabled}
+                        onclick={handleSaveNext}
+                        data-id="save-next"
+                    ></lightning-button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={showConsent}>
+            <div class="panel" data-id="consent">
+                <p class="panel-title">Complete Signing</p>
+                <p class="notice-text">{consentSubtitle}</p>
+                <lightning-input
+                    type="checkbox"
+                    label={consentText}
+                    checked={consentChecked}
+                    onchange={handleConsent}
+                    data-id="consent-box"
+                ></lightning-input>
+                <div class="actions">
+                    <lightning-button
+                        variant="brand"
+                        label="Finish &amp; Submit"
+                        disabled={submitDisabled}
+                        onclick={handleFinish}
+                        data-id="finish"
+                    ></lightning-button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={showLegacy}>
+            <div class="panel" data-id="legacy">
+                <p class="panel-title">Sign this document</p>
+                <lightning-input
+                    type="text"
+                    label="Type your full name to sign"
+                    value={legacyName}
+                    maxlength="80"
+                    onchange={handleLegacyName}
+                    data-id="legacy-name"
+                ></lightning-input>
+                <lightning-input
+                    type="checkbox"
+                    label={consentText}
+                    checked={consentChecked}
+                    onchange={handleConsent}
+                    data-id="consent-box"
+                ></lightning-input>
+                <div class="actions">
+                    <lightning-button
+                        variant="brand"
+                        label="Finish and submit"
+                        disabled={legacyDisabled}
+                        onclick={handleLegacyFinish}
+                        data-id="legacy-finish"
+                    ></lightning-button>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={isSubmitting}>
+            <div class="notice notice-info" data-id="submitting">
+                <div class="spinner-box">
+                    <lightning-spinner alternative-text="Submitting" size="small" variant="brand"></lightning-spinner>
+                </div>
+                <p class="notice-text">Submitting your signature...</p>
+            </div>
+        </template>
+
+        <div class={viewerClass} data-id="viewer">
+            <div class="pdf-pages" lwc:dom="manual"></div>
+        </div>
+    </div>
+</template>
