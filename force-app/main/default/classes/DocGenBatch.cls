@@ -124,22 +124,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         this.duplexPadding = job.Duplex_Padding__c == true;
     }
 
-    /**
-     * Initializes the batch job: sets status, counts records, builds data cache, and returns query locator.
-     * @param bc The batch context provided by the platform
-     * @return QueryLocator for the records to process
-     */
-    /**
-     * AND the template's Record_Filter__c onto the job's condition.
-     *
-     * Both fragments are parenthesised before joining: `A OR B` combined with
-     * `C` as `A OR B AND C` would silently mean `A OR (B AND C)` and let
-     * excluded records straight through — the exact bug this closes, reopened by
-     * operator precedence.
-     *
-     * Passed through the same sanitizeCondition() as the job's own condition, so
-     * the filter cannot widen what the query may reach.
-     */
+    /** Applies the template's Record Filter to the job selection. */
     // public, not @TestVisible private: the latter is unreachable from anonymous
     // Apex, which is where the e2e scripts verify behaviour. Still not global, so
     // it stays invisible to subscribers in the managed package.
@@ -167,19 +152,9 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 null
             );
             DocGenErrorLogger.flush();
-            return jobCondition;
+            return DocGenBulkCondition.validate(baseObject, jobCondition);
         }
-        if (String.isBlank(tf)) {
-            return jobCondition;
-        }
-        String safeFilter = sanitizeCondition(tf);
-        if (String.isBlank(safeFilter)) {
-            return jobCondition;
-        }
-        if (String.isBlank(jobCondition)) {
-            return '(' + safeFilter + ')';
-        }
-        return '(' + jobCondition + ') AND (' + safeFilter + ')';
+        return DocGenBulkCondition.combine(baseObject, jobCondition, tf);
     }
 
     public Database.QueryLocator start(Database.BatchableContext bc) {
@@ -191,7 +166,6 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             throw new DocGenException('Invalid object: ' + baseObject);
         }
 
-        String sanitizedCondition = sanitizeCondition(condition);
         // THE TEMPLATE'S OWN AUDIENCE FILTER, applied to the bulk query.
         //
         // Record_Filter__c was evaluated only on the per-record path in
@@ -205,7 +179,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         // instead of one describe-and-check per record, and — importantly — the
         // job's Total_Records__c count below then reflects what will actually be
         // produced, instead of promising a total the run never reaches.
-        sanitizedCondition = andTemplateFilter(sanitizedCondition);
+        String sanitizedCondition = andTemplateFilter(condition);
         String query = 'SELECT Id FROM ' + baseObject;
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
@@ -313,42 +287,6 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             dataCacheCvId = null;
             cachedDataJson = null;
         }
-    }
-
-    /**
-     * Basic sanitization of dynamic WHERE conditions to prevent SOQL injection.
-     */
-    private static String sanitizeCondition(String condition) {
-        if (String.isBlank(condition)) {
-            return condition;
-        }
-        // Reject dangerous characters (statement termination, comments)
-        if (condition.contains(';') || condition.contains('--') || condition.contains('/*')) {
-            throw new DocGenException('Invalid filter condition.');
-        }
-        String upper = condition.toUpperCase().trim();
-        List<String> disallowed = new List<String>{
-            'SELECT ',
-            'INSERT ',
-            'UPDATE ',
-            'DELETE ',
-            'MERGE ',
-            'UNDELETE ',
-            'WITH ',
-            'GROUP BY ',
-            'ORDER BY ',
-            'LIMIT ',
-            'OFFSET ',
-            'FOR UPDATE',
-            'HAVING ',
-            'TYPEOF '
-        };
-        for (String keyword : disallowed) {
-            if (upper.contains(keyword)) {
-                throw new DocGenException('Invalid filter condition.');
-            }
-        }
-        return condition;
     }
 
     /**

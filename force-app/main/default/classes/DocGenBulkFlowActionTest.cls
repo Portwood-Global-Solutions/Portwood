@@ -192,7 +192,7 @@ private class DocGenBulkFlowActionTest {
     @IsTest
     static void testBuildEffectiveCondition_idsOnly() {
         Account a = TestDataFactory.accountByName('Test Account 1');
-        String result = DocGenBulkFlowAction.buildEffectiveCondition(null, new List<String>{ a.Id });
+        String result = DocGenBulkFlowAction.buildEffectiveCondition('Account', null, new List<String>{ a.Id });
         System.assert(result.startsWith('Id IN ('), 'Should start with Id IN, got: ' + result);
         System.assert(result.contains(a.Id), 'Should include the supplied ID');
     }
@@ -200,22 +200,26 @@ private class DocGenBulkFlowActionTest {
     @IsTest
     static void testBuildEffectiveCondition_idsAndCondition_combine() {
         Account a = TestDataFactory.accountByName('Test Account 1');
-        String result = DocGenBulkFlowAction.buildEffectiveCondition('Industry = \'Tech\'', new List<String>{ a.Id });
-        // Expect the user condition to be parenthesized then AND-ed with Id IN
+        String result = DocGenBulkFlowAction.buildEffectiveCondition(
+            'Account',
+            'Industry = \'Tech\'',
+            new List<String>{ a.Id }
+        );
+        // Preserve both filters regardless of their normalized grouping.
         System.assert(result.contains('Industry'), 'Should preserve user condition');
-        System.assert(result.contains('AND Id IN ('), 'Should AND-combine, got: ' + result);
+        System.assert(result.contains(' AND ') && result.contains('Id IN ('), 'Should AND-combine, got: ' + result);
     }
 
     @IsTest
     static void testBuildEffectiveCondition_userOnly() {
-        String result = DocGenBulkFlowAction.buildEffectiveCondition('Industry = \'Tech\'', null);
+        String result = DocGenBulkFlowAction.buildEffectiveCondition('Account', 'Industry = \'Tech\'', null);
         System.assertEquals('Industry = \'Tech\'', result);
     }
 
     @IsTest
     static void testBuildEffectiveCondition_invalidIdRejected() {
         try {
-            DocGenBulkFlowAction.buildEffectiveCondition(null, new List<String>{ 'not-an-id-haha' });
+            DocGenBulkFlowAction.buildEffectiveCondition('Account', null, new List<String>{ 'not-an-id-haha' });
             System.assert(false, 'Should have thrown for invalid ID');
         } catch (DocGenException e) {
             System.assert(e.getMessage().contains('Invalid record ID'), 'Got: ' + e.getMessage());
@@ -225,7 +229,11 @@ private class DocGenBulkFlowActionTest {
     @IsTest
     static void testBuildEffectiveCondition_blanksSkipped() {
         Account a = TestDataFactory.accountByName('Test Account 1');
-        String result = DocGenBulkFlowAction.buildEffectiveCondition(null, new List<String>{ '', null, a.Id, '   ' });
+        String result = DocGenBulkFlowAction.buildEffectiveCondition(
+            'Account',
+            null,
+            new List<String>{ '', null, a.Id, '   ' }
+        );
         System.assertEquals('Id IN (\'' + a.Id + '\')', result, 'Blanks should be skipped silently');
     }
 
@@ -309,6 +317,49 @@ private class DocGenBulkFlowActionTest {
             );
             System.assert(job.Query_Condition__c.contains(accts[0].Id), 'Should target first Account');
             System.assert(job.Query_Condition__c.contains(accts[1].Id), 'Should target second Account');
+        }
+    }
+
+    @IsTest
+    static void testGenerateBulk_combinesSemiJoinRecordIdsAndTemplateFilter() {
+        User user = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(user) {
+            DocGen_Template__c template = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            template.Record_Filter__c = 'Name LIKE \'Included %\'';
+            Database.update(template, AccessLevel.SYSTEM_MODE);
+
+            Account accepted = new Account(Name = 'Included and selected');
+            Account noContact = new Account(Name = 'Included without matching Contact');
+            Account differentTemplate = new Account(Name = 'Excluded by template');
+            Account unselected = new Account(Name = 'Included outside supplied IDs');
+            insert new List<Account>{ accepted, noContact, differentTemplate, unselected };
+            insert new List<Contact>{
+                new Contact(LastName = 'Eligible accepted', AccountId = accepted.Id),
+                new Contact(LastName = 'Eligible outside template', AccountId = differentTemplate.Id),
+                new Contact(LastName = 'Eligible outside IDs', AccountId = unselected.Id)
+            };
+
+            DocGenBulkFlowAction.Request request = new DocGenBulkFlowAction.Request();
+            request.templateId = template.Id;
+            request.queryCondition = 'Id IN (SELECT AccountId FROM Contact WHERE LastName LIKE \'Eligible %\')';
+            request.recordIds = new List<String>{ accepted.Id, noContact.Id, differentTemplate.Id };
+            request.combinedPdfOnly = false;
+            request.batchSize = 200;
+
+            Test.startTest();
+            DocGenBulkFlowAction.Response result = DocGenBulkFlowAction.generateBulkDocuments(
+                new List<DocGenBulkFlowAction.Request>{ request }
+            )[0];
+            Test.stopTest();
+
+            System.assertEquals(true, result.success, 'Flow submission failed: ' + result.errorMessage);
+            DocGen_Job__c job = [
+                SELECT Query_Condition__c, Total_Records__c
+                FROM DocGen_Job__c
+                WHERE Id = :result.jobId
+            ];
+            System.assert(job.Query_Condition__c.toLowerCase().contains('select accountid from contact'));
+            System.assertEquals(1, job.Total_Records__c, 'All three filters must restrict the selected Accounts.');
         }
     }
 

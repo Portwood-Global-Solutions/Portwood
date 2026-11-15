@@ -19,7 +19,14 @@ Make one document per record without opening every record yourself.
 8. Click **Run Bulk Generation**.
 9. Review the job and its files when processing finishes.
 
-The condition is the filter only. Do not include `SELECT` or the word `WHERE` in that field.
+Enter the condition that follows the main query's `WHERE`. For an Account template, this example selects households with a Contact in California.
+
+```sql
+RecordType.DeveloperName = 'HH_Account'
+AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
+```
+
+Use your org's record type developer name. Salesforce supports up to two top-level `IN` or `NOT IN` subqueries joined by `AND`. The count also applies the selected template's saved Record Filter.
 
 ![The bulk runner has validated the three fictional Accounts and is set to Individual Files](docs/images/userguide/v3.60/bulk-ready.png)
 

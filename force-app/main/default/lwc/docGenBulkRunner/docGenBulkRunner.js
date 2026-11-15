@@ -5,7 +5,7 @@ import { refreshApex } from '@salesforce/apex';
 import CURRENT_USER_ID from '@salesforce/user/Id';
 import { downloadBase64, extractWhereClause } from 'c/docGenUtils';
 import getBulkTemplates from '@salesforce/apex/DocGenBulkController.getBulkTemplates';
-import validateFilter from '@salesforce/apex/DocGenBulkController.validateFilter';
+import validateTemplateFilter from '@salesforce/apex/DocGenBulkController.validateTemplateFilter';
 import submitJob from '@salesforce/apex/DocGenBulkController.submitJob';
 import submitBrowserMergeJob from '@salesforce/apex/DocGenBulkController.submitBrowserMergeJob';
 import retryBrowserMergeJob from '@salesforce/apex/DocGenBulkController.retryBrowserMergeJob';
@@ -672,7 +672,10 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.isValidating = true;
         this.analysis = null;
         try {
-            const count = await validateFilter({ objectName: this.baseObject, condition: this.condition });
+            const count = await validateTemplateFilter({
+                templateId: this.selectedTemplateId,
+                condition: this.condition
+            });
             this.recordCount = count;
             this.filterValidated = true;
             this.showToast('Success', `Found ${count} records.`, 'success');

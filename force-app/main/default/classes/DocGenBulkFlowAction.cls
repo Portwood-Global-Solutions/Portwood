@@ -132,7 +132,10 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                 // collection of IDs, fold them into an `Id IN (...)` clause so
                 // the bulk pipeline runs only against those records. Combines
                 // (AND) with any user-supplied queryCondition.
-                effectiveCondition = buildEffectiveCondition(req.queryCondition, req.recordIds);
+                String filterObject = req.recordIds != null && String.isNotBlank(req.queryCondition)
+                    ? DocGenBulkController.templateBaseObject(req.templateId)
+                    : null;
+                effectiveCondition = buildEffectiveCondition(filterObject, req.queryCondition, req.recordIds);
 
                 // submitJobInternal, NOT submitJob: the @AuraEnabled entry point
                 // raises AuraHandledException, which cannot be thrown outside an
@@ -187,7 +190,7 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
      * alphanumeric format before inclusion to defend against injection.
      */
     @TestVisible
-    private static String buildEffectiveCondition(String userCondition, List<String> recordIds) {
+    private static String buildEffectiveCondition(String objectName, String userCondition, List<String> recordIds) {
         String idClause = null;
         if (recordIds != null && !recordIds.isEmpty()) {
             List<String> quoted = new List<String>();
@@ -209,7 +212,7 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
 
         Boolean hasUser = String.isNotBlank(userCondition);
         if (hasUser && idClause != null) {
-            return '(' + userCondition + ') AND ' + idClause;
+            return DocGenBulkCondition.combine(objectName, userCondition, idClause);
         }
         if (idClause != null) {
             return idClause;

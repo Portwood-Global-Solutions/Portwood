@@ -221,7 +221,7 @@
                 <div class="divider"></div>
                 <h3 class="section-title">Step 2: Record Filter (SOQL)</h3>
                 <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_medium">
-                    Define a SOQL WHERE clause to select records. Leave empty to process ALL records.
+                    Enter a SOQL condition to narrow the records eligible for the selected template.
                 </p>
 
                 <lightning-textarea
@@ -249,9 +249,9 @@
                                     >
                                 </li>
                                 <li>
-                                    Subquery:
+                                    Account with matching Contacts:
                                     <code class="inline-code"
-                                        >AccountId IN (SELECT Id FROM Account WHERE BillingState = 'CA')</code
+                                        >Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')</code
                                     >
                                 </li>
                             </ul>

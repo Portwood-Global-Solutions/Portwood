@@ -74,20 +74,12 @@ public with sharing class DocGenBrowserPdf {
                 'Browser PDF Download requires an HTML, Canvas, or Word template with PDF output.'
             );
         }
-        if (
-            String.isBlank(template.Base_Object_API__c) ||
-            !Schema.getGlobalDescribe().containsKey(template.Base_Object_API__c)
-        ) {
+        String objectName = template.Base_Object_API__c;
+        if (String.isBlank(objectName) || !Schema.getGlobalDescribe().containsKey(objectName)) {
             throw new DocGenException('The template requires a valid Salesforce source object.');
         }
-        String safeFilter = DocGenBulkController.sanitizeConditionInternal(condition);
-        String templateFilter = DocGenBulkController.sanitizeConditionInternal(template.Record_Filter__c);
-        if (String.isNotBlank(templateFilter)) {
-            safeFilter = String.isBlank(safeFilter)
-                ? templateFilter
-                : '(' + safeFilter + ') AND (' + templateFilter + ')';
-        }
-        String safeSort = DocGenBulkController.normalizeSortOrder(template.Base_Object_API__c, sortOrder);
+        String safeFilter = DocGenBulkCondition.combine(objectName, condition, template.Record_Filter__c);
+        String safeSort = DocGenBulkController.normalizeSortOrder(objectName, sortOrder);
         String ordered = String.isBlank(safeSort) ? 'Id ASC' : safeSort;
         if (!Pattern.compile('(?i)(^|,\\s*)Id(\\s|$)').matcher(ordered).find()) {
             ordered += ', Id ASC';
@@ -109,7 +101,7 @@ public with sharing class DocGenBrowserPdf {
         /* code-analyzer-suppress ApexFlsViolation */
         Database.insert(job, AccessLevel.SYSTEM_MODE);
         Integer blockSize = batchSize == null ? 10 : Math.max(1, Math.min(MAX_BLOCK_SIZE, batchSize));
-        DocGenBrowserPdfPlanner.enqueue(job.Id, template.Base_Object_API__c, safeFilter, ordered, blockSize);
+        DocGenBrowserPdfPlanner.enqueue(job.Id, objectName, safeFilter, ordered, blockSize);
         return job.Id;
     }
 
