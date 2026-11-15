@@ -1541,13 +1541,23 @@ The condition is the filter only. Do not include `SELECT` or the word `WHERE` in
 
 #### Choose the right output
 
-| Mode                      | Use it when…                                     |
-| ------------------------- | ------------------------------------------------ |
-| **Individual Files**      | Each record needs its own file                   |
-| **Print-Ready Packet**    | You want one PDF covering the selected records   |
-| **Combined + Individual** | You need the individual files and a combined PDF |
+| Mode                      | Use it when…                                           |
+| ------------------------- | ------------------------------------------------------ |
+| **Individual Files**      | Each record needs its own file                         |
+| **Print-Ready Packet**    | You want one PDF covering the selected records         |
+| **Combined + Individual** | You need the individual files and a combined PDF       |
+| **Merge PDFs in Browser** | You want one download from a large set of private PDFs |
 
 Word, HTML, and supported Canvas PDF workflows can be used for PDF documents. Native Excel and PowerPoint output and fillable PDF forms require **Individual Files**. Follow any compatibility message shown for the selected template.
+
+#### Download a large merged PDF
+
+1. Select a PDF template and choose **Merge PDFs in Browser**.
+2. Start the run. Portwood makes a private PDF for each selected record in the background.
+3. Open the completed job from its notification or Recent Jobs, then choose **Download merged PDF**.
+4. Keep the browser open while it assembles and saves the PDF. If the connection drops or the page closes, reopen the same job in the same browser profile to resume.
+
+Use a current desktop browser that supports browser-managed file storage. The mode supports up to 100,000 source records and up to 1 MiB per generated PDF. Each source PDF uses Salesforce File storage. The browser needs space for the merged PDF on the device. If some statements fail, review the job and choose **Retry missing PDFs** when available before downloading.
 
 #### Put the documents in order
 
@@ -2374,6 +2384,10 @@ Store **Success**, **Error Message**, and **Job ID**. Add a Decision for an unsu
 The action submits background work and returns. Follow the job in Portwood job history; do not email a completion notice just because submission returned successfully.
 
 When producing a combined PDF for double-sided printing, the action's **Duplex Padding** input applies the same behavior as the bulk UI.
+
+#### Offer a browser download from Flow
+
+Set **Merge PDFs in Browser** to **True** and leave **Duplex Padding** off. Store **Job ID** and **Merged PDF Download URL** from the result. The URL opens the authenticated download page for the job. The job and private PDFs belong to the Flow running user. Start the job in the user context intended to receive the download. Give that user the link after the job is ready so they can open it in a browser, assemble the pages, and save the PDF. The other bulk output settings apply to the existing server-side modes.
 
 _Flow builders · 6 min read · Reviewed for 3.60.0_
 
@@ -4865,13 +4879,26 @@ global String sortOrder
 global String jobLabel
 global Boolean combinedPdfOnly
 global Boolean keepIndividualFiles
+global Boolean browserMerge
 global Boolean duplexPadding
 global Integer batchSize
 global class Response
 global Id jobId
+global String downloadUrl
 global String errorMessage
 global Boolean success
 global static List<Response> generateBulkDocuments(List<Request> requests)
+```
+
+#### DocGenBulkPdfDownloadController
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenBulkPdfDownloadController.cls)
+
+```apex
+global with sharing class DocGenBulkPdfDownloadController
+global static Object describe(String jobId)
+global static Object getManifestPage(String jobId, String revisionKey, Integer afterOrdinal)
+global static List<String> getSources(String jobId, String revisionKey, List<Integer> ordinals)
 ```
 
 #### DocGenChartCvReaper

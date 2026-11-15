@@ -35,3 +35,7 @@ Store **Success**, **Error Message**, and **Job ID**. Add a Decision for an unsu
 The action submits background work and returns. Follow the job in Portwood job history; do not email a completion notice just because submission returned successfully.
 
 When producing a combined PDF for double-sided printing, the action's **Duplex Padding** input applies the same behavior as the bulk UI.
+
+#### Offer a browser download from Flow
+
+Set **Merge PDFs in Browser** to **True** and leave **Duplex Padding** off. Store **Job ID** and **Merged PDF Download URL** from the result. The URL opens the authenticated download page for the job. The job and private PDFs belong to the Flow running user. Start the job in the user context intended to receive the download. Give that user the link after the job is ready so they can open it in a browser, assemble the pages, and save the PDF. The other bulk output settings apply to the existing server-side modes.

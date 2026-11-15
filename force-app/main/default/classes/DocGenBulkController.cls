@@ -19,6 +19,7 @@ public with sharing class DocGenBulkController {
                 'Base_Object_API__c',
                 'Description__c',
                 'Output_Format__c',
+                'Type__c',
                 'Query_Config__c',
                 'Test_Record_Id__c',
                 'Category__c',
@@ -47,6 +48,7 @@ public with sharing class DocGenBulkController {
                 Base_Object_API__c,
                 Description__c,
                 Output_Format__c,
+                Type__c,
                 Query_Config__c,
                 Test_Record_Id__c,
                 Category__c,
@@ -190,12 +192,20 @@ public with sharing class DocGenBulkController {
      * (2) caller performs allowlist validation of field names against Schema describe.
      */
     public static String sanitizeCondition(String condition) {
+        try {
+            return sanitizeConditionInternal(condition);
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e);
+        }
+    }
+
+    public static String sanitizeConditionInternal(String condition) {
         if (String.isBlank(condition)) {
             return condition;
         }
         // Reject dangerous characters (statement termination, comments)
         if (condition.contains(';') || condition.contains('--') || condition.contains('/*')) {
-            throw DocGenService.ahe('Invalid filter condition.');
+            throw new DocGenException('Invalid filter condition.');
         }
         // Normalize whitespace for keyword matching (tabs, newlines, multiple spaces -> single space)
         String normalized = condition.replaceAll('\\s+', ' ').toUpperCase().trim();
@@ -218,7 +228,7 @@ public with sharing class DocGenBulkController {
         };
         for (String keyword : disallowed) {
             if (normalized.contains(keyword)) {
-                throw DocGenService.ahe('Invalid filter condition.');
+                throw new DocGenException('Invalid filter condition.');
             }
         }
         return condition;
@@ -1047,6 +1057,51 @@ public with sharing class DocGenBulkController {
         }
     }
 
+    /** Generates private PDF sources whose exact versions are combined in the browser. */
+    @AuraEnabled
+    public static Id submitBrowserMergeJob(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Integer batchSize,
+        String sortOrder
+    ) {
+        try {
+            return submitBrowserMergeJobInternal(templateId, condition, jobLabel, batchSize, sortOrder);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error starting browser PDF generation.');
+        }
+    }
+
+    /** Catchable entry point for Flow and other package-internal callers. */
+    public static Id submitBrowserMergeJobInternal(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Integer batchSize,
+        String sortOrder
+    ) {
+        return DocGenBrowserPdf.submit(templateId, condition, jobLabel, batchSize, sortOrder);
+    }
+
+    @AuraEnabled
+    public static Id retryBrowserMergeJob(Id jobId) {
+        try {
+            return DocGenBrowserPdf.retry(jobId);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error retrying browser PDF generation.');
+        }
+    }
+
+    @AuraEnabled
+    public static String getBrowserMergeDownloadUrl(Id jobId) {
+        try {
+            return DocGenBrowserPdf.downloadUrl(jobId);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error opening the bulk PDF download.');
+        }
+    }
+
     /**
      * The same work, throwing a CATCHABLE exception.
      *
@@ -1265,11 +1320,29 @@ public with sharing class DocGenBulkController {
     public static DocGen_Job__c getJobStatus(Id jobId) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Job__c.sObjectType,
-            new Set<String>{ 'Name', 'Status__c', 'Success_Count__c', 'Error_Count__c', 'Total_Records__c' }
+            new Set<String>{
+                'Name',
+                'OwnerId',
+                'CreatedById',
+                'Status__c',
+                'Success_Count__c',
+                'Error_Count__c',
+                'Total_Records__c',
+                'Browser_Merge__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Job__c> jsRecords = [
-            SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c
+            SELECT
+                Id,
+                Name,
+                OwnerId,
+                CreatedById,
+                Status__c,
+                Success_Count__c,
+                Error_Count__c,
+                Total_Records__c,
+                Browser_Merge__c
             FROM DocGen_Job__c
             WHERE Id = :jobId
             WITH SYSTEM_MODE
@@ -1287,6 +1360,9 @@ public with sharing class DocGenBulkController {
             DocGen_Job__c.sObjectType,
             new Set<String>{
                 'Name',
+                'OwnerId',
+                'CreatedById',
+                'Browser_Merge__c',
                 'Label__c',
                 'Status__c',
                 'Success_Count__c',
@@ -1301,6 +1377,9 @@ public with sharing class DocGenBulkController {
             SELECT
                 Id,
                 Name,
+                OwnerId,
+                CreatedById,
+                Browser_Merge__c,
                 Label__c,
                 Status__c,
                 Success_Count__c,

@@ -167,6 +167,27 @@
                             </template>
 
                             <template if:true={isJobFinished}>
+                                <template lwc:if={jobBrowserActions.downloadReady}>
+                                    <lightning-button
+                                        label="Download merged PDF"
+                                        icon-name="utility:download"
+                                        variant="brand"
+                                        data-jobid={jobId}
+                                        onclick={handleOpenBrowserDownload}
+                                        disabled={isOpeningBrowserDownload}
+                                        class="slds-var-m-top_small slds-show"
+                                    ></lightning-button>
+                                </template>
+                                <template lwc:elseif={jobBrowserActions.retryReady}>
+                                    <lightning-button
+                                        label="Retry missing PDFs"
+                                        variant="inverse"
+                                        data-jobid={jobId}
+                                        onclick={handleRetryBrowserMerge}
+                                        disabled={isBrowserRetryDisabled}
+                                        class="slds-var-m-top_small slds-show"
+                                    ></lightning-button>
+                                </template>
                                 <div class="slds-var-m-top_small slds-grid slds-gutters_x-small">
                                     <div class="slds-col">
                                         <lightning-button
@@ -431,7 +452,7 @@
                             options={outputModeOptions}
                             onchange={handleOutputModeChange}
                             disabled={isProcessing}
-                            field-level-help="Individual Files: one PDF per record (unlimited scale). Print-Ready Packet: single merged PDF for mail/print. Combined + Individual: both."
+                            field-level-help="Individual Files saves one file per record. Print-Ready Packet builds a single PDF. Combined + Individual produces both."
                         >
                         </lightning-combobox>
                     </div>
@@ -461,6 +482,13 @@
                         </div>
                     </template>
                 </div>
+
+                <template lwc:if={browserMerge}>
+                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_small">
+                        Each source PDF can be up to 1 MiB. Open the completed job to merge and save the PDFs in your
+                        browser.
+                    </p>
+                </template>
 
                 <div class="slds-align_absolute-center slds-var-m-top_large">
                     <div class="slds-text-align_center">
@@ -526,6 +554,27 @@
                                     ></template
                                 >
                                 <span class="slds-text-color_weak slds-var-m-left_medium">{rj.date}</span>
+                                <template lwc:if={rj.downloadReady}>
+                                    <lightning-button
+                                        label="Download merged PDF"
+                                        icon-name="utility:download"
+                                        variant="base"
+                                        data-jobid={rj.id}
+                                        onclick={handleOpenBrowserDownload}
+                                        disabled={isOpeningBrowserDownload}
+                                        class="slds-var-m-left_medium"
+                                    ></lightning-button>
+                                </template>
+                                <template lwc:elseif={rj.retryReady}>
+                                    <lightning-button
+                                        label="Retry missing PDFs"
+                                        variant="base"
+                                        data-jobid={rj.id}
+                                        onclick={handleRetryBrowserMerge}
+                                        disabled={isBrowserRetryDisabled}
+                                        class="slds-var-m-left_medium"
+                                    ></lightning-button>
+                                </template>
                                 <lightning-button-icon
                                     icon-name="utility:open"
                                     alternative-text="View Job"

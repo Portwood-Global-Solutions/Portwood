@@ -40,6 +40,31 @@ private class DocGenBulkFlowActionTest {
     }
 
     @IsTest
+    static void browserMergeReturnsAnAuthenticatedJobLink() {
+        DocGen_Template__c template = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        template.Type__c = 'HTML';
+        template.Output_Format__c = 'PDF';
+        template.Is_Active__c = true;
+        update template;
+
+        DocGenBulkFlowAction.Request request = new DocGenBulkFlowAction.Request();
+        request.templateId = template.Id;
+        request.queryCondition = 'Name = \'Test Account 1\'';
+        request.browserMerge = true;
+        request.sortOrder = 'Name ASC';
+        DocGenBulkFlowAction.Response response = DocGenBulkFlowAction.generateBulkDocuments(
+            new List<DocGenBulkFlowAction.Request>{ request }
+        )[0];
+
+        System.assertEquals(true, response.success);
+        System.assert(response.downloadUrl.startsWith(URL.getOrgDomainUrl().toExternalForm()));
+        System.assert(response.downloadUrl.endsWith('jobId=' + response.jobId));
+        DocGen_Job__c job = [SELECT Browser_Merge__c, Merged_PDF_CV__c FROM DocGen_Job__c WHERE Id = :response.jobId];
+        System.assertEquals(true, job.Browser_Merge__c);
+        System.assertEquals(null, job.Merged_PDF_CV__c);
+    }
+
+    @IsTest
     static void duplexPaddingInputReachesTheJob() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
