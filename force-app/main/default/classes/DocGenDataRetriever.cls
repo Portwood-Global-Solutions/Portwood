@@ -2247,6 +2247,61 @@ public with sharing class DocGenDataRetriever {
         return data;
     }
 
+    /** Opens one sorted, user-mode cursor for a direct V3 child dataset. */
+    public static Database.Cursor openGiantQueryCursor(
+        Id recordId,
+        Map<String, Object> childNode,
+        List<String> requestedFields
+    ) {
+        String objectName = (String) childNode.get('object');
+        SObjectType childType = validateObjectName(objectName);
+        Map<String, SObjectField> fieldMap = childType.getDescribe().fields.getMap();
+        String lookup = (String) childNode.get('lookupField');
+        if (String.isBlank(lookup) || !fieldMap.containsKey(lookup.toLowerCase())) {
+            throw new DocGenException('Invalid or inaccessible lookup field: ' + lookup);
+        }
+        lookup = fieldMap.get(lookup.toLowerCase()).getDescribe().getName();
+
+        List<String> fields = new List<String>{ 'Id' };
+        Set<String> selected = new Set<String>{ 'id' };
+        for (String field : validateFieldList(requestedFields, childType)) {
+            if (selected.add(field.toLowerCase())) {
+                fields.add(field);
+            }
+        }
+
+        String rawWhere = (String) childNode.get('where');
+        String filter = sanitizeWhereClause(rawWhere == null ? (String) childNode.get('whereClause') : rawWhere);
+        String sortClause = sanitizeClause((String) childNode.get('orderBy'), 'ORDER BY', fieldMap);
+        Object rawLimit = childNode.get('limit') ?? childNode.get('limitClause');
+        String rowLimit = rawLimit == null ? null : sanitizeClause(String.valueOf(rawLimit), 'LIMIT');
+        if (String.isBlank(sortClause)) {
+            sortClause = 'Id ASC';
+        } else if (!Pattern.compile('(?i)(?:^|,)\\s*Id(?:\\s|,|$)').matcher(sortClause).find()) {
+            sortClause += ', Id ASC';
+        }
+        String query =
+            'SELECT ' +
+            String.join(fields, ', ') +
+            ' FROM ' +
+            objectName +
+            ' WHERE ' +
+            lookup +
+            ' = :parentId';
+        if (String.isNotBlank(filter)) {
+            query += ' AND (' + filter + ')';
+        }
+        query += ' ORDER BY ' + sortClause;
+        if (String.isNotBlank(rowLimit)) {
+            query += ' LIMIT ' + rowLimit;
+        }
+        return Database.getCursorWithBinds(
+            query,
+            new Map<String, Object>{ 'parentId' => recordId },
+            AccessLevel.USER_MODE
+        );
+    }
+
     /**
      * Counts child records per relationship for a given parent record.
      * Used by Giant Query to determine if async processing is needed.
