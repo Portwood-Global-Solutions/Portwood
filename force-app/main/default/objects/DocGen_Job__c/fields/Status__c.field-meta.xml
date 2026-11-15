@@ -13,6 +13,11 @@
                 <label>Draft</label>
             </value>
             <value>
+                <fullName>Queued</fullName>
+                <default>false</default>
+                <label>Queued</label>
+            </value>
+            <value>
                 <fullName>Processing</fullName>
                 <default>false</default>
                 <label>Processing</label>
