@@ -1849,9 +1849,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Map<String, Object> n = (Map<String, Object>) nodeObj;
                     String relName = (String) n.get('relationshipName');
                     if (String.isNotBlank(relName) && n.get('parentNode') != null) {
+                        String alias = (String) n.get('alias');
+                        String effectiveKey = String.isNotBlank(alias) ? alias : relName;
                         childNodes.put(
-                            relName,
+                            effectiveKey,
                             new Map<String, Object>{
+                                'relationshipName' => relName,
+                                'alias' => alias,
                                 'object' => n.get('object'),
                                 'lookupField' => n.get('lookupField'),
                                 'fields' => n.get('fields'),
