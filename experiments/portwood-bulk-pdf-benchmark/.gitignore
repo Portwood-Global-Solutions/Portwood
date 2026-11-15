@@ -1,0 +1,7 @@
+/node_modules/
+/.sf/
+/.sfdx/
+/runs/
+/artifacts/
+/output/
+__pycache__/

@@ -1,0 +1,10 @@
+{
+  "orgName": "Portwood 100K Statements Benchmark",
+  "edition": "Developer",
+  "features": ["EnableSetPasswordInApi"],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    }
+  }
+}

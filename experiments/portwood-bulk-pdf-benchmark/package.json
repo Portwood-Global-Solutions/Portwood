@@ -1,0 +1,12 @@
+{
+  "name": "portwood-bulk-pdf-benchmark",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1",
+    "playwright-core": "1.64.1"
+  }
+}

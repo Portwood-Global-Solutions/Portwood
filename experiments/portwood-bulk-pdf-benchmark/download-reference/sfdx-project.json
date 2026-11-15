@@ -1,0 +1,6 @@
+{
+  "packageDirectories": [{ "path": "force-app", "default": true }],
+  "name": "Portwood PDF Download Reference",
+  "namespace": "",
+  "sourceApiVersion": "68.0"
+}

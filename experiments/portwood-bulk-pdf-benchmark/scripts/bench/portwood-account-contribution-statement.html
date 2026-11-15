@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Annual contribution statement</title>
+    <style>
+      @page { size: letter; margin: 0.7in 0.78in; }
+      body { margin: 0; color: #212d28; font: 10pt Arial, Helvetica, sans-serif; line-height: 1.45; }
+      h1, h2, h3, p { margin: 0; }
+      table { border-collapse: collapse; width: 100%; }
+      td, th { vertical-align: top; }
+      .letterhead { margin-bottom: 19pt; border-bottom: 2pt solid #275846; }
+      .letterhead td { padding: 0 0 10pt; }
+      .organization { color: #275846; font: bold 21pt Georgia, 'Times New Roman', serif; }
+      .sender { text-align: right; color: #4e5b55; font-size: 9pt; }
+      h1 { color: #17412f; font: bold 25pt Georgia, 'Times New Roman', serif; }
+      .period { margin-top: 4pt; color: #4e5b55; font-size: 9pt; }
+      .account { margin: 13pt 0 11pt; }
+      .account td { padding: 9pt 11pt; border: 0.65pt solid #c9d8cf; }
+      .account .total { width: 34%; text-align: right; background: #f2f6f3; }
+      .label { margin-bottom: 3pt; color: #315646; font-size: 8pt; font-weight: bold; letter-spacing: 0.6pt; text-transform: uppercase; }
+      .account-number { margin-top: 3pt; color: #4e5b55; font-size: 8.5pt; }
+      .total strong { display: block; color: #17412f; font-size: 20pt; }
+      .intro { margin-bottom: 13pt; }
+      h2 { margin: 0 0 7pt; color: #17412f; font-size: 12pt; page-break-after: avoid; }
+      h3 { color: #17412f; font-size: 10pt; }
+      .gift { margin-bottom: 12pt; page-break-inside: avoid; }
+      .gift-heading { border-bottom: 0.7pt solid #acc0b5; }
+      .gift-heading td { padding: 0 0 3pt; }
+      .gift-label { margin-top: 2pt; color: #4e5b55; font-size: 8.5pt; }
+      .gift-amount { text-align: right; color: #17412f; font-size: 11pt; white-space: nowrap; }
+      .lines th { padding: 3pt 6pt; background: #edf3ef; color: #315646; font-size: 8pt; text-align: left; }
+      .lines td { padding: 4pt 6pt; border-bottom: 0.5pt solid #dbe3de; font-size: 8.75pt; }
+      .lines .quantity { width: 13%; text-align: right; }
+      .lines .money { width: 19%; text-align: right; white-space: nowrap; }
+      .foot { border-top: 0.65pt solid #b9c9bf; padding-top: 8pt; margin-top: 15pt; color: #4e5b55; font-size: 8.75pt; }
+      .foot strong { color: #17412f; }
+    </style>
+  </head>
+  <body>
+    <table class="letterhead" role="presentation">
+      <tr>
+        <td class="organization">Cedar Waters Foundation</td>
+        <td class="sender">Donor Services<br />Portland, Oregon</td>
+      </tr>
+    </table>
+
+    <h1>Annual contribution statement</h1>
+    <p class="period">January 1 &#8211; December 31, 2025</p>
+
+    <table class="account" role="presentation">
+      <tr>
+        <td>
+          <p class="label">Prepared for</p>
+          <strong>{Name}</strong><br />
+          {BillingStreet}<br />
+          {BillingCity}, {BillingState} {BillingPostalCode}
+          <p class="account-number">Donor account {AccountNumber}</p>
+        </td>
+        <td class="total">
+          <p class="label">Total contributed</p>
+          <strong>{SUM:Opportunities.Amount:currency}</strong>
+          <p>Gifts received {COUNT:Opportunities}</p>
+        </td>
+      </tr>
+    </table>
+
+    <p class="intro">Thank you for supporting local families. This statement lists each gift and how it was allocated.</p>
+    <h2>Contributions and fund allocations</h2>
+    {#Opportunities}
+    <div class="gift">
+      <table class="gift-heading" role="presentation">
+        <tr>
+          <td><h3>{Description}</h3><p class="gift-label">{CloseDate:MMMM d, yyyy} &#183; {Name}</p></td>
+          <td class="gift-amount"><strong>{Amount:currency}</strong></td>
+        </tr>
+      </table>
+      <table class="lines">
+        <thead>
+          <tr><th>Fund designation</th><th class="quantity">Units</th><th class="money">Per unit</th><th class="money">Allocated</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>{#OpportunityLineItems}{Product2.Name}</td><td class="quantity">{Quantity}</td><td class="money">{UnitPrice:currency}</td><td class="money">{TotalPrice:currency}{/OpportunityLineItems}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    {/Opportunities}
+
+    <div class="foot">
+      <strong>Sample &#8212; not issued</strong><br />
+      Cedar Waters Foundation is a fictional organization. This statement uses synthetic data.
+    </div>
+  </body>
+</html>

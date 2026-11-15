@@ -1,0 +1,76 @@
+{
+  "dataset": {
+    "accounts": 100000,
+    "opportunities": 200000,
+    "lineItems": 400000
+  },
+  "setup": {
+    "scratchOrgs": 8,
+    "accountsPerOrg": 12500,
+    "packageVersion": "3.61.0-1",
+    "renderEngine": "Portwood managed HTML generation backed by native Blob.toPdf()",
+    "apexCallouts": 0
+  },
+  "timingsMs": {
+    "provisioningThroughLastOrgReadyMs": 16000,
+    "setupThroughLastTemplateReadyMs": 150000,
+    "seedingThroughLastCohortVerifiedMs": 146000,
+    "salesforceGenerationFirstJobToLastJobMs": 785000,
+    "slowestScratchOrgGenerationMs": 755000,
+    "exportFirstTransferToLastTransferMs": 412000,
+    "browserMergeAndSaveMs": 23606,
+    "startFromProvisioningThroughFinalVerificationMs": 1347901,
+    "startFromFirstBatchThroughFinalVerificationMs": 1133901
+  },
+  "summedSalesforceStageMs": {
+    "prefetch": 137613,
+    "render": 2411561,
+    "savePrivateFiles": 19636180
+  },
+  "browser": {
+    "version": "Chrome 157.0.8103.51",
+    "localhostReplay": true,
+    "mergeAndSaveMs": 23606,
+    "verificationMs": 56166,
+    "verifiedPages": 100000,
+    "pixelMatchedPages": [
+      1,
+      50000,
+      100000
+    ]
+  },
+  "files": {
+    "sourcePdfs": 100000,
+    "sourceDownloadChecksums": 100000,
+    "sourcePdfBytes": 284164681,
+    "sourceCorpusSha256": "418e9224b2c09a30898bbdc6d4c1a68e03761c8401249ee231ad56fcaab40ea8",
+    "mergedPdfBytes": 250490191,
+    "mergedPdfSha256": "a70787dc78141a60def24cce8b84727d60f6dddb184342ab58115919a7923158"
+  },
+  "storage": {
+    "eachScratchOrg": [
+      {
+        "name": "DataStorageMB",
+        "max": 500,
+        "remaining": 427
+      },
+      {
+        "name": "FileStorageMB",
+        "max": 50,
+        "remaining": 16
+      }
+    ]
+  },
+  "verifiedContent": {
+    "cohort": "PW-BENCH-100K-2025",
+    "ordinalWidth": 6,
+    "pages": 100000,
+    "verifiedAccounts": 100000,
+    "verifiedOpportunities": 200000,
+    "verifiedOpportunityLineItems": 400000,
+    "firstOrdinal": 1,
+    "lastOrdinal": 100000,
+    "backendManifestMatched": true,
+    "verification": "Every account, address, gift reference, date, fund, amount, and associated allocation checked against the synthetic fixture."
+  }
+}

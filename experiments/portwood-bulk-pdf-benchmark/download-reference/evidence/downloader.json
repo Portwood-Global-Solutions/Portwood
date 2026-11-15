@@ -1,0 +1,48 @@
+{
+  "scope": "Sanitized results from prior scratch runs. This standalone copy was not deployed for packaging verification.",
+  "rangeDownload": {
+    "archiveBytes": 71442505,
+    "sourcePdfs": 100,
+    "pages": 300,
+    "stagedChunks": 170,
+    "httpRangeRequests": 137,
+    "concurrency": 6,
+    "downloadMs": 11895,
+    "maxSampledApexHeapBytes": 3468770,
+    "apexCallouts": 0,
+    "sha256Matched": true,
+    "anonymousStatus": 401
+  },
+  "notificationAndBrowserDownload": {
+    "archiveBytes": 269406468,
+    "pages": 103,
+    "distinctJpegs": 103,
+    "embeddedFonts": 2,
+    "stagedChunks": 700,
+    "concurrency": 6,
+    "generationMs": 56261,
+    "followedReadyNotificationInLightning": true,
+    "authenticatedVisualforceRemoting": true,
+    "browserDownloadCompleted": true,
+    "sha256Matched": true,
+    "apexCallouts": 0,
+    "externalServices": 0
+  },
+  "ordinaryUserResume": {
+    "profile": "Standard User",
+    "downloadPermissionSet": "PortwoodPdfDownload",
+    "document": "Public NTSB Creaform inspection reports, docket HWY22MH003, item 27, privately staged for the download test",
+    "archiveBytes": 11381399,
+    "pages": 61,
+    "totalChunks": 36,
+    "checkpointBytes": 5690700,
+    "resumedOffset": 5690700,
+    "verifiedLocalChunksReused": 18,
+    "fetchedAfterResumeBytes": 5690699,
+    "interruption": "Interrupted the network and closed the tab, then reopened the same authenticated link.",
+    "successfulRangeResponsesChecked": 36,
+    "sha256Matched": true,
+    "apexCallouts": 0,
+    "externalServices": 0
+  }
+}

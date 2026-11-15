@@ -1,0 +1,4 @@
+.sf/
+.sfdx/
+__pycache__/
+scratch-output/

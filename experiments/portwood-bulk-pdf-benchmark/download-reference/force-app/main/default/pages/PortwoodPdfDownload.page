@@ -1,0 +1,371 @@
+<apex:page controller="PortwoodPdfDownloadController" showHeader="false" sidebar="false"
+    standardStylesheets="false" applyHtmlTag="false" applyBodyTag="false" docType="html-5.0" cache="false">
+    <html lang="en">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Download Portwood PDF</title>
+        <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; padding: 3rem 1rem; background: #f4f6f9; color: #172638;
+                font: 1rem/1.5 system-ui, sans-serif; }
+            main { max-width: 30rem; margin: 0 auto; padding: 1.75rem; background: #fff;
+                border: 1px solid #dce3eb; border-radius: 0.75rem; }
+            h1 { margin: 0; font-size: 1.5rem; line-height: 1.25; }
+            p { margin: 0.75rem 0; color: #43576c; overflow-wrap: anywhere; }
+            progress { display: block; width: 100%; height: 0.75rem; margin: 1rem 0 0;
+                accent-color: #0758a4; }
+            button, a { font: inherit; font-weight: 600; }
+            button { display: inline-block; margin-top: 0.5rem; padding: 0.55rem 0.9rem; color: white;
+                background: #0758a4; border: 1px solid transparent; border-radius: 0.375rem; cursor: pointer; }
+            button:hover { background: #06477f; }
+            button:disabled { background: #516477; cursor: default; }
+            a { display: inline-block; margin-top: 0.5rem; color: #06477f; }
+            button:focus-visible, a:focus-visible { outline: 2px solid #095ec0; outline-offset: 4px; }
+            [hidden] { display: none; }
+        </style>
+    </head>
+    <body>
+        <main id="downloadPage" data-describe="{!$RemoteAction.PortwoodPdfDownloadController.describe}"
+            data-read="{!$RemoteAction.PortwoodPdfDownloadController.readRange}">
+            <h1>Download PDF</h1>
+            <p id="fileDetails" hidden="hidden"></p>
+            <p id="status" role="status">Checking PDF availability…</p>
+            <progress id="progress" max="100" value="0" aria-label="Download progress" hidden="hidden"></progress>
+            <button id="download" type="button" hidden="hidden">Download PDF</button>
+            <button id="retry" type="button" hidden="hidden">Try again</button>
+            <a id="newTab" target="_blank" rel="noopener" hidden="hidden">Open download in a new tab</a>
+        </main>
+        <script>
+        (() => {
+            'use strict';
+
+            const maxPending = 6;
+            const maxRangeBytes = 512 * 1024;
+            const segmentLimit = 2 * 1024 * 1024;
+            const exportDelay = 120000;
+            const exportPattern = /^portwood-export-(\d+)-[a-f0-9-]+\.pdf$/;
+            const canStageToDisk = typeof navigator.storage?.getDirectory === 'function';
+            const canChooseDestination = typeof window.showSaveFilePicker === 'function';
+            const canResume = canStageToDisk ? typeof navigator.locks?.request === 'function' : false;
+            const revisionId = new URLSearchParams(window.location.search).get('id');
+            const page = document.getElementById('downloadPage');
+            const details = document.getElementById('fileDetails');
+            const status = document.getElementById('status');
+            const progress = document.getElementById('progress');
+            const download = document.getElementById('download');
+            const retry = document.getElementById('retry');
+            const newTab = document.getElementById('newTab');
+            const sizeFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+            let pdf;
+
+            function invoke(action, ...args) {
+                return new Promise((resolve, reject) => {
+                    Visualforce.remoting.Manager.invokeAction(action, ...args, (result, event) => {
+                        if (event.status) resolve(result);
+                        else reject(new Error('Could not read the PDF.'));
+                    }, { buffer: false, escape: false, timeout: 30000 });
+                });
+            }
+
+            function validDetails(result) {
+                if (!Number.isSafeInteger(result?.totalBytes) || 0 >= result.totalBytes ||
+                    !Number.isSafeInteger(result.rangeBytes) || 0 >= result.rangeBytes ||
+                    result.rangeBytes > maxRangeBytes || typeof result.fileName !== 'string') return false;
+                if (result.chunkSizes == null) return true;
+                if (!Array.isArray(result.chunkSizes) || result.chunkSizes.length > 1024) return false;
+                if (result.chunkSizes.some(size => !Number.isSafeInteger(size) || 0 >= size || size > result.rangeBytes)) {
+                    return false;
+                }
+                return result.chunkSizes.reduce((total, size) => total + size, 0) === result.totalBytes;
+            }
+
+            async function loadDetails() {
+                retry.hidden = true;
+                status.textContent = 'Checking PDF availability…';
+                try {
+                    const result = await invoke(page.dataset.describe, revisionId);
+                    if (!validDetails(result)) throw new Error('Invalid PDF details.');
+                    pdf = result;
+                    const size = sizeFormatter.format(pdf.totalBytes / (1024 * 1024));
+                    details.textContent = `${pdf.fileName} · ${size} MiB`;
+                    details.hidden = false;
+                    if (window.self !== window.top) {
+                        status.textContent = 'Open this page in its own tab to save the PDF.';
+                        const target = new URL(window.location.pathname, window.location.origin);
+                        target.searchParams.set('id', revisionId);
+                        newTab.href = target.href;
+                        newTab.hidden = false;
+                    } else if (!(canStageToDisk || canChooseDestination)) {
+                        status.textContent = 'Open this link in desktop Chrome or Edge to save the PDF.';
+                    } else {
+                        status.textContent = 'Ready to download.';
+                        download.hidden = false;
+                    }
+                } catch (error) {
+                    status.textContent = 'Could not open this PDF. Check your access and try again.';
+                    retry.hidden = false;
+                }
+            }
+
+            async function readRange(start, end) {
+                for (let attempt = 0; 3 > attempt; attempt += 1) {
+                    try {
+                        const range = await invoke(page.dataset.read, revisionId, start, end);
+                        if (typeof range?.data !== 'string') throw new Error('Missing PDF range.');
+                        return { data: range.data, apexCallouts: range.apexCallouts };
+                    } catch (error) {
+                        if (attempt === 2) return { error };
+                        await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
+                    }
+                }
+            }
+
+            function decode(data, length) {
+                const binary = window.atob(data);
+                if (binary.length !== length) throw new Error('Incorrect PDF range size.');
+                const bytes = new Uint8Array(length);
+                for (let index = 0; length > index; index += 1) {
+                    bytes[index] = binary.charCodeAt(index);
+                }
+                return bytes;
+            }
+
+            function rangePlan() {
+                const ranges = [];
+                let start = 0;
+                while (pdf.totalBytes > start) {
+                    const size = pdf.chunkSizes ? pdf.chunkSizes[ranges.length] :
+                        Math.min(pdf.rangeBytes, pdf.totalBytes - start);
+                    ranges.push({ start, size });
+                    start += size;
+                }
+                return ranges;
+            }
+
+            function segmentPlan(ranges) {
+                const segments = [];
+                let start = 0;
+                while (ranges.length > start) {
+                    let stop = start;
+                    let length = 0;
+                    while (ranges.length > stop) {
+                        const candidate = length + ranges[stop].size;
+                        if (candidate > segmentLimit) break;
+                        length = candidate;
+                        stop += 1;
+                    }
+                    segments.push({ length, until: ranges[start].start + length, stop, name: `segment-${segments.length}` });
+                    start = stop;
+                }
+                return segments;
+            }
+
+            async function transfer(ranges, from, consume) {
+                const pending = [];
+                let cursor = from;
+                let freshlyRead = 0;
+                let callouts = 0;
+                function queueNext() {
+                    if (cursor >= ranges.length) return;
+                    const { start, size } = ranges[cursor];
+                    pending.push({ result: readRange(start, start + size - 1), start, size });
+                    cursor += 1;
+                }
+                try {
+                    for (let index = 0; maxPending > index; index += 1) queueNext();
+                    while (pending.length > 0) {
+                        const next = pending.shift();
+                        const range = await next.result;
+                        if (range.error) throw range.error;
+                        if (!Number.isSafeInteger(range.apexCallouts) || 0 > range.apexCallouts) {
+                            throw new Error('Missing Apex transfer status.');
+                        }
+                        const bytes = decode(range.data, next.size);
+                        await consume(bytes, next.start);
+                        callouts += range.apexCallouts;
+                        freshlyRead += bytes.length;
+                        page.dataset.downloadedBytes = freshlyRead;
+                        page.dataset.apexCallouts = callouts;
+                        progress.value = Math.floor((next.start + bytes.length) * 100 / pdf.totalBytes);
+                        queueNext();
+                    }
+                } finally {
+                    await Promise.all(pending.map(item => item.result));
+                }
+            }
+
+            async function writeFile(handle, write) {
+                const writable = await handle.createWritable();
+                try {
+                    await write(writable);
+                    await writable.close();
+                } catch (error) {
+                    await writable.abort().catch(() => {});
+                    throw error;
+                }
+            }
+
+            async function digest(bytes) {
+                const sha = await crypto.subtle.digest('SHA-256', bytes);
+                return Array.from(new Uint8Array(sha), value => value.toString(16).padStart(2, '0')).join('');
+            }
+
+            async function storedFile(directory, name) {
+                const handle = await directory.getFileHandle(name);
+                return handle.getFile();
+            }
+
+            async function recover(directory, segments, key) {
+                const verified = [];
+                try {
+                    const file = await storedFile(directory, 'checkpoint');
+                    if (file.size > 131072) return verified;
+                    const saved = JSON.parse(await file.text());
+                    if (saved.key !== key || saved.total !== pdf.totalBytes || !Array.isArray(saved.hashes)) return verified;
+                    for (const segment of segments) {
+                        const expected = saved.hashes[verified.length];
+                        if (!/^[a-f0-9]{64}$/.test(expected)) break;
+                        const part = await storedFile(directory, segment.name);
+                        if (part.size !== segment.length || await digest(await part.arrayBuffer()) !== expected) break;
+                        verified.push(expected);
+                    }
+                } catch (error) {
+                    return verified;
+                }
+                return verified;
+            }
+
+            async function saveCheckpoint(directory, segment, bytes, hashes, key) {
+                const sha = await digest(bytes);
+                const part = await directory.getFileHandle(segment.name, { create: true });
+                await writeFile(part, writable => writable.write(bytes));
+                const handle = await directory.getFileHandle('checkpoint', { create: true });
+                hashes.push(sha);
+                await writeFile(handle, writable => writable.write(JSON.stringify({ key, total: pdf.totalBytes, hashes })));
+                page.dataset.checkpointBytes = segment.until;
+            }
+
+            async function exportToDownloads(root, write) {
+                const name = `portwood-export-${Date.now()}-${crypto.randomUUID()}.pdf`;
+                const handle = await root.getFileHandle(name, { create: true });
+                let url;
+                try {
+                    await writeFile(handle, write);
+                    const file = await handle.getFile();
+                    if (file.size !== pdf.totalBytes) throw new Error('The saved PDF size is incorrect.');
+                    url = URL.createObjectURL(file);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = pdf.fileName;
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    anchor.remove();
+                } catch (error) {
+                    if (url) URL.revokeObjectURL(url);
+                    await root.removeEntry(name).catch(() => {});
+                    throw error;
+                }
+                window.setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                    root.removeEntry(name).catch(() => {});
+                }, exportDelay);
+            }
+
+            async function clearOldExports(root) {
+                for await (const entry of root.values()) {
+                    const match = exportPattern.exec(entry.name);
+                    if (match ? Date.now() - Number(match[1]) > exportDelay : false) {
+                        await root.removeEntry(entry.name).catch(() => {});
+                    }
+                }
+            }
+
+            async function resumeToDownloads(root, key, ranges) {
+                return navigator.locks.request(key, { ifAvailable: true }, async lock => {
+                    if (!lock) {
+                        status.textContent = 'This PDF is downloading in another tab.';
+                        return false;
+                    }
+                    const directory = await root.getDirectoryHandle(key, { create: true });
+                    const segments = segmentPlan(ranges);
+                    const hashes = await recover(directory, segments, key);
+                    let position = hashes.length;
+                    const verified = segments[position - 1];
+                    const resumeAt = verified?.until ?? 0;
+                    page.dataset.resumedBytes = resumeAt;
+                    page.dataset.verifiedChunks = verified?.stop ?? 0;
+                    page.dataset.checkpointBytes = resumeAt;
+                    progress.value = Math.floor(resumeAt * 100 / pdf.totalBytes);
+                    status.textContent = resumeAt ? 'Resuming download…' : 'Downloading…';
+                    if (segments.length > position) {
+                        let buffer = new Uint8Array(segments[position].length);
+                        let used = 0;
+                        await transfer(ranges, verified?.stop ?? 0, async bytes => {
+                            buffer.set(bytes, used);
+                            used += bytes.length;
+                            if (used !== buffer.length) return;
+                            await saveCheckpoint(directory, segments[position], buffer, hashes, key);
+                            position += 1;
+                            used = 0;
+                            buffer = segments[position] ? new Uint8Array(segments[position].length) : null;
+                        });
+                    }
+                    status.textContent = 'Saving PDF…';
+                    await exportToDownloads(root, async writable => {
+                        for (const segment of segments) {
+                            const file = await storedFile(directory, segment.name);
+                            await file.stream().pipeTo(writable, { preventClose: true });
+                        }
+                    });
+                    await root.removeEntry(key, { recursive: true }).catch(() => {});
+                    return true;
+                });
+            }
+
+            async function savePdf() {
+                download.disabled = true;
+                page.dataset.apexCallouts = 0;
+                page.dataset.resumedBytes = 0;
+                page.dataset.verifiedChunks = 0;
+                page.dataset.checkpointBytes = 0;
+                page.dataset.downloadedBytes = 0;
+                progress.hidden = false;
+                progress.value = 0;
+                status.textContent = 'Downloading…';
+                const ranges = rangePlan();
+                try {
+                    if (canStageToDisk) {
+                        const root = await navigator.storage.getDirectory();
+                        await clearOldExports(root);
+                        if (canResume ? /^[a-zA-Z0-9]{18}$/.test(pdf.ownerKey) : false) {
+                            if (!/^[a-zA-Z0-9]{18}$/.test(pdf.revisionKey)) throw new Error('Invalid revision key.');
+                            const key = `portwood-resume-v1-${pdf.ownerKey}-${pdf.revisionKey}`;
+                            if (!await resumeToDownloads(root, key, ranges)) return;
+                        } else {
+                            await exportToDownloads(root, writable => transfer(ranges, 0, bytes => writable.write(bytes)));
+                        }
+                        status.textContent = 'PDF sent to Downloads.';
+                    } else {
+                        const file = await window.showSaveFilePicker({ suggestedName: pdf.fileName,
+                            types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }] });
+                        await writeFile(file, writable => transfer(ranges, 0, bytes => writable.write(bytes)));
+                        status.textContent = `Saved ${file.name}.`;
+                    }
+                } catch (error) {
+                    progress.hidden = true;
+                    status.textContent = error.name === 'AbortError' ? 'Ready to download.' :
+                        'Download interrupted. Choose Download PDF to try again.';
+                } finally {
+                    download.disabled = false;
+                }
+            }
+
+            download.addEventListener('click', savePdf);
+            retry.addEventListener('click', loadDetails);
+            if (/^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$/.test(revisionId)) loadDetails();
+            else status.textContent = 'This download link is invalid.';
+        })();
+        </script>
+    </body>
+    </html>
+</apex:page>

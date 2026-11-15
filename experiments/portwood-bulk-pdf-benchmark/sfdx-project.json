@@ -1,0 +1,12 @@
+{
+  "packageDirectories": [
+    {
+      "path": "tmp/portwood-live-receipt-timing/bulk-source",
+      "default": true
+    }
+  ],
+  "name": "portwood-bulk-pdf-benchmark",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "68.0"
+}

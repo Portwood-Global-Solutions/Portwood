@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Portwood PDF merge benchmark</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 3rem 1rem; color: #182634; background: #f4f6f9;
+            font: 1rem/1.5 system-ui, sans-serif; }
+        main { max-width: 32rem; margin: 0 auto; padding: 1.75rem; background: #fff;
+            border: 1px solid #dce4ec; border-radius: .75rem; }
+        h1 { margin: 0; font-size: 1.5rem; }
+        p { margin: .75rem 0; color: #43566a; }
+        progress { display: block; width: 100%; margin: 1.25rem 0; accent-color: #0758a4; }
+        button { padding: .5rem .8rem; margin-right: .4rem; border: 1px solid #0758a4; border-radius: .35rem;
+            color: #0758a4; background: white; font: inherit; font-weight: 600; cursor: pointer; }
+        button:not(:disabled):hover { background: #f0f7ff; }
+        button:disabled { opacity: .5; cursor: default; }
+        button:focus-visible { outline: 2px solid #0758a4; outline-offset: 3px; }
+    </style>
+    <script type="module" src="./portwood-pdf-merge-browser.mjs"></script>
+</head>
+<body>
+    <main id="benchmark" data-stage="loading">
+        <h1>Portwood PDF merge benchmark</h1>
+        <p id="status" role="status">Loading receipt manifest…</p>
+        <progress id="progress" max="1" value="0" aria-label="Merge progress"></progress>
+        <button id="start" disabled>Start merge</button>
+        <button id="pause" disabled>Pause</button>
+        <button id="download" disabled>Download PDF</button>
+    </main>
+</body>
+</html>
