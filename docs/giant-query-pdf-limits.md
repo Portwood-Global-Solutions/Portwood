@@ -4,7 +4,7 @@ This report measures the server-side path for HTML-backed PDFs with multiple tab
 
 ## How to read the results
 
-Source records are unique records read from Salesforce. Printed rows count each placement in the PDF. A repeated table can print the same records again from one cursor. Each end-to-end pass requires a Salesforce File with every expected row in the authored section and sort order. A job that stages every row and fails to produce a valid PDF reaches the assembly limit for that fixture.
+Source records are unique records read from Salesforce. Printed rows count each placement in the PDF. A repeated table can print the same records again from one cursor. Each end-to-end pass requires a Salesforce File with every expected row in the authored section and sort order. Both failed cases below staged every row and reported an Apex heap exception during final assembly.
 
 The PDF tests use synthetic data in a scratch org. The CLI creates the fixture, starts the real Portwood Runner's Apex methods, and streams the completed file for local text validation. Salesforce performs data retrieval, row rendering, assembly, and file publication.
 
@@ -18,11 +18,14 @@ These results were measured on November 15, 2026 in a Developer scratch org seed
 | Compact, two distinct queries      |         25,000 |       25,000 |         1,477,788 |       330 |   685,527 |        3m 33s | All rows verified                 |
 | Compact, two distinct queries      |         50,000 |       50,000 |         2,977,788 |       660 | 1,302,618 |        6m 44s | All rows verified                 |
 | Compact, two distinct queries      |        100,000 |      100,000 |         5,977,788 |     1,321 | 2,539,329 |       12m 57s | All rows verified                 |
+| Compact, one query used four times |         50,000 |      200,000 |        11,955,576 |         — |         — |       18m 16s | Apex heap failure joining HTML    |
 | Wrapped text, two distinct queries |         10,000 |       10,000 |         3,497,786 |       346 |   649,117 |        1m 22s | All rows verified                 |
 | Wrapped text, two distinct queries |         25,000 |       25,000 |         8,752,788 |       946 | 1,603,397 |         3m 4s | All rows verified                 |
 | Wrapped text, one query used twice |         25,000 |       50,000 |        17,527,788 |         — |         — |        5m 20s | Apex heap failure during assembly |
 
-The 50,000-row wrapped-text job staged all 1,000 row fragments. The final Queueable failed with `Apex heap size too large: 35080015`, so the File was never published. For this layout, 25,000 printed rows passed and 50,000 hit the assembler heap. The exception reports heap used at failure. Salesforce publishes the applicable heap allowance separately.
+The largest verified compact run published one 100,000-row PDF. The 200,000-row compact run staged all 4,000 fragments and then failed while joining the complete HTML, before `Blob.toPdf()`. Apex reported `Apex heap size too large: 26985858`.
+
+The 50,000-row wrapped-text job staged all 1,000 fragments and failed in the final Queueable with `Apex heap size too large: 35080015`. The 25,000-row run passed with the same row layout. These exceptions report heap used at failure. Salesforce publishes the heap allowance separately.
 
 Staged bytes sum the `ContentVersion.ContentSize` of the row fragments. They exclude template chrome and the extra markup used to split tables for pagination. Observed time runs from requesting the job until the CLI sees a terminal status. Several cases ran concurrently in the scratch org, so the timings reflect that queue load.
 
@@ -66,6 +69,6 @@ node scripts/qa/giant-query-540-scale.mjs \
   --output-dir "$GQ540_RUN_DIR/compact"
 ```
 
-The compact template uses two filtered Contact queries with three short cells per row. `--shape rich` adds styled cells and wrapped text. `--placements 2` repeats the same query in two tables. When using repeated placements, `--rows` gives the total printed rows across those tables. For the wrapped-text assembly failure in the table, use `--shape rich --placements 2 --rows 50000`. Keep row shape and placement count fixed when comparing sizes.
+The compact template uses two filtered Contact queries with three short cells per row. `--shape rich` adds styled cells and wrapped text. `--placements 2` repeats the same query in two tables. When using repeated placements, `--rows` gives the total printed rows across those tables. For the wrapped-text assembly failure, use `--shape rich --placements 2 --rows 50000`. For the compact assembly failure, use `--placements 4 --rows 200000`. Keep row shape and placement count fixed when comparing sizes.
 
 Open `matrix.json` for the outcome of each run. Each case directory contains `result.json` with the scout counts, job status, staged row count, failure stage and message, timing, and PDF verification fields. Successful cases also save `output.pdf`. A published file passes verification only when the extracted content contains the exact expected row sequence and values in every table.
