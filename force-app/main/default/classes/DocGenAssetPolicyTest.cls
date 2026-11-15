@@ -116,4 +116,31 @@ private class DocGenAssetPolicyTest {
         }
         System.assert(rejected);
     }
+
+    @IsTest
+    static void scansLargeTablesAndChecksResourcesAtTheEnd() {
+        String row = '<tr><td>Stable row</td><td>Data field with harmless text</td></tr>';
+        String html = '<!DOCTYPE html><table>' + row.repeat(9000) + '</table>';
+        System.assertEquals(html, DocGenAssetPolicy.assertHtmlResources(html));
+        String tail = '<img title="banner > image" src="https://example.com/tracker.png">';
+        assertRejected(html + tail);
+    }
+
+    @IsTest
+    static void rejectsLateExternalDeclarationsAndStyleBlocks() {
+        String html = '<p>' + 'x'.repeat(500000) + '</p>';
+        assertRejected(html + '<!DoCtYpE html PUBLIC "example">');
+        assertRejected(html + '<!DOCTYPE html [ <!ENTITY ext "external"> ]>');
+        assertRejected(html + '<STYLE title=">">@import "https://example.com/font.css";</STYLE >');
+    }
+
+    private static void assertRejected(String html) {
+        Boolean rejected = false;
+        try {
+            DocGenAssetPolicy.assertHtmlResources(html);
+        } catch (DocGenException ex) {
+            rejected = ex.getMessage().contains('Salesforce-hosted');
+        }
+        System.assert(rejected, 'Expected the external resource policy to reject the markup.');
+    }
 }

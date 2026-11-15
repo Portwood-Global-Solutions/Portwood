@@ -2027,9 +2027,14 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 throw new Error('Giant Query batch failed to launch.');
             }
             const jobId = giantResult.jobId;
+            const isMultiTable = giantResult.isMultiTable === true;
 
-            // 2. Poll until completed — server assembles the final PDF in finish()
-            this.loadingMessage = `Processing ${totalRecords.toLocaleString()} records... Do not leave this page.`;
+            // 2. Poll until the server has assembled the final PDF.
+            this.showProgressBar = !isMultiTable;
+            this.loadingMessage = isMultiTable
+                ? 'Rendering table rows... Do not leave this page.'
+                : `Processing ${totalRecords.toLocaleString()} records... Do not leave this page.`;
+            let renderedRows = 0;
             let status = 'Harvesting';
             while (status !== 'Completed' && status !== 'Failed') {
                 // eslint-disable-next-line no-await-in-loop
@@ -2043,15 +2048,24 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                     throw new Error('PDF generation failed: ' + (jobStatus.label || 'Unknown error'));
                 }
                 const done = jobStatus.successCount || 0;
-                const total = jobStatus.totalRecords || 0;
-                if (total > 0) {
-                    const totalBatches = Math.ceil(total / 50);
-                    this.progressPercent = Math.min(95, Math.round((done / totalBatches) * 95));
-                    this.loadingMessage = `Generating PDF (batch ${done}/${totalBatches})... Do not leave this page.`;
+                if (isMultiTable) {
+                    renderedRows = done;
+                    this.loadingMessage = `Rendered ${renderedRows.toLocaleString()} table rows... Do not leave this page.`;
+                } else {
+                    const total = jobStatus.totalRecords || 0;
+                    if (total > 0) {
+                        const totalBatches = Math.ceil(total / 50);
+                        this.progressPercent = Math.min(95, Math.round((done / totalBatches) * 95));
+                        this.loadingMessage = `Generating PDF (batch ${done}/${totalBatches})... Do not leave this page.`;
+                    }
                 }
             }
 
             // 3. Fetch result — single part is saved to record, multiple parts need client merge
+            const rowSummary = isMultiTable
+                ? `${renderedRows.toLocaleString()} table rows rendered`
+                : `${totalRecords.toLocaleString()} ${giantRelationship} rows`;
+            this.showProgressBar = true;
             this.progressPercent = 97;
             this.loadingMessage = 'Finalizing PDF... Do not leave this page.';
             const fragResult = await getGiantQueryFragments({ jobId });
@@ -2077,11 +2091,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                     // record's Files tab so the user can retrieve it manually.
                     console.warn('Portwood: giant PDF download fetch failed', dlErr);
                 }
-                this.showToast(
-                    'Success',
-                    `PDF downloaded and saved to record — ${totalRecords.toLocaleString()} ${giantRelationship} rows.`,
-                    'success'
-                );
+                this.showToast('Success', `PDF downloaded and saved to record — ${rowSummary}.`, 'success');
             } else if (partIds.length > 0) {
                 // Multiple parts — fetch and merge client-side
                 const pdfParts = [];
@@ -2103,11 +2113,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 const docTitle = (fragResult && fragResult.docTitle) || 'Document';
                 this.downloadBase64(mergedBase64, docTitle + '.pdf', 'application/pdf');
                 this.progressPercent = 100;
-                this.showToast(
-                    'Success',
-                    `PDF downloaded (${fileSizeMB}MB) — ${totalRecords.toLocaleString()} ${giantRelationship} rows.`,
-                    'success'
-                );
+                this.showToast('Success', `PDF downloaded (${fileSizeMB}MB) — ${rowSummary}.`, 'success');
                 // Clean up parts
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 try {

@@ -15,6 +15,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     private String childObjectName;
     private String lookupFieldName;
     private String whereClauseOverride;
+    private String effectivePlanConfig;
+    private Id plannedVersionId;
+    private List<DocGenGiantQueryPlan.Slot> plannedSlots;
+    private Map<String, Integer> expectedFragmentCounts;
+    private DocGenGiantQueryPlan htmlPlan;
     private String colGroupHtml = '';
     // The authored <table …> opening tag captured from the template snapshot. Chunk-break
     // tables reproduce this verbatim so every page renders at the SAME authored width /
@@ -56,8 +61,31 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         this.whereClauseOverride = whereClauseOverride;
     }
 
+    public DocGenGiantQueryAssembler(
+        Id jobId,
+        Id templateId,
+        Id recordId,
+        Id plannedVersionId,
+        List<DocGenGiantQueryPlan.Slot> plannedSlots,
+        Map<String, Integer> expectedFragmentCounts,
+        String effectivePlanConfig
+    ) {
+        this.jobId = jobId;
+        this.templateId = templateId;
+        this.recordId = recordId;
+        this.plannedVersionId = plannedVersionId;
+        this.plannedSlots = plannedSlots;
+        this.expectedFragmentCounts = expectedFragmentCounts;
+        this.effectivePlanConfig = effectivePlanConfig;
+    }
+
     public void execute(QueueableContext ctx) {
         try {
+            if (plannedSlots != null) {
+                DocGenGiantQueryMulti.attachFailureHandler(jobId);
+                renderPlannedPdf();
+                return;
+            }
             // Load ALL fragments in one pass — no Queueable chaining needed.
             // 28K rows × ~5KB/frag = ~2.8MB, well within 12MB Queueable heap.
             // Chaining was limited to 5 depth on some orgs, causing stack overflow.
@@ -98,6 +126,59 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             }
         } catch (Exception e) {
             update new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = e.getMessage().left(255)); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        }
+    }
+
+    private void renderPlannedPdf() {
+        String shell = buildHtmlTemplate();
+        Map<String, String> rowsBySlot = new Map<String, String>();
+        Set<Id> fragmentDocuments = new Set<Id>();
+        Id creator = UserInfo.getUserId();
+        DocGenFlsGuard.assertAccessible(
+            ContentVersion.sObjectType,
+            new Set<String>{ 'Title', 'VersionData', 'ContentDocumentId', 'CreatedById', 'IsLatest' }
+        );
+        for (DocGenGiantQueryPlan.Slot slot : htmlPlan.slots) {
+            Integer expected = expectedFragmentCounts == null ? null : expectedFragmentCounts.get(slot.key);
+            if (expected == null || expected < 0) {
+                throw new DocGenException('Giant Query is missing completion data for table ' + slot.queryKey + '.');
+            }
+            String prefix = 'docgen_giant_' + jobId + '_slot_' + slot.key + '_';
+            String titleFilter = prefix + '%';
+            List<String> parts = new List<String>();
+            /* code-analyzer-suppress ApexFlsViolation */
+            for (ContentVersion fragment : [
+                SELECT Title, VersionData, ContentDocumentId
+                FROM ContentVersion
+                WHERE Title LIKE :titleFilter AND CreatedById = :creator AND IsLatest = TRUE
+                WITH SYSTEM_MODE
+                ORDER BY Title
+            ]) {
+                String expectedTitle = prefix + String.valueOf(parts.size()).leftPad(5, '0');
+                if (!expectedTitle.equals(fragment.Title) || fragment.VersionData == null) {
+                    throw new DocGenException('Giant Query fragments are incomplete for table ' + slot.queryKey + '.');
+                }
+                parts.add(fragment.VersionData.toString());
+                fragmentDocuments.add(fragment.ContentDocumentId);
+            }
+            if (parts.size() != expected) {
+                throw new DocGenException('Giant Query fragments are incomplete for table ' + slot.queryKey + '.');
+            }
+            String rows = String.join(parts, '');
+            parts.clear();
+            rowsBySlot.put(slot.key, paginatePlannedRows(shell, slot, rows, ROWS_PER_PDF_CHUNK));
+        }
+        String html = htmlPlan.fill(shell, rowsBySlot);
+        rowsBySlot.clear();
+        shell = null;
+        html = DocGenFontService.prepare(html);
+        Boolean published = publishPreparedPdf(html);
+        if (published && !fragmentDocuments.isEmpty() && Schema.sObjectType.ContentDocument.isDeletable()) {
+            List<ContentDocument> files = new List<ContentDocument>();
+            for (Id documentId : fragmentDocuments) {
+                files.add(new ContentDocument(Id = documentId));
+            }
+            Database.delete(files, false); // NOPMD ApexCRUDViolation — CRUD checked above
         }
     }
 
@@ -144,32 +225,39 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         String html = DocGenFontService.prepare(injectRowsIntoTemplate(htmlTemplate, allRows));
         allRows = null;
         htmlTemplate = null;
-        DocGenService.ensureTemplateAssetImageAccessForPdf(templateId, recordId, html);
+        publishPreparedPdf(html);
+    }
 
-        // DEBUG: save HTML for inspection before Blob.toPdf()
-        ContentVersion debugCv = new ContentVersion(
-            Title = 'docgen_giant_' + jobId + '_debug_html',
-            PathOnClient = 'debug.html',
-            VersionData = Blob.valueOf(html.substring(0, Math.min(100000, html.length()))),
-            IsMajorVersion = false
-        );
-        SObjectAccessDecision dbgDec = Security.stripInaccessible(
-            AccessType.CREATABLE,
-            new List<ContentVersion>{ debugCv }
-        );
-        insert dbgDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+    private Boolean publishPreparedPdf(String html) {
+        html = DocGenAssetPolicy.assertHtmlResources(html);
+        DocGenService.ensureTemplateAssetImageAccessForPdf(templateId, recordId, html, plannedVersionId);
+
+        if (plannedSlots == null) {
+            // DEBUG: save HTML for inspection before Blob.toPdf()
+            ContentVersion debugCv = new ContentVersion(
+                Title = 'docgen_giant_' + jobId + '_debug_html',
+                PathOnClient = 'debug.html',
+                VersionData = Blob.valueOf(html.substring(0, Math.min(100000, html.length()))),
+                IsMajorVersion = false
+            );
+            SObjectAccessDecision dbgDec = Security.stripInaccessible(
+                AccessType.CREATABLE,
+                new List<ContentVersion>{ debugCv }
+            );
+            insert dbgDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+        }
 
         Blob pdfBlob;
         try {
-            pdfBlob = Blob.toPdf(DocGenAssetPolicy.assertHtmlResources(html));
+            pdfBlob = Blob.toPdf(html);
         } catch (Exception pdfErr) {
             // Flying Saucer stack overflow — fall back to multi-part PDF approach
             pdfBlob = null;
-            renderMultiPartPdf(html, htmlTemplate);
+            renderMultiPartPdf(html, null);
             html = null;
             // Failed render still linked its images — don't leave them as Files.
             DocGenService.removeTemplateImageLinksAfterRender(templateId, recordId, null);
-            return;
+            return false;
         }
         html = null;
         // #202 follow-up — the image links exist only for the toPdf fetch above;
@@ -217,6 +305,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // of its title (the legacy title-pattern lookup breaks once we honor
         // Document_Title_Format__c).
         update new DocGen_Job__c(Id = jobId, Status__c = 'Completed', Merged_PDF_CV__c = String.valueOf(pdfCv.Id)); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        return true;
     }
 
     /**
@@ -256,31 +345,10 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             LIMIT 1
         ];
         if (!tpls.isEmpty() && DocGenService.isHtmlBacked(tpls[0].Type__c)) {
-            // v1.97 — prefer the active version's snapshotted header/footer so
-            // editing the template doesn't retroactively rewrite earlier versions.
-            String headerHtml = tpls[0].Header_Html__c;
-            String footerHtml = tpls[0].Footer_Html__c;
-            DocGenFlsGuard.assertAccessible(
-                DocGen_Template_Version__c.sObjectType,
-                new Set<String>{ 'Header_Html__c', 'Footer_Html__c', 'Template__c', 'Is_Active__c' }
-            );
-            /* code-analyzer-suppress ApexFlsViolation */
-            List<DocGen_Template_Version__c> snap = [
-                SELECT Header_Html__c, Footer_Html__c
-                FROM DocGen_Template_Version__c
-                WHERE Template__c = :templateId AND Is_Active__c = TRUE
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            if (!snap.isEmpty()) {
-                if (snap[0].Header_Html__c != null) {
-                    headerHtml = snap[0].Header_Html__c;
-                }
-                if (snap[0].Footer_Html__c != null) {
-                    footerHtml = snap[0].Footer_Html__c;
-                }
-            }
-            return buildHtmlTemplateForHtmlType(headerHtml, footerHtml);
+            return buildHtmlTemplateForHtmlType(tpls[0].Header_Html__c, tpls[0].Footer_Html__c);
+        }
+        if (plannedSlots != null) {
+            throw new DocGenException('Giant Query table assembly requires an HTML-backed template.');
         }
 
         DocGenFlsGuard.assertAccessible(
@@ -433,47 +501,88 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * for list-based output (no enclosing <table>), leaving the generic defaults.
      */
     private void captureTableShell(String htmlWithPlaceholder) {
-        Integer idx = htmlWithPlaceholder.indexOf('{ROWS}');
+        captureTableShell(htmlWithPlaceholder, '{ROWS}');
+    }
+
+    private Boolean captureTableShell(String htmlWithPlaceholder, String marker) {
+        Integer idx = htmlWithPlaceholder.indexOf(marker);
         if (idx == -1) {
-            return;
+            return false;
         }
-        Integer tblStart = htmlWithPlaceholder.lastIndexOf('<table', idx);
-        if (tblStart == -1) {
-            return; // list-based output or no table — keep the generic full-width default
+        String lower = htmlWithPlaceholder.toLowerCase();
+        Integer tblStart = lower.lastIndexOf('<table', idx);
+        if (tblStart == -1 || lower.lastIndexOf('</table', idx) > tblStart) {
+            return false;
         }
-        Integer tblOpenEnd = htmlWithPlaceholder.indexOf('>', tblStart);
-        if (tblOpenEnd == -1) {
-            return;
+        Integer tblOpenEnd = lower.indexOf('>', tblStart);
+        if (tblOpenEnd == -1 || tblOpenEnd > idx) {
+            return false;
         }
         this.tableOpenTag = htmlWithPlaceholder.substring(tblStart, tblOpenEnd + 1);
-        for (String name : new List<String>{ 'tbody', 'tfoot' }) {
-            Integer section = htmlWithPlaceholder.lastIndexOf('<' + name, idx);
-            Integer close = htmlWithPlaceholder.lastIndexOf('</' + name + '>', idx);
+        this.tableSectionOpenTag = '';
+        this.tableSectionCloseTag = '';
+        this.colGroupHtml = '';
+        this.theadHtml = '';
+        for (String name : new List<String>{ 'tbody', 'tfoot', 'thead' }) {
+            Integer section = lower.lastIndexOf('<' + name, idx);
+            Integer close = lower.lastIndexOf('</' + name + '>', idx);
             if (section > tblStart && section > close) {
-                Integer sectionEnd = htmlWithPlaceholder.indexOf('>', section);
-                this.tableSectionOpenTag = htmlWithPlaceholder.substring(section, sectionEnd + 1);
-                this.tableSectionCloseTag = '</' + name + '>';
+                Integer sectionEnd = lower.indexOf('>', section);
+                if (sectionEnd != -1 && sectionEnd < idx) {
+                    this.tableSectionOpenTag = htmlWithPlaceholder.substring(section, sectionEnd + 1);
+                    this.tableSectionCloseTag = '</' + name + '>';
+                }
             }
         }
 
-        // Authored colgroup, if any, sits between the table tag and {ROWS}.
-        Integer cgStart = htmlWithPlaceholder.indexOf('<colgroup', tblStart);
+        Integer cgStart = lower.indexOf('<colgroup', tblStart);
         if (cgStart != -1 && cgStart < idx) {
-            Integer cgEnd = htmlWithPlaceholder.indexOf('</colgroup>', cgStart);
-            if (cgEnd != -1) {
+            Integer cgEnd = lower.indexOf('</colgroup>', cgStart);
+            if (cgEnd != -1 && cgEnd < idx) {
                 this.colGroupHtml = htmlWithPlaceholder.substring(cgStart, cgEnd + '</colgroup>'.length());
             }
         }
 
-        // Authored <thead> (repeat-header rows) sits before {ROWS}. Capture it so each
-        // chunk-break table reprints the header at the top of the chunk.
-        Integer thStart = htmlWithPlaceholder.indexOf('<thead', tblStart);
+        // A repeated header is static. A header with another slot stays solely
+        // in the original table so pagination cannot duplicate its marker.
+        Integer thStart = lower.indexOf('<thead', tblStart);
         if (thStart != -1 && thStart < idx) {
-            Integer thEnd = htmlWithPlaceholder.indexOf('</thead>', thStart);
-            if (thEnd != -1) {
-                this.theadHtml = htmlWithPlaceholder.substring(thStart, thEnd + '</thead>'.length());
+            Integer thEnd = lower.indexOf('</thead>', thStart);
+            if (thEnd != -1 && thEnd < idx) {
+                String header = htmlWithPlaceholder.substring(thStart, thEnd + '</thead>'.length());
+                if (!header.contains('<!--docgen-giant-slot-')) {
+                    this.theadHtml = header;
+                }
             }
         }
+        return true;
+    }
+
+    @TestVisible
+    private String paginatePlannedRows(
+        String shell,
+        DocGenGiantQueryPlan.Slot slot,
+        String rows,
+        Integer rowsPerBreak
+    ) {
+        // The planner can also place list items, unwrapped content, or values
+        // within a static table cell. Only full table rows can reopen a table.
+        if (
+            !slot.innerXml.trim().startsWithIgnoreCase('<tr') ||
+            String.isBlank(rows) ||
+            !captureTableShell(shell, slot.marker)
+        ) {
+            return rows;
+        }
+        return insertTableBreaks(
+            rows,
+            rowsPerBreak,
+            tableOpenTag,
+            colGroupHtml,
+            theadHtml,
+            tableSectionOpenTag,
+            tableSectionCloseTag
+        );
     }
 
     /**
@@ -529,18 +638,46 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     private String buildHtmlTemplateForHtmlType(String headerHtml, String footerHtml) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Template_Version__c.sObjectType,
-            new Set<String>{ 'Content_Version_Id__c', 'Template__c', 'Is_Active__c' }
+            new Set<String>{
+                'Content_Version_Id__c',
+                'Template__c',
+                'Is_Active__c',
+                'Header_Html__c',
+                'Footer_Html__c'
+            }
         );
-        /* code-analyzer-suppress ApexFlsViolation */
-        List<DocGen_Template_Version__c> vers = [
-            SELECT Id, Content_Version_Id__c
-            FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = TRUE
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
+        List<DocGen_Template_Version__c> vers;
+        if (plannedVersionId != null) {
+            /* code-analyzer-suppress ApexFlsViolation */
+            vers = [
+                SELECT Content_Version_Id__c, Header_Html__c, Footer_Html__c
+                FROM DocGen_Template_Version__c
+                WHERE Id = :plannedVersionId AND Template__c = :templateId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        } else {
+            /* code-analyzer-suppress ApexFlsViolation */
+            vers = [
+                SELECT Content_Version_Id__c, Header_Html__c, Footer_Html__c
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
         if (vers.isEmpty() || String.isBlank(vers[0].Content_Version_Id__c)) {
-            throw new DocGenException('HTML template has no active version body.');
+            throw new DocGenException(
+                plannedVersionId == null
+                    ? 'HTML template has no active version body.'
+                    : 'HTML template version has no body.'
+            );
+        }
+        if (vers[0].Header_Html__c != null) {
+            headerHtml = vers[0].Header_Html__c;
+        }
+        if (vers[0].Footer_Html__c != null) {
+            footerHtml = vers[0].Footer_Html__c;
         }
         Id bodyCvId = (Id) vers[0].Content_Version_Id__c;
         DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
@@ -563,13 +700,58 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         sourceStyles += 'table { border-collapse: collapse; border-spacing: 0; -fs-table-paginate: paginate; } thead { display: table-header-group; } td, th { word-wrap: break-word; overflow-wrap: break-word; }';
         String bodyContent = DocGenService.extractHtmlBodyContent(rawHtml);
 
-        // Resolve parent-level merge tags (outside the loop) and grand-total
-        // aggregate tags. Both operate as regex/string replace on HTML —
-        // same implementation works for HTML-type templates.
-        bodyContent = resolveParentMergeTags(bodyContent);
-        bodyContent = resolveGiantAggregateTags(bodyContent);
-        bodyContent = resolveGiantChartBuckets(bodyContent);
+        if (plannedSlots == null) {
+            bodyContent = resolveParentMergeTags(bodyContent);
+            bodyContent = resolveGiantAggregateTags(bodyContent);
+            bodyContent = resolveGiantChartBuckets(bodyContent);
+            bodyContent = prepareLegacyHtmlBody(bodyContent);
+            captureTableShell(bodyContent);
+        } else {
+            sourceStyles += 'tr { page-break-inside: avoid; }';
+            bodyContent = preparePlannedHtmlBody(bodyContent);
+        }
 
+        String mergedHeader = String.isBlank(headerHtml)
+            ? null
+            : resolveParentMergeTags(DocGenService.decodeBraceEntities(headerHtml));
+        String mergedFooter = String.isBlank(footerHtml)
+            ? null
+            : resolveParentMergeTags(DocGenService.decodeBraceEntities(footerHtml));
+        return DocGenService.wrapHtmlForPdf(bodyContent, sourceStyles, mergedHeader, mergedFooter, false);
+    }
+
+    private String preparePlannedHtmlBody(String bodyContent) {
+        Set<String> queryKeys = new Set<String>();
+        for (DocGenGiantQueryPlan.Slot slot : plannedSlots) {
+            queryKeys.add(slot.queryKey);
+        }
+        htmlPlan = DocGenGiantQueryPlan.compile(bodyContent, queryKeys);
+        if (htmlPlan.slots.size() != plannedSlots.size()) {
+            throw new DocGenException('Giant Query sections changed before assembly.');
+        }
+        for (Integer i = 0; i < plannedSlots.size(); i++) {
+            DocGenGiantQueryPlan.Slot incoming = plannedSlots[i];
+            DocGenGiantQueryPlan.Slot stored = htmlPlan.slots[i];
+            if (
+                !incoming.key.equals(stored.key) ||
+                !incoming.queryKey.equals(stored.queryKey) ||
+                !incoming.innerXml.equals(stored.innerXml)
+            ) {
+                throw new DocGenException('Giant Query sections changed before assembly.');
+            }
+        }
+
+        String shell = resolveParentMergeTags(htmlPlan.shell);
+        for (String queryKey : queryKeys) {
+            giantRelationshipName = queryKey;
+            shell = resolveGiantAggregateTags(shell);
+            shell = resolveGiantChartBuckets(shell);
+        }
+        giantRelationshipName = null;
+        return shell;
+    }
+
+    private String prepareLegacyHtmlBody(String bodyContent) {
         // Replace the giant-loop <tr>…</tr> (or <li>…</li>) section with a
         // {ROWS} placeholder. Same boundary logic the DOCX path uses — find
         // the nearest opening tag before {#Rel} and the next closing container.
@@ -615,22 +797,23 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             bodyContent += '<table style="width:100%;border-collapse:collapse;">{ROWS}</table>';
         }
 
-        // Resolve field merge tags in the header/footer using the same parent-
-        // tag resolver that runs on the body. Without this, `{Name}`, `{Owner.Name}`,
-        // `{Field:format}` tags in Header_Html__c / Footer_Html__c would render
-        // as literal text in the final PDF.
-        String mergedHeader = String.isBlank(headerHtml)
-            ? null
-            : resolveParentMergeTags(DocGenService.decodeBraceEntities(headerHtml));
-        String mergedFooter = String.isBlank(footerHtml)
-            ? null
-            : resolveParentMergeTags(DocGenService.decodeBraceEntities(footerHtml));
+        return bodyContent;
+    }
 
-        // Capture the authored <table …> tag + colgroup (when the loop renders into a
-        // table) so chunk-break tables reproduce the author's own width / columns.
-        captureTableShell(bodyContent);
-
-        return DocGenService.wrapHtmlForPdf(bodyContent, sourceStyles, mergedHeader, mergedFooter, false);
+    private String resolvedQueryConfig() {
+        DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Query_Config__c' });
+        if (effectivePlanConfig != null) {
+            return effectivePlanConfig;
+        }
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template__c> templates = [
+            SELECT Query_Config__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        return templates.isEmpty() ? null : templates[0].Query_Config__c;
     }
 
     /**
@@ -640,21 +823,12 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      */
     private String buildHeaderRowFromConfig() {
         try {
-            // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
-            DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Query_Config__c' });
-            /* code-analyzer-suppress ApexFlsViolation */
-            List<DocGen_Template__c> tpls = [
-                SELECT Query_Config__c
-                FROM DocGen_Template__c
-                WHERE Id = :templateId
-                WITH SYSTEM_MODE
-                LIMIT 1
-            ];
-            if (tpls.isEmpty() || String.isBlank(tpls[0].Query_Config__c)) {
+            String queryConfig = resolvedQueryConfig();
+            if (String.isBlank(queryConfig)) {
                 return '';
             }
 
-            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(tpls[0].Query_Config__c.trim());
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
             List<Object> nodes = (List<Object>) config.get('nodes');
             if (nodes == null) {
                 return '';
@@ -1179,19 +1353,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         if (String.isBlank(childObj) || String.isBlank(lookupFld)) {
             try {
-                DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Query_Config__c' });
-                /* code-analyzer-suppress ApexFlsViolation */
-                List<DocGen_Template__c> tpls = [
-                    SELECT Query_Config__c
-                    FROM DocGen_Template__c
-                    WHERE Id = :templateId
-                    WITH SYSTEM_MODE
-                    LIMIT 1
-                ];
-                if (tpls.isEmpty() || String.isBlank(tpls[0].Query_Config__c)) {
+                String queryConfig = resolvedQueryConfig();
+                if (String.isBlank(queryConfig)) {
                     return html;
                 }
-                String cfgStr = tpls[0].Query_Config__c.trim();
+                String cfgStr = queryConfig.trim();
                 if (!cfgStr.startsWith('{')) {
                     return html;
                 } // V1 flat — caller must pass child/lookup explicitly
@@ -1666,19 +1832,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
         if (String.isBlank(childObj) || String.isBlank(lookupFld)) {
             try {
-                DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Query_Config__c' });
-                /* code-analyzer-suppress ApexFlsViolation */
-                List<DocGen_Template__c> tpls = [
-                    SELECT Query_Config__c
-                    FROM DocGen_Template__c
-                    WHERE Id = :templateId
-                    WITH SYSTEM_MODE
-                    LIMIT 1
-                ];
-                if (tpls.isEmpty() || String.isBlank(tpls[0].Query_Config__c)) {
+                String queryConfig = resolvedQueryConfig();
+                if (String.isBlank(queryConfig)) {
                     return html;
                 }
-                String cfgStr = tpls[0].Query_Config__c.trim();
+                String cfgStr = queryConfig.trim();
                 if (!cfgStr.startsWith('{')) {
                     return html;
                 }

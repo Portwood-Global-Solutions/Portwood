@@ -2598,6 +2598,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * image blobs into heap.
      */
     public static void ensureTemplateAssetImageAccessForPdf(Id templateId, Id recordId, String html) {
+        ensureTemplateAssetImageAccessForPdf(templateId, recordId, html, null);
+    }
+
+    public static void ensureTemplateAssetImageAccessForPdf(
+        Id templateId,
+        Id recordId,
+        String html,
+        Id templateVersionId
+    ) {
         pendingRenderImageLinkIds.clear();
         if (templateId == null || recordId == null || String.isBlank(html) || !html.contains('/version/download/')) {
             return;
@@ -2612,19 +2621,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             DocGen_Template_Version__c.sObjectType,
             new Set<String>{ 'Template__c', 'Is_Active__c' }
         );
-        /* code-analyzer-suppress ApexFlsViolation */
-        List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id
-            FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = TRUE
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
-        if (activeVersions.isEmpty()) {
+        List<DocGen_Template_Version__c> versions;
+        if (templateVersionId == null) {
+            /* code-analyzer-suppress ApexFlsViolation */
+            versions = [
+                SELECT Id
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        } else {
+            /* code-analyzer-suppress ApexFlsViolation */
+            versions = [
+                SELECT Id
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Id = :templateVersionId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
+        if (versions.isEmpty()) {
             return;
         }
 
-        String versionId = String.valueOf(activeVersions[0].Id);
+        String versionId = String.valueOf(versions[0].Id);
         String templateIdText = String.valueOf(templateId);
         List<String> assetPrefixes = new List<String>{
             'docgen_tmpl_img_' +
@@ -9920,13 +9941,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     public static Map<String, String> extractLoopBody(String templateXml, String relationshipName) {
         Map<String, String> result = new Map<String, String>();
 
-        // Merge runs first so we find complete tags
-        String xml = mergeRunsInTags(templateXml);
-        if (xml != null && xml.toLowerCase().contains('{%snippet:')) {
-            if (xml.contains('<w:'))
-                throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
-            xml = DocGenSnippetService.expand(xml);
-        }
+        String xml = normalizeGiantQueryTemplate(templateXml);
 
         // Find the opening tag {#relationshipName}
         String openTag = '{#' + relationshipName + '}';
@@ -9956,51 +9971,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Integer closeTagEnd = xml.indexOf('}', sectionEnd) + 1;
 
-        // Determine container boundaries (same logic as processXml — expand to
-        // the nearest valid row/list-item container if applicable). Checks both
-        // DOCX <w:tr> and HTML <tr>/<li> containers; whichever is closer and
-        // encloses the full {#Rel}...{/Rel} section wins. Safe for both
-        // template types because DOCX XML doesn't contain literal <tr>/<li>
-        // and HTML doesn't contain <w:tr>.
-        Integer containerStart = openIdx;
-        Integer containerEnd = closeTagEnd;
-
-        // DOCX <w:tr>
-        Integer wTrStart = lastIndexOfTagStart(xml, 'w:tr', openIdx);
-        if (wTrStart != -1) {
-            Integer wTrEnd = xml.indexOf('</w:tr>', wTrStart);
-            Boolean closedBeforeOpen = xml.substring(wTrStart, openIdx).contains('</w:tr>');
-            if (!closedBeforeOpen && wTrEnd != -1 && wTrEnd >= closeTagEnd) {
-                containerStart = wTrStart;
-                containerEnd = wTrEnd + 7; // </w:tr>
-            }
-        }
-
-        // HTML <tr>
-        Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', openIdx);
-        if (htmlTrStart != -1) {
-            Integer htmlTrEnd = xml.indexOf('</tr>', htmlTrStart);
-            Boolean closedBeforeOpen = xml.substring(htmlTrStart, openIdx).contains('</tr>');
-            if (!closedBeforeOpen && htmlTrEnd != -1 && htmlTrEnd >= closeTagEnd) {
-                if (containerStart == openIdx || htmlTrStart > containerStart) {
-                    containerStart = htmlTrStart;
-                    containerEnd = htmlTrEnd + 5; // </tr>
-                }
-            }
-        }
-
-        // HTML <li>
-        Integer htmlLiStart = lastIndexOfTagStart(xml, 'li', openIdx);
-        if (htmlLiStart != -1) {
-            Integer htmlLiEnd = xml.indexOf('</li>', htmlLiStart);
-            Boolean closedBeforeOpen = xml.substring(htmlLiStart, openIdx).contains('</li>');
-            if (!closedBeforeOpen && htmlLiEnd != -1 && htmlLiEnd >= closeTagEnd) {
-                if (containerStart == openIdx || htmlLiStart > containerStart) {
-                    containerStart = htmlLiStart;
-                    containerEnd = htmlLiEnd + 5; // </li>
-                }
-            }
-        }
+        List<Integer> container = giantQueryLoopContainer(xml, openIdx, closeTagEnd);
+        Integer containerStart = container[0];
+        Integer containerEnd = container[1];
 
         // Build inner XML (container content minus the open/close tags)
         String innerXml = xml.substring(containerStart, containerEnd);
@@ -10013,6 +9986,43 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         result.put('afterLoop', xml.substring(containerEnd));
 
         return result;
+    }
+
+    /** Normalizes the authored text without processing fields or expanding query loops. */
+    public static String normalizeGiantQueryTemplate(String templateXml) {
+        if (String.isBlank(templateXml)) {
+            return templateXml;
+        }
+        String xml = mergeRunsInTags(templateXml);
+        if (xml.contains('<w:')) {
+            if (xml.toLowerCase().contains('{%snippet:')) {
+                throw new DocGenException('Shared HTML snippets require an HTML or Canvas template.');
+            }
+            return xml;
+        }
+        if (!xml.contains('<a:')) {
+            xml = decodeBraceEntities(xml);
+        }
+        return xml.toLowerCase().contains('{%snippet:') ? DocGenSnippetService.expand(xml) : xml;
+    }
+
+    /** Selects the same enclosing row/list item used by the giant loop renderer. */
+    public static List<Integer> giantQueryLoopContainer(String xml, Integer openIdx, Integer closeTagEnd) {
+        Integer containerStart = openIdx;
+        Integer containerEnd = closeTagEnd;
+        for (String tagName : new List<String>{ 'w:tr', 'tr', 'li' }) {
+            Integer candidate = lastIndexOfTagStart(xml, tagName, openIdx);
+            if (candidate == -1 || (containerStart != openIdx && candidate <= containerStart)) {
+                continue;
+            }
+            String close = '</' + tagName + '>';
+            Integer candidateEnd = xml.indexOf(close, candidate);
+            if (candidateEnd != -1 && candidateEnd >= closeTagEnd) {
+                containerStart = candidate;
+                containerEnd = candidateEnd + close.length();
+            }
+        }
+        return new List<Integer>{ containerStart, containerEnd };
     }
 
     /**
