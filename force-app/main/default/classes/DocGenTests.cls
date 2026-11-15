@@ -53,6 +53,16 @@ private class DocGenTests {
         System.runAs(u) {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
+            // TestDataFactory creates an active version with no
+            // Content_Version_Id__c. Left active, getTemplateFileContent can
+            // return it and fall back to the newest linked file by
+            // ContentDocument.CreatedDate, which has whole-second precision and
+            // ties with the @TestSetup file whenever the setup and this method
+            // run in the same second.
+            DocGen_Template_Version__c factoryVersion = TestDataFactory.getTestTemplateVersion();
+            factoryVersion.Is_Active__c = false;
+            Database.update(factoryVersion, AccessLevel.SYSTEM_MODE);
+
             // 1. Setup - Create V1 Record
             ContentVersion cv1 = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Title = 'TestDoc' LIMIT 1];
 
