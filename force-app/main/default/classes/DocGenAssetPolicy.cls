@@ -109,12 +109,10 @@ public without sharing class DocGenAssetPolicy {
         if (String.isBlank(html))
             return html;
         String checked = resourceScanHtml(html);
-        if (Pattern.compile('(?is)<!ENTITY|<!DOCTYPE[^>]*(SYSTEM|PUBLIC)').matcher(checked).find())
-            fail();
+        assertDeclarations(checked);
         Pattern attributes = Pattern.compile(
             '(?is)[\\s/]+([a-z_:][a-z0-9_:.\\-]*)(?:\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+)))?'
         );
-        Pattern tagName = Pattern.compile('(?i)^<([a-z][a-z0-9:-]*)');
         Set<String> forbidden = new Set<String>{
             'script',
             'iframe',
@@ -158,18 +156,43 @@ public without sharing class DocGenAssetPolicy {
             'marker-end',
             'cursor'
         };
-        Matcher tags = Pattern.compile('(?is)<!--.*?-->|<[a-z][a-z0-9:-]*(?:[^\'">]|"[^"]*"|\'[^\']*\')*>')
-            .matcher(checked);
-        while (tags.find()) {
-            String tag = tags.group();
-            if (tag.startsWith('<!--'))
+        Integer cursor = 0;
+        while (cursor < checked.length()) {
+            Integer start = checked.indexOf('<', cursor);
+            if (start < 0 || start + 1 == checked.length())
+                break;
+            cursor = start + 1;
+            if (
+                checked.charAt(cursor) == 33 &&
+                start + 4 <= checked.length() &&
+                checked.substring(start, start + 4) == '<!--'
+            ) {
+                Integer endComment = checked.indexOf('-->', start + 4);
+                if (endComment >= 0)
+                    cursor = endComment + 3;
                 continue;
-            Matcher name = tagName.matcher(tag);
-            name.find();
-            String element = name.group(1).toLowerCase();
+            }
+            if (!isHtmlLetter(checked.charAt(cursor)))
+                continue;
+            Integer nameEnd = cursor + 1;
+            while (nameEnd < checked.length() && isHtmlNameChar(checked.charAt(nameEnd)))
+                nameEnd++;
+            String element = checked.substring(cursor, nameEnd).toLowerCase();
             if (forbidden.contains(element))
                 fail();
-            Matcher attrs = attributes.matcher(tag.substring(name.end()));
+            Integer tagEnd = findTagEnd(checked, nameEnd);
+            if (tagEnd < 0)
+                fail();
+            cursor = tagEnd + 1;
+            if (element == 'style') {
+                Integer endStyle = findStyleClose(checked, cursor);
+                if (endStyle < 0)
+                    fail();
+                assertCss(checked.substring(cursor, endStyle));
+            }
+            if (nameEnd == tagEnd)
+                continue;
+            Matcher attrs = attributes.matcher(checked.substring(nameEnd, tagEnd));
             while (attrs.find()) {
                 String key = attrs.group(1).toLowerCase();
                 String value = attrs.group(2) != null
@@ -188,10 +211,68 @@ public without sharing class DocGenAssetPolicy {
                     assertCss(value);
             }
         }
-        Matcher blocks = Pattern.compile('(?is)<style\\b[^>]*>(.*?)</style>').matcher(checked);
-        while (blocks.find())
-            assertCss(blocks.group(1));
         return html;
+    }
+
+    private static void assertDeclarations(String html) {
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer start = html.indexOf('<!', cursor);
+            if (start < 0)
+                break;
+            cursor = start + 2;
+            String name = html.substring(cursor, Math.min(cursor + 7, html.length())).toLowerCase();
+            if (name.startsWith('entity'))
+                fail();
+            if (name == 'doctype') {
+                Integer declarationEnd = html.indexOf('>', cursor + 7);
+                String declaration = html.substring(cursor + 7, declarationEnd < 0 ? html.length() : declarationEnd)
+                    .toLowerCase();
+                if (declaration.contains('system') || declaration.contains('public'))
+                    fail();
+            }
+        }
+    }
+
+    private static Integer findTagEnd(String html, Integer start) {
+        for (Integer i = start; i < html.length(); i++) {
+            Integer c = html.charAt(i);
+            if (c == 62)
+                return i;
+            if (c == 34 || c == 39) {
+                i = html.indexOf(html.substring(i, i + 1), i + 1);
+                if (i < 0)
+                    return -1;
+            }
+        }
+        return -1;
+    }
+
+    private static Integer findStyleClose(String html, Integer start) {
+        Integer closing = html.indexOf('</', start);
+        while (closing >= 0) {
+            Integer endName = closing + 7;
+            if (endName < html.length() && '</style'.equalsIgnoreCase(html.substring(closing, endName))) {
+                Integer closingEnd = endName;
+                while (
+                    closingEnd < html.length() &&
+                    (html.charAt(closingEnd) == 32 || (html.charAt(closingEnd) >= 9 && html.charAt(closingEnd) <= 13))
+                )
+                    closingEnd++;
+                if (closingEnd < html.length() && html.charAt(closingEnd) == 62)
+                    return closing;
+            }
+            closing = html.indexOf('</', closing + 2);
+        }
+        return -1;
+    }
+
+    private static Boolean isHtmlLetter(Integer c) {
+        return (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+    }
+
+    private static Boolean isHtmlNameChar(Integer c) {
+        return isHtmlLetter(c) || (c >= 48 && c <= 57) || c == 45 || c == 58;
     }
 
     /** Inline binary data cannot make a network request. Keep it out of the
