@@ -64,6 +64,16 @@ public with sharing class DocGenDataRetriever {
      * @return Map of field names to values, with child relationships nested
      */
     public static Map<String, Object> getRecordData(Id recordId, String baseObject, String fieldsConfig) {
+        return getRecordData(recordId, baseObject, fieldsConfig, null);
+    }
+
+    /** Omit direct V3 queries that the Word runner will read in pages. */
+    public static Map<String, Object> getRecordData(
+        Id recordId,
+        String baseObject,
+        String fieldsConfig,
+        Set<String> excludedRootChildKeys
+    ) {
         if (String.isBlank(baseObject) || String.isBlank(fieldsConfig) || recordId == null) {
             throw new DocGenException('Invalid parameters for data retrieval.');
         }
@@ -100,14 +110,21 @@ public with sharing class DocGenDataRetriever {
             Object versionObj = jsonConfig.get('v');
             Integer version = (versionObj != null) ? Integer.valueOf(String.valueOf(versionObj)) : 2;
 
+            if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty() && version != 3) {
+                throw new DocGenException('Multiple giant Word queries require a V3 query configuration.');
+            }
             // V4: Custom Apex Data Provider
             if (version == 4) {
                 return getRecordDataV4(recordId, jsonConfig);
             }
             if (version >= 3) {
-                return getRecordDataV3(recordId, jsonConfig);
+                return getRecordDataV3(recordId, jsonConfig, excludedRootChildKeys);
             }
             return getRecordDataV2(recordId, baseObject, fieldsConfig);
+        }
+
+        if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty()) {
+            throw new DocGenException('Multiple giant Word queries require a V3 query configuration.');
         }
 
         SObjectType objType = Schema.getGlobalDescribe().get(baseObject);
@@ -584,7 +601,11 @@ public with sharing class DocGenDataRetriever {
      * executing one SOQL query per node and stitching results into the
      * parent's data map.
      */
-    private static Map<String, Object> getRecordDataV3(Id recordId, Map<String, Object> config) {
+    private static Map<String, Object> getRecordDataV3(
+        Id recordId,
+        Map<String, Object> config,
+        Set<String> excludedRootChildKeys
+    ) {
         // Parse all nodes
         List<TreeNode> allNodes = new List<TreeNode>();
         Map<String, TreeNode> nodeMap = new Map<String, TreeNode>();
@@ -678,6 +699,25 @@ public with sharing class DocGenDataRetriever {
             seenKeysPerParent.add(key);
         }
 
+        if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty()) {
+            Set<String> directChildKeys = new Set<String>();
+            for (TreeNode child : allNodes) {
+                if (
+                    child.parentNodeId == root.id &&
+                    child.junction == null &&
+                    String.isNotBlank(child.lookupField) &&
+                    String.isNotBlank(child.relationshipName)
+                ) {
+                    directChildKeys.add(child.dataMapKey());
+                }
+            }
+            for (String key : excludedRootChildKeys) {
+                if (!directChildKeys.contains(key)) {
+                    throw new DocGenException('Giant Word query must use a direct child lookup: ' + key + '.');
+                }
+            }
+        }
+
         // Query root: SELECT fields, parentFields FROM object WHERE Id = :recordId
         List<String> rootSelect = new List<String>();
         rootSelect.addAll(root.fields);
@@ -711,7 +751,7 @@ public with sharing class DocGenDataRetriever {
         }
 
         // Walk the tree: process children of each node
-        processChildNodes(root.id, rootData, allNodes, nodeMap, true);
+        processChildNodes(root.id, rootData, allNodes, nodeMap, true, excludedRootChildKeys);
 
         return rootData;
     }
@@ -872,18 +912,23 @@ public with sharing class DocGenDataRetriever {
      * @param allNodes All tree nodes
      * @param nodeMap Map of node ID → TreeNode
      * @param isSingleParent True if parent is a single record (root), false if batch
+     * @param excludedChildKeys Effective keys fetched by the caller at this level
      */
     private static void processChildNodes(
         String parentId,
         Map<String, Object> parentDataMap,
         List<TreeNode> allNodes,
         Map<String, TreeNode> nodeMap,
-        Boolean isSingleParent
+        Boolean isSingleParent,
+        Set<String> excludedChildKeys
     ) {
         // Find children of this parent
         List<TreeNode> children = new List<TreeNode>();
         for (TreeNode tn : allNodes) {
-            if (tn.parentNodeId == parentId) {
+            if (
+                tn.parentNodeId == parentId &&
+                (excludedChildKeys == null || !excludedChildKeys.contains(tn.dataMapKey()))
+            ) {
                 children.add(tn);
             }
         }
@@ -1050,7 +1095,7 @@ public with sharing class DocGenDataRetriever {
 
                 // Recurse: process this child's children for each child record
                 for (Map<String, Object> childRec : childRecords) {
-                    processChildNodes(child.id, childRec, allNodes, nodeMap, true);
+                    processChildNodes(child.id, childRec, allNodes, nodeMap, true, null);
                 }
             }
         }
@@ -2515,7 +2560,7 @@ public with sharing class DocGenDataRetriever {
                     validatedLookupField +
                     ' = :recordId';
                 if (String.isNotBlank(whereClause)) {
-                    countQuery += ' AND ' + sanitizeClause(whereClause, 'WHERE');
+                    countQuery += ' AND (' + sanitizeClause(whereClause, 'WHERE') + ')';
                 }
                 Integer cnt = Database.countQuery(countQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — childObject + lookupField allowlist-validated; whereClause sanitized; USER_MODE enforced
                 counts.put(countsKey, cnt);

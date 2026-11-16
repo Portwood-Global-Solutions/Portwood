@@ -74,6 +74,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      */
     @AuraEnabled
     public static Map<String, Object> generateDocumentData(Id templateId, Id recordId) {
+        return generateDocumentDataForWordShell(templateId, recordId, null);
+    }
+
+    /** Prepares merge data while deferring selected direct child queries to the Word runner. */
+    public static Map<String, Object> generateDocumentDataForWordShell(
+        Id templateId,
+        Id recordId,
+        Set<String> excludedRootChildKeys
+    ) {
         if (templateId == null) {
             throw new DocGenException('Template ID is missing.');
         }
@@ -132,11 +141,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             throw new DocGenException('Unable to access template. Verify it exists and you have permission.');
         }
         DocGen_Template__c template = templates[0];
+        if (excludedRootChildKeys != null && template.Type__c != 'Word') {
+            throw new DocGenException('Multiple giant Word queries require a Word template.');
+        }
 
         Map<String, Object> recordData = DocGenDataRetriever.getRecordData(
             recordId,
             template.Base_Object_API__c,
-            template.Query_Config__c
+            template.Query_Config__c,
+            excludedRootChildKeys
         );
 
         String fileContent = DocGenTemplateManager.getTemplateFileContent(templateId);
@@ -1688,6 +1701,20 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Returns a Word shell and the individual placements to fill from paged queries. */
+    @AuraEnabled
+    public static Map<String, Object> generateDocumentPartsGiantQueryMulti(
+        Id templateId,
+        Id recordId,
+        List<String> giantRelationshipNames
+    ) {
+        try {
+            return DocGenService.generateDocumentPartsGiantQueryMulti(templateId, recordId, giantRelationshipNames);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error generating Giant Query Word document parts.');
+        }
+    }
+
     /**
      * Deletes the fragment ContentVersions for a Giant Query job after client-side
      * DOCX assembly is complete. Cleans up intermediate storage.
@@ -2197,7 +2224,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String.escapeSingleQuotes(lookupField) +
             ' = :parentId';
         if (String.isNotBlank(whereClause)) {
-            query += ' AND ' + whereClause;
+            query += ' AND (' + whereClause + ')';
         }
         query += ' ORDER BY ' + orderByClause;
 
