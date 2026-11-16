@@ -193,6 +193,14 @@ private class DocGenGiantQueryFlowActionTest {
             FirstPublishLocationId = ver.Id
         );
         insert cv;
+        insert new ContentVersion(
+            Title = 'docgen_tmpl_html_' + ver.Id,
+            PathOnClient = 'snapshot.html',
+            VersionData = Blob.valueOf(
+                '<html><body><table><tr><td>{#Contacts}{LastName}{/Contacts}</td></tr></table></body></html>'
+            ),
+            FirstPublishLocationId = ver.Id
+        );
         return tmpl.Id;
     }
 
@@ -213,7 +221,7 @@ private class DocGenGiantQueryFlowActionTest {
         );
         DocGenGiantQueryFlowAction.Response r = responses[0];
         System.assertEquals(true, r.success, 'Routing must succeed: ' + r.errorMessage);
-        System.assertEquals(true, r.isGiantQuery, '300 heavy rows route async, not sync');
+        System.assertEquals(true, r.isGiantQuery, '40 heavy rows route asynchronously');
         System.assertNotEquals(null, r.jobId, 'a Job Id is returned for polling');
         System.assertEquals(null, r.contentDocumentId, 'async path returns no sync document id');
         Test.stopTest();

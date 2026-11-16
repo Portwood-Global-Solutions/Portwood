@@ -38,6 +38,14 @@ Staged bytes sum the `ContentVersion.ContentSize` of the row fragments. They exc
 
 The Runner uses a heap estimate to decide when to start Giant Query. The estimate describes routing. The 2,000-row split in each long HTML table helps the renderer paginate. The PDF is still rendered in one call. A repeat header can appear twice on the page containing the split.
 
+## Long text in Word templates
+
+Giant Query also handles Word-authored PDFs whose child rows contain long text, such as Case email threads. The Runner samples configured long-text fields even when a relationship has fewer than 25 rows. The estimated payload can send the document to Giant Query below the row threshold. The job uses the saved Word PDF snapshot and renders top-level child loops in pages, including ordinary sibling sections in the same template.
+
+Set **Giant Query Row Threshold** or **Giant Query Page Size** on the template record in its **Giant Query PDF** section. A blank value uses the organization default under **Setup → Custom Settings → Portwood Settings**. If both values are blank, the row threshold is 2,000 and the page size is 50. The page size is an upper bound. Portwood may use fewer rows per page for long fields.
+
+Save the Word template so Portwood has its PDF snapshot. Put large child loops in the document body. Direct child loops in V3 or flat SOQL are supported by the Runner. HTML email content is subject to the PDF renderer's existing resource rules.
+
 ## Reproduce the measurement
 
 Use a scratch org with the PR source deployed, an authenticated Salesforce CLI, Node.js, and Poppler (`pdfinfo` and `pdftotext`). Create a synthetic Account in that org and generate a CSV of its Contacts. Put its ID in `GQ540_ACCOUNT_ID`.

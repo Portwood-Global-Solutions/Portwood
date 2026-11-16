@@ -81,11 +81,24 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                 // DocGenFlsGuard.cls.
                 DocGenFlsGuard.assertAccessible(
                     DocGen_Template__c.sObjectType,
-                    new Set<String>{ 'Base_Object_API__c', 'Query_Config__c', 'Type__c', 'Output_Format__c' }
+                    new Set<String>{
+                        'Base_Object_API__c',
+                        'Query_Config__c',
+                        'Type__c',
+                        'Output_Format__c',
+                        'Giant_Query_Row_Threshold__c',
+                        'Giant_Query_Page_Size__c'
+                    }
                 );
                 /* code-analyzer-suppress ApexFlsViolation */
                 List<DocGen_Template__c> templates = [
-                    SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c
+                    SELECT
+                        Base_Object_API__c,
+                        Query_Config__c,
+                        Type__c,
+                        Output_Format__c,
+                        Giant_Query_Row_Threshold__c,
+                        Giant_Query_Page_Size__c
                     FROM DocGen_Template__c
                     WHERE Id = :req.templateId
                     WITH SYSTEM_MODE
@@ -105,7 +118,8 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                 DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
                     req.recordId,
                     queryConfig,
-                    template.Output_Format__c
+                    template.Output_Format__c,
+                    new DocGenGiantQueryRouter.Settings(template)
                 );
 
                 if (route.useGiantPath) {
@@ -151,13 +165,24 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                                 'Run this Generate Document step from a screen or record-triggered (synchronous) Flow.'
                         );
                     }
+                    if (route.useWordSnapshot) {
+                        Map<String, Object> job = DocGenController.launchGiantQueryPdfBatch(
+                            req.templateId,
+                            req.recordId,
+                            route.giantRelationship,
+                            JSON.serialize(route.giantNodeConfig)
+                        );
+                        res.jobId = (Id) job.get('jobId');
+                    } else {
+                        res.jobId = launchGiantBatch(
+                            req.templateId,
+                            req.recordId,
+                            route.giantRelationship,
+                            route.giantNodeConfig,
+                            route.pageSize
+                        );
+                    }
                     res.isGiantQuery = true;
-                    res.jobId = launchGiantBatch(
-                        req.templateId,
-                        req.recordId,
-                        route.giantRelationship,
-                        route.giantNodeConfig
-                    );
                     res.success = true;
                 } else {
                     // Sync path — same as DocGenFlowAction. attachmentRecordId is null when
@@ -203,7 +228,8 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
         Id templateId,
         Id recordId,
         String giantRelationshipKey,
-        Map<String, Object> childNodeConfig
+        Map<String, Object> childNodeConfig,
+        Integer pageSize
     ) {
         // Get document XML from pre-decomposed parts
         DocGenFlsGuard.assertAccessible(
@@ -276,7 +302,8 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
             recordId,
             childNodeConfig,
             loopParts.get('innerXml'),
-            'PDF'
+            'PDF',
+            pageSize
         );
         Database.executeBatch(batch, 1);
 

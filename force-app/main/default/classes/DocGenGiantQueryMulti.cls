@@ -1,12 +1,16 @@
-/** Plans ordered HTML PDF tables separately from the child datasets they share. */
+/** Plans the PDF placements separately from the child datasets they share. */
 public with sharing class DocGenGiantQueryMulti {
-    private static final Integer ROWS_PER_PAGE = 50;
+    public static final Integer DEFAULT_PAGE_SIZE = 50;
     private static final Integer PAGES_PER_TRANSACTION = 16;
+    private static final Integer MAX_PAGE_SIZE = 500;
+    private static final Integer LONG_TEXT_LENGTH = 32000;
+    private static final Integer MAX_LONG_TEXT_CHARS_PER_PAGE = 1000000;
 
     public class Dataset {
         public Map<String, Object> childNode;
         public List<String> fields = new List<String>();
         public List<DocGenGiantQueryPlan.Slot> slots = new List<DocGenGiantQueryPlan.Slot>();
+        public Integer pageSize;
     }
 
     public class Run {
@@ -19,6 +23,7 @@ public with sharing class DocGenGiantQueryMulti {
         public Map<String, Integer> fragmentCounts = new Map<String, Integer>();
         public Integer harvestedRows = 0;
         public Integer plannedRows = 0;
+        public Boolean wordSnapshot = false;
 
         public String queryConfig;
     }
@@ -51,7 +56,7 @@ public with sharing class DocGenGiantQueryMulti {
                 }
 
                 for (
-                    Integer pages = 0; pages < PAGES_PER_TRANSACTION && nextPage * ROWS_PER_PAGE < totalRows; pages++
+                    Integer pages = 0; pages < PAGES_PER_TRANSACTION && nextPage * dataset.pageSize < totalRows; pages++
                 ) {
                     harvestPage(dataset);
                     if (
@@ -61,7 +66,7 @@ public with sharing class DocGenGiantQueryMulti {
                         break;
                     }
                 }
-                if (nextPage * ROWS_PER_PAGE >= totalRows) {
+                if (nextPage * dataset.pageSize >= totalRows) {
                     for (DocGenGiantQueryPlan.Slot slot : dataset.slots) {
                         run.fragmentCounts.put(slot.key, nextPage);
                     }
@@ -80,7 +85,8 @@ public with sharing class DocGenGiantQueryMulti {
                             run.templateVersionId,
                             run.slots,
                             run.fragmentCounts,
-                            run.queryConfig
+                            run.queryConfig,
+                            run.wordSnapshot
                         )
                     );
                 } else {
@@ -97,8 +103,8 @@ public with sharing class DocGenGiantQueryMulti {
         }
 
         private void harvestPage(Dataset dataset) {
-            Integer position = nextPage * ROWS_PER_PAGE;
-            Integer count = Math.min(ROWS_PER_PAGE, totalRows - position);
+            Integer position = nextPage * dataset.pageSize;
+            Integer count = Math.min(dataset.pageSize, totalRows - position);
             List<SObject> rows = cursor.fetch(position, count);
             if (rows.size() != count) {
                 throw new DocGenException('Giant Query cursor returned an incomplete page: ' + nextPage);
@@ -174,9 +180,86 @@ public with sharing class DocGenGiantQueryMulti {
     }
 
     public static Run plan(String documentBody, String queryConfig) {
-        if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3 || String.isBlank(documentBody))
-            return null;
+        return plan(documentBody, queryConfig, null);
+    }
 
+    public static Run plan(String documentBody, String queryConfig, Integer pageSize) {
+        if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3 || String.isBlank(documentBody)) {
+            return null;
+        }
+        return planPlacements(documentBody, queryConfig, pageSize, false);
+    }
+
+    /**
+     * A Word version already has a small, unmerged HTML snapshot. Render its
+     * children into HTML in bounded pages so long email bodies never have to
+     * be expanded into Word XML and converted back to HTML.
+     */
+    public static Run planWordPdf(Id parentId, Id versionId, String queryConfig, Integer pageSize) {
+        if (parentId == null || String.isBlank(queryConfig)) {
+            throw new DocGenException('Giant Query for Word PDF needs a source record and a query configuration.');
+        }
+        String snapshot = loadWordPdfSnapshot(versionId);
+        Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
+        if (configVersion == 1) {
+            queryConfig = wordFlatPlanConfig(parentId, queryConfig);
+        } else if (configVersion != 3) {
+            throw new DocGenException(
+                'Giant Query for Word PDF needs direct child queries. Re-save this template in Query Builder.'
+            );
+        }
+        Run planned = planPlacements(snapshot, queryConfig, pageSize, true);
+        if (planned == null) {
+            throw new DocGenException(
+                'Giant Query could not find a direct child loop in the Word template. Place the loop in the document body.'
+            );
+        }
+        return planned;
+    }
+
+    public static String loadWordPdfSnapshot(Id versionId) {
+        if (versionId != null) {
+            DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
+            String title = 'docgen_tmpl_html_' + versionId;
+            List<ContentVersion> versions = DocGenService.loadInternalContentVersionsForVersionByTitle(
+                versionId,
+                title
+            );
+            if (versions.isEmpty()) {
+                versions = DocGenService.loadInternalContentVersionsByTitle(title);
+            }
+            if (!versions.isEmpty() && versions[0].VersionData != null) {
+                return versions[0].VersionData.toString();
+            }
+        }
+        throw new DocGenException(
+            'The Word template has no prepared PDF snapshot. Re-save the template and try again.'
+        );
+    }
+
+    private static String wordFlatPlanConfig(Id parentId, String queryConfig) {
+        List<Object> nodes = new List<Object>{ new Map<String, Object>{ 'id' => 'word-root' } };
+        // Pass the individual subquery to the existing parser. In a flat list
+        // it may otherwise match the SELECT from an earlier sibling.
+        Matcher children = Pattern.compile('(?i)\\(\\s*SELECT\\s+[^()]+?\\s+FROM\\s+(\\w+)(?:\\s+[^()]*)?\\)')
+            .matcher(queryConfig);
+        while (children.find()) {
+            String relationship = children.group(1);
+            Map<String, Object> node = DocGenController.buildNodeConfigFromFlat(
+                parentId,
+                children.group(),
+                relationship
+            );
+            if (node != null) {
+                node.put('id', 'word-child-' + nodes.size());
+                node.put('parentNode', 'word-root');
+                nodes.add(node);
+            }
+        }
+        return JSON.serialize(new Map<String, Object>{ 'v' => 3, 'nodes' => nodes });
+    }
+
+    private static Run planPlacements(String documentBody, String queryConfig, Integer pageSize, Boolean wordSnapshot) {
         Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig);
         List<Object> configNodes = (List<Object>) config.get('nodes');
         if (configNodes == null)
@@ -195,32 +278,41 @@ public with sharing class DocGenGiantQueryMulti {
 
         Map<String, Map<String, Object>> byKey = new Map<String, Map<String, Object>>();
         Set<String> duplicates = new Set<String>();
+        Set<String> queryKeys = new Set<String>();
         for (Object value : configNodes) {
             Map<String, Object> node = (Map<String, Object>) value;
-            if ((String) node.get('parentNode') != rootNodeId)
-                continue;
+            String parentNode = (String) node.get('parentNode');
             String alias = (String) node.get('alias');
             String key = String.isNotBlank(alias) ? alias : (String) node.get('relationshipName');
-            if (String.isBlank(key))
+            if (String.isBlank(key) || String.isBlank(parentNode))
+                continue;
+            if (wordSnapshot || parentNode == rootNodeId) {
+                queryKeys.add(key);
+            }
+            if (parentNode != rootNodeId)
                 continue;
             if (byKey.containsKey(key))
                 duplicates.add(key);
             byKey.put(key, node);
         }
 
-        DocGenGiantQueryPlan planned = DocGenGiantQueryPlan.compile(documentBody, byKey.keySet());
-        if (planned.slots.size() < 2)
+        DocGenGiantQueryPlan planned = DocGenGiantQueryPlan.compile(documentBody, queryKeys, wordSnapshot);
+        if (!wordSnapshot && planned.slots.size() < 2)
             return null;
         if (!planned.nestedQueryKeys.isEmpty()) {
             throw new DocGenException(
-                'Giant Query requires top-level table loops for these child queries: ' +
+                'Giant Query requires top-level loops for these child queries: ' +
                 String.join(new List<String>(planned.nestedQueryKeys), ', ')
             );
+        }
+        if (planned.slots.isEmpty()) {
+            return null;
         }
 
         Run run = new Run();
         run.slots = planned.slots;
         run.queryConfig = queryConfig;
+        run.wordSnapshot = wordSnapshot;
         Map<String, Dataset> datasets = new Map<String, Dataset>();
         for (DocGenGiantQueryPlan.Slot slot : planned.slots) {
             if (duplicates.contains(slot.queryKey)) {
@@ -234,10 +326,8 @@ public with sharing class DocGenGiantQueryMulti {
             if (!datasets.containsKey(slot.queryKey)) {
                 Dataset dataset = new Dataset();
                 dataset.childNode = byKey.get(slot.queryKey);
-                if (dataset.childNode.get('junction') != null) {
-                    throw new DocGenException(
-                        'Giant Query table loops require a direct child lookup: ' + slot.queryKey
-                    );
+                if (dataset.childNode == null || dataset.childNode.get('junction') != null) {
+                    throw new DocGenException('Giant Query loops require a direct child lookup: ' + slot.queryKey);
                 }
                 for (String fieldGroup : new List<String>{ 'fields', 'parentFields' }) {
                     List<Object> names = (List<Object>) dataset.childNode.get(fieldGroup);
@@ -247,12 +337,51 @@ public with sharing class DocGenGiantQueryMulti {
                         }
                     }
                 }
+                dataset.pageSize = pageSizeForFields(
+                    pageSize,
+                    (String) dataset.childNode.get('object'),
+                    dataset.fields
+                );
                 datasets.put(slot.queryKey, dataset);
                 run.datasets.add(dataset);
             }
             datasets.get(slot.queryKey).slots.add(slot);
         }
         return run;
+    }
+
+    /** Keep explicit page sizes bounded, then narrow pages for long text fields. */
+    public static Integer pageSizeForFields(Integer pageSize, String objectName, List<String> selectedFields) {
+        Integer effective = pageSize != null && pageSize > 0 ? Math.min(pageSize, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+        if (objectName == null || selectedFields == null) {
+            return effective;
+        }
+        Schema.SObjectType objectType = Schema.getGlobalDescribe().get(objectName);
+        if (objectType == null) {
+            return effective;
+        }
+        Map<String, Schema.SObjectField> fields = objectType.getDescribe().fields.getMap();
+        Integer maxCharacters = 0;
+        Set<String> seen = new Set<String>();
+        for (String fieldName : selectedFields) {
+            if (String.isBlank(fieldName) || seen.contains(fieldName.toLowerCase())) {
+                continue;
+            }
+            seen.add(fieldName.toLowerCase());
+            Schema.SObjectField field = fields.get(fieldName.toLowerCase());
+            if (field != null) {
+                Schema.DescribeFieldResult description = field.getDescribe();
+                if (
+                    description.getType() == Schema.DisplayType.TextArea &&
+                    description.getLength() >= LONG_TEXT_LENGTH
+                ) {
+                    maxCharacters += description.getLength();
+                }
+            }
+        }
+        return maxCharacters == 0
+            ? effective
+            : Math.min(effective, Math.max(1, MAX_LONG_TEXT_CHARS_PER_PAGE / maxCharacters));
     }
 
     public static void launch(Run planned, Id jobId, Id templateId, Id recordId, Id templateVersionId) {

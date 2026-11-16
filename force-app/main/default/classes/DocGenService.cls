@@ -2964,6 +2964,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return ids;
     }
 
+    // Word XML is copied while combining parts and again while converting to HTML.
+    // A million characters leaves headroom for these copies in the 6 MB sync heap.
+    private static final Integer SYNC_WORD_PDF_XML_CHAR_LIMIT = 1000000;
+    private static final Integer SYNC_CPU_LIMIT_MS = 10000;
+
     /**
      * Generates a PDF Blob from a MergeResult using the unified image map.
      * Single entry point for all PDF rendering — used by generateDocument()
@@ -3008,6 +3013,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
 
             Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
+            if (mr.templateType == 'Word') {
+                assertWordPdfRenderBudget(
+                    templateId,
+                    mergedWordXmlLength(mr),
+                    Limits.getCpuTime(),
+                    Limits.getLimitCpuTime()
+                );
+            }
             // Pass styles.xml to renderer for dynamic table style resolution
             if (mr.processedXmlEntries != null && mr.processedXmlEntries.containsKey('word/styles.xml')) {
                 DocGenHtmlRenderer.stylesXml = mr.processedXmlEntries.get('word/styles.xml');
@@ -3026,6 +3039,51 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             DocGenHtmlRenderer.pageSizeOverride = null;
             DocGenHtmlRenderer.marginsOverride = null;
             DocGenHtmlRenderer.customMarginsOverride = null;
+        }
+    }
+
+    private static Integer mergedWordXmlLength(MergeResult mr) {
+        Integer characters = mr.documentXml == null ? 0 : mr.documentXml.length();
+        for (String path : mr.processedXmlEntries.keySet()) {
+            if (path.startsWith('word/header') || path.startsWith('word/footer')) {
+                String part = mr.processedXmlEntries.get(path);
+                characters += part == null ? 0 : part.length();
+            }
+        }
+        return characters;
+    }
+
+    @TestVisible
+    private static void assertWordPdfRenderBudget(
+        Id templateId,
+        Integer xmlCharacters,
+        Integer cpuUsed,
+        Integer cpuLimit
+    ) {
+        if (cpuLimit <= SYNC_CPU_LIMIT_MS && xmlCharacters > SYNC_WORD_PDF_XML_CHAR_LIMIT) {
+            throw new DocGenException(
+                'Word PDF template ' +
+                    templateId +
+                    ' expanded to ' +
+                    xmlCharacters +
+                    ' XML characters before conversion. The synchronous limit is ' +
+                    SYNC_WORD_PDF_XML_CHAR_LIMIT +
+                    ' characters. For large child queries, lower the Giant Query threshold or filter the included rows. ' +
+                    'For large fields on the parent record, reduce the merged text.'
+            );
+        }
+        // Reserve capacity for Word XML conversion and the final PDF render.
+        if (cpuLimit > 0 && cpuUsed * 4 >= cpuLimit * 3) {
+            throw new DocGenException(
+                'Word PDF template ' +
+                    templateId +
+                    ' reached the rendering CPU budget (' +
+                    cpuUsed +
+                    ' of ' +
+                    cpuLimit +
+                    ' ms before conversion). For child queries with large text fields, configure a lower ' +
+                    'Giant Query threshold or filter the records and fields included in the template.'
+            );
         }
     }
 
@@ -5701,7 +5759,6 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return normalized.escapeXml();
         }
         List<String> lines = normalized.split('\n');
-        String result = '';
         String rPrXml = String.isNotBlank(rPr) ? rPr : '';
         String lineBreakXml =
             '</w:t></w:r><w:r>' +
@@ -5710,12 +5767,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             rPrXml +
             '<w:t xml:space="preserve">';
         for (Integer i = 0; i < lines.size(); i++) {
-            if (i > 0) {
-                result += lineBreakXml;
-            }
-            result += lines[i].escapeXml();
+            lines[i] = lines[i].escapeXml();
         }
-        return result;
+        return String.join(lines, lineBreakXml);
     }
 
     /**
@@ -6927,7 +6981,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         List<String> paragraphs = normalized.split(delim);
 
         // Build DOCX XML: close current context, emit paragraphs, reopen context
-        String result = '</w:t></w:r>'; // close current run
+        List<String> parts = new List<String>{ '</w:t></w:r>' };
 
         Boolean firstPara = true;
         for (String para : paragraphs) {
@@ -6937,14 +6991,14 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
 
             if (!firstPara) {
-                result += '</w:p><w:p>'; // new paragraph
+                parts.add('</w:p><w:p>');
             } else {
                 // Continue in the same paragraph as the merge tag
                 firstPara = false;
             }
 
             // Process inline content within this paragraph
-            result += processInlineHtml(trimmed);
+            parts.add(processInlineHtml(trimmed));
         }
 
         // If we never output anything, just return empty text
@@ -6953,8 +7007,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Reopen run/text context for any content after the merge tag
-        result += '<w:r><w:t xml:space="preserve">';
-        return result;
+        parts.add('<w:r><w:t xml:space="preserve">');
+        return String.join(parts, '');
     }
 
     /**
@@ -6962,7 +7016,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Handles <b>, <i>, <u>, <strong>, <em>, <span>, <img>, and plain text.
      */
     private static String processInlineHtml(String html) {
-        String result = '';
+        List<String> parts = new List<String>();
         Integer cursor = 0;
 
         // Track formatting state
@@ -6981,7 +7035,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 // Remaining plain text
                 String text = html.substring(cursor).trim();
                 if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                    parts.add(buildRun(stripTags(text), isBold, isItalic, isUnderline));
                 }
                 break;
             }
@@ -6990,7 +7044,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             if (nextTag > cursor) {
                 String text = html.substring(cursor, nextTag);
                 if (String.isNotBlank(text)) {
-                    result += buildRun(stripTags(text), isBold, isItalic, isUnderline);
+                    parts.add(buildRun(stripTags(text), isBold, isItalic, isUnderline));
                 }
             }
 
@@ -7030,17 +7084,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     }
                     if (String.isNotBlank(href)) {
                         // Build w:hyperlink with direct URL attribute for PDF rendering
-                        result +=
+                        parts.add(
                             '<w:hyperlink w:docgen-url="' +
-                            href.escapeXml() +
-                            '">' +
-                            '<w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>' +
-                            '<w:t xml:space="preserve">' +
-                            linkText.escapeXml() +
-                            '</w:t></w:r>' +
-                            '</w:hyperlink>';
+                                href.escapeXml() +
+                                '">' +
+                                '<w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>' +
+                                '<w:t xml:space="preserve">' +
+                                linkText.escapeXml() +
+                                '</w:t></w:r>' +
+                                '</w:hyperlink>'
+                        );
                     } else {
-                        result += buildRun(linkText, isBold, isItalic, true);
+                        parts.add(buildRun(linkText, isBold, isItalic, true));
                     }
                     cursor = closeA + 4; // skip past </a>
                     continue;
@@ -7050,7 +7105,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 String imgTag = html.substring(nextTag, tagEnd);
                 String imgResult = processRichTextImage(imgTag);
                 if (imgResult != null) {
-                    result += imgResult;
+                    parts.add(imgResult);
                 }
             } else if (tag.startsWith('<ul>') || tag.startsWith('<ul ')) {
                 listStack.add('ul');
@@ -7078,7 +7133,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 } else {
                     marker = indent + '• ';
                 }
-                result += '</w:p><w:p><w:r><w:t xml:space="preserve">' + marker + '</w:t></w:r>';
+                parts.add('</w:p><w:p><w:r><w:t xml:space="preserve">' + marker + '</w:t></w:r>');
             } else if (tag.startsWith('</li>')) {
                 // No-op; next <li> or list close handles boundaries.
             }
@@ -7087,7 +7142,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             cursor = tagEnd;
         }
 
-        return result;
+        return String.join(parts, '');
     }
 
     /**

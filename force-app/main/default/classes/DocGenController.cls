@@ -1302,11 +1302,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // Get template config
             DocGenFlsGuard.assertAccessible(
                 DocGen_Template__c.sObjectType,
-                new Set<String>{ 'Base_Object_API__c', 'Query_Config__c', 'Type__c', 'Output_Format__c' }
+                new Set<String>{
+                    'Base_Object_API__c',
+                    'Query_Config__c',
+                    'Type__c',
+                    'Output_Format__c',
+                    'Giant_Query_Row_Threshold__c',
+                    'Giant_Query_Page_Size__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template__c> templates = [
-                SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c
+                SELECT
+                    Base_Object_API__c,
+                    Query_Config__c,
+                    Type__c,
+                    Output_Format__c,
+                    Giant_Query_Row_Threshold__c,
+                    Giant_Query_Page_Size__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
                 WITH SYSTEM_MODE
@@ -1318,47 +1331,25 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             DocGen_Template__c template = templates[0];
             String queryConfig = template.Query_Config__c;
 
-            // Scout child counts (works for V1 flat strings AND V3 JSON)
-            Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(recordId, queryConfig);
-
-            // Check if any count exceeds threshold
-            Integer threshold = 2000;
-            String giantRelationship = null;
-            Map<String, Object> giantNodeConfig = null;
-
-            Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
-
-            for (String relName : counts.keySet()) {
-                if (counts.get(relName) > threshold) {
-                    giantRelationship = relName;
-                    break;
-                }
-            }
-
-            if (giantRelationship != null) {
-                if (configVersion >= 3) {
-                    // V3: find the matching node by alias if present (filtered subset),
-                    // else by relationshipName. The scout keys counts by the same effective
-                    // key, so giantRelationship === node.alias || node.relationshipName.
-                    Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
-                    List<Object> nodesJson = (List<Object>) config.get('nodes');
-                    if (nodesJson != null) {
-                        for (Object nodeObj : nodesJson) {
-                            Map<String, Object> n = (Map<String, Object>) nodeObj;
-                            String nodeAlias = (String) n.get('alias');
-                            String effectiveKey = String.isNotBlank(nodeAlias)
-                                ? nodeAlias
-                                : (String) n.get('relationshipName');
-                            if (giantRelationship.equals(effectiveKey)) {
-                                giantNodeConfig = n;
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    // V1/V2 flat string: build node config from schema + parsed subquery
-                    giantNodeConfig = buildNodeConfigFromFlat(recordId, queryConfig, giantRelationship);
-                }
+            DocGenGiantQueryRouter.Settings giantSettings = new DocGenGiantQueryRouter.Settings(template);
+            DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
+                recordId,
+                queryConfig,
+                template.Output_Format__c,
+                giantSettings
+            );
+            Map<String, Integer> counts = route.counts;
+            String giantRelationship = route.giantRelationship;
+            Map<String, Object> giantNodeConfig = route.giantNodeConfig;
+            if (route.useGiantPath && 'PDF'.equalsIgnoreCase(template.Output_Format__c) && giantNodeConfig != null) {
+                Map<String, Object> launched = launchGiantQueryPdfBatch(
+                    templateId,
+                    recordId,
+                    giantRelationship,
+                    JSON.serialize(giantNodeConfig)
+                );
+                launched.put('childCounts', counts);
+                return launched;
             }
 
             if (giantRelationship == null) {
@@ -1461,7 +1452,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String outputFormat = template.Output_Format__c != null ? template.Output_Format__c : 'PDF';
             DocGenGiantQueryMulti.Run multi = 'PDF'.equalsIgnoreCase(outputFormat) &&
                 DocGenService.isHtmlBacked(template.Type__c)
-                ? DocGenGiantQueryMulti.plan(DocGenService.extractHtmlBodyContent(documentXml), queryConfig)
+                ? DocGenGiantQueryMulti.plan(
+                      DocGenService.extractHtmlBodyContent(documentXml),
+                      queryConfig,
+                      giantSettings.pageSize
+                  )
                 : null;
             Map<String, String> loopParts = multi == null
                 ? DocGenService.extractLoopBody(documentXml, giantRelationship)
@@ -1524,7 +1519,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                         recordId,
                         giantNodeConfig,
                         loopParts.get('innerXml'),
-                        outputFormat
+                        outputFormat,
+                        route.pageSize
                     ),
                     1
                 );
@@ -1775,17 +1771,50 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // HTML uses the active version's Content_Version_Id__c directly.
             DocGenFlsGuard.assertAccessible(
                 DocGen_Template__c.sObjectType,
-                new Set<String>{ 'Type__c', 'Query_Config__c' }
+                new Set<String>{
+                    'Type__c',
+                    'Query_Config__c',
+                    'Giant_Query_Row_Threshold__c',
+                    'Giant_Query_Page_Size__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template__c> tplForType = [
-                SELECT Type__c, Query_Config__c
+                SELECT Type__c, Query_Config__c, Giant_Query_Row_Threshold__c, Giant_Query_Page_Size__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
                 WITH SYSTEM_MODE
                 LIMIT 1
             ];
-            String templateType = tplForType.isEmpty() ? 'Word' : tplForType[0].Type__c;
+            if (tplForType.isEmpty())
+                throw new DocGenException('Unable to access template.');
+            DocGen_Template__c template = tplForType[0];
+            String templateType = template.Type__c;
+            DocGenGiantQueryRouter.Settings giantSettings = new DocGenGiantQueryRouter.Settings(template);
+            Map<String, Object> savedNode = DocGenGiantQueryRouter.resolveNodeConfig(
+                recordId,
+                template.Query_Config__c,
+                giantRelationship
+            );
+            if (savedNode != null)
+                childNodeConfig = savedNode;
+            Boolean useWordSnapshot = false;
+            Integer pageSize = giantSettings.pageSize;
+            if ('Word'.equalsIgnoreCase(templateType) && savedNode != null) {
+                Integer rows = DocGenDataRetriever.scoutChildCounts(recordId, template.Query_Config__c)
+                    .get(giantRelationship);
+                DocGenGiantQueryRouter.Assessment route = DocGenGiantQueryRouter.assess(
+                    recordId,
+                    savedNode,
+                    rows,
+                    'PDF',
+                    giantSettings,
+                    false
+                );
+                useWordSnapshot =
+                    route.largePayload || (giantSettings.thresholdConfigured && route.exceedsRowThreshold);
+                pageSize = route.pageSize;
+            }
 
             DocGenFlsGuard.assertAccessible(
                 DocGen_Template_Version__c.sObjectType,
@@ -1801,7 +1830,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ];
             String documentXml = null;
 
-            if (DocGenService.isHtmlBacked(templateType)) {
+            DocGenGiantQueryMulti.Run multi;
+            if (useWordSnapshot) {
+                if (activeVersions.isEmpty())
+                    throw new DocGenException('The Word template has no active version.');
+                multi = DocGenGiantQueryMulti.planWordPdf(
+                    recordId,
+                    activeVersions[0].Id,
+                    template.Query_Config__c,
+                    pageSize
+                );
+                if (multi == null) {
+                    throw new DocGenException(
+                        'Could not prepare the Word PDF layout for "' +
+                            giantRelationship +
+                            '". Use a top-level loop in the template body and re-save the Word template.'
+                    );
+                }
+            } else if (DocGenService.isHtmlBacked(templateType)) {
                 if (!activeVersions.isEmpty() && String.isNotBlank(activeVersions[0].Content_Version_Id__c)) {
                     Id bodyCvId = (Id) activeVersions[0].Content_Version_Id__c;
                     DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
@@ -1842,12 +1888,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            DocGenGiantQueryMulti.Run multi = DocGenService.isHtmlBacked(templateType)
-                ? DocGenGiantQueryMulti.plan(
-                      DocGenService.extractHtmlBodyContent(documentXml),
-                      tplForType[0].Query_Config__c
-                  )
-                : null;
+            if (DocGenService.isHtmlBacked(templateType)) {
+                multi = DocGenGiantQueryMulti.plan(
+                    DocGenService.extractHtmlBodyContent(documentXml),
+                    template.Query_Config__c,
+                    pageSize
+                );
+            }
             Map<String, String> loopParts = multi == null
                 ? DocGenService.extractLoopBody(documentXml, giantRelationship)
                 : null;
@@ -1872,8 +1919,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             Database.insert(job, AccessLevel.SYSTEM_MODE);
 
             if (multi == null) {
-                // The V1 scout omits this field.
-                childNodeConfig.put('relationshipName', giantRelationship);
+                if (String.isBlank((String) childNodeConfig.get('relationshipName'))) {
+                    childNodeConfig.put('relationshipName', giantRelationship);
+                }
                 Database.executeBatch(
                     new DocGenGiantQueryBatch(
                         job.Id,
@@ -1881,7 +1929,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                         recordId,
                         childNodeConfig,
                         loopParts.get('innerXml'),
-                        'PDF'
+                        'PDF',
+                        pageSize
                     ),
                     1
                 );
@@ -1926,11 +1975,22 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         DocGenFlsGuard.assertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Query_Config__c', 'Base_Object_API__c', 'Output_Format__c' }
+            new Set<String>{
+                'Query_Config__c',
+                'Base_Object_API__c',
+                'Output_Format__c',
+                'Giant_Query_Row_Threshold__c',
+                'Giant_Query_Page_Size__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template__c> templates = [
-            SELECT Query_Config__c, Base_Object_API__c, Output_Format__c
+            SELECT
+                Query_Config__c,
+                Base_Object_API__c,
+                Output_Format__c,
+                Giant_Query_Row_Threshold__c,
+                Giant_Query_Page_Size__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -2050,21 +2110,43 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         result.put('childNodes', childNodes);
 
-        // Heap-pressure pre-flight: for each relationship with a known count,
-        // estimate peak sync-path heap via the shared router (#374). Row-count
-        // only here (no per-row sampling) — the client just needs the flag.
         String outputFormat = templates[0].Output_Format__c;
-        Integer safeHeapBytes = DocGenGiantQueryRouter.safeHeapBytes();
-
+        DocGenGiantQueryRouter.Settings giantSettings = new DocGenGiantQueryRouter.Settings(templates[0]);
         Map<String, Integer> heapEstimates = new Map<String, Integer>();
         Map<String, Boolean> useGiantPath = new Map<String, Boolean>();
+        String preferredRelationship;
+        Integer preferredBytes = -1;
+        Boolean preferredWide = false;
         for (String relName : counts.keySet()) {
-            Integer estimatedPeak = DocGenGiantQueryRouter.estimatePeakHeapBytes(counts.get(relName), 0, outputFormat);
-            heapEstimates.put(relName, estimatedPeak);
-            useGiantPath.put(relName, estimatedPeak > safeHeapBytes);
+            Map<String, Object> node = childNodes.get(relName);
+            DocGenGiantQueryRouter.Assessment route = DocGenGiantQueryRouter.assess(
+                recordId,
+                node,
+                counts.get(relName),
+                outputFormat,
+                giantSettings,
+                false
+            );
+            heapEstimates.put(relName, route.estimatedPeakHeapBytes);
+            useGiantPath.put(relName, route.useGiantPath);
+            if (node != null && (route.largePayload || giantSettings.pageSizeConfigured)) {
+                node.put('giantPageSize', route.pageSize);
+            }
+            if (
+                route.useGiantPath &&
+                (preferredRelationship == null ||
+                (route.largePayload && !preferredWide) ||
+                (route.largePayload == preferredWide &&
+                route.estimatedPeakHeapBytes > preferredBytes))
+            ) {
+                preferredRelationship = relName;
+                preferredBytes = route.estimatedPeakHeapBytes;
+                preferredWide = route.largePayload;
+            }
         }
         result.put('heapEstimates', heapEstimates);
         result.put('useGiantPath', useGiantPath);
+        result.put('preferredGiantRelationship', preferredRelationship);
         result.put('outputFormat', outputFormat);
         return result;
     }
