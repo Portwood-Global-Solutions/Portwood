@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { inflateRawSync } from 'node:zlib';
 import { buildCompressedDocx, buildDocx } from '../../force-app/main/default/lwc/docGenRunner/docGenZipWriter.js';
+import {
+    GiantDocxMedia,
+    giantDocxFieldValue,
+    giantDocxImageTags,
+    wordTextPosition
+} from '../../force-app/main/default/lwc/docGenRunner/docGenGiantDocxMedia.js';
 
 // Load the real Runner and ZIP writer. Only Lightning decorators and platform imports are stubbed.
 const rawRunner = readFileSync(
@@ -25,11 +31,16 @@ const mocks = {
     OUT_FMT_FIELD: { fieldApiName: 'Output_Format__c' },
     USER_TIME_ZONE: 'America/Chicago',
     buildCompressedDocx,
-    buildDocx
+    buildDocx,
+    GiantDocxMedia,
+    giantDocxFieldValue,
+    giantDocxImageTags,
+    wordTextPosition
 };
 for (const method of [
     'generateDocumentPartsGiantQuery',
     'generateDocumentPartsGiantQueryMulti',
+    'getGiantDocxImage',
     'getSortedChildIds',
     'getChildRecordsByIds',
     'getChildRecordPage',
@@ -52,7 +63,7 @@ function runner(outputFormat = 'Native') {
     return component;
 }
 
-function documentXml(zip) {
+function zipEntry(zip, path) {
     for (let offset = 0; zip.readUInt32LE(offset) === 0x04034b50; ) {
         const compressedSize = zip.readUInt32LE(offset + 18);
         const nameSize = zip.readUInt16LE(offset + 26);
@@ -61,14 +72,19 @@ function documentXml(zip) {
         const dataStart = nameStart + nameSize + extraSize;
         const dataEnd = dataStart + compressedSize;
         const name = zip.toString('utf8', nameStart, nameStart + nameSize);
-        if (name === 'word/document.xml') {
+        if (name === path) {
             const method = zip.readUInt16LE(offset + 8);
             const data = zip.subarray(dataStart, dataEnd);
-            return { method, xml: (method === 8 ? inflateRawSync(data) : data).toString('utf8') };
+            return { method, data: method === 8 ? inflateRawSync(data) : data };
         }
         offset = dataEnd;
     }
-    assert.fail('The DOCX has no main document part.');
+    assert.fail('The DOCX is missing ZIP part ' + path);
+}
+
+function documentXml(zip) {
+    const { method, data } = zipEntry(zip, 'word/document.xml');
+    return { method, xml: data.toString('utf8') };
 }
 
 const scout = {
@@ -243,6 +259,94 @@ await single.handleGenerate();
 assert.equal(single.error, null);
 assert.deepEqual(documentXml(single.download.zip), { method: 0, xml: '<root><b>First</b><b>Second</b></root>' });
 
+const logo = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3dAAAAAASUVORK5CYII=';
+const versionId = '068000000000001AAA';
+const documentId = '069000000000001AAA';
+const requestedMedia = [];
+platform.scoutChildCounts = async () => ({
+    counts: { Beta: 2 },
+    useGiantPath: { Beta: true },
+    childNodes: { Beta: { ...scout.childNodes.Beta, fields: ['Name', 'Photo__c'] } }
+});
+platform.getGiantDocxImage = async ({ fileId }) => {
+    requestedMedia.push(fileId);
+    assert.equal(fileId, documentId);
+    return { extension: 'png', contentVersionId: versionId, base64: logo };
+};
+platform.generateDocumentPartsGiantQuery = async () => ({
+    allXmlParts: {
+        'word/document.xml': '<w:document xmlns:w="urn:word"><w:body><!--media--></w:body></w:document>',
+        '[Content_Types].xml':
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+        'word/_rels/document.xml.rels':
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdPortwoodGiantImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/template-logo.png"/></Relationships>'
+    },
+    imageBase64Map: { 'word/media/template-logo.png': logo },
+    placeholder: '<!--media-->',
+    giantLoopBodyXml: '<w:p><w:r><w:t>{Name} {%Photo__c:80x40}</w:t></w:r></w:p>'
+});
+platform.getChildRecordPage = async () => ({
+    records: [
+        { Name: 'One\nTwo & three', Photo__c: '/sfc/servlet.shepherd/document/download/' + documentId },
+        { Name: 'Again', Photo__c: versionId }
+    ],
+    hasMore: false
+});
+const images = runner();
+await images.handleGenerate();
+assert.equal(images.error, null);
+assert.deepEqual(requestedMedia, [documentId], 'A document and version alias reuse one image.');
+const { xml: imageXml } = documentXml(images.download.zip);
+assert.deepEqual(
+    [...imageXml.matchAll(/<wp:docPr id="(\d+)"/g)].map((match) => match[1]),
+    ['1', '2']
+);
+assert.deepEqual(
+    [...imageXml.matchAll(/r:embed="([^"]+)"/g)].map((match) => match[1]),
+    ['rIdPortwoodGiantImage2', 'rIdPortwoodGiantImage2']
+);
+assert.match(imageXml, /<wp:extent cx="762000" cy="381000"\/>/);
+assert.match(imageXml, /One<\/w:t><w:br\/><w:t xml:space="preserve">Two &amp; three/);
+const imageRelationships = zipEntry(images.download.zip, 'word/_rels/document.xml.rels').data.toString('utf8');
+assert.match(imageRelationships, /Id="rIdPortwoodGiantImage1"[^>]+Target="media\/template-logo.png"/);
+assert.match(imageRelationships, /Id="rIdPortwoodGiantImage2"[^>]+Target="media\/docgen_giant_image_2.png"/);
+assert.deepEqual(
+    zipEntry(images.download.zip, 'word/media/docgen_giant_image_2.png').data,
+    Buffer.from(logo, 'base64')
+);
+assert.deepEqual(zipEntry(images.download.zip, 'word/media/template-logo.png').data, Buffer.from(logo, 'base64'));
+assert.match(
+    zipEntry(images.download.zip, '[Content_Types].xml').data.toString('utf8'),
+    /Extension="png" ContentType="image\/png"/
+);
+
+platform.getChildRecordPage = async () => ({
+    records: [{ Name: 'Remote', Photo__c: 'https://outside.example/image.png' }],
+    hasMore: false
+});
+const rejected = runner();
+await rejected.handleGenerate();
+assert.match(rejected.error, /must contain a Salesforce File ID/);
+assert.equal(rejected.download, undefined);
+assert.deepEqual(requestedMedia, [documentId], 'Remote images never reach the Apex file reader.');
+
+const fullParagraphParts = platform.generateDocumentPartsGiantQuery;
+platform.generateDocumentPartsGiantQuery = async () => {
+    const parts = await fullParagraphParts();
+    parts.allXmlParts['word/document.xml'] =
+        '<w:document xmlns:w="urn:word"><w:body><w:p><w:r><w:t><!--media--></w:t></w:r></w:p></w:body></w:document>';
+    parts.giantLoopBodyXml = '{Name} {%Photo__c:80x40}';
+    return parts;
+};
+platform.getChildRecordPage = async () => ({
+    records: [{ Name: 'Inline', Photo__c: documentId }],
+    hasMore: false
+});
+const inlineImages = runner();
+await inlineImages.handleGenerate();
+assert.equal(inlineImages.error, null);
+assert.match(documentXml(inlineImages.download.zip).xml, /<w:t>Inline <\/w:t><w:drawing>/);
+
 console.log(
-    'PASS: Giant Query Runner routing, order, alias reuse, pagination, dates, limits, ZIP, and error handling.'
+    'PASS: Giant Query Runner routing, order, alias reuse, pagination, dates, limits, ZIP, native images, and error handling.'
 );

@@ -117,6 +117,14 @@ public with sharing class DocGenGiantQueryMulti {
             if (rows.size() != count) {
                 throw new DocGenException('Giant Query cursor returned an incomplete page: ' + nextPage);
             }
+            if ('EmailMessage'.equalsIgnoreCase((String) dataset.childNode.get('object'))) {
+                for (String fieldName : dataset.fields) {
+                    if ('HtmlBody'.equalsIgnoreCase(fieldName)) {
+                        DocGenEmailInlineImages.prepare(rows);
+                        break;
+                    }
+                }
+            }
 
             Map<String, Object> groupData = dataset.nestedQuery == null
                 ? null

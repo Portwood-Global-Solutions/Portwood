@@ -569,8 +569,6 @@
         >true</readable></fieldPermissions>
     <fieldPermissions><editable>false</editable><field>DocGen_Font_Face__c.Source_CV_Id__c</field><readable
         >true</readable></fieldPermissions>
-    <fieldPermissions><editable>false</editable><field>DocGen_Font_Face__c.Source_Checksum__c</field><readable
-        >true</readable></fieldPermissions>
     <fieldPermissions><editable>false</editable><field>DocGen_Font_Face__c.Status__c</field><readable
         >true</readable></fieldPermissions>
     <fieldPermissions><editable>false</editable><field>DocGen_Font_Face__c.Verified_At__c</field><readable

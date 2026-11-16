@@ -1450,46 +1450,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (mr.relsXml != null) {
             allXmlParts.put(mr.relsPath, mr.relsXml);
         }
-        // Build the image map up front so the passthrough split below can
-        // route non-UTF-8 binaries into it as fallback storage.
-        Map<String, String> imageBase64Map = new Map<String, String>();
-
-        // Split passthrough entries into XML (allXmlParts) and binary (imageBase64Map).
-        //
-        // Word can stamp a `docProps/thumbnail.jpeg` (and occasionally fonts /
-        // OLE objects / printerSettings.bin) outside the `word/media/` prefix.
-        // The pre-#117 code assumed "anything not under mediaPath is XML text"
-        // and called .toString() unconditionally — which throws
-        // `BLOB is not a valid UTF-8 string` on those binary entries and aborts
-        // the whole generate. Detect-by-trying so XML stays in allXmlParts and
-        // binary lands in the base64 image map (which the client-side ZIP
-        // writer already handles as a passthrough mediaPath → bytes mapping).
-        for (String path : mr.passthroughEntries.keySet()) {
-            Blob entryBlob = mr.passthroughEntries.get(path);
-            if (path.startsWith(mr.mediaPath)) {
-                continue; // handled below in the media base64 loop
-            }
-            // Known-binary parts (xl/vbaProject.bin, printerSettings*.bin) go straight
-            // to base64 — the detect-by-trying split below is probabilistic, and a
-            // binary whose bytes happen to decode as valid UTF-8 would survive
-            // .toString() and ship re-encoded (corrupt).
-            if (path.endsWithIgnoreCase('.bin')) {
-                imageBase64Map.put(path, EncodingUtil.base64Encode(entryBlob));
-                continue;
-            }
-            try {
-                allXmlParts.put(path, entryBlob.toString());
-            } catch (StringException stre) {
-                imageBase64Map.put(path, EncodingUtil.base64Encode(entryBlob));
-            }
-        }
-
-        // Template-embedded media from passthrough (small, already in heap)
-        for (String path : mr.passthroughEntries.keySet()) {
-            if (path.startsWith(mr.mediaPath)) {
-                imageBase64Map.put(path, EncodingUtil.base64Encode(mr.passthroughEntries.get(path)));
-            }
-        }
+        Map<String, String> imageBase64Map = splitClientPassthroughParts(mr, allXmlParts);
 
         // Dynamic images: return mediaPath → CV ID mapping (not base64)
         // Client calls getContentVersionBase64() for each unique CV in separate transactions.
@@ -1529,6 +1490,30 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             'templateType' => mr.templateType,
             'isMacroEnabled' => isMacroEnabled
         };
+    }
+
+    /** Preserve both the text and original binary ZIP entries for client assembly. */
+    private static Map<String, String> splitClientPassthroughParts(MergeResult mr, Map<String, String> xmlParts) {
+        Map<String, String> binaryParts = new Map<String, String>();
+        for (String path : mr.passthroughEntries.keySet()) {
+            Blob part = mr.passthroughEntries.get(path);
+            // Word thumbnails and printer settings can live outside word/media.
+            // Treat known binary parts as bytes even when they happen to be valid UTF-8.
+            if (
+                path.startsWith(mr.mediaPath) ||
+                path.endsWithIgnoreCase('.bin') ||
+                path.toLowerCase().startsWith('docprops/thumbnail.')
+            ) {
+                binaryParts.put(path, EncodingUtil.base64Encode(part));
+                continue;
+            }
+            try {
+                xmlParts.put(path, part.toString());
+            } catch (StringException invalidText) {
+                binaryParts.put(path, EncodingUtil.base64Encode(part));
+            }
+        }
+        return binaryParts;
     }
 
     /**
@@ -1711,19 +1696,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (mr.relsXml != null) {
             allXmlParts.put(mr.relsPath, mr.relsXml);
         }
-        for (String path : mr.passthroughEntries.keySet()) {
-            Blob entryBlob = mr.passthroughEntries.get(path);
-            if (!path.startsWith(mr.mediaPath)) {
-                allXmlParts.put(path, entryBlob.toString());
-            }
-        }
-
-        Map<String, String> imageBase64Map = new Map<String, String>();
-        for (String path : mr.passthroughEntries.keySet()) {
-            if (path.startsWith(mr.mediaPath)) {
-                imageBase64Map.put(path, EncodingUtil.base64Encode(mr.passthroughEntries.get(path)));
-            }
-        }
+        Map<String, String> imageBase64Map = splitClientPassthroughParts(mr, allXmlParts);
 
         Map<String, String> imageCvIdMap = new Map<String, String>();
         for (Map<String, Object> img : pendingImages) {

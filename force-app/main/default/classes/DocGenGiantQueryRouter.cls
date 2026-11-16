@@ -170,7 +170,7 @@ public with sharing class DocGenGiantQueryRouter {
             soql += described.containsKey('createddate') ? ' ORDER BY CreatedDate DESC, Id DESC' : ' ORDER BY Id DESC';
             soql += ' LIMIT :sampleSize';
             Integer maximum = 0;
-            for (SObject row : Database.query(DocGenSignatureIpContext.publicQuery(soql), AccessLevel.USER_MODE)) {
+            for (SObject row : Database.query(soql, AccessLevel.USER_MODE)) {
                 Integer bytes = 0;
                 for (String fieldName : selected) {
                     String value = (String) row.get(fieldName);
