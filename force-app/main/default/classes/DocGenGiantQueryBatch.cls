@@ -48,6 +48,18 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         String innerXml,
         String outputFormat
     ) {
+        this(jobId, templateId, recordId, childNodeConfig, innerXml, outputFormat, null);
+    }
+
+    public DocGenGiantQueryBatch(
+        Id jobId,
+        Id templateId,
+        Id recordId,
+        Map<String, Object> childNodeConfig,
+        String innerXml,
+        String outputFormat,
+        Integer pageSize
+    ) {
         this.jobId = jobId;
         this.templateId = templateId;
         this.recordId = recordId;
@@ -55,7 +67,6 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         this.outputFormat = outputFormat;
         this.fragmentSequence = 0;
         this.rowNumberOffset = 0;
-        this.batchSize = 50;
         // DOCX loop bodies contain <w:tr>/<w:t>; HTML loop bodies don't. One
         // indexOf is cheap and avoids an extra SOQL for Type__c on every execute.
         this.isHtmlSource = innerXml == null || !innerXml.contains('<w:');
@@ -114,6 +125,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                 this.parentFields.add(String.valueOf(f));
             }
         }
+        List<String> selectedFields = new List<String>(this.childFields);
+        selectedFields.addAll(this.parentFields);
+        this.batchSize = DocGenGiantQueryMulti.pageSizeForFields(pageSize, this.childObjectName, selectedFields);
 
         // Read and sanitize ORDER BY clause from config
         String rawOrderBy = (String) childNodeConfig.get('orderBy');

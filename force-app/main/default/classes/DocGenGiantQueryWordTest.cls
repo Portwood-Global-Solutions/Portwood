@@ -63,7 +63,33 @@ private class DocGenGiantQueryWordTest {
             row('{#FirstQuery}{FirstName}{/FirstQuery}') +
             row('{#SecondQuery}{FirstName}{/SecondQuery}') +
             '</w:body></w:document>';
-        ContentVersion cv = TestDataFactory.createValidDocxFile(template.Id, document);
+        ContentVersion original = TestDataFactory.createValidDocxFile(template.Id, document);
+        Compression.ZipReader reader = new Compression.ZipReader(
+            [SELECT VersionData FROM ContentVersion WHERE Id = :original.Id].VersionData
+        );
+        Compression.ZipWriter archive = new Compression.ZipWriter();
+        for (Compression.ZipEntry originalEntry : reader.getEntries()) {
+            archive.addEntry(originalEntry.getName(), reader.extract(originalEntry.getName()));
+        }
+        String thumbnailPath = 'docProps/thumbnail.jpeg';
+        String printerSettingsPath = 'word/printerSettings/printerSettings1.bin';
+        String customXmlPath = 'customXml/item1.xml';
+        // JPEG marker bytes are deliberately invalid UTF-8. The .bin payload can
+        // decode as text but its package path still identifies a binary part.
+        Blob thumbnail = EncodingUtil.convertFromHex('FFD8FFE000104A4649460001FFD9');
+        Blob printerSettings = Blob.valueOf('test printer settings');
+        String customXml = '<note>Still here</note>';
+        archive.addEntry(thumbnailPath, thumbnail);
+        archive.addEntry(printerSettingsPath, printerSettings);
+        archive.addEntry(customXmlPath, Blob.valueOf(customXml));
+
+        ContentVersion cv = new ContentVersion(
+            Title = 'Giant Word with binary ZIP parts',
+            PathOnClient = 'GiantWordWithBinaryZipParts.docx',
+            VersionData = archive.getArchive(),
+            FirstPublishLocationId = template.Id
+        );
+        insert cv;
         insert new DocGen_Template_Version__c(
             Template__c = template.Id,
             Is_Active__c = true,
@@ -96,7 +122,17 @@ private class DocGenGiantQueryWordTest {
         Assert.areEqual('SecondQuery', slots[2].get('queryKey'));
         Assert.isTrue(slots[0].get('innerXml').contains('{LastName}'));
         Assert.isTrue(slots[2].get('innerXml').contains('{FirstName}'));
-        String xml = ((Map<String, String>) shell.get('allXmlParts')).get('word/document.xml');
+        Map<String, String> textParts = (Map<String, String>) shell.get('allXmlParts');
+        Map<String, String> binaryParts = (Map<String, String>) shell.get('imageBase64Map');
+        Assert.areEqual(customXml, textParts.get(customXmlPath));
+        Assert.isFalse(textParts.containsKey(thumbnailPath), 'A Word thumbnail is not a text part');
+        Assert.isFalse(
+            textParts.containsKey(printerSettingsPath),
+            'UTF-8 bytes do not make printer settings a text part'
+        );
+        Assert.areEqual(EncodingUtil.base64Encode(thumbnail), binaryParts.get(thumbnailPath));
+        Assert.areEqual(EncodingUtil.base64Encode(printerSettings), binaryParts.get(printerSettingsPath));
+        String xml = textParts.get('word/document.xml');
         Assert.isTrue(xml.contains('Word giant query parent'));
         Assert.isTrue(xml.contains('Small sibling'));
         Assert.isTrue(xml.indexOf(slots[0].get('marker')) < xml.indexOf('Small sibling'));

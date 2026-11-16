@@ -19,6 +19,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     private Id plannedVersionId;
     private List<DocGenGiantQueryPlan.Slot> plannedSlots;
     private Map<String, Integer> expectedFragmentCounts;
+    private Boolean plannedWordSnapshot = false;
     private DocGenGiantQueryPlan htmlPlan;
     private String colGroupHtml = '';
     // The authored <table …> opening tag captured from the template snapshot. Chunk-break
@@ -70,6 +71,28 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         Map<String, Integer> expectedFragmentCounts,
         String effectivePlanConfig
     ) {
+        this(
+            jobId,
+            templateId,
+            recordId,
+            plannedVersionId,
+            plannedSlots,
+            expectedFragmentCounts,
+            effectivePlanConfig,
+            false
+        );
+    }
+
+    public DocGenGiantQueryAssembler(
+        Id jobId,
+        Id templateId,
+        Id recordId,
+        Id plannedVersionId,
+        List<DocGenGiantQueryPlan.Slot> plannedSlots,
+        Map<String, Integer> expectedFragmentCounts,
+        String effectivePlanConfig,
+        Boolean plannedWordSnapshot
+    ) {
         this.jobId = jobId;
         this.templateId = templateId;
         this.recordId = recordId;
@@ -77,6 +100,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         this.plannedSlots = plannedSlots;
         this.expectedFragmentCounts = expectedFragmentCounts;
         this.effectivePlanConfig = effectivePlanConfig;
+        this.plannedWordSnapshot = plannedWordSnapshot == true;
     }
 
     public void execute(QueueableContext ctx) {
@@ -141,7 +165,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         for (DocGenGiantQueryPlan.Slot slot : htmlPlan.slots) {
             Integer expected = expectedFragmentCounts == null ? null : expectedFragmentCounts.get(slot.key);
             if (expected == null || expected < 0) {
-                throw new DocGenException('Giant Query is missing completion data for table ' + slot.queryKey + '.');
+                throw new DocGenException('Giant Query is missing completion data for ' + slot.queryKey + '.');
             }
             String prefix = 'docgen_giant_' + jobId + '_slot_' + slot.key + '_';
             String titleFilter = prefix + '%';
@@ -156,13 +180,13 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             ]) {
                 String expectedTitle = prefix + String.valueOf(parts.size()).leftPad(5, '0');
                 if (!expectedTitle.equals(fragment.Title) || fragment.VersionData == null) {
-                    throw new DocGenException('Giant Query fragments are incomplete for table ' + slot.queryKey + '.');
+                    throw new DocGenException('Giant Query fragments are incomplete for ' + slot.queryKey + '.');
                 }
                 parts.add(fragment.VersionData.toString());
                 fragmentDocuments.add(fragment.ContentDocumentId);
             }
             if (parts.size() != expected) {
-                throw new DocGenException('Giant Query fragments are incomplete for table ' + slot.queryKey + '.');
+                throw new DocGenException('Giant Query fragments are incomplete for ' + slot.queryKey + '.');
             }
             String rows = String.join(parts, '');
             parts.clear();
@@ -348,6 +372,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             return buildHtmlTemplateForHtmlType(tpls[0].Header_Html__c, tpls[0].Footer_Html__c);
         }
         if (plannedSlots != null) {
+            if (plannedWordSnapshot && !tpls.isEmpty() && tpls[0].Type__c == 'Word') {
+                // Use the whole snapshot so its page geometry, repeating
+                // headers/footers, and styles survive the deferred merge.
+                return preparePlannedHtmlBody(DocGenGiantQueryMulti.loadWordPdfSnapshot(plannedVersionId));
+            }
             throw new DocGenException('Giant Query table assembly requires an HTML-backed template.');
         }
 
@@ -725,7 +754,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         for (DocGenGiantQueryPlan.Slot slot : plannedSlots) {
             queryKeys.add(slot.queryKey);
         }
-        htmlPlan = DocGenGiantQueryPlan.compile(bodyContent, queryKeys);
+        htmlPlan = DocGenGiantQueryPlan.compile(bodyContent, queryKeys, plannedWordSnapshot);
         if (htmlPlan.slots.size() != plannedSlots.size()) {
             throw new DocGenException('Giant Query sections changed before assembly.');
         }
@@ -748,6 +777,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             shell = resolveGiantChartBuckets(shell);
         }
         giantRelationshipName = null;
+        if (plannedWordSnapshot && Pattern.compile('\\{\\s*[#^/]\\s*[^}]+\\}').matcher(shell).find()) {
+            throw new DocGenException(
+                'The Word PDF contains a section outside a supported direct child loop. Move related-list loops to the document body or use an HTML template.'
+            );
+        }
         return shell;
     }
 
@@ -907,7 +941,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     @TestVisible
     private String resolveParentMergeTags(String html) {
         // Expand before the guarded field resolver; missing legal content must fail loudly.
-        html = DocGenSnippetService.expand(html);
+        html = resolveParentFieldImageTags(DocGenSnippetService.expand(html));
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Base_Object_API__c' });
             /* code-analyzer-suppress ApexFlsViolation */
@@ -1157,6 +1191,104 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             return String.join(labels, '; ');
         }
         return labelsByValue.containsKey(rawValue) ? labelsByValue.get(rawValue) : rawValue;
+    }
+
+    /** Render dynamic parent image field tags without downloading file bytes into Apex. */
+    @TestVisible
+    private String resolveParentFieldImageTags(String html) {
+        if (recordId == null || String.isBlank(html) || !html.contains('{%')) {
+            return html;
+        }
+        Pattern tag = Pattern.compile(
+            '\\{%([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)(?::([0-9]{1,4}(?:x[0-9]{0,4})?|x[0-9]{1,4}))?\\}'
+        );
+        Matcher scan = tag.matcher(html);
+        Set<String> fields = new Set<String>();
+        Schema.SObjectType objectType = recordId.getSObjectType();
+        while (scan.find()) {
+            String path = scan.group(1);
+            if (path.equalsIgnoreCase('Image') && scan.group(2) != null) {
+                continue; // The positional {%Image:N} resolver owns this tag.
+            }
+            if (fields.size() < 50 && readableImageFieldPath(objectType, path)) {
+                fields.add(path);
+            }
+        }
+        if (fields.isEmpty()) {
+            return html;
+        }
+
+        Map<String, Id> filesByField = new Map<String, Id>();
+        Map<Id, ContentVersion> files = new Map<Id, ContentVersion>();
+        try {
+            String query =
+                'SELECT ' +
+                String.join(new List<String>(fields), ', ') +
+                ' FROM ' +
+                objectType.getDescribe().getName() +
+                ' WHERE Id = :recordId LIMIT 1';
+            // CxSAST: object and all field paths come from Schema describe, and USER_MODE enforces access.
+            List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE);
+            if (!records.isEmpty()) {
+                for (String field : fields) {
+                    List<String> parts = field.split('\\.');
+                    SObject owner = records[0];
+                    for (Integer i = 0; owner != null && i < parts.size() - 1; i++) {
+                        owner = owner.getSObject(parts[i]);
+                    }
+                    if (owner != null) {
+                        filesByField.put(field, DocGenGiantMedia.fileId(owner.get(parts[parts.size() - 1])));
+                    }
+                }
+                files = DocGenGiantMedia.readableImages(new Set<Id>(filesByField.values()), 5000000);
+            }
+        } catch (Exception unavailable) {
+            files.clear();
+        }
+
+        scan.reset();
+        List<String> output = new List<String>();
+        Integer cursor = 0;
+        while (scan.find()) {
+            String field = scan.group(1);
+            if (!fields.contains(field) || (field.equalsIgnoreCase('Image') && scan.group(2) != null)) {
+                continue;
+            }
+            ContentVersion file = files.get(filesByField.get(field));
+            output.add(html.substring(cursor, scan.start()));
+            output.add(
+                file != null ? buildParentImageHtml(String.valueOf(file.Id), scan.group(2)) : '[image unavailable]'
+            );
+            cursor = scan.end();
+        }
+        output.add(html.substring(cursor));
+        return String.join(output, '');
+    }
+
+    private static Boolean readableImageFieldPath(Schema.SObjectType objectType, String path) {
+        List<String> parts = path.split('\\.');
+        for (Integer i = 0; i < parts.size(); i++) {
+            Map<String, Schema.SObjectField> fields = objectType.getDescribe().fields.getMap();
+            if (i == parts.size() - 1) {
+                return fields.get(parts[i].toLowerCase())?.getDescribe()?.isAccessible() == true;
+            }
+            Schema.SObjectType target;
+            for (Schema.SObjectField field : fields.values()) {
+                Schema.DescribeFieldResult described = field.getDescribe();
+                if (described.isAccessible() && parts[i].equalsIgnoreCase(described.getRelationshipName())) {
+                    List<Schema.SObjectType> targets = described.getReferenceTo();
+                    if (targets.size() == 1) {
+                        target = targets[0];
+                    }
+                    break;
+                }
+            }
+            if (target == null) {
+                return false;
+            }
+            objectType = target;
+        }
+        return false;
     }
 
     /**

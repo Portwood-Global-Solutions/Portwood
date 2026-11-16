@@ -1714,84 +1714,62 @@ public with sharing class DocGenHtmlRenderer {
         // the element walker below only recognizes <w:p>/<w:tbl> at the top level.
         xml = unwrapTextboxes(xml);
 
-        // First pass: collect all paragraphs and tables in order
-        List<String> elements = new List<String>();
-        List<String> elementTypes = new List<String>(); // 'p' or 'tbl'
+        List<String> parts = new List<String>();
+        List<String> listItems = new List<String>();
+        Boolean isNumbered = false;
         Integer cursor = 0;
 
         while (cursor < xml.length()) {
-            Integer nextTag = xml.indexOf('<', cursor);
-            if (nextTag == -1) {
+            cursor = xml.indexOf('<', cursor);
+            if (cursor == -1) {
                 break;
             }
-            cursor = nextTag;
 
-            if (xml.substring(cursor).startsWith('<w:tbl')) {
-                Integer tblEnd = findClosingTag(xml, cursor, 'w:tbl');
-                if (tblEnd != -1) {
-                    elements.add(xml.substring(cursor, tblEnd));
-                    elementTypes.add('tbl');
-                    cursor = tblEnd;
-                } else {
-                    cursor++;
-                }
-            } else if (
-                xml.substring(cursor).startsWith('<w:p ') ||
-                xml.substring(cursor).startsWith('<w:p>') ||
-                xml.substring(cursor).startsWith('<w:p/>')
-            ) {
-                Integer pEnd = findClosingTag(xml, cursor, 'w:p');
-                if (pEnd != -1) {
-                    elements.add(xml.substring(cursor, pEnd));
-                    elementTypes.add('p');
-                    cursor = pEnd;
-                } else {
-                    cursor++;
-                }
-            } else {
+            Boolean isTable = startsWithAt(xml, '<w:tbl', cursor);
+            Boolean isParagraph =
+                startsWithAt(xml, '<w:p ', cursor) ||
+                startsWithAt(xml, '<w:p>', cursor) ||
+                startsWithAt(xml, '<w:p/>', cursor);
+            if (!isTable && !isParagraph) {
                 Integer tagEnd = xml.indexOf('>', cursor);
-                if (tagEnd != -1) {
-                    cursor = tagEnd + 1;
-                } else {
+                if (tagEnd == -1) {
                     break;
                 }
+                cursor = tagEnd + 1;
+                continue;
             }
-        }
 
-        // Second pass: render elements, grouping consecutive list paragraphs
-        String result = '';
-        Integer i = 0;
-        while (i < elements.size()) {
-            if (elementTypes[i] == 'tbl') {
-                result += processTable(elements[i], images);
-                i++;
-            } else {
-                // Check if this paragraph is a list item
-                ListInfo li = getListInfo(elements[i]);
-                if (li.isList) {
-                    // Collect consecutive list paragraphs
-                    List<String> listItems = new List<String>();
-                    Boolean isNumbered = li.isNumbered;
-                    listItems.add(elements[i]);
-                    Integer j = i + 1;
-                    while (j < elements.size() && elementTypes[j] == 'p') {
-                        ListInfo nextLi = getListInfo(elements[j]);
-                        if (!nextLi.isList) {
-                            break;
-                        }
-                        listItems.add(elements[j]);
-                        j++;
-                    }
-                    result += renderList(listItems, isNumbered, images);
-                    i = j;
-                } else {
-                    result += processParagraph(elements[i], images);
-                    i++;
+            Integer elementEnd = findClosingTag(xml, cursor, isTable ? 'w:tbl' : 'w:p');
+            if (elementEnd == -1) {
+                cursor++;
+                continue;
+            }
+            String element = xml.substring(cursor, elementEnd);
+            cursor = elementEnd;
+
+            ListInfo item = isTable ? null : getListInfo(element);
+            if (item != null && item.isList) {
+                if (listItems.isEmpty()) {
+                    isNumbered = item.isNumbered;
                 }
+                listItems.add(element);
+            } else {
+                if (!listItems.isEmpty()) {
+                    parts.add(renderList(listItems, isNumbered, images));
+                    listItems.clear();
+                }
+                parts.add(isTable ? processTable(element, images) : processParagraph(element, images));
             }
         }
+        if (!listItems.isEmpty()) {
+            parts.add(renderList(listItems, isNumbered, images));
+        }
+        return String.join(parts, '');
+    }
 
-        return result;
+    private static Boolean startsWithAt(String xml, String prefix, Integer offset) {
+        Integer endOffset = offset + prefix.length();
+        return endOffset <= xml.length() && xml.substring(offset, endOffset).equals(prefix);
     }
 
     /**
@@ -1840,7 +1818,7 @@ public with sharing class DocGenHtmlRenderer {
      */
     private static String renderList(List<String> listItems, Boolean isNumbered, Map<String, String> images) {
         String tag = isNumbered ? 'ol' : 'ul';
-        String result = '<' + tag + '>';
+        List<String> parts = new List<String>{ '<' + tag + '>' };
         for (String pXml : listItems) {
             String content = processRuns(pXml, images);
             if (String.isBlank(content)) {
@@ -1854,10 +1832,10 @@ public with sharing class DocGenHtmlRenderer {
                 style = parseParagraphStyle(pPr);
             }
 
-            result += '<li' + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</li>';
+            parts.add('<li' + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</li>');
         }
-        result += '</' + tag + '>';
-        return result;
+        parts.add('</' + tag + '>');
+        return String.join(parts, '');
     }
 
     /**
@@ -2205,99 +2183,78 @@ public with sharing class DocGenHtmlRenderer {
         pXml = resolveFieldCodes(pXml);
 
         List<String> parts = new List<String>();
+        List<String> openingTokens = new List<String>{
+            '<w:r>',
+            '<w:r ',
+            '<w:drawing>',
+            '<w:drawing ',
+            '<w:pict>',
+            '<w:pict ',
+            '<w:hyperlink'
+        };
+        List<Integer> nextPositions = new List<Integer>();
+        for (String token : openingTokens) {
+            nextPositions.add(pXml.indexOf(token));
+        }
         Integer cursor = 0;
 
         while (cursor < pXml.length()) {
-            Integer runStart = pXml.indexOf('<w:r>', cursor);
-            Integer runStart2 = pXml.indexOf('<w:r ', cursor);
-            Integer drawingStart = pXml.indexOf('<w:drawing>', cursor);
-            Integer drawingStart2 = pXml.indexOf('<w:drawing ', cursor);
-            Integer pictStart = pXml.indexOf('<w:pict>', cursor);
-            Integer pictStart2 = pXml.indexOf('<w:pict ', cursor);
-            Integer hyperlinkStart = pXml.indexOf('<w:hyperlink', cursor);
-
-            Integer nextRun = -1;
-            if (runStart != -1 && runStart2 != -1) {
-                nextRun = Math.min(runStart, runStart2);
-            } else if (runStart != -1) {
-                nextRun = runStart;
-            } else if (runStart2 != -1) {
-                nextRun = runStart2;
-            }
-
-            Integer nextDrawing = -1;
-            if (drawingStart != -1 && drawingStart2 != -1) {
-                nextDrawing = Math.min(drawingStart, drawingStart2);
-            } else if (drawingStart != -1) {
-                nextDrawing = drawingStart;
-            } else if (drawingStart2 != -1) {
-                nextDrawing = drawingStart2;
-            }
-
-            Integer nextPict = -1;
-            if (pictStart != -1 && pictStart2 != -1) {
-                nextPict = Math.min(pictStart, pictStart2);
-            } else if (pictStart != -1) {
-                nextPict = pictStart;
-            } else if (pictStart2 != -1) {
-                nextPict = pictStart2;
-            }
-
             Integer nextElement = -1;
-            String elementType = '';
-            if (nextRun != -1) {
-                nextElement = nextRun;
-                elementType = 'run';
+            Integer tokenIndex = -1;
+            for (Integer i = 0; i < nextPositions.size(); i++) {
+                Integer position = nextPositions[i];
+                // Each token scans forward only after its previous match was consumed.
+                // An exhausted token never scans the same suffix again.
+                if (position != -1 && position < cursor) {
+                    position = pXml.indexOf(openingTokens[i], cursor);
+                    nextPositions[i] = position;
+                }
+                if (position != -1 && (nextElement == -1 || position < nextElement)) {
+                    nextElement = position;
+                    tokenIndex = i;
+                }
             }
-            if (nextDrawing != -1 && (nextElement == -1 || nextDrawing < nextElement)) {
-                nextElement = nextDrawing;
-                elementType = 'drawing';
-            }
-            if (nextPict != -1 && (nextElement == -1 || nextPict < nextElement)) {
-                nextElement = nextPict;
-                elementType = 'pict';
-            }
-            if (hyperlinkStart != -1 && (nextElement == -1 || hyperlinkStart < nextElement)) {
-                nextElement = hyperlinkStart;
-                elementType = 'hyperlink';
-            }
-            if (nextElement == -1) {
+            if (tokenIndex == -1) {
                 break;
             }
 
-            if (elementType == 'run') {
-                Integer runEnd = findClosingTag(pXml, nextRun, 'w:r');
-                if (runEnd != -1) {
-                    parts.add(processRun(pXml.substring(nextRun, runEnd), images));
-                    cursor = runEnd;
-                } else {
-                    cursor = nextRun + 1;
+            String tag;
+            switch on tokenIndex {
+                when 0, 1 {
+                    tag = 'w:r';
                 }
-            } else if (elementType == 'drawing') {
-                Integer drawEnd = findClosingTag(pXml, nextDrawing, 'w:drawing');
-                if (drawEnd != -1) {
-                    parts.add(processDrawing(pXml.substring(nextDrawing, drawEnd), images));
-                    cursor = drawEnd;
-                } else {
-                    cursor = nextDrawing + 1;
+                when 2, 3 {
+                    tag = 'w:drawing';
                 }
-            } else if (elementType == 'pict') {
-                Integer pictEnd = findClosingTag(pXml, nextPict, 'w:pict');
-                if (pictEnd != -1) {
-                    parts.add(processPict(pXml.substring(nextPict, pictEnd), images));
-                    cursor = pictEnd;
-                } else {
-                    cursor = nextPict + 1;
+                when 4, 5 {
+                    tag = 'w:pict';
                 }
-            } else if (elementType == 'hyperlink') {
-                Integer hlEnd = findClosingTag(pXml, hyperlinkStart, 'w:hyperlink');
-                if (hlEnd != -1) {
-                    parts.add(processHyperlink(pXml.substring(hyperlinkStart, hlEnd), images));
-                    cursor = hlEnd;
-                } else {
-                    cursor = hyperlinkStart + 1;
+                when else {
+                    tag = 'w:hyperlink';
                 }
             }
+            Integer elementEnd = findClosingTag(pXml, nextElement, tag);
+            if (elementEnd == -1) {
+                cursor = nextElement + 1;
+                continue;
+            }
+
+            String element = pXml.substring(nextElement, elementEnd);
+            switch on tag {
+                when 'w:r' {
+                    parts.add(processRun(element, images));
+                }
+                when 'w:drawing' {
+                    parts.add(processDrawing(element, images));
+                }
+                when 'w:pict' {
+                    parts.add(processPict(element, images));
+                }
+                when else {
+                    parts.add(processHyperlink(element, images));
+                }
+            }
+            cursor = elementEnd;
         }
 
         // RTL paragraph: reverse run order so first run (rightmost) renders last in LTR HTML
@@ -3103,8 +3060,8 @@ public with sharing class DocGenHtmlRenderer {
         // Process rows. Rows flagged as repeat-headers — Word's <w:tblHeader/>, which the
         // {RepeatHeader} marker also sets in a pre-merge pass — are grouped into a single
         // <thead> so Flying Saucer repeats them at the top of every page the table spans.
-        String headerRows = '';
-        String bodyRows = '';
+        List<String> headerRows = new List<String>();
+        List<String> bodyRows = new List<String>();
         Integer cursor = 0;
         Integer rowIndex = 0;
         Map<String, Integer> verticalMergeRowspans = calculateVerticalMergeRowspans(tblXml);
@@ -3133,16 +3090,16 @@ public with sharing class DocGenHtmlRenderer {
                 rowIndex
             );
             if (rowIsHeader(rowXml)) {
-                headerRows += rowHtml;
+                headerRows.add(rowHtml);
             } else {
-                bodyRows += rowHtml;
+                bodyRows.add(rowHtml);
             }
             rowIndex++;
             cursor = trEnd;
         }
-        String rows = bodyRows;
-        if (String.isNotBlank(headerRows)) {
-            rows = '<thead>' + headerRows + '</thead>' + bodyRows;
+        String rows = String.join(bodyRows, '');
+        if (!headerRows.isEmpty()) {
+            rows = '<thead>' + String.join(headerRows, '') + '</thead>' + rows;
         }
 
         return '<table style="' + tableStyle + '">' + colGroupHtml + rows + '</table>';

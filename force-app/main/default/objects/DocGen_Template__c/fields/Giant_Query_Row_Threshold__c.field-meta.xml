@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Giant_Query_Row_Threshold__c</fullName>
+    <description
+    >Route a related list to Giant Query when the number of rows exceeds this value. A blank template value uses the organization setting, then 2,000. The payload estimate may route smaller lists.</description>
+    <label>Giant Query Row Threshold</label>
+    <precision>6</precision>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

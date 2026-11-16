@@ -3,6 +3,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getTemplatesForObject from '@salesforce/apex/DocGenController.getTemplatesForObjectAndRecord';
 import generateDocumentParts from '@salesforce/apex/DocGenController.generateDocumentParts';
 import getContentVersionBase64 from '@salesforce/apex/DocGenController.getContentVersionBase64';
+import getGiantDocxImage from '@salesforce/apex/DocGenController.getGiantDocxImage';
 import generatePdf from '@salesforce/apex/DocGenController.generatePdf';
 import saveGeneratedDocument from '@salesforce/apex/DocGenController.saveGeneratedDocument';
 import generatePdfAsync from '@salesforce/apex/DocGenController.generatePdfAsync';
@@ -39,6 +40,7 @@ import {
     prepareChartsClientSide
 } from 'c/docGenChartJs';
 import { buildCompressedDocx, buildDocx } from './docGenZipWriter';
+import { GiantDocxMedia, giantDocxFieldValue, giantDocxImageTags, wordTextPosition } from './docGenGiantDocxMedia';
 import { generateStaticWord } from 'c/docGenNativeWord';
 import { mergePdfs } from './docGenPdfMerger';
 import { extractFirstImageFromPdfBase64 } from './docGenPdfImageExtractor';
@@ -929,7 +931,8 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 this.outputMode = 'download';
                 const isPdf = this.templateOutputFormat === 'PDF';
                 if (isPdf) {
-                    await this._assembleGiantQueryPdf(giantRelationship, counts, childNodes[giantRelationship]);
+                    const relationship = scoutResult.preferredGiantRelationship || giantRelationship;
+                    await this._assembleGiantQueryPdf(relationship, counts, childNodes[relationship]);
                     return;
                 }
                 if (isWord) {
@@ -1836,13 +1839,24 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                         throw new Error('Could not place the Giant Query loop for ' + queryKey + '.');
                     }
                     markers.add(marker);
-                    const placement = { position, marker, innerXml, rows: [] };
+                    const initiallyInsideWordText = wordTextPosition(shell, position);
+                    const placement = {
+                        position,
+                        marker,
+                        innerXml,
+                        rows: [],
+                        initiallyInsideWordText,
+                        imageTags: giantDocxImageTags(innerXml, initiallyInsideWordText)
+                    };
                     if (!slotsByQuery.has(queryKey)) slotsByQuery.set(queryKey, []);
                     const slotGroup = slotsByQuery.get(queryKey);
                     slotGroup.push(placement);
                     return placement;
                 })
                 .sort((a, b) => a.position - b.position);
+            const dynamicMedia = placements.some((placement) => placement.imageTags.size)
+                ? new GiantDocxMedia(parts, placements, getGiantDocxImage)
+                : null;
             const totalRows = new Map();
             let totalExpected = 0;
             for (const relationship of slotsByQuery.keys()) {
@@ -1866,10 +1880,17 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 await this._loadGiantDocxRows(
                     childNodes[relationship],
                     isMulti ? expected : null,
-                    (records, fields, parentFields) => {
+                    async (records, fields, parentFields) => {
                         for (const placement of slotGroup) {
+                            if (placement.imageTags.size) {
+                                // eslint-disable-next-line no-await-in-loop
+                                await dynamicMedia.preparePage(records, placement.imageTags, [
+                                    ...fields,
+                                    ...parentFields
+                                ]);
+                            }
                             const page = [];
-                            this._renderGiantDocxRows(records, placement.innerXml, fields, parentFields, (row) => {
+                            this._renderGiantDocxRows(records, placement, fields, parentFields, dynamicMedia, (row) => {
                                 page.push(row);
                             });
                             placement.rows.push(page.join(''));
@@ -1943,6 +1964,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 }
             }
 
+            dynamicMedia?.writeImages(allImages);
             this.loadingMessage = 'Building DOCX...';
             const fileBytes = isMulti
                 ? await buildCompressedDocx(parts.allXmlParts, allImages)
@@ -1972,7 +1994,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         const parentFields = node.parentFields || [];
         const allFields = [...new Set(['Id', ...fields, ...parentFields])].join(', ');
         const parentId = this.recordId;
-        const pageSize = 500;
+        const pageSize = node.giantPageSize || 500;
         const configuredLimit = Number(node.limit);
         const maxRows = Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : Infinity;
         let loaded = 0;
@@ -1990,7 +2012,8 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 // eslint-disable-next-line no-await-in-loop
                 const records = await getChildRecordsByIds({ childObject, fields: allFields, recordIds });
                 loaded += records.length;
-                renderPage(records, fields, parentFields);
+                // eslint-disable-next-line no-await-in-loop
+                await renderPage(records, fields, parentFields);
             }
         } else {
             let lastCursorId = null;
@@ -2012,7 +2035,8 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 }
                 lastCursorId = page.lastId;
                 loaded += records.length;
-                renderPage(records, fields, parentFields);
+                // eslint-disable-next-line no-await-in-loop
+                await renderPage(records, fields, parentFields);
             }
         }
         if (expected !== null && loaded !== expected) {
@@ -2026,17 +2050,17 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
      * Renders DOCX XML rows for a batch of records. Used by both sorted and
      * cursor-based Giant Query DOCX assembly paths.
      */
-    _renderGiantDocxRows(records, innerXml, childFields, parentFields, appendFn) {
+    _renderGiantDocxRows(records, placement, childFields, parentFields, dynamicMedia, appendFn) {
+        const { innerXml, imageTags, initiallyInsideWordText } = placement;
         const configuredFields = new Set([...childFields, ...parentFields]);
         const tags = /\{([*]|%(?:QR:|BARCODE:)?)?(\w[\w.]*?)(?::([^}]+))?\}/g;
         for (const rec of records) {
             appendFn(
-                innerXml.replace(tags, (match, prefix, fieldName, format) => {
+                innerXml.replace(tags, (match, prefix, fieldName, format, index) => {
+                    const imageTag = imageTags.get(index);
+                    if (imageTag) return dynamicMedia.drawing(giantDocxFieldValue(rec, imageTag.field), imageTag.size);
                     if (prefix && (format || !configuredFields.has(fieldName))) return match;
-                    let value = rec;
-                    for (const part of fieldName.split('.')) {
-                        value = value?.[part];
-                    }
+                    const value = giantDocxFieldValue(rec, fieldName);
                     if (value == null) return '';
                     if (format === 'currency' && typeof value === 'number') {
                         return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -2044,10 +2068,14 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                     if (format === 'number' && typeof value === 'number') {
                         return value.toLocaleString();
                     }
-                    return String(formatGiantDocxDate(value, format))
+                    const escaped = String(formatGiantDocxDate(value, format))
                         .replace(/&/g, '&amp;')
                         .replace(/</g, '&lt;')
                         .replace(/>/g, '&gt;');
+                    // Keep manual line breaks in long plain text fields, including email TextBody.
+                    return /[\r\n]/.test(escaped) && wordTextPosition(innerXml, index, initiallyInsideWordText)
+                        ? escaped.replace(/\r\n|\r|\n/g, '</w:t><w:br/><w:t xml:space="preserve">')
+                        : escaped;
                 })
             );
         }

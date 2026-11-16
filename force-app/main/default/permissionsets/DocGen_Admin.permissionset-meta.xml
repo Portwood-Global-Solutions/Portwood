@@ -211,6 +211,26 @@
         <name>Manage_DocGen_Fonts</name>
     </customPermissions>
     <description>Full access to all Document Generation features and administration.</description>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Template__c.Giant_Query_Row_Threshold__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Template__c.Giant_Query_Page_Size__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Settings__c.Giant_Query_Row_Threshold__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Settings__c.Giant_Query_Page_Size__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Source_Checksum__c</field><readable
         >true</readable></fieldPermissions>
     <fieldPermissions>

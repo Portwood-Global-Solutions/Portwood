@@ -190,4 +190,65 @@ private class DocGenGiantQueryRouterTest {
             'but the node keeps the real relationship name for SOQL'
         );
     }
+
+    @IsTest
+    static void scoutsLongEmailBodiesBelowTwentyFiveRows() {
+        Case parent = new Case(Subject = 'Long synthetic email thread', Status = 'New', Origin = 'Email');
+        insert parent;
+        String body = 'x'.rightPad(100000, 'x');
+        List<EmailMessage> emails = new List<EmailMessage>();
+        for (Integer i = 0; i < 8; i++) {
+            emails.add(
+                new EmailMessage(
+                    ParentId = parent.Id,
+                    Subject = 'Thread ' + i,
+                    Incoming = true,
+                    Status = '1',
+                    FromAddress = 'sender@example.invalid',
+                    ToAddress = 'case@example.invalid',
+                    TextBody = body
+                )
+            );
+        }
+        insert emails;
+
+        Test.startTest();
+        DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
+            parent.Id,
+            'CaseNumber, (SELECT Subject, TextBody FROM EmailMessages)',
+            'PDF'
+        );
+        Test.stopTest();
+        Assert.areEqual(8, route.counts.get('EmailMessages'));
+        Assert.isTrue(route.useGiantPath, route.reason);
+        Assert.isTrue(route.useWordSnapshot);
+        Assert.isTrue(route.pageSize < 50);
+    }
+
+    @IsTest
+    static void usesTemplateOverrideThenOrgThenBuiltIn() {
+        DocGenGiantQueryRouter.Settings builtin = new DocGenGiantQueryRouter.Settings(null);
+        Assert.areEqual(2000, builtin.rowThreshold);
+        Assert.areEqual(50, builtin.pageSize);
+        insert new DocGen_Settings__c(
+            SetupOwnerId = UserInfo.getOrganizationId(),
+            Giant_Query_Row_Threshold__c = 12,
+            Giant_Query_Page_Size__c = 6
+        );
+        DocGen_Template__c template = new DocGen_Template__c(Giant_Query_Page_Size__c = 3);
+        DocGenGiantQueryRouter.Settings configured = new DocGenGiantQueryRouter.Settings(template);
+        Assert.areEqual(12, configured.rowThreshold);
+        Assert.areEqual(3, configured.pageSize);
+        Id parentId = makeAccountWithContacts(5, 0);
+        template.Giant_Query_Row_Threshold__c = 4;
+        DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
+            parentId,
+            V3_CONTACTS,
+            'PDF',
+            new DocGenGiantQueryRouter.Settings(template)
+        );
+        Assert.isTrue(route.useGiantPath);
+        Assert.isTrue(route.useWordSnapshot);
+        Assert.areEqual(3, route.pageSize);
+    }
 }
