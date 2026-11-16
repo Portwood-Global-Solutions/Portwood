@@ -166,7 +166,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                         );
                     }
                     if (route.useWordSnapshot) {
-                        Map<String, Object> job = DocGenController.launchGiantQueryPdfBatch(
+                        Map<String, Object> job = DocGenController.startGiantQueryPdf(
                             req.templateId,
                             req.recordId,
                             route.giantRelationship,
