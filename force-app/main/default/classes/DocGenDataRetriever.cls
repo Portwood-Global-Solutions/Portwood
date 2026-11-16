@@ -78,31 +78,7 @@ public with sharing class DocGenDataRetriever {
             throw new DocGenException('Invalid parameters for data retrieval.');
         }
 
-        // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
-        fieldsConfig = fieldsConfig.trim();
-        if (fieldsConfig.toUpperCase().startsWith('SELECT ') && !fieldsConfig.startsWith('{')) {
-            fieldsConfig = fieldsConfig.substring(7).trim();
-            // Find the last FROM at outermost paren level, strip it and everything after
-            Integer lastFromAt = -1;
-            Integer pLevel = 0;
-            String upper = fieldsConfig.toUpperCase();
-            for (Integer idx = 0; idx < fieldsConfig.length(); idx++) {
-                String ch = fieldsConfig.substring(idx, idx + 1);
-                if (ch == '(')
-                    pLevel++;
-                if (ch == ')')
-                    pLevel--;
-                if (pLevel == 0 && upper.substring(idx).startsWith('FROM ')) {
-                    lastFromAt = idx;
-                }
-            }
-            if (lastFromAt > 0) {
-                fieldsConfig = fieldsConfig.substring(0, lastFromAt).trim();
-                if (fieldsConfig.endsWith(',')) {
-                    fieldsConfig = fieldsConfig.substring(0, fieldsConfig.length() - 1).trim();
-                }
-            }
-        }
+        fieldsConfig = flatConfigProjection(fieldsConfig);
 
         // JSON config: route by version
         if (fieldsConfig.trim().startsWith('{')) {
@@ -184,7 +160,7 @@ public with sharing class DocGenDataRetriever {
         // Stitch deeper levels (grandchildren, great-grandchildren)
         for (SubquerySpec spec : deepSpecs) {
             if (!spec.children.isEmpty()) {
-                stitchGrandchildren(data, spec);
+                stitchGrandchildren(data, spec, false);
             }
         }
 
@@ -1752,7 +1728,11 @@ public with sharing class DocGenDataRetriever {
      * For each child record in the parent's child list, queries grandchildren
      * using IN :parentIds and injects them into the child record's map.
      */
-    private static void stitchGrandchildren(Map<String, Object> data, SubquerySpec parentSpec) {
+    private static void stitchGrandchildren(
+        Map<String, Object> data,
+        SubquerySpec parentSpec,
+        Boolean requireCompleteData
+    ) {
         // Get the child records list from the data map
         Object childData = data.get(parentSpec.relationshipName);
         if (childData == null || !(childData instanceof Map<String, Object>)) {
@@ -1851,6 +1831,9 @@ public with sharing class DocGenDataRetriever {
                 try {
                     piResults = Database.query(DocGenSignatureIpContext.publicQuery(piQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
+                    if (requireCompleteData) {
+                        throw e;
+                    }
                     // ProcessInstance subquery failed — skip this relationship
                     continue;
                 }
@@ -1885,6 +1868,9 @@ public with sharing class DocGenDataRetriever {
                 try {
                     gcResults = Database.query(DocGenSignatureIpContext.publicQuery(gcQuery), AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
+                    if (requireCompleteData) {
+                        throw e;
+                    }
                     // Grandchild query failed — skip this relationship
                     continue;
                 }
@@ -1961,7 +1947,7 @@ public with sharing class DocGenDataRetriever {
                             'records' => allGrandchildren
                         }
                     };
-                    stitchGrandchildren(syntheticParent, grandchildSpec);
+                    stitchGrandchildren(syntheticParent, grandchildSpec, requireCompleteData);
                 }
             }
         }
@@ -2317,6 +2303,97 @@ public with sharing class DocGenDataRetriever {
     }
 
     /** Opens one sorted, user-mode cursor for a direct V3 child dataset. */
+    private static String flatConfigProjection(String fieldsConfig) {
+        // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
+        fieldsConfig = fieldsConfig.trim();
+        if (fieldsConfig.toUpperCase().startsWith('SELECT ')) {
+            fieldsConfig = fieldsConfig.substring(7).trim();
+            // Find the last FROM at outermost paren level, strip it and everything after
+            Integer lastFromAt = -1;
+            Integer pLevel = 0;
+            String upper = fieldsConfig.toUpperCase();
+            for (Integer idx = 0; idx < fieldsConfig.length(); idx++) {
+                String ch = fieldsConfig.substring(idx, idx + 1);
+                if (ch == '(')
+                    pLevel++;
+                if (ch == ')')
+                    pLevel--;
+                if (pLevel == 0 && upper.substring(idx).startsWith('FROM ')) {
+                    lastFromAt = idx;
+                }
+            }
+            if (lastFromAt > 0) {
+                fieldsConfig = fieldsConfig.substring(0, lastFromAt).trim();
+                if (fieldsConfig.endsWith(',')) {
+                    fieldsConfig = fieldsConfig.substring(0, fieldsConfig.length() - 1).trim();
+                }
+            }
+        }
+
+        return fieldsConfig;
+    }
+
+    /** Resolve outer datasets without interpreting nested SELECTs as root relationships. */
+    public static Map<String, Map<String, Object>> planFlatGiantDatasets(Id recordId, String config) {
+        Map<String, Map<String, Object>> datasets = new Map<String, Map<String, Object>>();
+        if (recordId == null || String.isBlank(config) || config.trim().startsWith('{')) {
+            return datasets;
+        }
+        String rootObject = recordId.getSObjectType().getDescribe().getName();
+        Boolean hasNested = false;
+        for (String part : splitTopLevel(flatConfigProjection(config))) {
+            String token = part.trim();
+            if (!token.startsWith('(')) {
+                continue;
+            }
+            SubquerySpec spec = parseSubquerySpec(token, rootObject);
+            if (spec == null || String.isBlank(spec.childObjectApiName) || String.isBlank(spec.parentIdField)) {
+                continue;
+            }
+            hasNested = hasNested || !spec.children.isEmpty();
+            List<Object> fields = new List<Object>();
+            for (String name : spec.fieldsOnly.split(',')) {
+                fields.add(name.trim());
+            }
+            datasets.put(
+                spec.relationshipName,
+                new Map<String, Object>{
+                    'object' => spec.childObjectApiName,
+                    'lookupField' => spec.parentIdField,
+                    'where' => spec.whereClause,
+                    'orderBy' => spec.orderByClause,
+                    'limit' => spec.limitClause,
+                    'fields' => fields,
+                    'nestedQuery' => spec.children.isEmpty() ? null : token
+                }
+            );
+        }
+        return hasNested ? datasets : new Map<String, Map<String, Object>>();
+    }
+
+    public static Map<String, Object> getGroupedGiantRootData(Id recordId, String config) {
+        List<String> rootFields = new List<String>{ 'Id' };
+        for (String part : splitTopLevel(flatConfigProjection(config))) {
+            String token = part.trim();
+            if (!token.startsWith('(') && !token.equalsIgnoreCase('Id')) {
+                rootFields.add(token);
+            }
+        }
+        String objectName = recordId.getSObjectType().getDescribe().getName();
+        return getRecordData(recordId, objectName, String.join(rootFields, ', '));
+    }
+
+    /** Load the complete nested relationship data for one outer record, in user mode. */
+    public static Map<String, Object> loadGiantGroup(Id recordId, String nestedQuery, SObject row) {
+        SubquerySpec spec = parseSubquerySpec(nestedQuery, recordId.getSObjectType().getDescribe().getName());
+        Map<String, Object> groupData = mapSObject(row);
+        Map<String, Object> wrapper = new Map<String, Object>{
+            spec.relationshipName => new Map<String, Object>{ 'records' => new List<Object>{ groupData } }
+        };
+        stitchGrandchildren(wrapper, spec, true);
+        return groupData;
+    }
+
     public static Database.Cursor openGiantQueryCursor(
         Id recordId,
         Map<String, Object> childNode,

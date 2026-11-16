@@ -52,6 +52,22 @@ public with sharing class DocGenGiantQueryPlan {
     }
 
     public static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys) {
+        return compile(template, queryKeys, false);
+    }
+
+    public static DocGenGiantQueryPlan compileGrouped(String template, Set<String> queryKeys, Map<String, Object> rootData) {
+        DocGenGiantQueryPlan plan = compile(template, queryKeys, true);
+        String mergedShell = DocGenService.mergeGiantHtml(plan.shell, rootData, null);
+        List<Slot> visibleSlots = new List<Slot>();
+        for (Slot slot : plan.slots) {
+            if (mergedShell.contains(slot.marker)) {
+                visibleSlots.add(slot);
+            }
+        }
+        return new DocGenGiantQueryPlan(mergedShell, visibleSlots, plan.nestedQueryKeys);
+    }
+
+    private static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys, Boolean allowRootConditions) {
         String normalized = DocGenService.normalizeGiantQueryTemplate(template);
         List<Slot> slots = new List<Slot>();
         Set<String> nestedQueryKeys = new Set<String>();
@@ -108,7 +124,7 @@ public with sharing class DocGenGiantQueryPlan {
             if (!open.isQuery) {
                 continue;
             }
-            if (!stack.isEmpty()) {
+            if (!stack.isEmpty() && (!allowRootConditions || containsQuerySection(stack))) {
                 nestedQueryKeys.add(open.closingKey);
                 continue;
             }
@@ -182,6 +198,15 @@ public with sharing class DocGenGiantQueryPlan {
             xml.substring(open.endOffset, closeStart) +
             xml.substring(closeEnd, finish);
         return new Slot(ordinal, open.closingKey, innerXml, start, finish);
+    }
+
+    private static Boolean containsQuerySection(List<OpenTag> stack) {
+        for (OpenTag tag : stack) {
+            if (tag.isQuery) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Boolean hasSectionMarker(String text, Integer start, Integer finish) {

@@ -1461,7 +1461,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String outputFormat = template.Output_Format__c != null ? template.Output_Format__c : 'PDF';
             DocGenGiantQueryMulti.Run multi = 'PDF'.equalsIgnoreCase(outputFormat) &&
                 DocGenService.isHtmlBacked(template.Type__c)
-                ? DocGenGiantQueryMulti.plan(DocGenService.extractHtmlBodyContent(documentXml), queryConfig)
+                ? DocGenGiantQueryMulti.plan(DocGenService.extractHtmlBodyContent(documentXml), queryConfig, recordId)
                 : null;
             Map<String, String> loopParts = multi == null
                 ? DocGenService.extractLoopBody(documentXml, giantRelationship)
@@ -1845,7 +1845,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             DocGenGiantQueryMulti.Run multi = DocGenService.isHtmlBacked(templateType)
                 ? DocGenGiantQueryMulti.plan(
                       DocGenService.extractHtmlBodyContent(documentXml),
-                      tplForType[0].Query_Config__c
+                      tplForType[0].Query_Config__c,
+                      recordId
                   )
                 : null;
             Map<String, String> loopParts = multi == null

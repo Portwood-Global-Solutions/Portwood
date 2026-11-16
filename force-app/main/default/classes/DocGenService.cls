@@ -10152,6 +10152,22 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * @param fieldNames List of field API names to include in the data map
      * @return Concatenated rendered XML for all records
      */
+    public static String mergeGiantHtml(String innerHtml, Map<String, Object> data, Integer rowNumber) {
+        String previousType = currentTemplateType;
+        String previousOutput = currentOutputFormat;
+        currentTemplateType = 'HTML';
+        currentOutputFormat = 'PDF';
+        try {
+            if (rowNumber != null) {
+                data.put('RowNumber', rowNumber);
+            }
+            return processXml(innerHtml, data);
+        } finally {
+            currentTemplateType = previousType;
+            currentOutputFormat = previousOutput;
+        }
+    }
+
     public static String renderLoopBodyForRecords(
         String innerXml,
         String relationshipName,
