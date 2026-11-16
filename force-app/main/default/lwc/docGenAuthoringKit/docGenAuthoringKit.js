@@ -802,7 +802,7 @@ export function prettyPrintHtml(html) {
  * are stripped. Merge tags render as-is — this is a layout preview, not a
  * data merge.
  */
-export function scopeHtmlForInlinePreview(html) {
+export function scopeHtmlForInlinePreview(html, options = {}) {
     let work = (html || '').replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<link\b[^>]*>/gi, '');
     const styles = [];
     work = work.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (m, css) => {
@@ -816,7 +816,8 @@ export function scopeHtmlForInlinePreview(html) {
     const bodyMatch = work.match(/<body\b[^>]*>([\s\S]*?)<\/body\s*>/i);
     let content = bodyMatch ? bodyMatch[1] : work.replace(/<\/?(?:!DOCTYPE|html|head|body|meta|title)\b[^>]*>/gi, '');
     // Strip inline event handlers (on*="...") — static preview only.
-    content = content.replace(/\son\w+\s*=\s*(["'])[\s\S]*?\1/gi, '');
+    content = content.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    content = content.replace(/\s(?:href|src|xlink:href)\s*=\s*(["'])\s*(?:javascript|vbscript):[\s\S]*?\1/gi, '');
 
     let css = styles.join('\n').replace(/@page\b[^{]*{[^}]*}/gi, '');
     // Prefix every selector with the scope class. Handles the flat CSS 2.1
@@ -829,6 +830,9 @@ export function scopeHtmlForInlinePreview(html) {
                 const sel = s.trim();
                 if (!sel) {
                     return sel;
+                }
+                if (options.canvas && /^(html|body)(?=[\s.#[:]|$)/i.test(sel)) {
+                    return sel.replace(/^html\s+body\b/i, 'body').replace(/^(html|body)\b/i, '.dg-pv');
                 }
                 if (/^(html|body)$/i.test(sel)) {
                     return '.dg-pv';
@@ -866,7 +870,27 @@ export function scopeHtmlForInlinePreview(html) {
         '.dg-pv td, .dg-pv th { overflow-wrap: break-word; }';
     // Mark the stylesheet the editor owns so serialization removes only editor
     // chrome, never an author's <style> element (#464).
-    return '<div class="dg-pv"><style data-dg-editor="preview">' + baseline + css + '</style>' + content + '</div>';
+    const canvasBaseline =
+        '.dg-pv { display:block; position:relative; margin:8px; background:white; color:black; font:16px "Times New Roman",serif; }';
+    const bodyAttrs = options.canvas ? /<body\b([^>]*)>/i.exec(work) : null;
+    const attrs = bodyAttrs
+        ? bodyAttrs[1]
+              .replace(/\sclass\s*=\s*(["'])(.*?)\1/i, '')
+              .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        : '';
+    const bodyClass = bodyAttrs && /\bclass\s*=\s*(["'])(.*?)\1/i.exec(bodyAttrs[1]);
+    return (
+        '<div class="dg-pv' +
+        (bodyClass ? ' ' + bodyClass[2] : '') +
+        '"' +
+        attrs +
+        '><style data-dg-editor="preview">' +
+        (options.canvas ? canvasBaseline : baseline) +
+        css +
+        '</style>' +
+        content +
+        '</div>'
+    );
 }
 
 // ---------------------------------------------------------------------------

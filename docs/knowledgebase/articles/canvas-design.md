@@ -42,4 +42,6 @@ Click **Page** to set paper size, orientation, and margins. Click **Add page** f
 
 Click **Save**, then **Preview**. Review the first page, the last page, long values, empty lists, and page breaks.
 
-**Import HTML** converts an existing HTML document into Canvas blocks. Keep a copy of the original and check the conversion carefully. **Export HTML** downloads a reusable HTML copy; it is different from exporting the whole template bundle.
+**Import HTML** opens text and tables as separate Canvas elements while retaining the template's HTML structure and stylesheet. Select a table to edit its **Table cells**, or use **HTML** to edit its markup. CSS page breaks and content extending beyond a page create additional canvas pages. Save and preview with a representative record to check the final PDF layout.
+
+**Export HTML** downloads a reusable HTML copy, including the information needed to reopen its Canvas elements. It is different from exporting the whole template bundle.

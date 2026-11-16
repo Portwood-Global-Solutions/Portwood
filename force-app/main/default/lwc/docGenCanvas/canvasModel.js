@@ -1049,10 +1049,14 @@ export function newArtboard() {
 export function cloneArtboard(board) {
     return {
         id: nextId('board'),
-        boxes: (board.boxes || []).map((b) => ({
-            ...JSON.parse(JSON.stringify(b)),
-            id: nextId('box')
-        }))
+        boxes: (board.boxes || []).map((b) => {
+            const copy = { ...JSON.parse(JSON.stringify(b)), id: nextId('box') };
+            // A duplicate is new content, not a second editor for the same source range.
+            delete copy.importRange;
+            delete copy.importOffset;
+            delete copy.importNative;
+            return copy;
+        })
     };
 }
 
@@ -2581,6 +2585,7 @@ function buildVariantFlowGroups(boxes, excludedIds) {
 
 /** The rendered content of a box, without its positioning wrapper. */
 function boxInnerHtml(box) {
+    if (box.importedTable) return box.html || '';
     if (box.kind === 'table') {
         return tableToHtml(box);
     } else if (box.kind === 'image') {
@@ -2599,7 +2604,9 @@ function boxInnerHtml(box) {
 
 function boxToHtml(box, cursor) {
     let inner;
-    if (box.kind === 'table') {
+    if (box.importedTable) {
+        inner = box.html || '';
+    } else if (box.kind === 'table') {
         inner = tableToHtml(box);
     } else if (box.kind === 'image') {
         inner = imageToHtml(box);
@@ -2658,6 +2665,9 @@ function boxToHtml(box, cursor) {
 }
 
 export function serialize(doc, geo) {
+    if (doc.importSource) {
+        return serializeImported(doc, geo);
+    }
     const boards = doc.artboards
         .map((b, i) => {
             const cls = i === 0 ? 'dg-artboard' : 'dg-artboard dg-artboard_break';
@@ -2738,8 +2748,14 @@ export function serialize(doc, geo) {
 // ---------------------------------------------------------------------------
 
 function readInches(style, prop) {
-    const m = new RegExp(prop + '\\s*:\\s*(-?[0-9.]+)in').exec(style || '');
-    return m ? parseFloat(m[1]) : null;
+    return cssLengthIn(readCss(style, prop));
+}
+
+function cssLengthIn(value) {
+    const match = /^(-?[\d.]+)(in|cm|mm|pt|pc|px)?$/i.exec(String(value || '').trim());
+    if (!match) return null;
+    const factors = { in: 1, cm: 1 / 2.54, mm: 1 / 25.4, pt: 1 / 72, pc: 1 / 6, px: 1 / 96 };
+    return Number(match[1]) * (factors[(match[2] || 'px').toLowerCase()] || 1);
 }
 
 /**
@@ -2922,6 +2938,53 @@ function readTable(wrapper, tableEl) {
 }
 
 export function deserialize(html) {
+    const imported = /<!--dg-import-v1:([\s\S]*?)-->/.exec(html || '');
+    if (imported) {
+        try {
+            const doc = JSON.parse(decodeURIComponent(imported[1]));
+            if (doc.imported && Array.isArray(doc.artboards)) {
+                doc.importSource = html.slice(0, imported.index).replace(/\n$/, '');
+                // Source images can be rewritten to ContentVersion URLs at save
+                // time. Comment anchors survive those length changes; offsets do not.
+                const ranges = new Map();
+                let removed = 0;
+                doc.importSource = doc.importSource.replace(
+                    /<!--dg-import-(start|end):([\w-]+)-->/g,
+                    (mark, edge, id, index) => {
+                        const range = ranges.get(id) || {};
+                        range[edge] = index - removed;
+                        ranges.set(id, range);
+                        removed += mark.length;
+                        return '';
+                    }
+                );
+                delete doc.imported;
+                for (const box of doc.artboards.flatMap((b) => b.boxes)) {
+                    if (!box.importRange) continue;
+                    const range = ranges.get(box.id);
+                    if (range && range.start != null && range.end != null) Object.assign(box.importRange, range);
+                    const source = doc.importSource.slice(box.importRange.start, box.importRange.end);
+                    if (!box.importNative) box.html = source;
+                    box.importRange.original = source;
+                }
+                doc.importSlots = doc.artboards
+                    .flatMap((b) => b.boxes)
+                    .filter((b) => b.importRange)
+                    .map((b) => ({ start: b.importRange.start, end: b.importRange.end }));
+            }
+            if (typeof doc.importSource === 'string' && Array.isArray(doc.artboards)) {
+                for (const board of doc.artboards) {
+                    for (const item of [board, ...(board.boxes || [])]) {
+                        const suffix = /_(\d+)$/.exec(item.id || '');
+                        if (suffix) seq = Math.max(seq, Number(suffix[1]));
+                    }
+                }
+                return doc;
+            }
+        } catch (e) {
+            // A damaged authoring comment must not hide otherwise usable HTML.
+        }
+    }
     if (!html || html.indexOf('dg-artboard') === -1) {
         return null;
     }
@@ -3119,27 +3182,295 @@ function remapAnchors(boxes, els) {
 // ---------------------------------------------------------------------------
 
 /**
- * Converts an HTML template body into a canvas document.
- *
- * STRUCTURAL, not geometric. Each top-level block becomes a FLOW box carrying its own
- * markup, in document order; only elements whose CSS already says `position: absolute`
- * become pinned boxes. Nothing is measured and nothing is re-laid-out.
- *
- * That choice is the whole reason this is safe. A canvas document IS an HTML document
- * rendered by the same engine, so re-describing the blocks emits near-identical markup
- * and the PDF barely moves. The alternative — rendering the source in the browser,
- * measuring every element with getBoundingClientRect and pinning boxes at those
- * coordinates — would bake the BROWSER's layout into a document that Flying Saucer
- * renders, and the two do not agree. It would look right in the editor and drift in the
- * output, which is the failure this editor exists to prevent.
- *
- * One way. The caller must write the result to a NEW template: flow content that used
- * to be one continuous document becomes discrete boxes, and there is no route back.
- *
- * Returns { doc, page, report } — report lists what could not be carried over, because
- * a conversion that silently drops a running header is worse than one that refuses.
+ * Imports source elements as editable boxes without rebuilding the source layout.
+ * Browser measurements size selection rectangles and canvas pages only. Output
+ * retains authored HTML, CSS and merge-tag positions until an element is edited.
  */
+// Imported documents retain their source, rather than replacing the author's DOM
+// with dg-flow wrappers. Wrappers change margin collapsing, child selectors and
+// nested layouts even when every word survives. Source ranges also avoid parsing
+// merge-loop text through a table DOM (HTML foster parenting moves those tags).
+const IMPORT_VOID = new Set([
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'param',
+    'source',
+    'track',
+    'wbr'
+]);
+const IMPORT_BLOCK = new Set([
+    'p',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'table',
+    'ul',
+    'ol',
+    'blockquote',
+    'pre',
+    'img',
+    'hr'
+]);
+
+function importRanges(html, cells = false) {
+    const root = { children: [], start: 0, end: html.length, tag: '' };
+    const stack = [root];
+    const tokens =
+        /<!--[\s\S]*?-->|<(script|style|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<\/?([a-z][\w:-]*)\b(?:"[^"]*"|'[^']*'|[^'">])*>/gi;
+    let previous = 0;
+    for (const match of html.matchAll(tokens)) {
+        const parent = stack[stack.length - 1];
+        if (match.index > previous) parent.children.push({ tag: '', start: previous, end: match.index, children: [] });
+        previous = match.index + match[0].length;
+        if (!match[2]) continue;
+        const tag = match[2].toLowerCase();
+        if (match[0][1] === '/') {
+            const index = stack.map((n) => n.tag).lastIndexOf(tag);
+            if (index > 0) {
+                for (const open of stack.splice(index)) {
+                    open.end = previous;
+                    open.closeStart = match.index;
+                }
+            }
+        } else {
+            const node = { tag, start: match.index, end: previous, contentStart: previous, children: [] };
+            parent.children.push(node);
+            if (!IMPORT_VOID.has(tag) && !/\/\s*>$/.test(match[0])) stack.push(node);
+        }
+    }
+    if (previous < html.length)
+        stack[stack.length - 1].children.push({ tag: '', start: previous, end: html.length, children: [] });
+    const ranges = [];
+    const visit = (node) => {
+        if (['head', 'script', 'style', 'title', 'meta', 'link'].includes(node.tag)) return;
+        const raw = html.slice(node.start, node.end);
+        if (cells) {
+            if ((node.tag === 'td' || node.tag === 'th') && !/<table\b/i.test(raw)) ranges.push(node);
+            else node.children.forEach(visit);
+            return;
+        }
+        if (!node.tag) {
+            if (raw.replace(/<![^>]*>/g, '').trim()) ranges.push(node);
+        } else if (IMPORT_BLOCK.has(node.tag) || !node.children.some((c) => c.tag)) {
+            if (!isEmptyBlockHtml(raw)) ranges.push(node);
+        } else node.children.forEach(visit);
+    };
+    root.children.forEach(visit);
+    return ranges;
+}
+
+export function importedTableCells(box) {
+    return importRanges(box.html || '', true).map((range, index) => ({
+        key: String(index),
+        label: 'Cell ' + (index + 1),
+        start: range.contentStart,
+        end: range.closeStart,
+        value: box.html.slice(range.contentStart, range.closeStart)
+    }));
+}
+
 export function htmlToCanvas(html, measure) {
+    if (!html || typeof document === 'undefined') return legacyHtmlToCanvas(html, measure);
+    const report = { dropped: [], notes: [], boxes: 0 };
+    const page = readPageFromCss(html, report);
+    const geo = page
+        ? pageGeometry(page.size, page.orientation, page.margins, page.custom)
+        : pageGeometry('Letter', 'Portrait');
+    const boards = [newArtboard()];
+    let cursor = 0;
+    const nextPage = () => {
+        boards.push(newArtboard());
+        cursor = 0;
+    };
+    for (const range of importRanges(html)) {
+        const raw = html.slice(range.start, range.end);
+        const parsed = legacyHtmlToCanvas(raw, measure);
+        const box = parsed.doc.artboards[0].boxes[0];
+        if (!box) continue;
+        // Keep table loop markers and escaped literal braces in their exact source
+        // location. A DOM round trip moves text out of tbody before we can read it.
+        box.html = raw;
+        const before = /(?:page-break-before|break-before)\s*:\s*(?:always|page|left|right)/i.test(raw.split('>')[0]);
+        const after = /(?:page-break-after|break-after)\s*:\s*(?:always|page|left|right)/i.test(raw.split('>')[0]);
+        if (before && boards[boards.length - 1].boxes.length) nextPage();
+        if (box.mode === 'flow') {
+            box.w = geo.w;
+            box.h = measuredHeight(measure, box.html, box.w, box.h);
+            if (cursor + box.h > geo.h && cursor > 0) nextPage();
+            box.y = cursor;
+        }
+        box.importRange = {
+            start: range.start,
+            end: range.end,
+            original: box.html,
+            geometry: { x: box.x, y: box.y, w: box.w, h: box.h }
+        };
+        if (range.tag === 'table') {
+            box.kind = 'table';
+            box.importedTable = true;
+        }
+        boards[boards.length - 1].boxes.push(box);
+        cursor = Math.max(cursor, box.y + box.h);
+        if (after) nextPage();
+    }
+    if (boards.length > 1 && !boards[boards.length - 1].boxes.length) boards.pop();
+    report.boxes = boards.reduce((count, b) => count + b.boxes.length, 0);
+    report.notes.push(
+        'Text and tables are separate elements. The original HTML structure and stylesheet are retained for preview and output.'
+    );
+    const importSlots = boards
+        .flatMap((b) => b.boxes)
+        .map((b) => ({ start: b.importRange.start, end: b.importRange.end }));
+    return { doc: { importSource: html, importSlots, artboards: boards }, page, report };
+}
+
+/** Source is replaced only where the author edited an element; untouched HTML is byte-identical. */
+function importEdits(doc, preview = false) {
+    const boxes = doc.artboards.flatMap((b) => b.boxes).filter((b) => b.importRange);
+    const replacements = boxes.map((box) => {
+        const r = box.importRange;
+        let html = box.importNative
+            ? boxToHtml(box, 0)
+            : box.html === r.original
+              ? doc.importSource.slice(r.start, r.end)
+              : box.html || '';
+        if (box.importOffset && !box.importNative) {
+            const offset = box.importOffset;
+            const placement = r.placement || {};
+            const absolute = /^(absolute|fixed)$/.test(placement.position || '');
+            let css = '';
+            if (offset.x || offset.y) {
+                css +=
+                    'position:' +
+                    (absolute ? placement.position : 'relative') +
+                    ';left:' +
+                    ((absolute ? placement.left || 0 : 0) + (offset.x || 0)) +
+                    'in;top:' +
+                    ((absolute ? placement.top || 0 : 0) + (offset.y || 0)) +
+                    'in;';
+            }
+            if (offset.w != null) css += 'box-sizing:border-box;width:' + offset.w + 'in;';
+            if (offset.h != null) css += 'min-height:' + offset.h + 'in;';
+            if (!/^\s*<[a-z]/i.test(html)) html = '<span>' + html + '</span>';
+            html = html.replace(/<([a-z][\w:-]*)\b([^>]*)>/i, (tag, name, attrs) => {
+                if (/\bstyle\s*=/i.test(attrs))
+                    return (
+                        '<' +
+                        name +
+                        attrs.replace(
+                            /\bstyle\s*=\s*(["'])(.*?)\1/i,
+                            (s, quote, value) => 'style=' + quote + value + ';' + css + quote
+                        ) +
+                        '>'
+                    );
+                return '<' + name + attrs + ' style="' + css + '">';
+            });
+        }
+        if (preview) {
+            // Mark the projection, never the saved source. Tables retain their own
+            // root so column widths, colspan and rowspan remain browser-native.
+            html = /^\s*</.test(html)
+                ? html.replace(/<([a-z][\w:-]*)\b/i, '<$1 data-dg-import-id="' + box.id + '"')
+                : '<span data-dg-import-id="' + box.id + '">' + html + '</span>';
+        }
+        return { ...r, html };
+    });
+    // Missing source elements were deleted in Canvas.
+    const retained = new Set(boxes.map((b) => b.importRange.start));
+    for (const range of doc.importSlots || []) {
+        if (!retained.has(range.start)) replacements.push({ ...range, html: '' });
+    }
+    return replacements.sort((a, b) => a.start - b.start);
+}
+
+export function importedHtml(doc, preview = false) {
+    let source = doc.importSource;
+    for (const r of importEdits(doc, preview).reverse())
+        source = source.slice(0, r.start) + r.html + source.slice(r.end);
+    return source;
+}
+
+function serializeImported(doc, geo) {
+    let html = importedHtml(doc);
+    const snapshot = JSON.parse(JSON.stringify(doc));
+    const byStart = new Map(
+        snapshot.artboards
+            .flatMap((b) => b.boxes)
+            .filter((b) => b.importRange)
+            .map((b) => [b.importRange.start, b])
+    );
+    let shift = 0;
+    for (const edit of importEdits(doc)) {
+        const box = byStart.get(edit.start);
+        if (box) {
+            box.importRange.start = edit.start + shift;
+            box.importRange.end = box.importRange.start + edit.html.length;
+            if (!box.importNative) delete box.html;
+            delete box.importRange.original;
+            delete box.importOffset;
+        }
+        shift += edit.html.length - (edit.end - edit.start);
+    }
+    delete snapshot.importSource;
+    snapshot.importSlots = snapshot.artboards
+        .flatMap((b) => b.boxes)
+        .filter((b) => b.importRange)
+        .map((b) => ({ start: b.importRange.start, end: b.importRange.end }));
+    snapshot.imported = true;
+    const markBox = (box, content) =>
+        '<!--dg-import-start:' + box.id + '-->' + content + '<!--dg-import-end:' + box.id + '-->';
+    for (const box of [...byStart.values()].sort((a, b) => b.importRange.start - a.importRange.start)) {
+        const range = box.importRange;
+        html = html.slice(0, range.start) + markBox(box, html.slice(range.start, range.end)) + html.slice(range.end);
+    }
+    const additions = doc.artboards.flatMap((b) => b.boxes).filter((b) => !b.importRange);
+    if (additions.length) {
+        const body =
+            '<div class="dg-artboard dg-artboard_break">' +
+            additions
+                .map((box) => {
+                    const saved = snapshot.artboards.flatMap((b) => b.boxes).find((b) => b.id === box.id);
+                    saved.importRange = { start: 0, end: 0 };
+                    saved.importNative = !box.importedTable;
+                    if (!saved.importNative) delete saved.html;
+                    return markBox(box, boxToHtml(box, 0));
+                })
+                .join('\n') +
+            '</div>';
+        html = /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, body + '</body>') : html + body;
+        const css = buildCanvasCss(geo, true).replace(/@page\s*\{[^}]*\}|body\s*\{[^}]*\}|thead\s*\{[^}]*\}/g, '');
+        const style = '<style>' + css + '</style>';
+        html = /<\/head\s*>/i.test(html) ? html.replace(/<\/head\s*>/i, style + '</head>') : style + html;
+    }
+    const savedBoxes = new Map(snapshot.artboards.flatMap((b) => b.boxes).map((b) => [b.id, b]));
+    let removed = 0;
+    html.replace(/<!--dg-import-(start|end):([\w-]+)-->/g, (mark, edge, id, index) => {
+        const box = savedBoxes.get(id);
+        if (box?.importRange) box.importRange[edge] = index - removed;
+        removed += mark.length;
+        return '';
+    });
+    snapshot.importSlots = snapshot.artboards
+        .flatMap((b) => b.boxes)
+        .filter((b) => b.importRange)
+        .map((b) => ({ start: b.importRange.start, end: b.importRange.end }));
+    // URI encoding makes the authoring comment inert even for user text containing
+    // comment terminators or HTML. It never participates in the rendered document.
+    return html + '\n<!--dg-import-v1:' + encodeURIComponent(JSON.stringify(snapshot)) + '-->';
+}
+
+function legacyHtmlToCanvas(html, measure) {
     const report = { dropped: [], notes: [], boxes: 0 };
     if (!html || typeof document === 'undefined') {
         return { doc: blankDocument(), page: null, report };
@@ -3262,14 +3593,14 @@ export function htmlToCanvas(html, measure) {
 }
 
 /** Reads page size, orientation and margins out of the source's @page rule. */
-function readPageFromCss(html, report) {
-    const rule = /@page\s*\{([^}]*)\}/.exec(html || '');
+export function readPageFromCss(html, report = { notes: [] }) {
+    const rule = /@page\s*\{([^}]*)\}/i.exec(html || '');
     if (!rule) {
         report.notes.push('No @page rule found — using Letter portrait with no margins.');
         return null;
     }
     const out = { size: 'Letter', orientation: 'Portrait', margins: { ...DEFAULT_MARGINS } };
-    const custom = /size:\s*([0-9.]+)in\s+([0-9.]+)in/i.exec(rule[1]);
+    const custom = /size:\s*([0-9.]+(?:in|cm|mm|pt|pc|px))\s+([0-9.]+(?:in|cm|mm|pt|pc|px))/i.exec(rule[1]);
     const named = custom ? null : /size:\s*([A-Za-z0-9]+)\s*(portrait|landscape)?/i.exec(rule[1]);
     if (named) {
         const match = ['Letter', 'A4', 'Legal'].find((n) => n.toLowerCase() === named[1].toLowerCase());
@@ -3277,23 +3608,30 @@ function readPageFromCss(html, report) {
         out.orientation = (named[2] || 'portrait').toLowerCase() === 'landscape' ? 'Landscape' : 'Portrait';
     } else if (custom) {
         out.size = 'Custom';
-        out.custom = { w: parseFloat(custom[1]), h: parseFloat(custom[2]) };
+        out.custom = { w: cssLengthIn(custom[1]), h: cssLengthIn(custom[2]) };
     }
     const marg = /margin:\s*([^;]+)/i.exec(rule[1]);
     if (marg) {
         const parts = marg[1]
             .trim()
             .split(/\s+/)
-            .map((v) => parseFloat(v))
-            .filter((v) => !isNaN(v));
+            .map((v) => cssLengthIn(v))
+            .filter((v) => v != null);
         if (parts.length === 1) {
             out.margins = normalizeMargins({ top: parts[0], right: parts[0], bottom: parts[0], left: parts[0] });
         } else if (parts.length === 2) {
             out.margins = normalizeMargins({ top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] });
         } else if (parts.length === 4) {
             out.margins = normalizeMargins({ top: parts[0], right: parts[1], bottom: parts[2], left: parts[3] });
+        } else if (parts.length === 3) {
+            out.margins = normalizeMargins({ top: parts[0], right: parts[1], bottom: parts[2], left: parts[1] });
         }
     }
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+        const value = cssLengthIn(readCss(rule[1], 'margin-' + side));
+        if (value != null) out.margins[side] = value;
+    }
+    out.margins = normalizeMargins(out.margins);
     return out;
 }
 
@@ -3697,6 +4035,10 @@ function collectFromText(text, out, rel) {
  */
 export function collectUsedFields(doc) {
     const out = { base: new Set(), children: {} };
+    if (doc.importSource) {
+        collectFromText(importedHtml(doc), out, '');
+        return out;
+    }
     for (const board of doc.artboards || []) {
         for (const box of board.boxes || []) {
             if (box.kind === 'table') {

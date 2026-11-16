@@ -80,6 +80,21 @@
                         <b>&lt;a href="https://…"&gt;text&lt;/a&gt;</b> and comes out clickable in the PDF.
                     </p>
                 </template>
+                <template lwc:if={selectedImportedTable}>
+                    <h4 class="dg-panel-sub">Table cells</h4>
+                    <p class="dg-panel-note">
+                        Edit cell content here. The table keeps its original styles, merged cells and merge tags.
+                    </p>
+                    <template for:each={importedCells} for:item="cell">
+                        <lightning-input
+                            key={cell.key}
+                            label={cell.label}
+                            value={cell.value}
+                            data-cell={cell.key}
+                            onchange={handleImportedCellChange}
+                        ></lightning-input>
+                    </template>
+                </template>
                 <template lwc:if={showRichEditor}>
                     <c-doc-gen-font-picker
                         label="PDF font"
@@ -1600,6 +1615,7 @@
                                 style={boardStyle}
                                 onclick={handleBoardClick}
                             >
+                                <div class="dg-import-page" data-board-id={board.id} lwc:dom="manual"></div>
                                 <template for:each={renderedGuides} for:item="g">
                                     <div key={g.key} class="dg-guide" style={g.style}></div>
                                 </template>

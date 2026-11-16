@@ -255,6 +255,22 @@
     font-size: 11pt;
 }
 
+.dg-import-page {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.dg-cbox_imported {
+    background: transparent;
+}
+
+.dg-cbox_imported .dg-cbox-body {
+    padding: 0;
+    min-height: 0;
+}
+
 /* Readout rides above the box so the author can see real inches while dragging —
    pixel-exactness is only useful if the number is visible. */
 .dg-cbox-readout {

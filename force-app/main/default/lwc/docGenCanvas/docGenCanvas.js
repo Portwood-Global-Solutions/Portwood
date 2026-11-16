@@ -8,7 +8,7 @@ import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
-import { extractQueryShape } from 'c/docGenAuthoringKit';
+import { extractQueryShape, scopeHtmlForInlinePreview } from 'c/docGenAuthoringKit';
 import { loadFontFace, fontPickerOptions } from 'c/docGenFontLoader';
 import { downloadBlob } from 'c/docGenUtils';
 import { loadScript } from 'lightning/platformResourceLoader';
@@ -60,6 +60,9 @@ import {
     signatureBoxSize,
     SIGNATURE_TYPES,
     htmlToCanvas,
+    importedHtml,
+    importedTableCells,
+    readPageFromCss,
     buildAnchorGroups,
     anchorRoot,
     wouldCycle,
@@ -788,9 +791,8 @@ export default class DocGenCanvas extends LightningElement {
             }
             this.pushHistory('import');
             // A canvas document is OPENED, not converted — the same rule loadBody
-            // already follows, and for the same reason: htmlToCanvas() groups
-            // consecutive blocks into single boxes, which is right for foreign HTML
-            // and destroys every box, condition and coordinate in a canvas-exported
+            // already follows. Re-converting a saved document would destroy the
+            // identities, conditions and coordinates in a canvas-exported
             // one, because a box's `position: absolute` lives in the .dg-pin/.dg-flow
             // CLASS rule, not on the box's own inline style, so htmlToCanvas never
             // recognizes it as already positioned.
@@ -1080,7 +1082,9 @@ export default class DocGenCanvas extends LightningElement {
                 (b.z || 0) +
                 ';' +
                 this.screenStyle(b),
-            cls: b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox',
+            cls:
+                (b.id === this.selectedId ? 'dg-cbox dg-cbox_selected' : 'dg-cbox') +
+                (b.importRange ? ' dg-cbox_imported' : ''),
             isSelected: b.id === this.selectedId,
             readout:
                 (b.name ? b.name + ' · ' : '') +
@@ -1122,6 +1126,7 @@ export default class DocGenCanvas extends LightningElement {
         if (!box) {
             return 0;
         }
+        if (box.importRange) return box.h;
         if (box.kind === 'text') {
             const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
             const borderPt = st.borderWidth > 0 ? st.borderWidth * 2 : 0;
@@ -1390,7 +1395,24 @@ export default class DocGenCanvas extends LightningElement {
 
     get selectedIsTable() {
         const b = this.selectedBox;
-        return !!b && b.kind === 'table';
+        return !!b && b.kind === 'table' && !b.importedTable;
+    }
+
+    get selectedImportedTable() {
+        return !!this.selectedBox?.importedTable;
+    }
+
+    get importedCells() {
+        return this.selectedImportedTable ? importedTableCells(this.selectedBox) : [];
+    }
+
+    handleImportedCellChange(event) {
+        const box = this.selectedBox;
+        if (!box?.importedTable) return;
+        const cell = importedTableCells(box)[Number(event.currentTarget.dataset.cell)];
+        if (!cell) return;
+        const html = box.html.slice(0, cell.start) + sanitizeInline(event.target.value) + box.html.slice(cell.end);
+        this.applyToBox(box.id, { html });
     }
 
     get selTableRel() {
@@ -2591,6 +2613,7 @@ export default class DocGenCanvas extends LightningElement {
      * to the left of the tag.
      */
     renderedCallback() {
+        this.renderImportedPages();
         // Re-sync the property inputs whenever the SELECTION changes.
         //
         // These are plain <input> elements holding values that come from getters. When
@@ -2653,6 +2676,122 @@ export default class DocGenCanvas extends LightningElement {
         this.paintChartPreviews();
     }
 
+    /** Paint the author's actual DOM underneath transparent selection rectangles.
+     * Geometry is measured only for the editor; PDF layout keeps the source HTML.
+     * No model content is ever reconstructed from this rendered projection.
+     */
+    renderImportedPages() {
+        const hosts = [...this.template.querySelectorAll('.dg-import-page')];
+        if (!this.doc.importSource) {
+            hosts.forEach((host) => {
+                host.innerHTML = '';
+            });
+            this._importPaintKey = null;
+            return;
+        }
+        const wasClean = this._savedHtml === serialize(this.doc, this.geo);
+        let source = importedHtml(this.doc, true);
+        if (this.showSampleData && this.resolvedSampleData)
+            source = substituteSampleTags(source, this.resolvedSampleData);
+        const key = source + JSON.stringify(this.geo) + this.zoom + hosts.length;
+        if (this._importPaintKey === key) return;
+        this._importPaintKey = key;
+        const markup = scopeHtmlForInlinePreview(source, { canvas: true });
+        const heightPx = this.geo.h * 96;
+        const layouts = new Map();
+        let pageCount = 1;
+        hosts.forEach((host, pageIndex) => {
+            // Safe, scoped, static preview: the same pipeline as the HTML designer.
+            // eslint-disable-next-line @lwc/lwc/no-inner-html
+            host.innerHTML = '<div style="display:flow-root;width:' + this.geo.w * 96 + 'px">' + markup + '</div>';
+            const root = host.querySelector('.dg-pv');
+            if (!root) return;
+            const viewport = root.parentElement;
+            viewport.inert = true;
+            viewport.style.transformOrigin = '0 0';
+            viewport.style.transform = 'scale(' + this.zoom + ') translateY(-' + pageIndex * heightPx + 'px)';
+            // Honour CSS page breaks in the editor. Printing already honours these
+            // on the original elements, so no break markup is added to saved HTML.
+            for (const el of root.querySelectorAll('*')) {
+                if (el.tagName === 'STYLE') continue;
+                const computed = window.getComputedStyle(el);
+                const rect = el.getBoundingClientRect();
+                const origin = viewport.getBoundingClientRect();
+                const top = (rect.top - origin.top) / this.zoom;
+                const h = rect.height / this.zoom;
+                const before = /^(always|page|left|right)$/.test(computed.breakBefore || computed.pageBreakBefore);
+                const avoid = /^(avoid|avoid-page)$/.test(computed.breakInside || computed.pageBreakInside);
+                const offset = ((top % heightPx) + heightPx) % heightPx;
+                if ((before && offset > 0.5) || (avoid && offset + h > heightPx && h <= heightPx)) {
+                    el.style.marginTop = (parseFloat(computed.marginTop) || 0) + heightPx - offset + 'px';
+                }
+                const after = /^(always|page|left|right)$/.test(computed.breakAfter || computed.pageBreakAfter);
+                if (after && el.nextElementSibling) {
+                    const bottom = (el.getBoundingClientRect().bottom - origin.top) / this.zoom;
+                    const gap = (heightPx - (bottom % heightPx)) % heightPx;
+                    const next = el.nextElementSibling;
+                    next.style.marginTop = (parseFloat(window.getComputedStyle(next).marginTop) || 0) + gap + 'px';
+                }
+            }
+            if (pageIndex !== 0) return;
+            const origin = viewport.getBoundingClientRect();
+            for (const el of root.querySelectorAll('[data-dg-import-id]')) {
+                const rect = el.getBoundingClientRect();
+                const y = Math.max(0, (rect.top - origin.top) / this.zoom / 96);
+                const h = Math.max(0.01, rect.height / this.zoom / 96);
+                const page = Math.floor((y + 0.001) / this.geo.h);
+                const computed = window.getComputedStyle(el);
+                layouts.set(el.getAttribute('data-dg-import-id'), {
+                    page,
+                    x: (rect.left - origin.left) / this.zoom / 96,
+                    y: y - page * this.geo.h,
+                    w: Math.max(0.01, rect.width / this.zoom / 96),
+                    h,
+                    placement: {
+                        position: computed.position,
+                        left: (parseFloat(computed.left) || 0) / 96,
+                        top: (parseFloat(computed.top) || 0) / 96
+                    }
+                });
+                pageCount = Math.max(pageCount, Math.ceil((y + h - 0.001) / this.geo.h));
+            }
+            pageCount = Math.max(pageCount, Math.ceil(viewport.scrollHeight / heightPx));
+        });
+        const boxes = this.doc.artboards.flatMap((board) => board.boxes);
+        this.doc.artboards.forEach((board, index) => {
+            if (board.boxes.some((box) => !box.importRange)) pageCount = Math.max(pageCount, index + 1);
+        });
+        const boards = Array.from({ length: pageCount }, (_, index) => ({
+            ...(this.doc.artboards[index] || newArtboard()),
+            boxes: []
+        }));
+        for (const box of boxes) {
+            const position = layouts.get(box.id);
+            if (!position) {
+                const index = this.doc.artboards.findIndex((board) => board.boxes.some((b) => b.id === box.id));
+                boards[Math.max(0, Math.min(index, boards.length - 1))].boxes.push(box);
+                continue;
+            }
+            const { page, placement, ...rawGeometry } = position;
+            const geometry = Object.fromEntries(
+                Object.entries(rawGeometry).map(([name, value]) => [name, Number(value.toFixed(3))])
+            );
+            boards[page].boxes.push({
+                ...box,
+                ...geometry,
+                importRange: {
+                    ...box.importRange,
+                    geometry,
+                    placement: box.importOffset ? box.importRange.placement : placement
+                }
+            });
+        }
+        if (JSON.stringify(boards) !== JSON.stringify(this.doc.artboards)) {
+            this.doc = { ...this.doc, artboards: boards };
+            if (wasClean) this._savedHtml = serialize(this.doc, this.geo);
+        }
+    }
+
     /**
      * Tables can grow after their model height was chosen: extra rows, totals, nested
      * rows and wrapping all change the real footprint. Snap guides read `box.h`, so
@@ -2663,7 +2802,7 @@ export default class DocGenCanvas extends LightningElement {
         const patches = new Map();
         for (const el of this.template.querySelectorAll('.dg-cbox[data-id]')) {
             const model = byId.get(el.dataset.id);
-            if (!model || model.kind !== 'table') {
+            if (!model || model.kind !== 'table' || model.importedTable) {
                 continue;
             }
             const rect = el.getBoundingClientRect();
@@ -2825,44 +2964,12 @@ export default class DocGenCanvas extends LightningElement {
      * and the first save wrote that wrong page back over the right one.
      */
     readPageSetup(html) {
-        const rule = /@page\s*\{([^}]*)\}/.exec(html || '');
-        if (!rule) {
-            return;
-        }
-        // A custom size is two lengths rather than a named page.
-        const custom = /size:\s*([0-9.]+)in\s+([0-9.]+)in/i.exec(rule[1]);
-        if (custom) {
-            this.canvasPageSize = 'Custom';
-            this.canvasOrientation = 'Portrait';
-            this.customPage = normalizeCustomPage({ w: custom[1], h: custom[2] });
-        }
-        const size = custom ? null : /size:\s*([A-Za-z0-9]+)\s*(portrait|landscape)?/i.exec(rule[1]);
-        if (size) {
-            const named = ['Letter', 'A4', 'Legal'].find((n) => n.toLowerCase() === size[1].toLowerCase());
-            if (named) this.canvasPageSize = named;
-            this.canvasOrientation = (size[2] || 'portrait').toLowerCase() === 'landscape' ? 'Landscape' : 'Portrait';
-        }
-        const marg = /margin:\s*([^;]+)/i.exec(rule[1]);
-        if (marg) {
-            const parts = marg[1]
-                .trim()
-                .split(/\s+/)
-                .map((v) => parseFloat(v))
-                .filter((v) => !isNaN(v));
-            // CSS shorthand: 1, 2 or 4 values. Anything else is not something we wrote.
-            if (parts.length === 1) {
-                this.margins = normalizeMargins({ top: parts[0], right: parts[0], bottom: parts[0], left: parts[0] });
-            } else if (parts.length === 2) {
-                this.margins = normalizeMargins({ top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] });
-            } else if (parts.length === 4) {
-                this.margins = normalizeMargins({
-                    top: parts[0],
-                    right: parts[1],
-                    bottom: parts[2],
-                    left: parts[3]
-                });
-            }
-        }
+        const page = readPageFromCss(html);
+        if (!page) return;
+        this.canvasPageSize = page.size;
+        this.canvasOrientation = page.orientation;
+        this.margins = { ...page.margins };
+        if (page.custom) this.customPage = normalizeCustomPage(page.custom);
     }
 
     // ---- Image box -------------------------------------------------------
@@ -3267,6 +3374,8 @@ export default class DocGenCanvas extends LightningElement {
      * emits — the canvas is only worth having if the two agree.
      */
     previewHtmlFor(model) {
+        if (model.importRange) return '';
+        if (model.importedTable) return sanitizeInline(model.html || '');
         if (model.kind === 'chart') {
             // A <canvas> placeholder only. Chart.js paints into it after the DOM
             // settles (paintChartPreviews) — drawing here would be wiped by the
@@ -3587,7 +3696,19 @@ export default class DocGenCanvas extends LightningElement {
             ...this.doc,
             artboards: this.doc.artboards.map((board) => ({
                 ...board,
-                boxes: board.boxes.map((b) => (b.id === id ? clampBox({ ...b, ...patch }, geo) : b))
+                boxes: board.boxes.map((b) => {
+                    if (b.id !== id) return b;
+                    const next = clampBox({ ...b, ...patch }, geo);
+                    if (b.importRange) {
+                        const offset = { ...(b.importOffset || {}) };
+                        if (patch.x != null) offset.x = (offset.x || 0) + next.x - b.x;
+                        if (patch.y != null) offset.y = (offset.y || 0) + next.y - b.y;
+                        if (patch.w != null && next.w !== b.w) offset.w = next.w;
+                        if (patch.h != null && next.h !== b.h) offset.h = next.h;
+                        if (Object.keys(offset).length) next.importOffset = offset;
+                    }
+                    return next;
+                })
             }))
         };
     }
@@ -3606,7 +3727,7 @@ export default class DocGenCanvas extends LightningElement {
     /** Content for the panel editor — the selected box's markup. */
     get richTextValue() {
         const box = this.selectedBox;
-        if (!box || box.kind === 'table') {
+        if (!box || (box.kind === 'table' && !box.importedTable)) {
             return '';
         }
         return box.html != null ? box.html : box.text || '';
@@ -3698,7 +3819,7 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     get showRichEditor() {
-        return this.canEditRichText && !this.sourceMode;
+        return this.canEditRichText && !this.sourceMode && !this.selectedImportedTable;
     }
 
     get isSourceMode() {
@@ -3876,6 +3997,12 @@ export default class DocGenCanvas extends LightningElement {
     handleSourceChange(event) {
         const box = this.selectedBox;
         if (!box) return;
+        if (box.importRange) {
+            // Preserve authored table-loop positions and CSS. The scoped static
+            // preview strips executable content before anything enters the live DOM.
+            this.applyToBox(box.id, { html: event.target.value });
+            return;
+        }
         // Sanitized like any other authored markup: a paste from a web page must not
         // put an absolutely-positioned div inside an artboard whose whole layout
         // contract is position.
@@ -3885,7 +4012,7 @@ export default class DocGenCanvas extends LightningElement {
 
     get canEditRichText() {
         const box = this.selectedBox;
-        return !!box && (box.kind === 'text' || !box.kind);
+        return !!box && (box.kind === 'text' || box.importedTable || !box.kind);
     }
 
     /**
