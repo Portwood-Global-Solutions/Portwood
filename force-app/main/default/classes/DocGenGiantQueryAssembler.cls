@@ -30,6 +30,8 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     // repeat-header row ({RepeatHeader} / Word's tblHeader). Reproduced in each chunk-break
     // table so the column headers reprint at the top of every page.
     private String theadHtml = '';
+    private String tableSectionOpenTag = '';
+    private String tableSectionCloseTag = '';
 
     public DocGenGiantQueryAssembler(Id jobId, Id templateId, Id recordId, String giantRelationshipName) {
         this(jobId, templateId, recordId, giantRelationshipName, null, null, null);
@@ -2074,6 +2076,18 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         String colGroupHtml,
         String theadHtml
     ) {
+        return insertTableBreaks(allRows, rowsPerBreak, tableOpenTag, colGroupHtml, theadHtml, '', '');
+    }
+
+    private static String insertTableBreaks(
+        String allRows,
+        Integer rowsPerBreak,
+        String tableOpenTag,
+        String colGroupHtml,
+        String theadHtml,
+        String sectionOpen,
+        String sectionClose
+    ) {
         if (String.isBlank(allRows)) {
             return allRows;
         }
@@ -2115,7 +2129,13 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // Reproduce the authored <table …> tag (captured from the snapshot) so each
         // chunk renders at the same authored width / layout as the first table — and
         // reprint the captured <thead> so column headers repeat on every page.
-        final String TABLE_BREAK = '</table>' + openTag + colGroup + theadBlock;
+        final String TABLE_BREAK =
+            (sectionClose == null ? '' : sectionClose) +
+            '</table>' +
+            openTag +
+            colGroup +
+            theadBlock +
+            (sectionOpen == null ? '' : sectionOpen);
 
         // Build result with table breaks inserted at row boundaries.
         // Use List<String> + join instead of string concatenation for heap efficiency.
