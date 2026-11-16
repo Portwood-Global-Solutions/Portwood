@@ -184,6 +184,16 @@
     <description>Standard User access to Document Generation features.</description>
     <fieldPermissions>
         <editable>false</editable>
+        <field>DocGen_Template__c.Giant_Query_Row_Threshold__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>DocGen_Template__c.Giant_Query_Page_Size__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
         <field>DocGen_Asset__c.Asset_Type__c</field>
         <readable>true</readable>
     </fieldPermissions>

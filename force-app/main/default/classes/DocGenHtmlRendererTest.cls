@@ -20,6 +20,61 @@ private class DocGenHtmlRendererTest {
     }
 
     @IsTest
+    static void rendersLongParagraphAndNestedTableInOrder() {
+        List<String> runs = new List<String>();
+        for (Integer i = 0; i < 400; i++) {
+            if (i == 200) {
+                runs.add(
+                    '<w:hyperlink w:docgen-url="https://example.com/thread">' +
+                    '<w:r><w:t>THREAD-LINK</w:t></w:r></w:hyperlink>'
+                );
+                runs.add('<w:r><w:br/></w:r>');
+            }
+            String opening = Math.mod(i, 2) == 0 ? '<w:r>' : '<w:r w:rsidR="00000000">';
+            runs.add(opening + '<w:t>EMAIL-' + i + '-END</w:t></w:r>');
+        }
+        String xml =
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+            '<w:p>' +
+            String.join(runs, '') +
+            '</w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>OUTER-CELL</w:t></w:r></w:p>' +
+            '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>INNER-CELL</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+            '</w:tc></w:tr></w:tbl><w:p><w:r><w:t>TAIL</w:t></w:r></w:p></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+
+        Assert.areEqual(400, html.countMatches('EMAIL-'));
+        Assert.areEqual(2, html.countMatches('<table'));
+        Assert.isTrue(html.contains('<a href="https://example.com/thread"'));
+        Assert.isTrue(html.indexOf('EMAIL-199-END') < html.indexOf('THREAD-LINK'));
+        Assert.isTrue(html.indexOf('THREAD-LINK') < html.indexOf('EMAIL-200-END'));
+        Assert.isTrue(html.indexOf('EMAIL-399-END') < html.indexOf('OUTER-CELL'));
+        Assert.isTrue(html.indexOf('OUTER-CELL') < html.indexOf('INNER-CELL'));
+        Assert.isTrue(html.indexOf('INNER-CELL') < html.indexOf('TAIL'));
+    }
+
+    @IsTest
+    static void wordPdfBudgetReportsTemplateBeforeConversion() {
+        Id templateId = Id.valueOf(DocGen_Template__c.SObjectType.getDescribe().getKeyPrefix() + '000000000001');
+        DocGenService.assertWordPdfRenderBudget(templateId, 1000000, 7499, 10000);
+        DocGenService.assertWordPdfRenderBudget(templateId, 2000000, 7499, 60000);
+        try {
+            DocGenService.assertWordPdfRenderBudget(templateId, 1000000, 7500, 10000);
+            Assert.fail('The budget guard should direct the author to Giant Query before rendering.');
+        } catch (DocGenException guard) {
+            Assert.isTrue(guard.getMessage().contains(String.valueOf(templateId)));
+            Assert.isTrue(guard.getMessage().contains('Giant Query'));
+        }
+        try {
+            DocGenService.assertWordPdfRenderBudget(templateId, 1000001, 100, 10000);
+            Assert.fail('Oversized synchronous XML should fail before converting the Word template.');
+        } catch (DocGenException guard) {
+            Assert.isTrue(guard.getMessage().contains(String.valueOf(templateId)));
+            Assert.isTrue(guard.getMessage().contains('1000001 XML characters'));
+        }
+    }
+
+    @IsTest
     static void testBoldItalicUnderline() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {

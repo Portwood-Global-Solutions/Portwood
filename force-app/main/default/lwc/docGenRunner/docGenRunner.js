@@ -39,7 +39,6 @@ import {
     prepareChartsClientSide
 } from 'c/docGenChartJs';
 import { buildCompressedDocx, buildDocx } from './docGenZipWriter';
-import { generateStaticWord } from 'c/docGenNativeWord';
 import { mergePdfs } from './docGenPdfMerger';
 import { extractFirstImageFromPdfBase64 } from './docGenPdfImageExtractor';
 import renderImageAsPdfBase64 from '@salesforce/apex/DocGenController.renderImageAsPdfBase64';
@@ -929,7 +928,8 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 this.outputMode = 'download';
                 const isPdf = this.templateOutputFormat === 'PDF';
                 if (isPdf) {
-                    await this._assembleGiantQueryPdf(giantRelationship, counts, childNodes[giantRelationship]);
+                    const relationship = scoutResult.preferredGiantRelationship || giantRelationship;
+                    await this._assembleGiantQueryPdf(relationship, counts, childNodes[relationship]);
                     return;
                 }
                 if (isWord) {
@@ -1956,7 +1956,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         const parentFields = node.parentFields || [];
         const allFields = [...new Set(['Id', ...fields, ...parentFields])].join(', ');
         const parentId = this.recordId;
-        const pageSize = 500;
+        const pageSize = node.giantPageSize || 500;
         const configuredLimit = Number(node.limit);
         const maxRows = Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : Infinity;
         let loaded = 0;

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Giant_Query_Page_Size__c</fullName>
+    <description
+    >Maximum PDF Giant Query rows per page, from 1 to 50. A blank template value uses the organization setting, then 50. Large text fields may require smaller pages.</description>
+    <label>Giant Query Page Size</label>
+    <precision>2</precision>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

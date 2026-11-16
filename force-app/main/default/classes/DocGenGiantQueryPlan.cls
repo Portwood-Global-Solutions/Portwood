@@ -60,7 +60,7 @@ public with sharing class DocGenGiantQueryPlan {
         Set<String> queryKeys,
         Map<String, Object> rootData
     ) {
-        DocGenGiantQueryPlan plan = compile(template, queryKeys, true);
+        DocGenGiantQueryPlan plan = compile(template, queryKeys, false, true);
         String mergedShell = DocGenService.mergeGiantHtml(plan.shell, rootData, null);
         List<Slot> visibleSlots = new List<Slot>();
         for (Slot slot : plan.slots) {
@@ -71,7 +71,12 @@ public with sharing class DocGenGiantQueryPlan {
         return new DocGenGiantQueryPlan(mergedShell, visibleSlots, plan.nestedQueryKeys);
     }
 
-    private static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys, Boolean allowRootConditions) {
+    /** Word snapshots may put loop markers in paragraphs or headings rather than a table row. */
+    public static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys, Boolean wordSnapshot) {
+        return compile(template, queryKeys, wordSnapshot, false);
+    }
+
+    private static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys, Boolean wordSnapshot, Boolean allowRootConditions) {
         String normalized = DocGenService.normalizeGiantQueryTemplate(template);
         List<Slot> slots = new List<Slot>();
         Set<String> nestedQueryKeys = new Set<String>();
@@ -132,7 +137,7 @@ public with sharing class DocGenGiantQueryPlan {
                 nestedQueryKeys.add(open.closingKey);
                 continue;
             }
-            Slot slot = buildSlot(normalized, open, brace, nextOffset, slots.size());
+            Slot slot = buildSlot(normalized, open, brace, nextOffset, slots.size(), wordSnapshot);
             if (slot.startOffset < writtenThrough) {
                 throw new DocGenException('Giant query loop placements overlap in the template.');
             }
@@ -187,10 +192,58 @@ public with sharing class DocGenGiantQueryPlan {
         return String.join(parts, '');
     }
 
-    private static Slot buildSlot(String xml, OpenTag open, Integer closeStart, Integer closeEnd, Integer ordinal) {
+    private static Slot buildSlot(
+        String xml,
+        OpenTag open,
+        Integer closeStart,
+        Integer closeEnd,
+        Integer ordinal,
+        Boolean wordSnapshot
+    ) {
         List<Integer> bounds = DocGenService.giantQueryLoopContainer(xml, open.startOffset, closeEnd);
         Integer start = bounds[0];
         Integer finish = bounds[1];
+        if (wordSnapshot == true && start == open.startOffset) {
+            List<Integer> firstBlock = wordBlockAt(xml, open.startOffset, open.endOffset);
+            List<Integer> lastBlock = wordBlockAt(xml, closeStart, closeEnd);
+            if (firstBlock != null && lastBlock != null) {
+                String prefix = xml.substring(firstBlock[0], open.startOffset);
+                String suffix = xml.substring(closeEnd, lastBlock[1]);
+                if (onlyWordBlockWrappers(prefix) && onlyWordBlockWrappers(suffix)) {
+                    start = firstBlock[0];
+                    finish = lastBlock[1];
+                    if (start == lastBlock[0]) {
+                        return new Slot(
+                            ordinal,
+                            open.closingKey,
+                            prefix + xml.substring(open.endOffset, closeStart) + suffix,
+                            start,
+                            finish
+                        );
+                    }
+                    // Preserve the full heading and body paragraphs of every
+                    // repetition. Consume separate marker-only blocks so they
+                    // neither inherit a neighboring style nor add blank lines.
+                    Integer contentStart = open.endOffset;
+                    Integer contentFinish = closeStart;
+                    if (onlyWordBlockWrappers(xml.substring(contentStart, firstBlock[1]))) {
+                        prefix = '';
+                        contentStart = firstBlock[1];
+                    }
+                    if (onlyWordBlockWrappers(xml.substring(lastBlock[0], contentFinish))) {
+                        suffix = '';
+                        contentFinish = lastBlock[0];
+                    }
+                    return new Slot(
+                        ordinal,
+                        open.closingKey,
+                        prefix + xml.substring(contentStart, contentFinish) + suffix,
+                        start,
+                        finish
+                    );
+                }
+            }
+        }
         // Multiple independent loops may share a row. Preserve the row and the
         // intervening cells if one loop cannot own the whole row safely.
         if (hasSectionMarker(xml, start, open.startOffset) || hasSectionMarker(xml, closeEnd, finish)) {
@@ -211,6 +264,36 @@ public with sharing class DocGenGiantQueryPlan {
             }
         }
         return false;
+    }
+
+    private static List<Integer> wordBlockAt(String html, Integer markerStart, Integer markerEnd) {
+        List<Integer> nearest;
+        for (String tag : new List<String>{ 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' }) {
+            String openTag = '<' + tag;
+            Integer start = html.lastIndexOf(openTag, markerStart);
+            while (start >= 0 && (nearest == null || start > nearest[0])) {
+                Integer tagEnd = start + openTag.length();
+                if ('>'.equals(html.substring(tagEnd, tagEnd + 1)) || skipWhitespace(html, tagEnd) > tagEnd) {
+                    String closeTag = '</' + tag + '>';
+                    Integer endIndex = html.indexOf(closeTag, tagEnd);
+                    if (endIndex >= markerEnd) {
+                        nearest = new List<Integer>{ start, endIndex + closeTag.length() };
+                    }
+                    break;
+                }
+                start = start > 0 ? html.lastIndexOf(openTag, start - 1) : -1;
+            }
+        }
+        return nearest;
+    }
+
+    private static Boolean onlyWordBlockWrappers(String html) {
+        // An image or other non-text element may share this marker's block.
+        // Consume only renderer formatting wrappers, never arbitrary markup.
+        return String.isBlank(
+            html.replaceAll('(?i)</?(?:p|h[1-6]|span|b|strong|i|em|u|s|sup|sub)(?:\\s[^>]*)?>', '')
+                .replace('&nbsp;', '')
+        );
     }
 
     private static Boolean hasSectionMarker(String text, Integer start, Integer finish) {
