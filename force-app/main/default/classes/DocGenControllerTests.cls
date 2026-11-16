@@ -1313,6 +1313,49 @@ private class DocGenControllerTests {
         }
     }
 
+    @IsTest
+    static void testActivateVersionPreservesBaseObjectForHistoricalBlankSnapshot() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+            DocGen_Template_Version__c active = new DocGen_Template_Version__c(
+                Template__c = tpl.Id,
+                Is_Active__c = true,
+                Type__c = 'Canvas',
+                Base_Object_API__c = 'Account',
+                Query_Config__c = 'Name'
+            );
+            DocGen_Template_Version__c historical = new DocGen_Template_Version__c(
+                Template__c = tpl.Id,
+                Is_Active__c = false,
+                Type__c = 'Canvas',
+                Query_Config__c = 'Name'
+            );
+            insert new List<DocGen_Template_Version__c>{ active, historical };
+
+            Test.startTest();
+            DocGenController.activateVersion(historical.Id);
+            Test.stopTest();
+
+            DocGen_Template__c restored = [
+                SELECT Base_Object_API__c
+                FROM DocGen_Template__c
+                WHERE Id = :tpl.Id
+            ];
+            System.assertEquals(
+                'Account',
+                restored.Base_Object_API__c,
+                'Activating an old version with no base-object snapshot must preserve the template value'
+            );
+            DocGen_Template_Version__c restoredVersion = [
+                SELECT Is_Active__c
+                FROM DocGen_Template_Version__c
+                WHERE Id = :historical.Id
+            ];
+            System.assertEquals(true, restoredVersion.Is_Active__c, 'The historical version should be active');
+        }
+    }
+
     // -----------------------------------------------------------------------
     // saveTemplate — with Is_Default__c flag
     // -----------------------------------------------------------------------

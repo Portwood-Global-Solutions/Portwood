@@ -5,6 +5,7 @@ public with sharing class DocGenFontController {
     private static final Set<String> FIELDS = new Set<String>{
         'Name',
         'Asset__c',
+        'API_Name__c',
         'Revision_Key__c',
         'Source_CV_Id__c',
         'Source_Checksum__c',
@@ -24,12 +25,15 @@ public with sharing class DocGenFontController {
     }
     public static DocGen_Font_Face__c load(String key) {
         DocGenFlsGuard.assertAccessible(DocGen_Font_Face__c.sObjectType, FIELDS);
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Key__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Font_Face__c> rows = [
             SELECT
                 Id,
                 Name,
                 Asset__c,
+                Asset__r.Asset_Key__c,
+                API_Name__c,
                 Revision_Key__c,
                 Source_CV_Id__c,
                 Source_Checksum__c,
@@ -76,6 +80,7 @@ public with sharing class DocGenFontController {
             SELECT
                 Id,
                 Name,
+                API_Name__c,
                 Revision_Key__c,
                 Metadata_JSON__c,
                 Status__c,
@@ -132,8 +137,9 @@ public with sharing class DocGenFontController {
             meta.put('key', f.Revision_Key__c);
             meta.put('label', f.Name);
             meta.put('assetKey', f.Asset__r.Asset_Key__c);
+            meta.put('apiName', f.API_Name__c);
             meta.put('status', f.Status__c);
-            meta.put('mergeTag', DocGenFontService.mergeTag(f.Asset__r.Asset_Key__c, f.Revision_Key__c));
+            meta.put('mergeTag', DocGenFontService.mergeTag(f.API_Name__c, f.Asset__r.Asset_Key__c, f.Revision_Key__c));
             meta.put(
                 'proofUrl',
                 f.Proof_CV_Id__c == null ? null : '/sfc/servlet.shepherd/version/download/' + f.Proof_CV_Id__c
@@ -221,14 +227,42 @@ public with sharing class DocGenFontController {
             throw new DocGenException('Choose a valid static TTF up to 9 MB.');
         Blob bytes = EncodingUtil.base64Decode(base64Data);
         Map<String, Object> meta = new DocGenFontInspector(bytes).inspect(filename);
-        return stageInspected(meta, fontKey, licenseText, bytes, null);
+        return stageInspected(meta, fontKey, null, licenseText, bytes, null);
+    }
+    public static String stageFontWithApiName(
+        String filename,
+        String base64Data,
+        String fontKey,
+        String apiName,
+        String licenseText,
+        Boolean hostingRightsConfirmed
+    ) {
+        validateUpload(fontKey, apiName, licenseText, hostingRightsConfirmed);
+        if (String.isBlank(base64Data) || base64Data.length() > 12582912)
+            throw new DocGenException('Choose a valid static TTF up to 9 MB.');
+        Blob bytes = EncodingUtil.base64Decode(base64Data);
+        Map<String, Object> meta = new DocGenFontInspector(bytes).inspect(filename);
+        return stageInspected(meta, fontKey, apiName, licenseText, bytes, null);
     }
     private static void validateUpload(String fontKey, String licenseText, Boolean hostingRightsConfirmed) {
+        validateUpload(fontKey, null, licenseText, hostingRightsConfirmed);
+    }
+    private static void validateUpload(
+        String fontKey,
+        String apiName,
+        String licenseText,
+        Boolean hostingRightsConfirmed
+    ) {
         admin();
         validateLicense(licenseText, hostingRightsConfirmed);
         String normalized = DocGenAssetKeyHandler.normalizeKey(fontKey);
         if (String.isBlank(normalized) || normalized != fontKey || fontKey.length() > 40)
             throw new DocGenException('Use a font key of up to 40 lowercase letters, numbers and hyphens.');
+        if (String.isNotBlank(apiName)) {
+            String normalizedApiName = DocGenAssetKeyHandler.normalizeKey(apiName);
+            if (String.isBlank(normalizedApiName) || normalizedApiName != apiName || apiName.length() > 40)
+                throw new DocGenException('Use an API name of up to 40 lowercase letters, numbers and hyphens.');
+        }
     }
     private static void validateLicense(String licenseText, Boolean hostingRightsConfirmed) {
         if (hostingRightsConfirmed != true)
@@ -285,7 +319,19 @@ public with sharing class DocGenFontController {
     ) {
         validateUpload(fontKey, licenseText, hostingRightsConfirmed);
         ContentVersion cv = ownedUpload(contentDocumentId);
-        return System.enqueueJob(new DocGenFontOperation('Import', cv.Id, fontKey, licenseText, null));
+        return System.enqueueJob(new DocGenFontOperation('Import', cv.Id, fontKey, null, licenseText, null));
+    }
+    @AuraEnabled
+    public static String importUploadedFontWithApiName(
+        Id contentDocumentId,
+        String fontKey,
+        String apiName,
+        String licenseText,
+        Boolean hostingRightsConfirmed
+    ) {
+        validateUpload(fontKey, apiName, licenseText, hostingRightsConfirmed);
+        ContentVersion cv = ownedUpload(contentDocumentId);
+        return System.enqueueJob(new DocGenFontOperation('Import', cv.Id, fontKey, apiName, licenseText, null));
     }
     @AuraEnabled
     public static String importUploadedFontArchive(
@@ -296,10 +342,19 @@ public with sharing class DocGenFontController {
         admin();
         validateLicense(licenseText, hostingRightsConfirmed);
         ContentVersion cv = ownedArchiveUpload(contentDocumentId);
-        return System.enqueueJob(new DocGenFontOperation('ImportArchive', cv.Id, null, licenseText, null));
+        return System.enqueueJob(new DocGenFontOperation('ImportArchive', cv.Id, null, null, licenseText, null));
     }
     public static void inspectUploadedFont(Id versionId, String fontKey, String licenseText) {
         validateUpload(fontKey, licenseText, true);
+        inspectUploadedFontWithApiName(versionId, fontKey, null, licenseText);
+    }
+    public static void inspectUploadedFontWithApiName(
+        Id versionId,
+        String fontKey,
+        String apiName,
+        String licenseText
+    ) {
+        validateUpload(fontKey, apiName, licenseText, true);
         DocGenFlsGuard.assertAccessible(ContentDocument.sObjectType, new Set<String>{ 'OwnerId' });
         DocGenFlsGuard.assertAccessible(
             ContentVersion.sObjectType,
@@ -323,7 +378,7 @@ public with sharing class DocGenFontController {
             filename = filename.substringAfterLast('/');
         Map<String, Object> meta = new DocGenFontInspector(cv.VersionData).inspect(filename);
         assertNativePdfCompatible(meta);
-        String key = stageInspected(meta, fontKey, licenseText, null, cv);
+        String key = stageInspected(meta, fontKey, apiName, licenseText, null, cv);
         ensureFontPreview(key);
     }
     public static void inspectUploadedFontArchive(Id versionId, String licenseText) {
@@ -366,16 +421,26 @@ public with sharing class DocGenFontController {
             if (fontCount > 200)
                 throw new DocGenException('A font ZIP can contain at most 200 TTF files.');
             String key = archiveFontKey(filename, usedKeys);
-            inspectArchiveEntry(reader.extract(entry), filename, key, licenseText);
+            inspectArchiveEntryWithApiName(reader.extract(entry), filename, key, key, licenseText);
         }
         if (fontCount == 0)
             throw new DocGenException('The ZIP archive does not contain any .ttf font files.');
     }
     public static String inspectArchiveEntry(Blob bytes, String filename, String fontKey, String licenseText) {
         validateUpload(fontKey, licenseText, true);
+        return inspectArchiveEntryWithApiName(bytes, filename, fontKey, null, licenseText);
+    }
+    public static String inspectArchiveEntryWithApiName(
+        Blob bytes,
+        String filename,
+        String fontKey,
+        String apiName,
+        String licenseText
+    ) {
+        validateUpload(fontKey, apiName, licenseText, true);
         Map<String, Object> meta = new DocGenFontInspector(bytes).inspect(filename);
         assertNativePdfCompatible(meta);
-        String key = stageInspected(meta, fontKey, licenseText, bytes, null);
+        String key = stageInspected(meta, fontKey, apiName, licenseText, bytes, null);
         ensureFontPreview(key);
         return key;
     }
@@ -433,6 +498,7 @@ public with sharing class DocGenFontController {
     private static String stageInspected(
         Map<String, Object> meta,
         String fontKey,
+        String apiName,
         String licenseText,
         Blob bytes,
         ContentVersion uploaded
@@ -453,6 +519,16 @@ public with sharing class DocGenFontController {
         ];
         if (!existing.isEmpty()) {
             DocGen_Font_Face__c prior = load(key);
+            if (String.isNotBlank(apiName) && String.isBlank(prior.API_Name__c)) {
+                prior.API_Name__c = apiName;
+                save(prior);
+            } else if (
+                String.isNotBlank(apiName) &&
+                String.isNotBlank(prior.API_Name__c) &&
+                prior.API_Name__c != apiName
+            ) {
+                throw new DocGenException('This font revision already uses API name ' + prior.API_Name__c + '.');
+            }
             Map<String, Object> oldMeta = (Map<String, Object>) JSON.deserializeUntyped(prior.Metadata_JSON__c);
             if (prior.Status__c == 'Staged' && !oldMeta.containsKey('licenseText')) {
                 oldMeta.put('licenseText', licenseText);
@@ -460,6 +536,18 @@ public with sharing class DocGenFontController {
                 save(prior);
             }
             return key;
+        }
+        if (String.isNotBlank(apiName)) {
+            DocGenFlsGuard.assertAccessible(DocGen_Font_Face__c.sObjectType, new Set<String>{ 'API_Name__c' });
+            List<DocGen_Font_Face__c> named = [
+                SELECT Id
+                FROM DocGen_Font_Face__c
+                WHERE API_Name__c = :apiName
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            if (!named.isEmpty())
+                throw new DocGenException('Font API name is already in use. Choose a unique API name.');
         }
         DocGenFlsGuard.assertAccessible(
             DocGen_Asset__c.sObjectType,
@@ -537,6 +625,7 @@ public with sharing class DocGenFontController {
             new DocGen_Font_Face__c(
                 Name = (String) meta.get('family') + ' / ' + (String) meta.get('subfamily'),
                 Asset__c = asset.Id,
+                API_Name__c = apiName,
                 Revision_Key__c = key,
                 Metadata_JSON__c = JSON.serialize(meta),
                 License_Text__c = licenseText,

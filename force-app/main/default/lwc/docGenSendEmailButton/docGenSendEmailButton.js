@@ -10,6 +10,8 @@ import sendGeneratedEmail from '@salesforce/apex/DocGenButtonController.sendGene
 import { sanitizePreviewHtml } from 'c/docGenUtils';
 import { scopeHtmlForInlinePreview } from 'c/docGenAuthoringKit';
 
+const NONE_EMAIL_OPTION = '__none__';
+
 export default class DocGenSendEmailButton extends LightningElement {
     _recordId;
     _pageRef;
@@ -231,6 +233,10 @@ export default class DocGenSendEmailButton extends LightningElement {
         return this.existingEmailOptions.length > 0;
     }
 
+    get existingEmailSelectOptions() {
+        return [{ label: 'None', value: NONE_EMAIL_OPTION }, ...this.existingEmailOptions];
+    }
+
     get hasNoExistingEmailOptions() {
         return !this.hasExistingEmailOptions;
     }
@@ -359,7 +365,8 @@ export default class DocGenSendEmailButton extends LightningElement {
     }
 
     handleExistingChange(event) {
-        this.selectedExistingEmails = event.detail.value ? [event.detail.value] : [];
+        this.selectedExistingEmails =
+            event.detail.value && event.detail.value !== NONE_EMAIL_OPTION ? [event.detail.value] : [];
     }
 
     handleField(event) {

@@ -2722,6 +2722,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Signer_Verification__c',
                 'Prefill_Signer_Email__c',
                 'Hide_Signer_Decline__c',
+                'Signature_Type_Only__c',
                 'API_Name__c',
                 'Default_Email_Message__c'
             }
@@ -2756,6 +2757,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Signer_Verification__c,
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
+                Signature_Type_Only__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 CreatedDate,
@@ -2807,6 +2809,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Signer_Verification__c',
                 'Prefill_Signer_Email__c',
                 'Hide_Signer_Decline__c',
+                'Signature_Type_Only__c',
                 'API_Name__c',
                 'Default_Email_Message__c',
                 'Brand__c'
@@ -2842,6 +2845,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Signer_Verification__c,
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
+                Signature_Type_Only__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 Brand__c,
@@ -2855,6 +2859,40 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         ];
     }
 
+    /** Returns the next unique legacy-designer HTML body filename for a template. */
+    private static String nextLegacyHtmlBodyFileName(Id templateId) {
+        String titlePrefix = 'docgen_html_body_' + templateId + '_';
+        String titleLike = titlePrefix + '%';
+        Set<String> existingNames = new Set<String>();
+        Integer highest = 0;
+        /* code-analyzer-suppress ApexFlsViolation */
+        for (ContentVersion body : [
+            SELECT PathOnClient
+            FROM ContentVersion
+            WHERE Title LIKE :titleLike
+            WITH SYSTEM_MODE
+        ]) {
+            String path = body.PathOnClient;
+            if (String.isBlank(path)) {
+                continue;
+            }
+            existingNames.add(path.toLowerCase());
+            String stem = path.substringBeforeLast('.');
+            if (stem.toLowerCase().startsWith('template')) {
+                String suffix = stem.substring('template'.length());
+                if (suffix.isNumeric()) {
+                    highest = Math.max(highest, Integer.valueOf(suffix));
+                }
+            }
+        }
+        Integer next = highest + 1;
+        String candidate = 'template' + next + '.html';
+        while (existingNames.contains(candidate.toLowerCase())) {
+            next++;
+            candidate = 'template' + next + '.html';
+        }
+        return candidate;
+    }
     /**
      * Saves template field updates and optionally creates a new template version.
      * @param fields Map of field API names to values for the template record
@@ -3014,6 +3052,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Prefill_Signer_Email__c')) {
                 template.Prefill_Signer_Email__c = (String) fields.get('Prefill_Signer_Email__c');
             }
+            if (fields.containsKey('Signature_Type_Only__c')) {
+                template.Signature_Type_Only__c = (Boolean) fields.get('Signature_Type_Only__c');
+            }
             // #367 — per-template "Hide Decline Button" switch
             if (fields.containsKey('Hide_Signer_Decline__c')) {
                 template.Hide_Signer_Decline__c = (Boolean) fields.get('Hide_Signer_Decline__c');
@@ -3101,6 +3142,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Signer_Verification__c',
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
+                    'Signature_Type_Only__c',
                     'API_Name__c',
                     'Default_Email_Message__c',
                     'Brand__c',
@@ -3221,6 +3263,41 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     }
                 }
 
+                // Legacy HTML designer saves must never make two template
+                // versions point at the same body file. The client can submit
+                // the prior CV when no new body was uploaded, so make an
+                // immutable copy here and give it its own filename instead of
+                // reusing the prior ContentVersion pointer.
+                if (
+                    DocGenService.isHtmlBacked((String) fields.get('Type__c')) &&
+                    String.isNotBlank(priorContentVersionId) &&
+                    (String.isBlank(contentVersionId) || contentVersionId == priorContentVersionId)
+                ) {
+                    Id priorBodyId = (Id) priorContentVersionId;
+                    DocGenFlsGuard.assertAccessible(
+                        ContentVersion.sObjectType,
+                        new Set<String>{ 'PathOnClient', 'VersionData' }
+                    );
+                    /* code-analyzer-suppress ApexFlsViolation */
+                    List<ContentVersion> priorBodies = [
+                        SELECT PathOnClient, VersionData
+                        FROM ContentVersion
+                        WHERE Id = :priorBodyId
+                        WITH SYSTEM_MODE
+                        LIMIT 1
+                    ];
+                    if (!priorBodies.isEmpty()) {
+                        ContentVersion copy = new ContentVersion();
+                        copy.Title = 'docgen_html_body_' + templateId + '_' + Datetime.now().getTime();
+                        copy.PathOnClient = nextLegacyHtmlBodyFileName(templateId);
+                        copy.VersionData = priorBodies[0].VersionData;
+                        copy.FirstPublishLocationId = templateId;
+                        /* code-analyzer-suppress ApexFlsViolation */
+                        Database.insert(copy, AccessLevel.SYSTEM_MODE);
+                        cvId = copy.Id;
+                    }
+                }
+
                 DocGen_Template_Version__c version = new DocGen_Template_Version__c();
                 version.Template__c = templateId;
                 // Same blank-safe rule as the template above — inherit the stored
@@ -3320,12 +3397,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     copyPdfAcroFormSnapshot(templateId, priorVersionId, version.Id);
                 }
 
-                // Decompose DOCX/PPTX into per-image and per-XML ContentVersions for
-                // heap-light PDF rendering. Runs in a Queueable (12 MB async heap)
-                // rather than inline (6 MB sync heap) so it survives real-world
-                // templates with iPhone-sized images that previously silently
-                // failed save-time decomposition.
-                DocGenService.enqueueTemplateImageExtraction(templateId, version.Id);
+                // Decompose only Office packages. HTML/Canvas bodies are plain text
+                // (or are unpacked by the browser before they reach this method), so
+                // sending them through the Office decomposition queue is unnecessary
+                // and can expose large imported HTML/XML to regex-heavy legacy work.
+                // Keep the guard here as well as in the queueable: this prevents an
+                // HTML/ZIP upload from ever entering that pipeline during Save as
+                // New Version.
+                if (isDocxBodyType((String) fields.get('Type__c'))) {
+                    DocGenService.enqueueTemplateImageExtraction(templateId, version.Id);
+                }
 
                 // HTML templates (v1.61+): if the upload was a Google Docs
                 // "Download → Web Page" zip, extract images + rewrite src refs.
@@ -4164,11 +4245,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         DocGenFlsGuard.assertAccessible(
             DocGen_Template__c.sObjectType,
-            new Set<String>{ 'Type__c', 'Page_Size__c', 'Page_Orientation__c', 'Page_Margins__c', 'Custom_Margins__c' }
+            new Set<String>{
+                'Type__c',
+                'Base_Object_API__c',
+                'Page_Size__c',
+                'Page_Orientation__c',
+                'Page_Margins__c',
+                'Custom_Margins__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Template__c tpl = [
-            SELECT Type__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
+            SELECT Type__c, Base_Object_API__c, Page_Size__c, Page_Orientation__c, Page_Margins__c, Custom_Margins__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -4221,7 +4309,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (!active.isEmpty()) {
                 fresh = active[0].clone(false, true, false, false);
             } else {
-                fresh = new DocGen_Template_Version__c(Template__c = templateId, Type__c = tpl.Type__c);
+                fresh = new DocGen_Template_Version__c(
+                    Template__c = templateId,
+                    Type__c = tpl.Type__c,
+                    Base_Object_API__c = tpl.Base_Object_API__c
+                );
             }
             fresh.Template__c = templateId;
             fresh.Content_Version_Id__c = cvId;
@@ -4256,11 +4348,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Template__c = templateId,
                 Content_Version_Id__c = cvId,
                 Is_Active__c = true,
-                Type__c = tpl.Type__c
+                Type__c = tpl.Type__c,
+                Base_Object_API__c = tpl.Base_Object_API__c
             );
             DocGenFlsGuard.assertCreateable(
                 v,
-                new Set<String>{ 'Template__c', 'Content_Version_Id__c', 'Is_Active__c', 'Type__c' }
+                new Set<String>{
+                    'Template__c',
+                    'Content_Version_Id__c',
+                    'Is_Active__c',
+                    'Type__c',
+                    'Base_Object_API__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(v, AccessLevel.SYSTEM_MODE);
@@ -4279,8 +4378,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * HTML template body read-back for the admin editor (paste-back surface).
      *
-     * Returns the most recent docgen_html_body_* ContentVersion attached to
-     * the template, or null when no body has been uploaded yet. The CV read
+     * Returns the body referenced by the active template version, or (for legacy
+     * records that have no version body pointer yet) the most recent
+     * docgen_html_body_* ContentVersion attached to the template. The CV read
      * runs WITH SYSTEM_MODE after an explicit FLS/CRUD gate on the template —
      * template-internal CVs can carry Visibility=InternalUsers ContentDocumentLinks,
      * which USER_MODE reads silently drop (the #114 quirk).
@@ -4312,6 +4412,41 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         if (!DocGenService.isHtmlBacked(tpls[0].Type__c)) {
             throw new DocGenException('getHtmlTemplateBody is for HTML-backed templates only.');
+        }
+
+        // The legacy designer used to read the newest loose body attached to the
+        // template. After Save as New Version, that is not necessarily the body of
+        // the active version: an older version can still point at its own immutable
+        // ContentVersion while the loose lookup returns a later edit. Reading that
+        // shared file made every version appear to contain the same document and
+        // could overwrite the wrong version on the next designer save.
+        DocGenFlsGuard.assertAccessible(
+            DocGen_Template_Version__c.sObjectType,
+            new Set<String>{ 'Template__c', 'Is_Active__c', 'Content_Version_Id__c' }
+        );
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template_Version__c> activeVersions = [
+            SELECT Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        if (!activeVersions.isEmpty() && String.isNotBlank(activeVersions[0].Content_Version_Id__c)) {
+            Id bodyCvId = (Id) activeVersions[0].Content_Version_Id__c;
+            DocGenFlsGuard.assertAccessible(ContentVersion.sObjectType, new Set<String>{ 'VersionData' });
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<ContentVersion> versionBodies = [
+                SELECT VersionData
+                FROM ContentVersion
+                WHERE Id = :bodyCvId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            if (!versionBodies.isEmpty()) {
+                return versionBodies[0].VersionData.toString();
+            }
         }
 
         // Scope the read by the template's linked documents, NOT by a bare Title LIKE.
@@ -4686,6 +4821,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Page_Size__c',
                 'Page_Margins__c',
                 'Custom_Margins__c',
+                'Output_Format__c',
+                'Document_Title_Format__c',
+                'Header_Html__c',
+                'Footer_Html__c',
                 'Template__c'
             }
         );
@@ -4707,7 +4846,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Page_Orientation__c,
                 Page_Size__c,
                 Page_Margins__c,
-                Custom_Margins__c
+                Custom_Margins__c,
+                Output_Format__c,
+                Document_Title_Format__c,
+                Header_Html__c,
+                Footer_Html__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId
             WITH SYSTEM_MODE
@@ -4910,7 +5053,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Category__c',
                     'Description__c',
                     'Type__c',
-                    'Base_Object_API__c'
+                    'Base_Object_API__c',
+                    'Output_Format__c',
+                    'Document_Title_Format__c',
+                    'Header_Html__c',
+                    'Footer_Html__c',
+                    'Page_Orientation__c',
+                    'Page_Size__c',
+                    'Page_Margins__c',
+                    'Custom_Margins__c'
                 }
             );
             /* code-analyzer-suppress ApexFlsViolation */
@@ -4922,7 +5073,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Category__c,
                     Description__c,
                     Type__c,
-                    Base_Object_API__c
+                    Base_Object_API__c,
+                    Output_Format__c,
+                    Document_Title_Format__c,
+                    Header_Html__c,
+                    Footer_Html__c,
+                    Page_Orientation__c,
+                    Page_Size__c,
+                    Page_Margins__c,
+                    Custom_Margins__c
                 FROM DocGen_Template_Version__c
                 WHERE Id = :versionId
                 WITH SYSTEM_MODE
@@ -4973,12 +5132,60 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (String.isNotBlank(version.Type__c)) {
                 template.Type__c = version.Type__c;
             }
-            template.Base_Object_API__c = version.Base_Object_API__c;
+            // Early versions may not contain a base-object snapshot. Do not overwrite
+            // the required template value with null when activating those records.
+            if (String.isNotBlank(version.Base_Object_API__c)) {
+                template.Base_Object_API__c = version.Base_Object_API__c;
+            }
+            // Restore the render settings captured by this version as well. These
+            // fields are nullable for versions created before the snapshot fields
+            // shipped, so leave the live template value alone when no snapshot is
+            // available. Without this, activating an older version changed the
+            // body/query headline but left Settings showing the previously active
+            // version's output/page/chrome configuration.
+            if (version.Output_Format__c != null) {
+                template.Output_Format__c = version.Output_Format__c;
+            }
+            if (version.Document_Title_Format__c != null) {
+                template.Document_Title_Format__c = version.Document_Title_Format__c;
+            }
+            if (version.Header_Html__c != null) {
+                template.Header_Html__c = version.Header_Html__c;
+            }
+            if (version.Footer_Html__c != null) {
+                template.Footer_Html__c = version.Footer_Html__c;
+            }
+            if (version.Page_Orientation__c != null) {
+                template.Page_Orientation__c = version.Page_Orientation__c;
+            }
+            if (version.Page_Size__c != null) {
+                template.Page_Size__c = version.Page_Size__c;
+            }
+            if (version.Page_Margins__c != null) {
+                template.Page_Margins__c = version.Page_Margins__c;
+            }
+            if (version.Custom_Margins__c != null) {
+                template.Custom_Margins__c = version.Custom_Margins__c;
+            }
 
             // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Update").
             DocGenFlsGuard.assertUpdateable(
                 template,
-                new Set<String>{ 'Query_Config__c', 'Category__c', 'Description__c', 'Type__c', 'Base_Object_API__c' }
+                new Set<String>{
+                    'Query_Config__c',
+                    'Category__c',
+                    'Description__c',
+                    'Type__c',
+                    'Base_Object_API__c',
+                    'Output_Format__c',
+                    'Document_Title_Format__c',
+                    'Header_Html__c',
+                    'Footer_Html__c',
+                    'Page_Orientation__c',
+                    'Page_Size__c',
+                    'Page_Margins__c',
+                    'Custom_Margins__c'
+                }
             );
             /* code-analyzer-suppress ApexFlsViolation */
             Database.update(template, AccessLevel.SYSTEM_MODE);
@@ -7976,6 +8183,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Signer_Verification__c',
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
+                    'Signature_Type_Only__c',
                     'Default_Email_Message__c',
                     'Form_Fields_Config__c'
                 }
@@ -8009,6 +8217,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Signer_Verification__c,
                     Prefill_Signer_Email__c,
                     Hide_Signer_Decline__c,
+                    Signature_Type_Only__c,
                     Default_Email_Message__c,
                     Form_Fields_Config__c,
                     (
@@ -8073,6 +8282,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('Signer_Verification__c', tmpl.Signer_Verification__c);
             tmplData.put('Prefill_Signer_Email__c', tmpl.Prefill_Signer_Email__c);
             tmplData.put('Hide_Signer_Decline__c', tmpl.Hide_Signer_Decline__c);
+            tmplData.put('Signature_Type_Only__c', tmpl.Signature_Type_Only__c);
             tmplData.put('Default_Email_Message__c', tmpl.Default_Email_Message__c);
             tmplData.put('Form_Fields_Config__c', tmpl.Form_Fields_Config__c);
             bundle.put('template', tmplData);
@@ -8300,6 +8510,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmpl.Prefill_Signer_Email__c = (String) tmplData.get('Prefill_Signer_Email__c');
             // #367 — a bundle without the key (older export) keeps Decline shown
             tmpl.Hide_Signer_Decline__c = tmplData.get('Hide_Signer_Decline__c') == true;
+            tmpl.Signature_Type_Only__c = tmplData.get('Signature_Type_Only__c') == true;
             tmpl.Default_Email_Message__c = (String) tmplData.get('Default_Email_Message__c');
             tmpl.Form_Fields_Config__c = (String) tmplData.get('Form_Fields_Config__c');
             // API_Name__c is unique — keep it (the whole point is a stable key
@@ -8350,6 +8561,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Signer_Verification__c',
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
+                    'Signature_Type_Only__c',
                     'Default_Email_Message__c',
                     'Form_Fields_Config__c',
                     'API_Name__c'
@@ -8679,6 +8891,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     LIMIT 1
                 )
             FROM DocGen_Asset__c
+            WHERE Asset_Type__c = 'Image' OR Asset_Type__c = NULL
             WITH SYSTEM_MODE
             ORDER BY Name ASC
         ];
@@ -8880,6 +9093,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (assetId.getSObjectType() != DocGen_Asset__c.sObjectType) {
             throw DocGenService.ahe('Expected a Portwood Asset Id.');
         }
+        assertImageAsset(assetId);
+        DocGenFlsGuard.assertUpdateable(new DocGen_Asset__c(Id = assetId), new Set<String>());
         try {
             // Confirm the RUNNING USER can see this ContentVersion under their own
             // sharing BEFORE the SYSTEM_MODE plumbing publishes it AllUsers. Without
@@ -9099,6 +9314,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Image uploads/public delivery and deletion must never consume font or private snippet sources. */
+    private static void assertImageAsset(Id assetId) {
+        DocGenFlsGuard.assertAccessible(DocGen_Asset__c.sObjectType, new Set<String>{ 'Asset_Type__c' });
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Asset__c> assets = [
+            SELECT Id
+            FROM DocGen_Asset__c
+            WHERE Id = :assetId AND (Asset_Type__c = 'Image' OR Asset_Type__c = NULL)
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (assets.isEmpty())
+            throw DocGenService.ahe('Choose an image asset. Edit fonts and shared content in their own Assets tabs.');
+    }
+
     /**
      * Permanently deletes a shared asset AND its linked image files. Any
      * template still referencing {%asset:<key>} renders the missing-asset
@@ -9112,6 +9342,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (!Schema.sObjectType.DocGen_Asset__c.isDeletable()) {
             throw DocGenService.ahe('Insufficient access to delete assets.');
         }
+        assertImageAsset(assetId);
         try {
             Set<Id> docIds = new Set<Id>();
             /* code-analyzer-suppress ApexFlsViolation */

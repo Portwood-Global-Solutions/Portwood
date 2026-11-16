@@ -5640,6 +5640,7 @@ private class DocGenSignatureTests {
         Test.startTest();
         DocGen_Signature_PDF__e evt = new DocGen_Signature_PDF__e();
         evt.Request_Id__c = req.Id;
+        evt.Signer_Id__c = signer1.Id;
         EventBus.publish(evt);
         Test.stopTest();
         // Exercises lines 72-80: remaining > 0, lastSignedSigner != null → sendSignerCompletedNotification

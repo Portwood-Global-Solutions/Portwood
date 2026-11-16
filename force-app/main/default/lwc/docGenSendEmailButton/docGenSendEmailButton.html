@@ -121,7 +121,7 @@
                 <template lwc:if={hasExistingEmailOptions}>
                     <lightning-combobox
                         label="Email from record"
-                        options={existingEmailOptions}
+                        options={existingEmailSelectOptions}
                         value={selectedExistingEmail}
                         onchange={handleExistingChange}
                         placeholder="Select an email from the record"
@@ -142,18 +142,20 @@
                         onchange={handleField}
                     ></lightning-textarea>
                 </div>
-                <h3 class="slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
+                <h3 class="email-subject-heading slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
                     <abbr class="slds-required" title="required">*</abbr> Email Subject
                 </h3>
-                <lightning-input-rich-text
+                <lightning-input
                     class="slds-m-top_small"
-                    label="Subject"
+                    type="text"
+                    label="Email Subject"
+                    variant="label-hidden"
                     data-field="subject"
                     value={subject}
                     onchange={handleField}
                     required
-                ></lightning-input-rich-text>
-                <h3 class="slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
+                ></lightning-input>
+                <h3 class="email-body-heading slds-text-title_bold slds-m-top_medium slds-m-bottom_x-small">
                     <abbr class="slds-required" title="required">*</abbr> Email Body
                 </h3>
                 <lightning-input-rich-text

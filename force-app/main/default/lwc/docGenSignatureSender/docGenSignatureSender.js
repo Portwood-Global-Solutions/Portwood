@@ -1,8 +1,11 @@
 import { LightningElement, api } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getPreparationUrl from '@salesforce/apex/DocGenSignaturePreparationController.getPreparationUrl';
 import getContext from '@salesforce/apex/DocGenSignaturePreparationController.getContext';
 import getPendingSignatureRequests from '@salesforce/apex/DocGenSignatureSenderController.getPendingSignatureRequests';
+import resendSignatureRequest from '@salesforce/apex/DocGenSignatureSenderController.resendSignatureRequest';
+import cancelSignatureRequest from '@salesforce/apex/DocGenSignatureSenderController.cancelSignatureRequest';
 
 export default class DocGenSignatureSender extends NavigationMixin(LightningElement) {
     _recordId;
@@ -99,7 +102,13 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
                 getPendingSignatureRequests({ relatedRecordId: this.recordId }),
                 getContext({ recordId: this.recordId })
             ]);
-            this.requests = requests.filter((request) => request.status !== 'Draft').slice(0, 5);
+            this.requests = requests
+                .filter((request) => request.status !== 'Draft')
+                .slice(0, 5)
+                .map((request) => ({
+                    ...request,
+                    canManage: request.status === 'Sent' || request.status === 'In Progress'
+                }));
             this.drafts = (context.drafts || []).map((draft) => ({
                 id: draft.Id,
                 title: draft.Document_Title_Format__c || draft.portwoodglobal__Document_Title_Format__c || draft.Name
@@ -247,6 +256,39 @@ export default class DocGenSignatureSender extends NavigationMixin(LightningElem
             type: 'standard__recordPage',
             attributes: { recordId: event.currentTarget.dataset.id, actionName: 'view' }
         });
+    }
+    async resendRequest(event) {
+        const requestId = event.currentTarget.dataset.id;
+        const confirmed = window.confirm(
+            'Resend this signature request to all unsigned signers?\n\n' +
+                'New signing links will be emailed and the previous links will stop working.'
+        );
+        if (!confirmed) return;
+        try {
+            await resendSignatureRequest({ requestId });
+            this.showToast('Resent', 'New signing links were emailed to all unsigned signers.', 'success');
+            await this.refreshRequests();
+        } catch (err) {
+            this.showToast('Unable to resend', this.errorText(err), 'error');
+        }
+    }
+    async revokeRequest(event) {
+        const requestId = event.currentTarget.dataset.id;
+        const confirmed = window.confirm(
+            'Revoke this signature request?\n\n' +
+                'All unsigned signing links become invalid and signers can no longer sign. This cannot be undone.'
+        );
+        if (!confirmed) return;
+        try {
+            await cancelSignatureRequest({ requestId });
+            this.showToast('Revoked', 'The signature request was revoked.', 'success');
+            await this.refreshRequests();
+        } catch (err) {
+            this.showToast('Unable to revoke', this.errorText(err), 'error');
+        }
+    }
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
     errorText(err) {
         return err?.body?.message || err?.message || 'The signature sender could not load.';

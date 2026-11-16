@@ -13,13 +13,18 @@ import { join } from 'node:path';
 
 const exec = promisify(execFile);
 
+// Windows exposes the Salesforce CLI through sf.cmd rather than an executable
+// that Node can spawn by the bare `sf` name.
+const SF_CLI = process.platform === 'win32' ? 'cmd.exe' : 'sf';
+const SF_PREFIX = process.platform === 'win32' ? ['/d', '/s', '/c', 'sf.cmd'] : [];
+
 const BIG = 64 * 1024 * 1024; // Apex debug logs are large; never truncate them.
 
 async function sf(args, { timeout = 900000, retries = 1 } = {}) {
     let lastErr;
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const { stdout } = await exec('sf', args, { maxBuffer: BIG, timeout });
+            const { stdout } = await exec(SF_CLI, [...SF_PREFIX, ...args], { maxBuffer: BIG, timeout });
             return stdout;
         } catch (e) {
             lastErr = e;

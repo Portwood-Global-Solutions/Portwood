@@ -358,6 +358,122 @@ public without sharing class DocGenSignatureEmailService {
         );
     }
 
+    private static String getDocumentTitle(Id contentVersionId) {
+        if (contentVersionId == null)
+            return 'Document';
+        List<ContentVersion> cvs = [
+            SELECT Title
+            FROM ContentVersion
+            WHERE Id = :contentVersionId
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        return !cvs.isEmpty() && String.isNotBlank(cvs[0].Title) ? cvs[0].Title : 'Document';
+    }
+    /** Notifies every signer who had not signed when the request was revoked. */
+    public static void sendSignerRevokedEmails(Id requestId) {
+        if (isInternalPreview(requestId)) {
+            return;
+        }
+        try {
+            DocGenFlsGuard.guestAssertAccessible(
+                DocGen_Signature_Request__c.sObjectType,
+                new Set<String>{ 'Template__c', 'Source_Document_Id__c', 'CreatedById' }
+            );
+            DocGenFlsGuard.guestAssertAccessible(
+                DocGen_Signer__c.sObjectType,
+                new Set<String>{
+                    'Signer_Name__c',
+                    'Signer_Email__c',
+                    'Role_Name__c',
+                    'Status__c',
+                    'Signature_Request__c'
+                }
+            );
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            DocGen_Signature_Request__c req = [
+                SELECT
+                    Id,
+                    Template__r.Name,
+                    Source_Document_Id__c,
+                    CreatedById,
+                    (
+                        SELECT Signer_Name__c, Signer_Email__c, Role_Name__c
+                        FROM Signers__r
+                        WHERE Status__c != 'Signed'
+                    )
+                FROM DocGen_Signature_Request__c
+                WHERE Id = :requestId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            if (req.Signers__r == null || req.Signers__r.isEmpty()) {
+                return;
+            }
+
+            DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+            Id brandId = DocGenBrandResolver.resolveBrandForRequest(requestId);
+            DocGen_Brand__c activeBrand = DocGenBrandResolver.getBrand(brandId);
+            String owaId = (activeBrand != null && String.isNotBlank(activeBrand.OWA_Id__c))
+                ? activeBrand.OWA_Id__c
+                : (settings == null ? null : settings.Signature_OWA_Id__c);
+            if (String.isBlank(owaId)) {
+                updateEmailStatus(requestId, 'Revocation emails not sent — no Org-Wide Email Address configured.');
+                return;
+            }
+
+            String senderName = UserInfo.getName();
+            String senderEmail = UserInfo.getUserEmail();
+            DocGenFlsGuard.guestAssertAccessible(User.sObjectType, new Set<String>{ 'Name', 'Email' });
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            User creator = [SELECT Name, Email FROM User WHERE Id = :req.CreatedById WITH SYSTEM_MODE LIMIT 1];
+            if (String.isNotBlank(creator.Name))
+                senderName = creator.Name;
+            if (String.isNotBlank(creator.Email))
+                senderEmail = creator.Email;
+
+            String documentTitle = req.Template__r != null ? req.Template__r.Name : 'Document';
+            if (String.isBlank(documentTitle) && req.Source_Document_Id__c != null) {
+                documentTitle = getDocumentTitle(req.Source_Document_Id__c);
+            }
+
+            List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+            for (DocGen_Signer__c signer : req.Signers__r) {
+                if (String.isBlank(signer.Signer_Email__c))
+                    continue;
+                DocGenEmailTemplateService.RenderedEmail rendered = DocGenEmailTemplateService.render(
+                    DocGenEmailTemplateService.TYPE_REVOKED,
+                    new Map<String, String>{
+                        'SignerName' => signer.Signer_Name__c,
+                        'SenderName' => senderName,
+                        'DocumentTitle' => documentTitle,
+                        'RoleName' => signer.Role_Name__c,
+                        'RequestId' => String.valueOf(requestId),
+                        'Message' => 'This signature request has been revoked. No further action is required.'
+                    },
+                    null,
+                    brandId
+                );
+                Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+                email.setToAddresses(new List<String>{ signer.Signer_Email__c });
+                email.setSubject(rendered.subject);
+                email.setHtmlBody(rendered.htmlBody);
+                if (String.isNotBlank(rendered.plainBody))
+                    email.setPlainTextBody(rendered.plainBody);
+                email.setSaveAsActivity(false);
+                email.setOrgWideEmailAddressId(owaId);
+                if (String.isNotBlank(senderEmail) && !senderEmail.startsWithIgnoreCase('noreply@')) {
+                    email.setReplyTo(senderEmail);
+                }
+                emails.add(email);
+            }
+            if (!emails.isEmpty())
+                Messaging.sendEmail(emails, false);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'Portwood: signer revocation emails failed: ' + e.getMessage());
+            logSignatureEmailFailure('sendSignerRevokedEmails', requestId, e);
+        }
+    }
     /** Notifies the sender that a signer has declined. */
     public static void sendDeclineNotification(Id requestId, DocGen_Signer__c signer, String reason) {
         sendSenderNotification(

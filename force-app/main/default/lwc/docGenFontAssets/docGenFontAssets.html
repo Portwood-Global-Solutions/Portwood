@@ -154,6 +154,16 @@
                         maxlength="40"
                         disabled={busy}
                     ></lightning-input>
+                    <lightning-input
+                        label="Font tag API name"
+                        field-level-help="Use the same API name when importing this face into another environment."
+                        required
+                        value={apiName}
+                        placeholder="poppins-bold"
+                        onchange={setApiName}
+                        maxlength="40"
+                        disabled={busy}
+                    ></lightning-input>
                     <lightning-textarea
                         label="Font license text"
                         required

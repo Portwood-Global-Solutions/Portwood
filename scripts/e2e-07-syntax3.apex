@@ -262,6 +262,38 @@ try {
     System.debug('TITLE BUILTINS: FAIL — ' + e.getMessage());
 }
 
+// ===== Salesforce Custom Label merge tags =====
+try {
+    String resolved = DocGenService.processXmlForTest(
+        'Before {!$Label.DocGenRunner_Subtitle} after',
+        new Map<String, Object>()
+    );
+    String missing = DocGenService.processXmlForTest(
+        'Before {!$Label.Portwood_Label_That_Does_Not_Exist} after',
+        new Map<String, Object>()
+    );
+    String title = DocGenService.generateDocTitle(
+        '{!$Label.DocGenRunner_Category} - {Name}',
+        new Map<String, Object>{ 'Name' => 'Example' }
+    );
+
+    Boolean resolvedOk = resolved == 'Before Create or combine documents for this record. after';
+    Boolean missingOk = missing == 'Before  after';
+    Boolean titleOk = title == 'Category - Example';
+    if (resolvedOk && missingOk && titleOk) {
+        pass++;
+        System.debug('CUSTOM LABEL MERGE TAGS: PASS');
+    } else {
+        fail++;
+        System.debug(
+            'CUSTOM LABEL MERGE TAGS: FAIL - resolved=' + resolved + ' missing=' + missing + ' title=' + title
+        );
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('CUSTOM LABEL MERGE TAGS: FAIL - ' + e.getMessage());
+}
+
 // ===== IF inside table row, condition false, no else (issue #53) =====
 // Pre-fix: smart-container expansion backtracked the row's <w:tr> opening,
 // IF emitted nothing, downstream </w:tr> orphaned → DOCX corruption + PDF

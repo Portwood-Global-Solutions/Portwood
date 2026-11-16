@@ -14,6 +14,7 @@ export function apexSurface(root) {
             const file = `${folder}/${name}`;
             const text = fs
                 .readFileSync(path.join(root, file), 'utf8')
+                .replace(/\r\n?/g, '\n')
                 .replace(/\/\*[\s\S]*?\*\//g, '')
                 .replace(/\/\/[^\n]*/g, '');
             if (!/^\s*global\s+(?:(?:with|without|inherited)\s+sharing\s+)?(?:class|interface)\s+/m.test(text))

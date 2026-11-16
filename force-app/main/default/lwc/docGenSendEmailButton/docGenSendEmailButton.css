@@ -141,6 +141,9 @@
     font-size: 0.82rem;
     font-weight: 700;
 }
+.email-body-heading {
+    color: #181818;
+}
 .manual-recipient-block {
     margin-top: 0.75rem;
     padding-top: 0.75rem;

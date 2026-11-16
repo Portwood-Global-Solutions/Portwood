@@ -76,6 +76,7 @@
             "global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed'",
             "global static final String TYPE_ALL_SIGNED = 'All_Signed'",
             "global static final String TYPE_DECLINED = 'Signer_Declined'",
+            "global static final String TYPE_REVOKED = 'Signature_Revoked'",
             "global static final String TYPE_COMPLETION = 'Completion_Confirmation'",
             "global static final List<String> ALL_TYPES = new List<String>",
             "global static final String MODE_MANAGED = 'Managed'",
@@ -148,6 +149,26 @@
             "global String errorMessage",
             "global Boolean success",
             "global static List<Response> generateDocument(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenPdfMergeFlowAction",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenPdfMergeFlowAction.cls",
+        "declarations": [
+            "global with sharing class DocGenPdfMergeFlowAction",
+            "global class Request",
+            "global List<String> contentVersionIds",
+            "global String contentVersionIdsText",
+            "global String documentTitle",
+            "global Id relatedRecordId",
+            "global Boolean padOddDocuments",
+            "global class Response",
+            "global Id contentVersionId",
+            "global Id contentDocumentId",
+            "global Boolean success",
+            "global String errorMessage",
+            "global static List<Response> mergePdfs(List<Request> requests)"
         ]
     },
     {

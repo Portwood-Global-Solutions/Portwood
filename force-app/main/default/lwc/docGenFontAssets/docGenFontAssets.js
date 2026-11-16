@@ -1,7 +1,7 @@
 import { LightningElement } from 'lwc';
 import { loadFontFace } from 'c/docGenFontLoader';
 import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
-import importUploadedFont from '@salesforce/apex/DocGenFontController.importUploadedFont';
+import importUploadedFontWithApiName from '@salesforce/apex/DocGenFontController.importUploadedFontWithApiName';
 import importUploadedFontArchive from '@salesforce/apex/DocGenFontController.importUploadedFontArchive';
 import getFontJobStatus from '@salesforce/apex/DocGenFontController.getFontJobStatus';
 import startFontProof from '@salesforce/apex/DocGenFontController.startFontProof';
@@ -29,6 +29,7 @@ export default class DocGenFontAssets extends LightningElement {
     showUpload = false;
     isBulkUpload = false;
     fontKey = '';
+    apiName = '';
     licenseText = '';
     rights = false;
     uploadedFile;
@@ -81,7 +82,11 @@ export default class DocGenFontAssets extends LightningElement {
         return this.faces.filter(
             (f) =>
                 (this.statusFilter === 'all' || f.status === this.statusFilter) &&
-                (!term || [f.label, f.filename, f.assetKey, f.weight, f.style].join(' ').toLowerCase().includes(term))
+                (!term ||
+                    [f.label, f.filename, f.assetKey, f.apiName, f.weight, f.style]
+                        .join(' ')
+                        .toLowerCase()
+                        .includes(term))
         );
     }
     get rows() {
@@ -249,7 +254,14 @@ export default class DocGenFontAssets extends LightningElement {
         return !!this.selected?.proofUrl;
     }
     get uploadDisabled() {
-        return this.busy || !this.uploadedFile || !this.fontKey || !this.licenseText.trim() || !this.rights;
+        return (
+            this.busy ||
+            !this.uploadedFile ||
+            !this.fontKey ||
+            !this.apiName ||
+            !this.licenseText.trim() ||
+            !this.rights
+        );
     }
     get bulkUploadDisabled() {
         return this.busy || !this.bulkUploadedFiles.length || !this.licenseText.trim() || !this.rights;
@@ -379,11 +391,18 @@ export default class DocGenFontAssets extends LightningElement {
     openUpload() {
         this.showUpload = true;
         this.isBulkUpload = false;
+        this.fontKey = '';
+        this.apiName = '';
+        this.uploadedFile = null;
+        this.licenseText = '';
+        this.rights = false;
         this.error = '';
     }
     openBulkUpload() {
         this.showUpload = true;
         this.isBulkUpload = true;
+        this.fontKey = '';
+        this.apiName = '';
         this.uploadedFile = null;
         this.bulkUploadedFiles = [];
         this.licenseText = '';
@@ -397,6 +416,10 @@ export default class DocGenFontAssets extends LightningElement {
     }
     setKey(e) {
         this.fontKey = e.target.value;
+        if (!this.apiName) this.apiName = this.fontKey;
+    }
+    setApiName(e) {
+        this.apiName = e.target.value;
     }
     setLicense(e) {
         this.licenseText = e.target.value;
@@ -423,6 +446,7 @@ export default class DocGenFontAssets extends LightningElement {
     handleUploadFinished(e) {
         this.uploadedFile = e.detail.files?.[0];
         if (!this.fontKey && this.uploadedFile?.name) this.fontKey = this.fontKeyFromFilename(this.uploadedFile.name);
+        if (!this.apiName) this.apiName = this.fontKey;
         this.error = '';
     }
     handleBulkUploadFinished(e) {
@@ -507,9 +531,10 @@ export default class DocGenFontAssets extends LightningElement {
             const file = this.uploadedFile;
             let jobId = '';
             try {
-                jobId = await importUploadedFont({
+                jobId = await importUploadedFontWithApiName({
                     contentDocumentId: file.documentId,
                     fontKey: this.fontKey,
+                    apiName: this.apiName,
                     licenseText: this.licenseText,
                     hostingRightsConfirmed: this.rights
                 });
@@ -540,6 +565,8 @@ export default class DocGenFontAssets extends LightningElement {
             this.showUpload = false;
             this.isBulkUpload = false;
             this.uploadedFile = null;
+            this.fontKey = '';
+            this.apiName = '';
             this.licenseText = '';
             this.rights = false;
             this.message = 'Font inspected and saved in Salesforce Files. Generate a PDF specimen to review it.';
@@ -560,9 +587,10 @@ export default class DocGenFontAssets extends LightningElement {
                               licenseText: this.licenseText,
                               hostingRightsConfirmed: this.rights
                           })
-                        : await importUploadedFont({
+                        : await importUploadedFontWithApiName({
                               contentDocumentId: file.documentId,
                               fontKey: file.fontKey,
+                              apiName: file.fontKey,
                               licenseText: this.licenseText,
                               hostingRightsConfirmed: this.rights
                           });

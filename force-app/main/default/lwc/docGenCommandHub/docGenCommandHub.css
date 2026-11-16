@@ -522,3 +522,16 @@
 .guide-redirect-fineprint a:hover {
     text-decoration: underline;
 }
+
+/* Let the active section determine the card height. */
+.content-panel {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    min-width: 0;
+    width: 100%;
+}
+.panel-body {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    min-width: 0;
+}

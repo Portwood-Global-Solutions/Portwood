@@ -5,6 +5,19 @@
         <visible>true</visible>
     </applicationVisibilities>
     <classAccesses>
+        <apexClass>DocGenPdfMergeFlowAction</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenGettingStartedController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DocGenSnippetController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+
+    <classAccesses>
         <apexClass>BarcodeGenerator</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -388,6 +401,11 @@
     <fieldPermissions>
         <editable>false</editable>
         <field>DocGen_Error_Log__c.User_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Font_Face__c.API_Name__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -957,6 +975,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Template__c.Signature_Type_Only__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Template__c.Hide_Signer_Decline__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -1095,6 +1118,8 @@
         <field>DocGen_Signature_Request__c.Brand__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.API_Name__c</field><readable
+        >true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.License_Text__c</field><readable
         >true</readable></fieldPermissions>
     <fieldPermissions><editable>true</editable><field>DocGen_Font_Face__c.Metadata_JSON__c</field><readable

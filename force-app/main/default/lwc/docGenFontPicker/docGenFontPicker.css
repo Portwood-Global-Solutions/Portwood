@@ -89,6 +89,16 @@ input {
     background: #fff;
     cursor: pointer;
 }
+.font-section {
+    padding: 8px 10px 4px;
+    color: #52616b;
+    background: #f5f7f8;
+    border-top: 1px solid #d8e0e3;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
 .font-option:hover {
     background: #edf5f4;
 }

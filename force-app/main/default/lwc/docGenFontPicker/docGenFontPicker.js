@@ -50,7 +50,7 @@ export default class DocGenFontPicker extends LightningElement {
     }
     get rows() {
         const query = this.query.trim().toLowerCase();
-        return this.options
+        const matches = this.options
             .filter(
                 (option) =>
                     !query ||
@@ -58,18 +58,35 @@ export default class DocGenFontPicker extends LightningElement {
             )
             .map((option) => ({
                 ...option,
+                isSection: false,
                 selected: option.value === this.selected?.value,
                 rowClass: 'font-option' + (option.value === this.selected?.value ? ' font-option_selected' : ''),
                 previewStyle: this.previewStyle(option),
                 previewError: this.previewErrors.includes(option.value)
             }));
+        const rows = [];
+        let lastSection;
+        for (const option of matches) {
+            const section = option.section || 'Fonts';
+            if (section !== lastSection) {
+                rows.push({
+                    value: 'section:' + section,
+                    section,
+                    isSection: true,
+                    rowClass: 'font-section'
+                });
+                lastSection = section;
+            }
+            rows.push(option);
+        }
+        return rows;
     }
     get noResults() {
         return !this.loading && !this.rows.length;
     }
     get resultCount() {
         return this.query.trim()
-            ? `${this.rows.length} of ${this.options.length} fonts`
+            ? `${this.rows.filter((row) => !row.isSection).length} of ${this.options.length} fonts`
             : `${this.options.length} fonts`;
     }
     handleCapture(event) {

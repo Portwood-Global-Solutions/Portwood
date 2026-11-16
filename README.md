@@ -4,11 +4,11 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
-[![Version](https://img.shields.io/badge/version-3.60.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-3.63.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2156_passing-brightgreen)](#security)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-2292_passing-brightgreen)](#security)
 [![Coverage](https://img.shields.io/badge/Coverage-80%25-brightgreen)](#security)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0%2F0%2F0-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwood.dev-blue)](https://portwood.dev)
@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx000001BOsrIAG --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001CfejIAC --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001BOsrIAG)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -229,15 +229,18 @@ Amount:   {Amount:currency}
 
 ### PDF Merger
 
-Five ways to combine PDFs:
+Six ways to combine PDFs:
 
-| Mode                  | What It Does                                                               |
-| --------------------- | -------------------------------------------------------------------------- |
-| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                  |
-| **Document Packets**  | Generate from multiple templates, merge into one PDF                       |
-| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering            |
-| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account) |
-| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download          |
+| Mode                  | What It Does                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Generate & Merge**  | Generate a doc, then append existing PDFs from the record                             |
+| **Document Packets**  | Generate from multiple templates, merge into one PDF                                  |
+| **Merge Only**        | Combine existing PDFs on the record with drag-and-drop ordering                       |
+| **Child Record PDFs** | Pull PDFs from child records (e.g., all Opportunity PDFs under an Account)            |
+| **Bulk Merge**        | After bulk generation, merge all generated PDFs into one download                     |
+| **Flow Action**       | Merge uploaded PDFs server-side using ContentVersion IDs as Text or a Text collection |
+
+**Portwood: Merge PDFs** runs entirely in Apex and returns the new File IDs. It supports modern compressed PDFs and ordinary forms, with optional record attachment and duplex padding. Apex file-size limits and PDF restrictions apply; see [the Flow recipe](UserGuide.md#11101-merge-existing-pdfs-entirely-in-flow).
 
 ### Giant Query Engine
 
@@ -455,32 +458,49 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-06**, then 11-20, 12-04.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-20**, then 12-04, 12-18.
 
 Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
-| Version     | Headline                                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                    |
-| **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records              |
-| **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                  |
-| **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                              |
-| **v3.56.0** | Set the label size on a chart; bold on Arial Unicode MS no longer silently does nothing                                         |
-| **v3.55.0** | Elements that travel together on the Canvas, named blocks, and charts on datasets that used to be too big                       |
-| **v3.54.0** | **Canvas designer (Beta)** — design a document in the browser, no Word or HTML needed                                           |
-| **v3.53.0** | Excel documents save as `.xlsx`, and a template set to PDF now produces a PDF from Flows too                                    |
-| **v3.52.0** | Runner on any Lightning page with built-in record search; **Show Save & Download** is now its own App Builder checkbox          |
-| **v3.51.0** | Smarter AI template authoring — the prompt now covers `{RowNumber}`, `{#GroupBy}`, `{#IF}`, charts, images, and signature types |
-| **v3.50.0** | Renamed to Portwood — display names only; every API name is unchanged, nothing you built needs updating                         |
-| **v3.49.0** | Bulk sort order, `{RowNumber}`, and **Save & Download** in a single generation                                                  |
-| **v3.48.0** | Bulk generation gets conditionals, charts, multi-column sorting; Template Designer opens for non-admins                         |
-| **v3.47.0** | PowerPoint table loops, GUID preservation, split-run merge tags                                                                 |
-| **v3.46.0** | AI template authoring with Agentforce — validated against the PDF engine before it reaches your canvas                          |
-| **v3.45.0** | Visual Designer editing overhaul, running-header fixes, silent-degradation logging to the Error Log                             |
-| **v3.34.0** | The HTML-first template wizard and the visual Template Designer (Beta)                                                          |
+| Version     | Headline                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.63.0** | Hotfix: upgrading to 3.62.0 from an earlier version failed with "The post install script failed"                                                    |
+| **v3.62.0** | Resend and revoke signatures, typed-signatures-only mode, reusable terms and snippets, a native PDF-merge Flow action, and version-activation fixes |
+| **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                                             |
+| **v3.60.0** | Customer-uploaded PDF signing, a fully branded signing experience, and custom font embedding                                                        |
+| **v3.59.0** | Canvas sample data, conditional variant groups, chart-in-table support, and tamper-evident signature audit records                                  |
+| **v3.58.0** | Delivery Mode and Send Email buttons, safer signing, and accent-safe PDF forms                                                                      |
+| **v3.57.0** | Per-brand signature emails, duplex bulk PDF, and a sweep of large-template crashes                                                                  |
+| **v3.56.0** | Set the label size on a chart; bold on Arial Unicode MS no longer silently does nothing                                                             |
+| **v3.55.0** | Elements that travel together on the Canvas, named blocks, and charts on datasets that used to be too big                                           |
+| **v3.54.0** | **Canvas designer (Beta)** — design a document in the browser, no Word or HTML needed                                                               |
+| **v3.53.0** | Excel documents save as `.xlsx`, and a template set to PDF now produces a PDF from Flows too                                                        |
+| **v3.52.0** | Runner on any Lightning page with built-in record search; **Show Save & Download** is now its own App Builder checkbox                              |
+| **v3.51.0** | Smarter AI template authoring — the prompt now covers `{RowNumber}`, `{#GroupBy}`, `{#IF}`, charts, images, and signature types                     |
+| **v3.50.0** | Renamed to Portwood — display names only; every API name is unchanged, nothing you built needs updating                                             |
+| **v3.49.0** | Bulk sort order, `{RowNumber}`, and **Save & Download** in a single generation                                                                      |
+| **v3.48.0** | Bulk generation gets conditionals, charts, multi-column sorting; Template Designer opens for non-admins                                             |
+| **v3.47.0** | PowerPoint table loops, GUID preservation, split-run merge tags                                                                                     |
+| **v3.46.0** | AI template authoring with Agentforce — validated against the PDF engine before it reaches your canvas                                              |
+| **v3.45.0** | Visual Designer editing overhaul, running-header fixes, silent-degradation logging to the Error Log                                                 |
+| **v3.34.0** | The HTML-first template wizard and the visual Template Designer (Beta)                                                                              |
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.63.0 — Hotfix: upgrading to 3.62.0 failed**: upgrading an existing install to 3.62.0 failed with "The post install script failed" and was rolled back; fresh installs were not affected. The script that creates the default email templates after an install can no longer fail an install or upgrade. If you are on 3.61 or earlier, upgrade straight to 3.63.0. On an org that upgraded (rather than installed fresh), an admin who wants to customize the new **Signature Request Revoked** email adds the value `Signature_Revoked` to **Email Template → Type** in Setup; the email still sends with its built-in text and every other email type is unaffected.
+
+**v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes**: signature senders can **Resend** or **Revoke** a request straight from the Recent requests list on a record, and revoking emails the signers who had not signed. An org, or a single template, can require **typed signatures only** and hide the drawing pad. Command Hub → Assets now holds reusable **Terms & HTML Snippets** that any template can insert with a snippet tag, kept versioned in one place. A new **Portwood: Merge PDFs** Flow action combines uploaded PDFs into one File without a screen or an outside service. Templates can use Salesforce **Custom Labels** as merge tags (including the signed-in user's translated value), and custom font tags take a stable **API name** so a template moves between orgs without rewriting its tags. Activating an older template version now restores its whole configuration, Canvas and the legacy designer reload the active version, each legacy-designer version keeps its own body, and the legacy designer gained a **Back to Library** button. Canvas text boxes wrap long text and no longer leak typed text into a table.
+
+**v3.61.0 — Hotfix: parallel-signing emails, signing-page UX, and large-HTML template saves**: a
+Parallel signature request could email the "signer completed" notification under the wrong
+signer's name when two or more people signed out of order — fixed by identifying the actual
+signer from the event instead of list order. The signing page keeps the typed-name field and
+drawing canvas usable together instead of one disabling the other, and hides the brand header on
+the decline screen for consistency with the other confirmation screens. Large HTML template saves
+no longer risk an Apex regex-limit failure. The Send Email wizard's record-email picker gained a
+**None** option to clear a selection and type a recipient manually, and the Email Subject field is
+now plain text.
 
 **v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding**: send any PDF your customer uploads out for signature — no Portwood template required — with the same guided drag-and-drop field placement, sequential multi-signer flow, and brand identity as a template-based request. Pick a Portwood Brand on a signing request and your company name, logo and color now carry through the whole signer journey consistently; the post-signing confirmation screens stay generic by design, matching the rest of the flow. Upload your own TrueType fonts in Command Hub → Assets and pin them to text in Canvas or HTML templates for native PDF output that matches your brand exactly. See the CHANGELOG for details.
 
@@ -583,7 +603,10 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.60.0 | **Latest (Released)**                   | `04tVx000001BOsrIAG` |
+| v3.63.0 | **Latest (Released)**                   | `04tVx000001CfejIAC` |
+| v3.62.0 | Released — upgrade fails, use 3.63.0    | `04tVx000001CeFdIAK` |
+| v3.61.0 | Released                                | `04tVx000001BaZ3IAK` |
+| v3.60.0 | Released                                | `04tVx000001BOsrIAG` |
 | v3.59.0 | Released                                | `04tVx0000019Ki5IAE` |
 | v3.58.0 | Released                                | `04tVx0000017QurIAE` |
 | v3.57.0 | Released                                | `04tVx0000015OKTIA2` |

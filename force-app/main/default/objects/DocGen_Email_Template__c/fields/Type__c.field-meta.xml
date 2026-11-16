@@ -41,6 +41,11 @@
                 <label>Signer Declined (to sender)</label>
             </value>
             <value>
+                <fullName>Signature_Revoked</fullName>
+                <default>false</default>
+                <label>Signature Request Revoked (to signers)</label>
+            </value>
+            <value>
                 <fullName>Completion_Confirmation</fullName>
                 <default>false</default>
                 <label>Completion Confirmation (to signers)</label>

@@ -156,21 +156,31 @@ export default class DocGenCanvas extends LightningElement {
     fontFaces = [];
     @track detectedPasteFont = null;
     fontValue(st) {
-        return st?.fontFaceKey ? 'face:' + st.fontFaceKey : st?.font;
+        return st?.fontFaceKey ? 'face:' + st.fontFaceKey : st?.fontChoiceKey || st?.font;
     }
     fontPatch(value) {
         const face = this.fontFaces.find((f) => 'face:' + f.key === value);
-        return face
-            ? {
-                  font: "'" + face.family + "'",
-                  fontFaceKey: face.key,
-                  fontWeight: face.weight,
-                  fontStyle: face.style,
-                  bold: false,
-                  italic: false
-              }
-            : { font: value, fontFaceKey: null, fontWeight: null, fontStyle: null };
+        if (face) {
+            return {
+                font: "'" + face.family + "'",
+                fontFaceKey: face.key,
+                fontChoiceKey: null,
+                fontWeight: face.weight,
+                fontStyle: face.style,
+                bold: false,
+                italic: false
+            };
+        }
+        const choice = FONT_CHOICES.find((item) => item.value === value);
+        return {
+            font: choice?.fontFamily || value,
+            fontFaceKey: null,
+            fontChoiceKey: choice?.section === 'Salesforce standard fonts' ? choice.value : null,
+            fontWeight: null,
+            fontStyle: null
+        };
     }
+
     async loadFonts() {
         try {
             this.fontFaces = await getFontFaces();
@@ -927,6 +937,7 @@ export default class DocGenCanvas extends LightningElement {
     /** Anything that replaces the document wholesale has to re-seed the editor. */
     reseedEditor() {
         this._syncedFor = null;
+        this._richEditorBoxId = this.selectedId;
         this.richSeed = this.richTextValue;
     }
 
@@ -2140,7 +2151,9 @@ export default class DocGenCanvas extends LightningElement {
                 custom: true
             };
         }
-        const builtin = FONT_CHOICES.find((choice) => normalizeFontFamily(choice.value) === normalized);
+        const builtin = FONT_CHOICES.find((choice) =>
+            [choice.value, choice.fontFamily, choice.label].some((value) => normalizeFontFamily(value) === normalized)
+        );
         const value = builtin ? builtin.value : normalized.replace(/[^a-z0-9_-]+/gi, ' ').trim();
         if (!value) return null;
         return {
@@ -2411,6 +2424,25 @@ export default class DocGenCanvas extends LightningElement {
     }
 
     /**
+     * Reloads the body selected by the template's current active version.
+     *
+     * The admin configuration modal can be opened over an already-mounted Canvas.
+     * Activating a version there changes Salesforce state, not this component's
+     * one-shot load state, so reopening the Canvas otherwise keeps showing its old
+     * in-memory document.
+     */
+    @api
+    async reloadActiveVersion() {
+        if (!this.templateId) {
+            return;
+        }
+        this._loaded = false;
+        this._docLoaded = false;
+        this.activeVersionId = null;
+        await this.loadBody();
+    }
+
+    /**
      * True when the canvas differs from what is stored.
      *
      * Compared by serializing rather than by tracking a dirty flag through every
@@ -2600,6 +2632,7 @@ export default class DocGenCanvas extends LightningElement {
         // hand-off explicit instead of relying on the diff to notice.
         if (this._syncedFor !== this.selectedId) {
             this._syncedFor = this.selectedId;
+            this._richEditorBoxId = this.selectedId;
             // Re-seed the editor for the newly selected box. Only here: doing it on
             // every render would put the caret back to the start on every keystroke.
             this.richSeed = this.richTextValue;
@@ -3509,7 +3542,11 @@ export default class DocGenCanvas extends LightningElement {
         // would fight text selection.
         // Let the textarea own its own clicks — dragging from inside the text would
         // fight text selection and caret placement.
-        if (event.target.classList.contains('dg-cbox-body')) {
+        // The preview is manually rendered, so a table click targets a TD/TH rather
+        // than the body itself. Treat every descendant as part of the preview; a
+        // click in a table cell must select the table, not start moving it.
+        const body = event.currentTarget.querySelector('.dg-cbox-body');
+        if (body && (event.target === body || body.contains(event.target))) {
             this.selectedId = event.currentTarget.dataset.id;
             return;
         }
@@ -3719,6 +3756,7 @@ export default class DocGenCanvas extends LightningElement {
 
     handleShowRich() {
         this.sourceMode = false;
+        this._richEditorBoxId = this.selectedId;
         // Re-seed: the selection has not changed, so the usual re-seed will not fire,
         // and edits just made in the HTML view would otherwise be invisible here — the
         // editor would show what the box held before the source edit and write that
@@ -3875,7 +3913,9 @@ export default class DocGenCanvas extends LightningElement {
 
     handleSourceChange(event) {
         const box = this.selectedBox;
-        if (!box) return;
+        // Source changes are subject to the same stale-event race as rich-text
+        // changes. Never let an editor event mutate a table or a newly selected box.
+        if (!box || box.kind === 'table' || box.id !== this._richEditorBoxId) return;
         // Sanitized like any other authored markup: a paste from a web page must not
         // put an absolutely-positioned div inside an artboard whose whole layout
         // contract is position.
@@ -3923,7 +3963,11 @@ export default class DocGenCanvas extends LightningElement {
 
     handleRichTextChange(event) {
         const box = this.selectedBox;
-        if (!box) {
+        // The rich editor may dispatch its final change after selection has moved.
+        // Resolve ownership from the box that seeded the editor and require that it
+        // is still the selected text box. Without this guard, text typed for a text
+        // box can be committed to the table selected immediately afterwards.
+        if (!box || box.kind === 'table' || box.id !== this._richEditorBoxId) {
             return;
         }
         // Deliberately does NOT touch richSeed — see above.

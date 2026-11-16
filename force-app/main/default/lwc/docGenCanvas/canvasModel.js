@@ -217,15 +217,41 @@ export function symbolMarkup(sym) {
 }
 
 export const FONT_CHOICES = [
-    { label: 'Sans-serif', value: 'sans-serif' },
-    { label: 'Serif', value: 'serif' },
-    { label: 'Monospace', value: 'monospace' },
+    { label: 'Sans-serif', value: 'sans-serif', section: 'Canvas fonts' },
+    { label: 'Serif', value: 'serif', section: 'Canvas fonts' },
+    { label: 'Monospace', value: 'monospace', section: 'Canvas fonts' },
+    {
+        label: 'Helvetica',
+        value: 'standard:helvetica',
+        fontFamily: 'sans-serif',
+        detail: 'PDF standard sans-serif',
+        section: 'Salesforce standard fonts'
+    },
+    {
+        label: 'Times',
+        value: 'standard:times',
+        fontFamily: 'serif',
+        detail: 'PDF standard serif',
+        section: 'Salesforce standard fonts'
+    },
+    {
+        label: 'Courier',
+        value: 'standard:courier',
+        fontFamily: 'monospace',
+        detail: 'PDF standard monospace',
+        section: 'Salesforce standard fonts'
+    },
     // The Unicode face. Embeds and draws symbols, CJK, Greek, Cyrillic and Hebrew that
     // the base-14 fonts cannot — in regular and italic. It has NO bold face in the PDF
     // engine (Blob.toPdf), so font-weight: bold on it silently prints regular; the
     // Bold control is disabled for it (see canRenderBold).
-    { label: 'Arial Unicode (symbols, CJK)', value: "'Arial Unicode MS'" }
+    { label: 'Arial Unicode (symbols, CJK)', value: "'Arial Unicode MS'", section: 'Canvas fonts' }
 ];
+
+/** CSS marker that preserves a friendly standard-font name across save/reload. */
+export function fontChoiceBindingCss(st) {
+    return st?.fontChoiceKey ? ' -pw-font-choice:' + st.fontChoiceKey + ';' : '';
+}
 
 /**
  * Stacking order. Measured to work in this engine (scripts/css-probe-canvas-features),
@@ -1213,8 +1239,8 @@ export function buildCanvasCss(geo, minimal) {
         geo.w +
         'in; }\n' +
         '.dg-artboard_break { page-break-before: always; }\n' +
-        '.dg-pin { position: absolute; }\n' +
-        '.dg-flow { position: relative; }\n' +
+        '.dg-pin { position: absolute; overflow-wrap: anywhere; word-break: break-word; word-wrap: break-word; }\n' +
+        '.dg-flow { position: relative; overflow-wrap: anywhere; word-break: break-word; word-wrap: break-word; }\n' +
         'thead { display: table-header-group; }\n' +
         (minimal
             ? ''
@@ -1278,14 +1304,16 @@ function faceTypography(st, fallbackFont) {
               (st?.font || fallbackFont || DEFAULT_STYLE.font) +
               '; font-weight: ' +
               (st?.bold && canRenderBold(st?.font || fallbackFont) ? 'bold' : 'normal') +
-              ';';
+              ';' +
+              fontChoiceBindingCss(st);
 }
-
 function readFontBinding(style) {
     const key = readCss(style, '-pw-font-face');
-    return key
+    const fontChoiceKey = readCss(style, '-pw-font-choice');
+    return key || fontChoiceKey
         ? {
               fontFaceKey: key,
+              fontChoiceKey,
               font: readCss(style, 'font-family'),
               fontWeight: Number(readCss(style, 'font-weight')),
               fontStyle: readCss(style, 'font-style'),
@@ -1294,7 +1322,6 @@ function readFontBinding(style) {
           }
         : {};
 }
-
 /** Box styling as inline CSS. Only properties the engine honours are emitted. */
 function styleCss(box) {
     const st = { ...DEFAULT_STYLE, ...(box.style || {}) };
@@ -1315,7 +1342,7 @@ function styleCss(box) {
     // disappears completely rather than degrading to a solid colour.
     if (st.fill) css += ' background: ' + st.fill + ';';
     if (st.borderWidth > 0) css += ' border: ' + st.borderWidth + 'pt solid ' + st.borderColor + ';';
-    return css + fontBindingCss(st);
+    return css + fontBindingCss(st) + fontChoiceBindingCss(st);
 }
 
 /** Escapes only what would break the markup — merge tags must survive verbatim. */
@@ -2770,6 +2797,9 @@ function readCss(style, prop) {
 /** Recovers box styling from the serialized inline CSS, falling back per-property. */
 function readStyle(style) {
     const st = { ...DEFAULT_STYLE };
+    const fontChoiceKey = readCss(style, '-pw-font-choice');
+    if (fontChoiceKey) st.fontChoiceKey = fontChoiceKey;
+
     const font = readCss(style, 'font-family');
     if (font) st.font = font;
     const size = readCss(style, 'font-size');

@@ -471,6 +471,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * In that shape, close the header block before injecting rows; otherwise the
      * assembler drops </thead> and Flying Saucer cannot repeat the real headers.
      */
+    @TestVisible
     private static String replaceGiantLoopTableTail(
         String html,
         Integer openIdx,
@@ -705,6 +706,8 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      */
     @TestVisible
     public String resolveParentMergeTags(String html) {
+        // Expand before the guarded field resolver; missing legal content must fail loudly.
+        html = DocGenSnippetService.expand(html);
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Base_Object_API__c' });
             /* code-analyzer-suppress ApexFlsViolation */
@@ -1887,6 +1890,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * This resets Flying Saucer's DOM tree depth without splitting into
      * separate PDF files, keeping the output as one continuous document.
      */
+    @TestVisible
     private static String insertTableBreaks(
         String allRows,
         Integer rowsPerBreak,

@@ -27,7 +27,11 @@ public with sharing class DocGenTemplateLinter {
     // rules over a large imported HTML file can roll back the body save itself.
     // Large files still save and receive the cheap page-setup check; their detailed
     // fidelity report is deferred instead of risking an uncatchable LimitException.
-    private static final Integer MAX_REGEX_LINT_CHARS = 200000;
+    // Keep a wide safety margin below Apex's regex step ceiling. The linter is
+    // advisory only; imported HTML with CSS and many merge tags must still
+    // upload successfully. The regex checks are limited to small HTML inputs
+    // because Apex LimitException cannot be caught by the upload transaction.
+    private static final Integer MAX_REGEX_LINT_CHARS = 10000;
 
     // Tags that resolve without a field on the base object. GROUPNAME only
     // exists inside a {#GroupBy} block; skipping it globally is harmless

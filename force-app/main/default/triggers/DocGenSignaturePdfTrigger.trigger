@@ -80,11 +80,15 @@ trigger DocGenSignaturePdfTrigger on DocGen_Signature_PDF__e(after insert) {
             // Count remaining unsigned signers and detect declines
             Integer remaining = 0;
             DocGen_Signer__c lastSignedSigner = null;
+            DocGen_Signer__c eventSigner = null;
             DocGen_Signer__c nextPendingSigner = null;
             DocGen_Signer__c declinedSigner = null;
             for (DocGen_Signer__c s : req.Signers__r) {
                 if (s.Status__c == 'Signed') {
                     lastSignedSigner = s;
+                    if (String.valueOf(s.Id) == evt.Signer_Id__c) {
+                        eventSigner = s;
+                    }
                 } else if (s.Status__c == 'Declined') {
                     declinedSigner = s;
                 } else if (s.Status__c == 'Pending' && nextPendingSigner == null) {
@@ -121,9 +125,12 @@ trigger DocGenSignaturePdfTrigger on DocGen_Signature_PDF__e(after insert) {
                 }
             } else if (remaining > 0) {
                 // Not all done — send "signer completed" notification
-                if (lastSignedSigner != null) {
+                // Use the signer carried by the event. Parallel signers can finish
+                // out of order, so Sort_Order__c cannot identify who just signed.
+                DocGen_Signer__c completedSigner = eventSigner != null ? eventSigner : lastSignedSigner;
+                if (completedSigner != null) {
                     try {
-                        DocGenSignatureEmailService.sendSignerCompletedNotification(requestId, lastSignedSigner);
+                        DocGenSignatureEmailService.sendSignerCompletedNotification(requestId, completedSigner);
                     } catch (Exception notifEx) {
                         System.debug(LoggingLevel.WARN, 'DocGen: Signer notification failed: ' + notifEx.getMessage());
                     }

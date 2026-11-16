@@ -1,5 +1,15 @@
 A merge tag is a small instruction inside braces. Portwood replaces `{Name}` with a name, repeats a row for `{#Contacts}`, or draws a chart for `{Chart:...}`. You can build a useful document with just fields and a loop; the rest are here when you need them.
 
+#### Salesforce Custom Labels
+
+You can place a Salesforce Custom Label directly in a template:
+
+```text
+{!$Label.Your_Label_Name}
+```
+
+Portwood resolves it when the document is generated and uses the running user's Salesforce language. Subscriber-org labels use the form above; namespaced labels can use `{!$Label.namespace.Label_Name}`.
+
 #### Find the tags for your own Salesforce data
 
 1. Open your template and its **Data** or query-builder controls.
