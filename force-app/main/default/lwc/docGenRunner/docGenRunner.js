@@ -15,6 +15,7 @@ import generateDocumentGiantQuery from '@salesforce/apex/DocGenController.genera
 import getGiantQueryJobStatus from '@salesforce/apex/DocGenController.getGiantQueryJobStatus';
 import getGiantQueryFragments from '@salesforce/apex/DocGenController.getGiantQueryFragments';
 import generateDocumentPartsGiantQuery from '@salesforce/apex/DocGenController.generateDocumentPartsGiantQuery';
+import generateDocumentPartsGiantQueryMulti from '@salesforce/apex/DocGenController.generateDocumentPartsGiantQueryMulti';
 import cleanupGiantQueryFragments from '@salesforce/apex/DocGenController.cleanupGiantQueryFragments';
 import getChildRecordPage from '@salesforce/apex/DocGenController.getChildRecordPage';
 import scoutChildCounts from '@salesforce/apex/DocGenController.scoutChildCounts';
@@ -37,10 +38,12 @@ import {
     isStyleSupported,
     prepareChartsClientSide
 } from 'c/docGenChartJs';
-import { buildDocx } from './docGenZipWriter';
+import { buildCompressedDocx, buildDocx } from './docGenZipWriter';
+import { generateStaticWord } from 'c/docGenNativeWord';
 import { mergePdfs } from './docGenPdfMerger';
 import { extractFirstImageFromPdfBase64 } from './docGenPdfImageExtractor';
 import renderImageAsPdfBase64 from '@salesforce/apex/DocGenController.renderImageAsPdfBase64';
+import USER_TIME_ZONE from '@salesforce/i18n/timeZone';
 import OUT_FMT_FIELD from '@salesforce/schema/DocGen_Template__c.Output_Format__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
 import IS_DEFAULT_FIELD from '@salesforce/schema/DocGen_Template__c.Is_Default__c';
@@ -74,6 +77,34 @@ const OFFICE_MIME_BY_EXT = {
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12'
 };
+
+const numericDateFormat = /^(?:yyyy|yy|MM|M|dd|d|[./\s-])+$/;
+const isoSalesforceDate = /^(\d{4})-(\d{2})-(\d{2})(?:$|T\d{2}:\d{2}:\d{2})/;
+const dateInUserTimeZone = new Intl.DateTimeFormat('en-US', {
+    timeZone: USER_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+});
+
+function formatGiantDocxDate(value, format) {
+    if (typeof value !== 'string' || !format || !numericDateFormat.test(format) || !/[yMd]/.test(format)) {
+        return value;
+    }
+    const date = isoSalesforceDate.exec(value);
+    if (!date) return value;
+    let [, year, month, day] = date;
+    if (value.length > 10) {
+        const instant = new Date(value);
+        if (Number.isNaN(instant.getTime())) return value;
+        const parts = dateInUserTimeZone.formatToParts(instant);
+        year = parts.find((part) => part.type === 'year').value.padStart(4, '0');
+        month = parts.find((part) => part.type === 'month').value;
+        day = parts.find((part) => part.type === 'day').value;
+    }
+    const tokens = { yyyy: year, yy: year.slice(-2), MM: month, M: Number(month), dd: day, d: Number(day) };
+    return format.replace(/yyyy|yy|MM|M|dd|d/g, (token) => tokens[token]);
+}
 
 export default class DocGenRunner extends NavigationMixin(LightningElement) {
     // Exposed to the template as {label.X}. Custom Labels resolve to the
@@ -891,23 +922,24 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             // Heap-aware routing (v1.54.0+): server estimates peak sync-path heap per
             // relationship and flags useGiantPath[rel]=true if the estimate exceeds
             // the safe ratio of the 6MB sync heap limit. No hardcoded record threshold.
-            const giantRel = Object.entries(counts).find(([rel]) => useGiantPath[rel]);
-            if (giantRel) {
+            const giantRelationships = Object.keys(counts).filter((rel) => useGiantPath[rel]);
+            const [giantRelationship] = giantRelationships;
+            if (giantRelationship) {
                 this.isGiantQueryMode = true;
                 this.outputMode = 'download';
                 const isPdf = this.templateOutputFormat === 'PDF';
                 if (isPdf) {
-                    await this._assembleGiantQueryPdf(giantRel[0], counts, childNodes[giantRel[0]]);
+                    await this._assembleGiantQueryPdf(giantRelationship, counts, childNodes[giantRelationship]);
                     return;
                 }
                 if (isWord) {
-                    await this._assembleGiantQueryDocxClientSide(giantRel[0], counts, childNodes[giantRel[0]]);
+                    await this._assembleGiantQueryDocxClientSide(giantRelationships, counts, childNodes);
                     return;
                 }
                 this.isLoading = false;
                 this.loadingMessage = '';
                 this.error =
-                    `This record has ${giantRel[1].toLocaleString()} ${giantRel[0]} records — ` +
+                    `This record has ${counts[giantRelationship].toLocaleString()} ${giantRelationship} records — ` +
                     'too large for sync PowerPoint/Excel output. Please generate as DOCX (Word) or PDF.';
                 return;
             }
@@ -1741,122 +1773,111 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
     }
 
     /**
-     * Pure client-side Giant Query DOCX assembly.
-     * No server-side batch, no fragment CVs — queries child records page by page
-     * via getChildRecordPage (2,000 rows per call), renders XML in JS, builds DOCX.
+     * Fetches each Giant Query dataset in pages and expands its Word loops in the browser.
      */
-    async _assembleGiantQueryDocxClientSide(giantRelationship, childCounts, serverChildNode) {
+    async _assembleGiantQueryDocxClientSide(giantRelationships, childCounts, childNodes) {
         this.isLoading = true;
         this.error = null;
         try {
-            const totalRecords = childCounts ? childCounts[giantRelationship] || 0 : 0;
-
-            // 1. Get template shell with placeholder
             this.loadingMessage = 'Preparing template...';
-            const parts = await generateDocumentPartsGiantQuery({
-                templateId: this.selectedTemplateId,
-                recordId: this.recordId,
-                giantRelationshipName: giantRelationship
-            });
-            if (!parts || !parts.allXmlParts) {
+            const [firstRelationship] = giantRelationships;
+            const isMulti = giantRelationships.length > 1;
+            const request = { templateId: this.selectedTemplateId, recordId: this.recordId };
+            const parts = isMulti
+                ? await generateDocumentPartsGiantQueryMulti({ ...request, giantRelationshipNames: giantRelationships })
+                : await generateDocumentPartsGiantQuery({ ...request, giantRelationshipName: firstRelationship });
+            const docXmlKey = 'word/document.xml';
+            const shell = parts?.allXmlParts?.[docXmlKey];
+            if (!shell) {
                 throw new Error('Template parts generation returned empty result.');
             }
 
-            const docTitle = parts.title || 'Document';
-            const placeholder = parts.placeholder || '<!--DOCGEN_GIANT_LOOP_PLACEHOLDER-->';
-
-            // 2. Use server-resolved child node metadata (works for V1, V2, V3)
-            if (!serverChildNode) {
-                throw new Error('Could not find child node configuration for ' + giantRelationship);
+            const slots = isMulti
+                ? parts.slots
+                : [
+                      {
+                          queryKey: firstRelationship,
+                          marker: parts.placeholder || '<!--DOCGEN_GIANT_LOOP_PLACEHOLDER-->',
+                          innerXml: parts.giantLoopBodyXml
+                      }
+                  ];
+            const giantQueries = new Set(giantRelationships);
+            const slotsByQuery = new Map();
+            if (!Array.isArray(slots) || !slots.length) {
+                throw new Error('The template did not return Giant Query loops.');
+            }
+            const markers = new Set();
+            const placements = slots
+                .map(({ queryKey, marker, innerXml }) => {
+                    const position = marker ? shell.indexOf(marker) : -1;
+                    if (
+                        !giantQueries.has(queryKey) ||
+                        !innerXml ||
+                        position === -1 ||
+                        markers.has(marker) ||
+                        shell.indexOf(marker, position + marker.length) !== -1
+                    ) {
+                        throw new Error('Could not place the Giant Query loop for ' + queryKey + '.');
+                    }
+                    markers.add(marker);
+                    const placement = { position, marker, innerXml, rows: [] };
+                    if (!slotsByQuery.has(queryKey)) slotsByQuery.set(queryKey, []);
+                    const slotGroup = slotsByQuery.get(queryKey);
+                    slotGroup.push(placement);
+                    return placement;
+                })
+                .sort((a, b) => a.position - b.position);
+            const totalRows = new Map();
+            let totalExpected = 0;
+            for (const relationship of slotsByQuery.keys()) {
+                const childNode = childNodes[relationship];
+                if (!childNode) {
+                    throw new Error('Could not find a Giant Query child configuration for ' + relationship + '.');
+                }
+                const limit = Number(childNode.limit);
+                const count = childCounts[relationship] || 0;
+                const expected = Number.isInteger(limit) && limit > 0 ? Math.min(count, limit) : count;
+                totalRows.set(relationship, expected);
+                totalExpected += expected;
             }
 
-            const childObject = serverChildNode.object;
-            const lookupField = serverChildNode.lookupField;
-            const childFields = serverChildNode.fields || [];
-            const parentFields = serverChildNode.parentFields || [];
-            const allFields = ['Id', ...childFields.filter((f) => f !== 'Id'), ...parentFields].join(', ');
-
-            // 3. Get the loop body XML from the template (extracted by generateDocumentPartsGiantQuery)
-            const innerXml = parts.giantLoopBodyXml || '';
-            if (!innerXml) {
-                throw new Error('Could not extract loop body XML from template for ' + giantRelationship);
-            }
-
-            // 4. Page through child records and render XML client-side
-            const orderBy = serverChildNode.orderBy || '';
-            const whereClause = serverChildNode.where || '';
-            let allRenderedXml = '';
             let fetched = 0;
-            const pageSize = 500;
-
-            if (orderBy) {
-                // Sorted path: pre-query all IDs in sort order, then fetch by chunk
-                this.loadingMessage = 'Sorting records...';
-                const sortedIds = await getSortedChildIds({
-                    childObject,
-                    lookupField,
-                    parentId: this.recordId,
-                    orderByClause: orderBy,
-                    whereClause: whereClause || null
-                });
-
-                for (let i = 0; i < sortedIds.length; i += pageSize) {
-                    const chunk = sortedIds.slice(i, i + pageSize);
-                    this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalRecords.toLocaleString()})...`;
-
-                    // eslint-disable-next-line no-await-in-loop
-                    const records = await getChildRecordsByIds({
-                        childObject,
-                        fields: allFields,
-                        recordIds: chunk
-                    });
-
-                    fetched += records.length;
-                    this._renderGiantDocxRows(records, innerXml, childFields, parentFields, (xml) => {
-                        allRenderedXml += xml;
-                    });
-
-                    this.progressPercent = Math.round((fetched / totalRecords) * 80);
-                }
-            } else {
-                // Unsorted cursor path (original behavior)
-                let lastCursorId = null;
-                let hasMore = true;
-
-                while (hasMore) {
-                    this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalRecords.toLocaleString()})...`;
-
-                    // eslint-disable-next-line no-await-in-loop
-                    const page = await getChildRecordPage({
-                        childObject,
-                        lookupField,
-                        parentId: this.recordId,
-                        lastCursorId,
-                        fields: allFields,
-                        pageSize
-                    });
-
-                    const records = page.records || [];
-                    lastCursorId = page.lastId;
-                    hasMore = page.hasMore;
-                    fetched += records.length;
-
-                    this._renderGiantDocxRows(records, innerXml, childFields, parentFields, (xml) => {
-                        allRenderedXml += xml;
-                    });
-
-                    this.progressPercent = Math.round((fetched / totalRecords) * 80);
-                }
+            this.progressPercent = 0;
+            this.showProgressBar = true;
+            for (const [relationship, slotGroup] of slotsByQuery) {
+                const expected = totalRows.get(relationship);
+                // eslint-disable-next-line no-await-in-loop
+                await this._loadGiantDocxRows(
+                    childNodes[relationship],
+                    isMulti ? expected : null,
+                    (records, fields, parentFields) => {
+                        for (const placement of slotGroup) {
+                            const page = [];
+                            this._renderGiantDocxRows(records, placement.innerXml, fields, parentFields, (row) => {
+                                page.push(row);
+                            });
+                            placement.rows.push(page.join(''));
+                        }
+                        fetched += records.length;
+                        this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalExpected.toLocaleString()})...`;
+                        this.progressPercent = totalExpected
+                            ? Math.min(80, Math.round((fetched / totalExpected) * 80))
+                            : 80;
+                    }
+                );
             }
 
-            this.loadingMessage = `Loaded ${fetched.toLocaleString()} records. Building document...`;
-
-            // 5. Inject rendered XML into template at placeholder
-            const docXmlKey = 'word/document.xml';
-            if (parts.allXmlParts[docXmlKey]) {
-                parts.allXmlParts[docXmlKey] = parts.allXmlParts[docXmlKey].replace(placeholder, allRenderedXml);
+            const documentParts = [];
+            let position = 0;
+            for (const placement of placements) {
+                documentParts.push(shell.slice(position, placement.position), ...placement.rows);
+                position = placement.position + placement.marker.length;
+                placement.rows.length = 0;
             }
-            allRenderedXml = null; // free memory
+            documentParts.push(shell.slice(position));
+            parts.allXmlParts[docXmlKey] = documentParts.join('');
+            documentParts.length = 0;
+            const docTitle = parts.title || 'Document';
 
             // 6. Fetch images
             this.loadingMessage = 'Fetching images...';
@@ -1906,17 +1927,16 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 }
             }
 
-            // 7. Build DOCX ZIP
             this.loadingMessage = 'Building DOCX...';
-            const fileBytes = buildDocx(parts.allXmlParts, allImages);
+            const fileBytes = isMulti
+                ? await buildCompressedDocx(parts.allXmlParts, allImages)
+                : buildDocx(parts.allXmlParts, allImages);
             const fileBase64 = this._uint8ArrayToBase64(fileBytes);
-
-            // 8. Giant Query always downloads — file size exceeds Aura 4MB payload limit
-            const fileSizeMB = ((fileBase64.length * 0.75) / 1048576).toFixed(1);
-            this.downloadBase64(fileBase64, docTitle + '.docx', 'application/octet-stream');
+            const fileSizeMB = (fileBytes.length / 1048576).toFixed(1);
+            this.downloadBase64(fileBase64, docTitle + '.docx', OFFICE_MIME_BY_EXT.docx);
             this.showToast(
                 'Success',
-                `DOCX downloaded (${fileSizeMB}MB) — ${fetched.toLocaleString()} ${giantRelationship} rows.`,
+                `DOCX downloaded (${fileSizeMB}MB) — ${fetched.toLocaleString()} rows.`,
                 'success'
             );
         } catch (e) {
@@ -1925,63 +1945,95 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             this.isLoading = false;
             this.loadingMessage = '';
             this.isGiantQueryMode = false;
+            this.showProgressBar = false;
+            this.progressPercent = 0;
         }
     }
 
-    /**
-     * Giant Query PDF: launches server batch that renders XML fragments, then
-     * assembles into a single PDF server-side via Blob.toPdf() in finish().
-     * Client just polls, fetches the final PDF, and downloads.
-     * @param {string} giantRelationship - The child relationship name
-     * @param {Object} childCounts - Map of relationship name to record count
-     * @param {Object} childNodeConfig - Child node config from scout
-     */
+    async _loadGiantDocxRows(node, expected, renderPage) {
+        const { object: childObject, lookupField } = node;
+        const fields = node.fields || [];
+        const parentFields = node.parentFields || [];
+        const allFields = [...new Set(['Id', ...fields, ...parentFields])].join(', ');
+        const parentId = this.recordId;
+        const pageSize = 500;
+        const configuredLimit = Number(node.limit);
+        const maxRows = Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : Infinity;
+        let loaded = 0;
+        if (node.orderBy || node.where) {
+            this.loadingMessage = 'Sorting records...';
+            const sortedIds = await getSortedChildIds({
+                childObject,
+                lookupField,
+                parentId,
+                orderByClause: node.orderBy || 'Id ASC',
+                whereClause: node.where || null
+            });
+            for (let i = 0; i < Math.min(sortedIds.length, maxRows); i += pageSize) {
+                const recordIds = sortedIds.slice(i, Math.min(i + pageSize, maxRows));
+                // eslint-disable-next-line no-await-in-loop
+                const records = await getChildRecordsByIds({ childObject, fields: allFields, recordIds });
+                loaded += records.length;
+                renderPage(records, fields, parentFields);
+            }
+        } else {
+            let lastCursorId = null;
+            let hasMore = true;
+            while (hasMore && loaded < maxRows) {
+                // eslint-disable-next-line no-await-in-loop
+                const page = await getChildRecordPage({
+                    childObject,
+                    lookupField,
+                    parentId,
+                    lastCursorId,
+                    fields: allFields,
+                    pageSize: Math.min(pageSize, maxRows - loaded)
+                });
+                const records = page.records || [];
+                hasMore = page.hasMore;
+                if (hasMore && (!page.lastId || page.lastId === lastCursorId)) {
+                    throw new Error('The Giant Query row cursor stopped advancing.');
+                }
+                lastCursorId = page.lastId;
+                loaded += records.length;
+                renderPage(records, fields, parentFields);
+            }
+        }
+        if (expected !== null && loaded !== expected) {
+            throw new Error(
+                `Giant Query expected ${expected.toLocaleString()} rows and retrieved ${loaded.toLocaleString()}.`
+            );
+        }
+    }
+
     /**
      * Renders DOCX XML rows for a batch of records. Used by both sorted and
      * cursor-based Giant Query DOCX assembly paths.
      */
     _renderGiantDocxRows(records, innerXml, childFields, parentFields, appendFn) {
+        const configuredFields = new Set([...childFields, ...parentFields]);
+        const tags = /\{([*]|%(?:QR:|BARCODE:)?)?(\w[\w.]*?)(?::([^}]+))?\}/g;
         for (const rec of records) {
-            let rowXml = innerXml;
-            for (const field of [...childFields, ...parentFields]) {
-                let value = '';
-                if (field.includes('.')) {
-                    const fieldParts = field.split('.');
-                    let current = rec;
-                    for (let i = 0; i < fieldParts.length && current; i++) {
-                        current = current[fieldParts[i]];
+            appendFn(
+                innerXml.replace(tags, (match, prefix, fieldName, format) => {
+                    if (prefix && (format || !configuredFields.has(fieldName))) return match;
+                    let value = rec;
+                    for (const part of fieldName.split('.')) {
+                        value = value?.[part];
                     }
-                    value = current != null ? String(current) : '';
-                } else {
-                    value = rec[field] != null ? String(rec[field]) : '';
-                }
-                const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                rowXml = rowXml.split('{' + field + '}').join(escaped);
-                rowXml = rowXml.split('{*' + field + '}').join(escaped);
-                rowXml = rowXml.split('{%QR:' + field + '}').join(escaped);
-                rowXml = rowXml.split('{%BARCODE:' + field + '}').join(escaped);
-                rowXml = rowXml.split('{%' + field + '}').join(escaped);
-            }
-            rowXml = rowXml.replace(/\{(\w[\w.]*?)(?::([^}]+))?\}/g, (match, fieldName, format) => {
-                let val = rec[fieldName];
-                if (fieldName.includes('.')) {
-                    const parts = fieldName.split('.');
-                    let cur = rec;
-                    for (let i = 0; i < parts.length && cur; i++) {
-                        cur = cur[parts[i]];
+                    if (value == null) return '';
+                    if (format === 'currency' && typeof value === 'number') {
+                        return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
                     }
-                    val = cur;
-                }
-                if (val == null) return '';
-                if (format === 'currency' && typeof val === 'number') {
-                    return val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                }
-                if (format === 'number' && typeof val === 'number') {
-                    return val.toLocaleString();
-                }
-                return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            });
-            appendFn(rowXml);
+                    if (format === 'number' && typeof value === 'number') {
+                        return value.toLocaleString();
+                    }
+                    return String(formatGiantDocxDate(value, format))
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                })
+            );
         }
     }
 
@@ -2128,11 +2180,13 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
     }
 
     _uint8ArrayToBase64(bytes) {
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        const chunks = [];
+        // Keep intermediate strings small and pad only the final Base64 chunk.
+        const chunkSize = 24 * 1024;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            chunks.push(btoa(String.fromCharCode(...bytes.subarray(i, i + chunkSize))));
         }
-        return btoa(binary);
+        return chunks.join('');
     }
 
     /**

@@ -1,5 +1,5 @@
 /**
- * Pure JavaScript ZIP reader + writer (store mode — no compression).
+ * ZIP reader and writer for client-side Office assembly.
  * No external dependencies. Produces valid DOCX/ZIP archives.
  *
  * Public API:
@@ -111,29 +111,31 @@ function readZipEntries(arrayBuffer) {
 // ZIP Writer — build a new ZIP from entries
 // ---------------------------------------------------------------------------
 
-function buildLocalEntry(nameBytes, fileBytes) {
+function buildLocalEntry(nameBytes, fileBytes, compressedBytes) {
     const crc = crc32(fileBytes);
     const size = fileBytes.length;
+    const payload = compressedBytes || fileBytes;
+    const method = compressedBytes ? 8 : 0;
     const header = new Uint8Array(30 + nameBytes.length);
     const view = new DataView(header.buffer);
 
     writeUint32LE(view, 0, 0x04034b50);
     writeUint16LE(view, 4, ZIP_VERSION_NEEDED);
     writeUint16LE(view, 6, 0);
-    writeUint16LE(view, 8, 0); // STORE
+    writeUint16LE(view, 8, method);
     writeUint16LE(view, 10, ZIP_DOS_TIME_MIDNIGHT);
     writeUint16LE(view, 12, ZIP_DOS_DATE_1980_01_01);
     writeUint32LE(view, 14, crc);
-    writeUint32LE(view, 18, size);
+    writeUint32LE(view, 18, payload.length);
     writeUint32LE(view, 22, size);
     writeUint16LE(view, 26, nameBytes.length);
     writeUint16LE(view, 28, 0);
     header.set(nameBytes, 30);
 
-    return { bytes: concat([header, fileBytes]), crc, size };
+    return { bytes: concat([header, payload]), crc, size, compressedSize: payload.length, method };
 }
 
-function buildCentralEntry(nameBytes, crc, size, localOffset) {
+function buildCentralEntry(nameBytes, { crc, size, compressedSize, method }, localOffset) {
     const entry = new Uint8Array(46 + nameBytes.length);
     const view = new DataView(entry.buffer);
 
@@ -141,11 +143,11 @@ function buildCentralEntry(nameBytes, crc, size, localOffset) {
     writeUint16LE(view, 4, ZIP_VERSION_MADE_BY_UNIX);
     writeUint16LE(view, 6, ZIP_VERSION_NEEDED);
     writeUint16LE(view, 8, 0);
-    writeUint16LE(view, 10, 0);
+    writeUint16LE(view, 10, method);
     writeUint16LE(view, 12, ZIP_DOS_TIME_MIDNIGHT);
     writeUint16LE(view, 14, ZIP_DOS_DATE_1980_01_01);
     writeUint32LE(view, 16, crc);
-    writeUint32LE(view, 20, size);
+    writeUint32LE(view, 20, compressedSize);
     writeUint32LE(view, 24, size);
     writeUint16LE(view, 28, nameBytes.length);
     writeUint16LE(view, 30, 0);
@@ -226,9 +228,27 @@ function orderedZipEntries(entries) {
  * @returns {Uint8Array} ZIP archive bytes
  */
 export function buildDocx(xmlParts, mediaParts) {
-    const localEntries = [];
-    const centralEntries = [];
-    let offset = 0;
+    return writeZip(officeEntries(xmlParts, mediaParts));
+}
+
+/** Compress the very large document part of a giant query before download. */
+export async function buildCompressedDocx(xmlParts, mediaParts) {
+    const entries = officeEntries(xmlParts, mediaParts);
+    const documentBytes = entries.get('word/document.xml');
+    if (!documentBytes || typeof CompressionStream !== 'function') {
+        return writeZip(entries);
+    }
+
+    const input = new Blob([documentBytes], { type: 'text/plain' });
+    const stream = input.stream().pipeThrough(new CompressionStream('deflate'));
+    const wrapped = new Uint8Array(await new Response(stream).arrayBuffer());
+    // ZIP requires raw DEFLATE. The web API's zlib format adds a two-byte
+    // header and a four-byte Adler-32 checksum around the DEFLATE bytes.
+    const deflated = wrapped.subarray(2, wrapped.length - 4);
+    return writeZip(entries, deflated.length < documentBytes.length ? deflated : null);
+}
+
+function officeEntries(xmlParts, mediaParts) {
     const allEntries = new Map();
 
     // XML files (text → UTF-8 bytes)
@@ -245,13 +265,19 @@ export function buildDocx(xmlParts, mediaParts) {
         }
         allEntries.set(path, fileBytes);
     }
+    return allEntries;
+}
 
-    for (const [path, fileBytes] of orderedZipEntries(allEntries)) {
+function writeZip(entries, deflatedDocument) {
+    const localEntries = [];
+    const centralEntries = [];
+    let offset = 0;
+    for (const [path, fileBytes] of orderedZipEntries(entries)) {
         const nameBytes = utf8Bytes(path);
-        const { bytes, crc, size } = buildLocalEntry(nameBytes, fileBytes);
-        centralEntries.push(buildCentralEntry(nameBytes, crc, size, offset));
-        localEntries.push(bytes);
-        offset += bytes.length;
+        const local = buildLocalEntry(nameBytes, fileBytes, path === 'word/document.xml' ? deflatedDocument : null);
+        centralEntries.push(buildCentralEntry(nameBytes, local, offset));
+        localEntries.push(local.bytes);
+        offset += local.bytes.length;
     }
 
     const centralDir = concat(centralEntries);
@@ -283,21 +309,5 @@ export function buildDocxFromShell(shellArrayBuffer, xmlOverrides, mediaEntries)
         }
     }
 
-    // 3. Build the ZIP
-    const localEntries = [];
-    const centralEntries = [];
-    let offset = 0;
-
-    for (const [path, fileBytes] of orderedZipEntries(allEntries)) {
-        const nameBytes = utf8Bytes(path);
-        const { bytes, crc, size } = buildLocalEntry(nameBytes, fileBytes);
-        centralEntries.push(buildCentralEntry(nameBytes, crc, size, offset));
-        localEntries.push(bytes);
-        offset += bytes.length;
-    }
-
-    const centralDir = concat(centralEntries);
-    const eocd = buildEOCD(localEntries.length, centralDir.length, offset);
-
-    return concat([...localEntries, centralDir, eocd]);
+    return writeZip(allEntries);
 }
