@@ -46,6 +46,14 @@ Set **Giant Query Row Threshold** or **Giant Query Page Size** on the template r
 
 Save the Word template so Portwood has its PDF snapshot. Put large child loops in the document body. Direct child loops in V3 or flat SOQL are supported by the Runner. HTML email content is subject to the PDF renderer's existing resource rules.
 
+### Images in Word and PDF
+
+- Embedded Word images, including header and footer logos, are carried in the saved PDF snapshot.
+- For a PDF image outside a child loop, use a field that contains an accessible Salesforce File ID or approved File download URL, for example `{%Logo_File__c:120x}`. Blank or unreadable files produce an image-unavailable marker. This applies to PNG, JPEG, GIF, and BMP files up to 5,000,000 bytes.
+- A Giant Query email PDF can print an inline `cid:` image when it identifies the File ID or uniquely matches the filename of a Salesforce File linked to that email. The linked image must be readable, stored in Salesforce, and no larger than 2 MiB. Inbound email image tags with unmatched CIDs, external URLs, or base64 data use their alt text when present. Other prohibited HTML resources remain subject to the asset policy.
+- In native Giant Query Word rows, `{%Image_Field__c:120x}` reads an accessible Salesforce File ID or relative File download URL. Each image can be up to 1 MiB, with a 20 MiB total budget for distinct dynamic images. References to the same File version share an embedded copy. Plain text line breaks carry into Word.
+- Native Giant Query Word output preserves embedded template media and binary document parts such as the Word thumbnail.
+
 ## Reproduce the measurement
 
 Use a scratch org with the PR source deployed, an authenticated Salesforce CLI, Node.js, and Poppler (`pdfinfo` and `pdftotext`). Create a synthetic Account in that org and generate a CSV of its Contacts. Put its ID in `GQ540_ACCOUNT_ID`.

@@ -6,6 +6,8 @@
 public with sharing class DocGenGiantQueryPlan {
     private static final String MARKER_PREFIX = '<!--docgen-giant-slot-';
     private static final String MARKER_SUFFIX = '-->';
+    private static final String WORD_PARAGRAPH_START = '<w:p';
+    private static final String WORD_PARAGRAPH_END = '</w:p>';
 
     public class Slot {
         public final Integer ordinal;
@@ -67,6 +69,7 @@ public with sharing class DocGenGiantQueryPlan {
             throw new DocGenException('Template already contains a reserved giant query slot marker.');
         }
 
+        Boolean wordDocument = normalized.contains('<w:body');
         List<OpenTag> stack = new List<OpenTag>();
         List<String> shellParts = new List<String>();
         Integer writtenThrough = 0;
@@ -117,7 +120,7 @@ public with sharing class DocGenGiantQueryPlan {
                 nestedQueryKeys.add(open.closingKey);
                 continue;
             }
-            Slot slot = buildSlot(normalized, open, brace, nextOffset, slots.size(), wordSnapshot);
+            Slot slot = buildSlot(normalized, open, brace, nextOffset, slots.size(), wordSnapshot, wordDocument);
             if (slot.startOffset < writtenThrough) {
                 throw new DocGenException('Giant query loop placements overlap in the template.');
             }
@@ -178,18 +181,26 @@ public with sharing class DocGenGiantQueryPlan {
         Integer closeStart,
         Integer closeEnd,
         Integer ordinal,
-        Boolean wordSnapshot
+        Boolean wordSnapshot,
+        Boolean wordDocument
     ) {
         List<Integer> bounds = DocGenService.giantQueryLoopContainer(xml, open.startOffset, closeEnd);
         Integer start = bounds[0];
         Integer finish = bounds[1];
-        if (wordSnapshot == true && start == open.startOffset) {
-            List<Integer> firstBlock = wordBlockAt(xml, open.startOffset, open.endOffset);
-            List<Integer> lastBlock = wordBlockAt(xml, closeStart, closeEnd);
-            if (firstBlock != null && lastBlock != null) {
+        if ((wordSnapshot == true || wordDocument) && start == open.startOffset) {
+            List<String> blockTags = wordDocument
+                ? new List<String>{ 'w:p' }
+                : new List<String>{ 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' };
+            List<Integer> firstBlock = wordBlockAt(xml, open.startOffset, open.endOffset, blockTags);
+            List<Integer> lastBlock = wordBlockAt(xml, closeStart, closeEnd, blockTags);
+            if (
+                firstBlock != null &&
+                lastBlock != null &&
+                (!wordDocument || spansSiblingWordParagraphs(xml, firstBlock, lastBlock))
+            ) {
                 String prefix = xml.substring(firstBlock[0], open.startOffset);
                 String suffix = xml.substring(closeEnd, lastBlock[1]);
-                if (onlyWordBlockWrappers(prefix) && onlyWordBlockWrappers(suffix)) {
+                if (onlyWordBlockWrappers(prefix, wordDocument) && onlyWordBlockWrappers(suffix, wordDocument)) {
                     start = firstBlock[0];
                     finish = lastBlock[1];
                     if (start == lastBlock[0]) {
@@ -206,11 +217,11 @@ public with sharing class DocGenGiantQueryPlan {
                     // neither inherit a neighboring style nor add blank lines.
                     Integer contentStart = open.endOffset;
                     Integer contentFinish = closeStart;
-                    if (onlyWordBlockWrappers(xml.substring(contentStart, firstBlock[1]))) {
+                    if (onlyWordBlockWrappers(xml.substring(contentStart, firstBlock[1]), wordDocument)) {
                         prefix = '';
                         contentStart = firstBlock[1];
                     }
-                    if (onlyWordBlockWrappers(xml.substring(lastBlock[0], contentFinish))) {
+                    if (onlyWordBlockWrappers(xml.substring(lastBlock[0], contentFinish), wordDocument)) {
                         suffix = '';
                         contentFinish = lastBlock[0];
                     }
@@ -237,33 +248,63 @@ public with sharing class DocGenGiantQueryPlan {
         return new Slot(ordinal, open.closingKey, innerXml, start, finish);
     }
 
-    private static List<Integer> wordBlockAt(String html, Integer markerStart, Integer markerEnd) {
+    private static List<Integer> wordBlockAt(String xml, Integer markerStart, Integer markerEnd, List<String> tags) {
         List<Integer> nearest;
-        for (String tag : new List<String>{ 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' }) {
+        for (String tag : tags) {
             String openTag = '<' + tag;
-            Integer start = html.lastIndexOf(openTag, markerStart);
+            Integer start = xml.lastIndexOf(openTag, markerStart);
             while (start >= 0 && (nearest == null || start > nearest[0])) {
                 Integer tagEnd = start + openTag.length();
-                if ('>'.equals(html.substring(tagEnd, tagEnd + 1)) || skipWhitespace(html, tagEnd) > tagEnd) {
+                if ('>'.equals(xml.substring(tagEnd, tagEnd + 1)) || skipWhitespace(xml, tagEnd) > tagEnd) {
                     String closeTag = '</' + tag + '>';
-                    Integer endIndex = html.indexOf(closeTag, tagEnd);
+                    Integer endIndex = xml.indexOf(closeTag, tagEnd);
                     if (endIndex >= markerEnd) {
                         nearest = new List<Integer>{ start, endIndex + closeTag.length() };
                     }
                     break;
                 }
-                start = start > 0 ? html.lastIndexOf(openTag, start - 1) : -1;
+                start = start > 0 ? xml.lastIndexOf(openTag, start - 1) : -1;
             }
         }
         return nearest;
     }
 
-    private static Boolean onlyWordBlockWrappers(String html) {
+    private static Boolean spansSiblingWordParagraphs(String xml, List<Integer> first, List<Integer> last) {
+        // Keep inline loops inline and leave section breaks in their original placement.
+        Integer sectionAt = xml.indexOf('<w:sectPr', first[0]);
+        if (first[0] >= last[0] || (sectionAt != -1 && sectionAt < last[1])) {
+            return false;
+        }
+        Integer next = skipWhitespace(xml, first[1]);
+        while (next < last[0]) {
+            Integer nameEnd = next + WORD_PARAGRAPH_START.length();
+            if (
+                xml.indexOf(WORD_PARAGRAPH_START, next) != next ||
+                (!'>'.equals(xml.substring(nameEnd, nameEnd + 1)) && skipWhitespace(xml, nameEnd) == nameEnd)
+            ) {
+                return false;
+            }
+            Integer paragraphEnd = xml.indexOf(WORD_PARAGRAPH_END, nameEnd);
+            if (paragraphEnd == -1 || paragraphEnd >= last[0]) {
+                return false;
+            }
+            next = skipWhitespace(xml, paragraphEnd + WORD_PARAGRAPH_END.length());
+        }
+        return next == last[0];
+    }
+
+    private static Boolean onlyWordBlockWrappers(String xml, Boolean wordDocument) {
         // An image or other non-text element may share this marker's block.
         // Consume only renderer formatting wrappers, never arbitrary markup.
+        if (wordDocument) {
+            return String.isBlank(
+                xml.replaceAll('<w:(?:pPr|rPr)(?:\\s[^>]*)?/>', '')
+                    .replaceAll('(?s)<w:(pPr|rPr)(?:\\s[^>]*)?>.*?</w:\\1>', '')
+                    .replaceAll('</?w:(?:p|r|t)(?:\\s[^>]*)?>', '')
+            );
+        }
         return String.isBlank(
-            html.replaceAll('(?i)</?(?:p|h[1-6]|span|b|strong|i|em|u|s|sup|sub)(?:\\s[^>]*)?>', '')
-                .replace('&nbsp;', '')
+            xml.replaceAll('(?i)</?(?:p|h[1-6]|span|b|strong|i|em|u|s|sup|sub)(?:\\s[^>]*)?>', '').replace('&nbsp;', '')
         );
     }
 

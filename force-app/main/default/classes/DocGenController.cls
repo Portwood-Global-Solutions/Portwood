@@ -813,6 +813,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         return EncodingUtil.base64Encode(cv.VersionData);
     }
 
+    /** Fetches one bounded, user-readable Salesforce image for native Giant Query Word output. */
+    @AuraEnabled
+    public static Map<String, Object> getGiantDocxImage(Id fileId) {
+        return DocGenGiantMedia.readWordImage(fileId);
+    }
+
     @AuraEnabled
     public static Id getLatestContentVersionId(Id contentDocumentId) {
         if (contentDocumentId == null) {

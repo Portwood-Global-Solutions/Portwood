@@ -109,6 +109,14 @@ public with sharing class DocGenGiantQueryMulti {
             if (rows.size() != count) {
                 throw new DocGenException('Giant Query cursor returned an incomplete page: ' + nextPage);
             }
+            if ('EmailMessage'.equalsIgnoreCase((String) dataset.childNode.get('object'))) {
+                for (String fieldName : dataset.fields) {
+                    if ('HtmlBody'.equalsIgnoreCase(fieldName)) {
+                        DocGenEmailInlineImages.prepare(rows);
+                        break;
+                    }
+                }
+            }
 
             List<ContentVersion> fragments = new List<ContentVersion>();
             for (DocGenGiantQueryPlan.Slot slot : dataset.slots) {

@@ -941,7 +941,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     @TestVisible
     private String resolveParentMergeTags(String html) {
         // Expand before the guarded field resolver; missing legal content must fail loudly.
-        html = DocGenSnippetService.expand(html);
+        html = resolveParentFieldImageTags(DocGenSnippetService.expand(html));
         try {
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Base_Object_API__c' });
             /* code-analyzer-suppress ApexFlsViolation */
@@ -1191,6 +1191,104 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             return String.join(labels, '; ');
         }
         return labelsByValue.containsKey(rawValue) ? labelsByValue.get(rawValue) : rawValue;
+    }
+
+    /** Render dynamic parent image field tags without downloading file bytes into Apex. */
+    @TestVisible
+    private String resolveParentFieldImageTags(String html) {
+        if (recordId == null || String.isBlank(html) || !html.contains('{%')) {
+            return html;
+        }
+        Pattern tag = Pattern.compile(
+            '\\{%([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)(?::([0-9]{1,4}(?:x[0-9]{0,4})?|x[0-9]{1,4}))?\\}'
+        );
+        Matcher scan = tag.matcher(html);
+        Set<String> fields = new Set<String>();
+        Schema.SObjectType objectType = recordId.getSObjectType();
+        while (scan.find()) {
+            String path = scan.group(1);
+            if (path.equalsIgnoreCase('Image') && scan.group(2) != null) {
+                continue; // The positional {%Image:N} resolver owns this tag.
+            }
+            if (fields.size() < 50 && readableImageFieldPath(objectType, path)) {
+                fields.add(path);
+            }
+        }
+        if (fields.isEmpty()) {
+            return html;
+        }
+
+        Map<String, Id> filesByField = new Map<String, Id>();
+        Map<Id, ContentVersion> files = new Map<Id, ContentVersion>();
+        try {
+            String query =
+                'SELECT ' +
+                String.join(new List<String>(fields), ', ') +
+                ' FROM ' +
+                objectType.getDescribe().getName() +
+                ' WHERE Id = :recordId LIMIT 1';
+            // CxSAST: object and all field paths come from Schema describe, and USER_MODE enforces access.
+            List<SObject> records = Database.query(DocGenSignatureIpContext.publicQuery(query), AccessLevel.USER_MODE);
+            if (!records.isEmpty()) {
+                for (String field : fields) {
+                    List<String> parts = field.split('\\.');
+                    SObject owner = records[0];
+                    for (Integer i = 0; owner != null && i < parts.size() - 1; i++) {
+                        owner = owner.getSObject(parts[i]);
+                    }
+                    if (owner != null) {
+                        filesByField.put(field, DocGenGiantMedia.fileId(owner.get(parts[parts.size() - 1])));
+                    }
+                }
+                files = DocGenGiantMedia.readableImages(new Set<Id>(filesByField.values()), 5000000);
+            }
+        } catch (Exception unavailable) {
+            files.clear();
+        }
+
+        scan.reset();
+        List<String> output = new List<String>();
+        Integer cursor = 0;
+        while (scan.find()) {
+            String field = scan.group(1);
+            if (!fields.contains(field) || (field.equalsIgnoreCase('Image') && scan.group(2) != null)) {
+                continue;
+            }
+            ContentVersion file = files.get(filesByField.get(field));
+            output.add(html.substring(cursor, scan.start()));
+            output.add(
+                file != null ? buildParentImageHtml(String.valueOf(file.Id), scan.group(2)) : '[image unavailable]'
+            );
+            cursor = scan.end();
+        }
+        output.add(html.substring(cursor));
+        return String.join(output, '');
+    }
+
+    private static Boolean readableImageFieldPath(Schema.SObjectType objectType, String path) {
+        List<String> parts = path.split('\\.');
+        for (Integer i = 0; i < parts.size(); i++) {
+            Map<String, Schema.SObjectField> fields = objectType.getDescribe().fields.getMap();
+            if (i == parts.size() - 1) {
+                return fields.get(parts[i].toLowerCase())?.getDescribe()?.isAccessible() == true;
+            }
+            Schema.SObjectType target;
+            for (Schema.SObjectField field : fields.values()) {
+                Schema.DescribeFieldResult described = field.getDescribe();
+                if (described.isAccessible() && parts[i].equalsIgnoreCase(described.getRelationshipName())) {
+                    List<Schema.SObjectType> targets = described.getReferenceTo();
+                    if (targets.size() == 1) {
+                        target = targets[0];
+                    }
+                    break;
+                }
+            }
+            if (target == null) {
+                return false;
+            }
+            objectType = target;
+        }
+        return false;
     }
 
     /**
