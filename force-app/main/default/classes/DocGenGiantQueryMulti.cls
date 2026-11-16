@@ -285,7 +285,13 @@ public with sharing class DocGenGiantQueryMulti {
         return planPlacements(documentBody, queryConfig, pageSize, false, recordId);
     }
 
-    private static Run planPlacements(String documentBody, String queryConfig, Integer pageSize, Boolean wordSnapshot, Id recordId) {
+    private static Run planPlacements(
+        String documentBody,
+        String queryConfig,
+        Integer pageSize,
+        Boolean wordSnapshot,
+        Id recordId
+    ) {
         if (String.isBlank(documentBody)) {
             return null;
         }

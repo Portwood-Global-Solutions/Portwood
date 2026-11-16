@@ -1817,7 +1817,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 multi = DocGenGiantQueryMulti.plan(
                     DocGenService.extractHtmlBodyContent(documentXml),
                     template.Query_Config__c,
-                    pageSize
+                    pageSize,
+                    recordId
                 );
             }
             Map<String, String> loopParts = multi == null

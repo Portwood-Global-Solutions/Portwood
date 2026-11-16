@@ -78,7 +78,12 @@ public with sharing class DocGenGiantQueryPlan {
         return compile(template, queryKeys, wordSnapshot, false);
     }
 
-    private static DocGenGiantQueryPlan compile(String template, Set<String> queryKeys, Boolean wordSnapshot, Boolean allowRootConditions) {
+    private static DocGenGiantQueryPlan compile(
+        String template,
+        Set<String> queryKeys,
+        Boolean wordSnapshot,
+        Boolean allowRootConditions
+    ) {
         String normalized = DocGenService.normalizeGiantQueryTemplate(template);
         List<Slot> slots = new List<Slot>();
         Set<String> nestedQueryKeys = new Set<String>();
