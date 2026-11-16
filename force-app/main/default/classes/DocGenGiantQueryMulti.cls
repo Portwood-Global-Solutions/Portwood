@@ -52,7 +52,10 @@ public with sharing class DocGenGiantQueryMulti {
                 }
 
                 for (
-                    Integer pages = 0; pages < PAGES_PER_TRANSACTION && nextPage * pageSize(dataset) < totalRows; pages++
+                    Integer pages = 0;
+                    pages < PAGES_PER_TRANSACTION &&
+                    nextPage * pageSize(dataset) < totalRows;
+                    pages++
                 ) {
                     harvestPage(dataset);
                     if (
@@ -123,14 +126,14 @@ public with sharing class DocGenGiantQueryMulti {
                     String.valueOf(nextPage).leftPad(5, '0');
                 String rendered = groupData == null
                     ? DocGenService.renderLoopBodyForRecords(
-                        slot.innerXml,
-                        slot.queryKey,
-                        rows,
-                        dataset.fields,
-                        position,
-                        'HTML',
-                        'PDF'
-                    )
+                          slot.innerXml,
+                          slot.queryKey,
+                          rows,
+                          dataset.fields,
+                          position,
+                          'HTML',
+                          'PDF'
+                      )
                     : DocGenService.mergeGiantHtml(slot.innerXml, groupData, position + 1);
                 fragments.add(
                     new ContentVersion(

@@ -155,7 +155,11 @@ private class DocGenGiantQueryPlanTest {
         DocGenGiantQueryMulti.Dataset dataset = plan.datasets[0];
         Assert.areEqual(new List<String>{ 'Id', 'Name' }, dataset.fields);
 
-        Database.Cursor cursor = DocGenDataRetriever.openGiantQueryCursor(account.Id, dataset.childNode, dataset.fields);
+        Database.Cursor cursor = DocGenDataRetriever.openGiantQueryCursor(
+            account.Id,
+            dataset.childNode,
+            dataset.fields
+        );
         Map<Id, String> groups = new Map<Id, String>();
         for (SObject row : cursor.fetch(0, 2)) {
             Map<String, Object> data = DocGenDataRetriever.loadGiantGroup(account.Id, dataset.nestedQuery, row);
