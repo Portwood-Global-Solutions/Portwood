@@ -125,4 +125,43 @@ private class DocGenGiantQueryPlanTest {
             Assert.isTrue(failure.getMessage().contains('Unexpected giant query slot marker'));
         }
     }
+
+    @IsTest
+    static void rendersNestedFlatRelationshipsWithGroupScopedCounts() {
+        Account account = new Account(Name = 'Grouped account');
+        insert account;
+        Contact first = new Contact(LastName = 'First group', AccountId = account.Id);
+        Contact empty = new Contact(LastName = 'Empty group', AccountId = account.Id);
+        insert new List<Contact>{ first, empty };
+        insert new List<Case>{
+            new Case(AccountId = account.Id, ContactId = first.Id, Subject = 'Alpha', Status = 'New', Origin = 'Phone'),
+            new Case(AccountId = account.Id, ContactId = first.Id, Subject = 'Beta', Status = 'New', Origin = 'Phone')
+        };
+
+        String config = 'Name, (SELECT Name, (SELECT Subject FROM Cases ORDER BY Subject DESC LIMIT 1) FROM Contacts)';
+        String body =
+            '{#Contacts}<h2>{Name}</h2>{#Cases}<p>{Subject}</p>{/Cases}<p>{COUNT:Cases}</p>{/Contacts}' +
+            '{#Description}<aside>{#Contacts}<p>{Name}</p>{/Contacts}</aside>{/Description}';
+        DocGenGiantQueryMulti.Run plan = DocGenGiantQueryMulti.plan(body, config, account.Id);
+        Assert.areEqual(1, plan.slots.size());
+        Assert.areEqual('Contacts', plan.slots[0].queryKey);
+        DocGenGiantQueryPlan visible = DocGenGiantQueryPlan.compileGrouped(
+            body,
+            new Set<String>{ 'Contacts' },
+            new Map<String, Object>{ 'Description' => 'Show additional table' }
+        );
+        Assert.areEqual(2, visible.slots.size());
+        Assert.isTrue(visible.shell.contains('<aside>' + visible.slots[1].marker + '</aside>'));
+        DocGenGiantQueryMulti.Dataset dataset = plan.datasets[0];
+        Assert.areEqual(new List<String>{ 'Id', 'Name' }, dataset.fields);
+
+        Database.Cursor cursor = DocGenDataRetriever.openGiantQueryCursor(account.Id, dataset.childNode, dataset.fields);
+        Map<Id, String> groups = new Map<Id, String>();
+        for (SObject row : cursor.fetch(0, 2)) {
+            Map<String, Object> data = DocGenDataRetriever.loadGiantGroup(account.Id, dataset.nestedQuery, row);
+            groups.put(row.Id, DocGenService.mergeGiantHtml(plan.slots[0].innerXml, data, 1));
+        }
+        Assert.areEqual('<h2>First group</h2><p>Beta</p><p>1</p>', groups.get(first.Id));
+        Assert.areEqual('<h2>Empty group</h2><p>0</p>', groups.get(empty.Id));
+    }
 }

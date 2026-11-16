@@ -707,7 +707,14 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         for (DocGenGiantQueryPlan.Slot slot : plannedSlots) {
             queryKeys.add(slot.queryKey);
         }
-        htmlPlan = DocGenGiantQueryPlan.compile(bodyContent, queryKeys);
+        Boolean groupedFlat = DocGenDataRetriever.getConfigVersion(effectivePlanConfig) == 1;
+        htmlPlan = groupedFlat
+            ? DocGenGiantQueryPlan.compileGrouped(
+                  bodyContent,
+                  queryKeys,
+                  DocGenDataRetriever.getGroupedGiantRootData(recordId, effectivePlanConfig)
+              )
+            : DocGenGiantQueryPlan.compile(bodyContent, queryKeys);
         if (htmlPlan.slots.size() != plannedSlots.size()) {
             throw new DocGenException('Giant Query sections changed before assembly.');
         }
@@ -723,6 +730,9 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             }
         }
 
+        if (groupedFlat) {
+            return htmlPlan.shell;
+        }
         String shell = resolveParentMergeTags(htmlPlan.shell);
         for (String queryKey : queryKeys) {
             giantRelationshipName = queryKey;

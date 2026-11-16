@@ -5,6 +5,7 @@ public with sharing class DocGenGiantQueryMulti {
 
     public class Dataset {
         public Map<String, Object> childNode;
+        public String nestedQuery;
         public List<String> fields = new List<String>();
         public List<DocGenGiantQueryPlan.Slot> slots = new List<DocGenGiantQueryPlan.Slot>();
     }
@@ -51,7 +52,7 @@ public with sharing class DocGenGiantQueryMulti {
                 }
 
                 for (
-                    Integer pages = 0; pages < PAGES_PER_TRANSACTION && nextPage * ROWS_PER_PAGE < totalRows; pages++
+                    Integer pages = 0; pages < PAGES_PER_TRANSACTION && nextPage * pageSize(dataset) < totalRows; pages++
                 ) {
                     harvestPage(dataset);
                     if (
@@ -61,7 +62,7 @@ public with sharing class DocGenGiantQueryMulti {
                         break;
                     }
                 }
-                if (nextPage * ROWS_PER_PAGE >= totalRows) {
+                if (nextPage * pageSize(dataset) >= totalRows) {
                     for (DocGenGiantQueryPlan.Slot slot : dataset.slots) {
                         run.fragmentCounts.put(slot.key, nextPage);
                     }
@@ -96,14 +97,21 @@ public with sharing class DocGenGiantQueryMulti {
             }
         }
 
+        private Integer pageSize(Dataset dataset) {
+            return dataset.nestedQuery == null ? ROWS_PER_PAGE : 1;
+        }
+
         private void harvestPage(Dataset dataset) {
-            Integer position = nextPage * ROWS_PER_PAGE;
-            Integer count = Math.min(ROWS_PER_PAGE, totalRows - position);
+            Integer position = nextPage * pageSize(dataset);
+            Integer count = Math.min(pageSize(dataset), totalRows - position);
             List<SObject> rows = cursor.fetch(position, count);
             if (rows.size() != count) {
                 throw new DocGenException('Giant Query cursor returned an incomplete page: ' + nextPage);
             }
 
+            Map<String, Object> groupData = dataset.nestedQuery == null
+                ? null
+                : DocGenDataRetriever.loadGiantGroup(run.recordId, dataset.nestedQuery, rows[0]);
             List<ContentVersion> fragments = new List<ContentVersion>();
             for (DocGenGiantQueryPlan.Slot slot : dataset.slots) {
                 String title =
@@ -113,15 +121,17 @@ public with sharing class DocGenGiantQueryMulti {
                     slot.key +
                     '_' +
                     String.valueOf(nextPage).leftPad(5, '0');
-                String rendered = DocGenService.renderLoopBodyForRecords(
-                    slot.innerXml,
-                    slot.queryKey,
-                    rows,
-                    dataset.fields,
-                    position,
-                    'HTML',
-                    'PDF'
-                );
+                String rendered = groupData == null
+                    ? DocGenService.renderLoopBodyForRecords(
+                        slot.innerXml,
+                        slot.queryKey,
+                        rows,
+                        dataset.fields,
+                        position,
+                        'HTML',
+                        'PDF'
+                    )
+                    : DocGenService.mergeGiantHtml(slot.innerXml, groupData, position + 1);
                 fragments.add(
                     new ContentVersion(
                         Title = title,
@@ -174,43 +184,62 @@ public with sharing class DocGenGiantQueryMulti {
     }
 
     public static Run plan(String documentBody, String queryConfig) {
-        if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3 || String.isBlank(documentBody))
-            return null;
+        return plan(documentBody, queryConfig, null);
+    }
 
-        Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig);
-        List<Object> configNodes = (List<Object>) config.get('nodes');
-        if (configNodes == null)
+    public static Run plan(String documentBody, String queryConfig, Id recordId) {
+        if (String.isBlank(documentBody)) {
             return null;
+        }
+        Map<String, Map<String, Object>> byKey = DocGenDataRetriever.planFlatGiantDatasets(recordId, queryConfig);
+        Boolean grouped = !byKey.isEmpty();
+        Set<String> duplicates = new Set<String>();
+        if (!grouped) {
+            if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3)
+                return null;
 
-        String rootNodeId;
-        for (Object value : configNodes) {
-            Map<String, Object> node = (Map<String, Object>) value;
-            if (String.isBlank((String) node.get('parentNode'))) {
-                rootNodeId = (String) node.get('id');
-                break;
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig);
+            List<Object> configNodes = (List<Object>) config.get('nodes');
+            if (configNodes == null)
+                return null;
+
+            String rootNodeId;
+            for (Object value : configNodes) {
+                Map<String, Object> node = (Map<String, Object>) value;
+                if (String.isBlank((String) node.get('parentNode'))) {
+                    rootNodeId = (String) node.get('id');
+                    break;
+                }
+            }
+            if (String.isBlank(rootNodeId))
+                return null;
+
+            for (Object value : configNodes) {
+                Map<String, Object> node = (Map<String, Object>) value;
+                if ((String) node.get('parentNode') != rootNodeId)
+                    continue;
+                String alias = (String) node.get('alias');
+                String key = String.isNotBlank(alias) ? alias : (String) node.get('relationshipName');
+                if (String.isBlank(key))
+                    continue;
+                if (byKey.containsKey(key))
+                    duplicates.add(key);
+                byKey.put(key, node);
             }
         }
-        if (String.isBlank(rootNodeId))
-            return null;
 
-        Map<String, Map<String, Object>> byKey = new Map<String, Map<String, Object>>();
-        Set<String> duplicates = new Set<String>();
-        for (Object value : configNodes) {
-            Map<String, Object> node = (Map<String, Object>) value;
-            if ((String) node.get('parentNode') != rootNodeId)
-                continue;
-            String alias = (String) node.get('alias');
-            String key = String.isNotBlank(alias) ? alias : (String) node.get('relationshipName');
-            if (String.isBlank(key))
-                continue;
-            if (byKey.containsKey(key))
-                duplicates.add(key);
-            byKey.put(key, node);
+        DocGenGiantQueryPlan planned = grouped
+            ? DocGenGiantQueryPlan.compileGrouped(
+                  documentBody,
+                  byKey.keySet(),
+                  DocGenDataRetriever.getGroupedGiantRootData(recordId, queryConfig)
+              )
+            : DocGenGiantQueryPlan.compile(documentBody, byKey.keySet());
+        if (!grouped && planned.slots.size() < 2)
+            return null;
+        if (grouped && planned.slots.isEmpty()) {
+            throw new DocGenException('Giant Query requires a top-level relationship loop for the grouped PDF.');
         }
-
-        DocGenGiantQueryPlan planned = DocGenGiantQueryPlan.compile(documentBody, byKey.keySet());
-        if (planned.slots.size() < 2)
-            return null;
         if (!planned.nestedQueryKeys.isEmpty()) {
             throw new DocGenException(
                 'Giant Query requires top-level table loops for these child queries: ' +
@@ -234,6 +263,7 @@ public with sharing class DocGenGiantQueryMulti {
             if (!datasets.containsKey(slot.queryKey)) {
                 Dataset dataset = new Dataset();
                 dataset.childNode = byKey.get(slot.queryKey);
+                dataset.nestedQuery = (String) dataset.childNode.get('nestedQuery');
                 if (dataset.childNode.get('junction') != null) {
                     throw new DocGenException(
                         'Giant Query table loops require a direct child lookup: ' + slot.queryKey
