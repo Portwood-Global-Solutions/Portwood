@@ -18,7 +18,7 @@ const scopes = [
             'Record_Filter'
         ]
     ],
-    ['assets', 'Asset', ['Asset_Key', 'Asset_Type']],
+    ['assets', 'Asset', ['Asset_Key', 'Asset_Type', 'Is_Active']],
     ['fonts', 'Font_Face', ['API_Name', 'Asset', 'Revision_Key', 'Status']],
     ['brands', 'Brand', ['Logo_Asset_Key', 'OWA_Id']],
     ['emailTemplates', 'Email_Template', ['Type', 'Brand', 'Logo_Asset_Key']],
@@ -48,7 +48,7 @@ function salesforce(org, args) {
     return response.result;
 }
 
-function inspect(org) {
+export function inspect(org) {
     const response = salesforce(org, ['sobject', 'list', '--sobject', 'custom']);
     const objects = Array.isArray(response) ? response : response.sobjects;
     if (!Array.isArray(objects)) throw new Error('Unexpected Salesforce object list.');
@@ -58,6 +58,8 @@ function inspect(org) {
           ? ''
           : null;
     if (prefix === null) throw new Error('No supported Portwood template object found in ' + org + '.');
+    const orgRecord = salesforce(org, ['data', 'query', '--query', 'SELECT Id, IsSandbox FROM Organization LIMIT 1'])
+        .records[0];
     const records = {};
     const unavailableFields = {};
     for (const [key, object, fields] of scopes) {
@@ -72,11 +74,12 @@ function inspect(org) {
         const missing = fields.filter((field) => !selected.includes(field));
         if (missing.length) unavailableFields[key] = missing;
         const columns = ['Id', 'Name', ...selected.map((field) => prefix + field + '__c')];
+        const filter = key === 'settings' ? " WHERE SetupOwnerId = '" + orgRecord.Id + "'" : '';
         const result = salesforce(org, [
             'data',
             'query',
             '--query',
-            'SELECT ' + columns.join(', ') + ' FROM ' + apiName + ' ORDER BY Id'
+            'SELECT ' + columns.join(', ') + ' FROM ' + apiName + filter + ' ORDER BY Id'
         ]);
         if (result.totalSize !== result.records.length) throw new Error('Incomplete inventory for ' + apiName + '.');
         if (!result.done) throw new Error('Incomplete inventory for ' + apiName + '.');
@@ -88,8 +91,6 @@ function inspect(org) {
             ])
         );
     }
-    const orgRecord = salesforce(org, ['data', 'query', '--query', 'SELECT Id, IsSandbox FROM Organization LIMIT 1'])
-        .records[0];
     return {
         schemaVersion: 1,
         kind: 'portwood-configuration-inventory',
@@ -104,8 +105,9 @@ function inspect(org) {
 function identity(kind, row, brands) {
     switch (kind) {
         case 'templates':
-        case 'fonts':
             return row.API_Name;
+        case 'fonts':
+            return row.API_Name || row.Revision_Key;
         case 'assets':
             return row.Asset_Key;
         case 'brands':
@@ -184,6 +186,8 @@ export function plan(source, target) {
             items.push({
                 kind: kind === 'assets' && row.Asset_Type === 'HTMLSnippet' ? 'snippets' : kind,
                 sourceId: row.id,
+                ...(kind === 'assets' ? { assetType: row.Asset_Type, active: row.Is_Active } : {}),
+                ...(kind === 'fonts' ? { fontRevision: row.Revision_Key } : {}),
                 name: row.name,
                 key,
                 status,
