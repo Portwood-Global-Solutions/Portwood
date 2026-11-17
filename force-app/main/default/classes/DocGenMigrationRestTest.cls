@@ -31,6 +31,10 @@ private class DocGenMigrationRestTest {
             RestContext.response = new RestResponse();
             DocGenMigrationRest.createConfiguration();
             System.assertEquals(403, RestContext.response.statusCode);
+            RestContext.request.requestURI = '/services/apexrest/portwood/migration/v1/staging/068000000000000';
+            RestContext.response = new RestResponse();
+            DocGenMigrationRest.discardStage();
+            System.assertEquals(403, RestContext.response.statusCode);
             System.assertEquals(0, [SELECT COUNT() FROM DocGen_Asset__c]);
         }
     }

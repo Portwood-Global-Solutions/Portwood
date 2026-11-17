@@ -2,6 +2,8 @@
 @RestResource(urlMapping='/portwood/migration/v1/*')
 global with sharing class DocGenMigrationRest {
     private static final Integer MAX_BODY_BYTES = 1500000;
+    private static final Integer MAX_FILE_BYTES = 10000000;
+    private static final Integer MAX_FONT_FILE_BYTES = 9000000;
     private static final List<String> RESOURCES = new List<String>{
         'template',
         'snippet',
@@ -19,7 +21,7 @@ global with sharing class DocGenMigrationRest {
         List<String> path = route();
         try {
             if (path.size() == 1 && path[0] == 'capabilities') {
-                respond(200, new Map<String, Object>{ 'schemaVersion' => 1, 'resources' => RESOURCES });
+                respond(200, new Map<String, Object>{ 'schemaVersion' => 2, 'resources' => RESOURCES });
             } else if (path.size() == 2 && path[0] == 'template') {
                 Id templateId = Id.valueOf(path[1]);
                 DocGen_Template__c template = [
@@ -29,7 +31,7 @@ global with sharing class DocGenMigrationRest {
                     WITH USER_MODE
                 ];
                 assertReadableTemplateFiles(templateId);
-                String exportJson = DocGenController.exportTemplate(templateId);
+                String exportJson = DocGenController.exportTemplateForMigration(templateId);
                 Map<String, Object> bundle = (Map<String, Object>) JSON.deserializeUntyped(exportJson);
                 if (bundle.get('templateFile') == null) {
                     throw new DocGenException('No readable active template file was exported.');
@@ -63,6 +65,17 @@ global with sharing class DocGenMigrationRest {
                 respond(200, readSettings());
             } else if (path.size() == 2 && path[0] == 'font') {
                 respond(200, readFont(Id.valueOf(path[1])));
+            } else if (path.size() == 2 && path[0] == 'font-job') {
+                respond(200, DocGenFontController.getFontJobStatus(Id.valueOf(path[1])));
+            } else if (path.size() == 2 && path[0] == 'font-revision') {
+                String key = path[1];
+                DocGen_Font_Face__c font = [
+                    SELECT Id
+                    FROM DocGen_Font_Face__c
+                    WHERE Revision_Key__c = :key
+                    WITH USER_MODE
+                ];
+                respond(200, new Map<String, Object>{ 'id' => font.Id });
             } else {
                 reject(404, 'Unknown migration resource.');
             }
@@ -100,7 +113,7 @@ global with sharing class DocGenMigrationRest {
                 writeSettings(payload);
                 respond(200, new Map<String, Object>{ 'id' => DocGen_Settings__c.getOrgDefaults().Id });
             } else if (path[0] == 'font') {
-                respond(201, new Map<String, Object>{ 'id' => stageFont(payload) });
+                respond(202, new Map<String, Object>{ 'jobId' => stageFont(payload) });
             } else {
                 Map<String, Object> result = DocGenSnippetController.saveSnippet(
                     null,
@@ -174,23 +187,12 @@ global with sharing class DocGenMigrationRest {
         if (asset.ContentDocumentLinks.isEmpty())
             throw new DocGenException('The asset has no published file.');
         Id versionId = asset.ContentDocumentLinks[0].ContentDocument.LatestPublishedVersionId;
-        ContentVersion version = [
-            SELECT Title, FileExtension, ContentSize
-            FROM ContentVersion
-            WHERE Id = :versionId
-            WITH USER_MODE
-        ];
-        if (version.ContentSize > 950000)
-            throw new DocGenException('Image asset exceeds the migration file limit.');
-        version = [SELECT Title, FileExtension, VersionData FROM ContentVersion WHERE Id = :versionId WITH USER_MODE];
         return new Map<String, Object>{
             'name' => asset.Name,
             'assetKey' => asset.Asset_Key__c,
             'category' => asset.Category__c,
             'isActive' => asset.Is_Active__c,
-            'title' => version.Title,
-            'extension' => version.FileExtension,
-            'base64' => EncodingUtil.base64Encode(version.VersionData)
+            'file' => readableFile(versionId, MAX_FILE_BYTES)
         };
     }
 
@@ -199,27 +201,17 @@ global with sharing class DocGenMigrationRest {
         if (String.isBlank(key) || key != DocGenAssetKeyHandler.normalizeKey(key)) {
             throw new DocGenException('A valid, canonical asset key is required.');
         }
-        String extension = (String) payload.get('extension');
+        Map<String, Object> file = (Map<String, Object>) payload.get('file');
+        ContentVersion staged = checkedStage(file, MAX_FILE_BYTES);
         if (
-            String.isBlank(extension) ||
-            !new Set<String>{ 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'tif', 'tiff' }
-                .contains(extension.toLowerCase())
+            !new Set<String>{ 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp' }.contains(staged.FileExtension.toLowerCase())
         ) {
             throw new DocGenException('Unrecognized image file extension.');
         }
-        Blob bytes = EncodingUtil.base64Decode((String) payload.get('base64'));
-        if (bytes.size() == 0 || bytes.size() > 950000)
-            throw new DocGenException('Image asset file size is outside the migration limit.');
         Map<String, Object> created = DocGenController.createAsset((String) payload.get('name'), key);
         Id assetId = (Id) created.get('id');
-        String title = (String) payload.get('title');
-        ContentVersion cv = new ContentVersion(
-            Title = title,
-            PathOnClient = key + '.' + extension,
-            VersionData = bytes
-        );
-        Database.insert(cv, AccessLevel.USER_MODE);
-        DocGenController.addAssetVersion(assetId, cv.Id);
+        Database.update(new ContentVersion(Id = staged.Id, Title = (String) file.get('title')), AccessLevel.USER_MODE);
+        DocGenController.addAssetVersion(assetId, staged.Id);
         Database.update(
             new DocGen_Asset__c(
                 Id = assetId,
@@ -229,6 +221,115 @@ global with sharing class DocGenMigrationRest {
             AccessLevel.USER_MODE
         );
         return assetId;
+    }
+
+    private static Map<String, Object> readableFile(Id versionId, Integer limitBytes) {
+        ContentVersion version = [
+            SELECT Title, FileExtension, ContentSize, Checksum, ContentLocation
+            FROM ContentVersion
+            WHERE Id = :versionId
+            WITH USER_MODE
+        ];
+        if (version.ContentLocation != 'S' || version.ContentSize > limitBytes || String.isBlank(version.Checksum)) {
+            throw new DocGenException('File must be stored in Salesforce and fit the migration size limit.');
+        }
+        return new Map<String, Object>{
+            'id' => versionId,
+            'title' => version.Title,
+            'extension' => version.FileExtension,
+            'size' => version.ContentSize,
+            'checksum' => version.Checksum
+        };
+    }
+
+    private static ContentVersion checkedStage(Map<String, Object> file, Integer limitBytes) {
+        if (file == null)
+            throw new DocGenException('A staged Salesforce File is required.');
+        String name = (String) file.get('stagingTitle');
+        if (String.isBlank(name) || !Pattern.matches('Portwood Migration Staging [0-9a-f-]{36}', name)) {
+            throw new DocGenException('Expected a Portwood migration staging file.');
+        }
+        Id versionId = Id.valueOf((String) file.get('id'));
+        ContentVersion version = [
+            SELECT Id, ContentDocumentId, Title, FileExtension, ContentSize, Checksum, ContentLocation
+            FROM ContentVersion
+            WHERE
+                Id = :versionId
+                AND IsLatest = TRUE
+                AND OwnerId = :UserInfo.getUserId()
+                AND CreatedById = :UserInfo.getUserId()
+            WITH USER_MODE
+        ];
+        if (
+            version.Title != name ||
+            version.ContentLocation != 'S' ||
+            version.ContentSize > limitBytes ||
+            version.ContentSize != getInteger(file, 'size') ||
+            String.isBlank(version.Checksum) ||
+            !version.Checksum.equalsIgnoreCase((String) file.get('checksum')) ||
+            !version.FileExtension.equalsIgnoreCase((String) file.get('extension'))
+        ) {
+            throw new DocGenException(
+                'The staged File does not match the size, checksum, or extension expected by the migration.'
+            );
+        }
+        ensurePrivateStage(version.ContentDocumentId);
+        return version;
+    }
+
+    private static void ensurePrivateStage(Id documentId) {
+        if (
+            [
+                SELECT COUNT()
+                FROM ContentDocumentLink
+                WHERE ContentDocumentId = :documentId AND LinkedEntityId != :UserInfo.getUserId()
+                WITH SYSTEM_MODE
+            ] > 0
+        ) {
+            throw new DocGenException('A migration staging file must have no sharing links.');
+        }
+        if (
+            Schema.getGlobalDescribe().containsKey('ContentDistribution') &&
+            Database.countQueryWithBinds(
+                'SELECT COUNT() FROM ContentDistribution WHERE ContentDocumentId = :documentId',
+                new Map<String, Object>{ 'documentId' => documentId },
+                AccessLevel.SYSTEM_MODE
+            ) > 0
+        ) {
+            throw new DocGenException('A migration staging file must have no public deliveries.');
+        }
+    }
+
+    @HttpDelete
+    global static void discardStage() {
+        if (!authorize())
+            return;
+        List<String> path = route();
+        if (path.size() != 2 || path[0] != 'staging') {
+            reject(404, 'Unknown migration resource.');
+            return;
+        }
+        try {
+            Id versionId = Id.valueOf(path[1]);
+            ContentVersion version = [
+                SELECT Title, ContentDocumentId
+                FROM ContentVersion
+                WHERE
+                    Id = :versionId
+                    AND IsLatest = TRUE
+                    AND OwnerId = :UserInfo.getUserId()
+                    AND CreatedById = :UserInfo.getUserId()
+                WITH USER_MODE
+            ];
+            if (!Pattern.matches('Portwood Migration Staging [0-9a-f-]{36}', version.Title)) {
+                throw new DocGenException('Only a private migration staging file can be discarded.');
+            }
+            ensurePrivateStage(version.ContentDocumentId);
+            Database.delete(new ContentDocument(Id = version.ContentDocumentId), AccessLevel.USER_MODE);
+            respond(200, new Map<String, Object>{ 'discarded' => true });
+        } catch (Exception error) {
+            reject(400, error.getMessage());
+        }
     }
 
     private static Map<String, Object> readBrand(Id brandId) {
@@ -373,9 +474,6 @@ global with sharing class DocGenMigrationRest {
         }
         DocGen_Font_Face__c registered = DocGenFontController.load(font.Revision_Key__c);
         ContentVersion source = DocGenFontController.sourceFile(registered);
-        if (source.ContentSize > 950000)
-            throw new DocGenException('Font exceeds the migration file limit.');
-        ContentVersion readable = [SELECT VersionData FROM ContentVersion WHERE Id = :source.Id WITH USER_MODE];
         Map<String, Object> metadata = (Map<String, Object>) JSON.deserializeUntyped(registered.Metadata_JSON__c);
         String licenseText = (String) metadata.get('licenseText');
         if (String.isBlank(licenseText)) {
@@ -388,12 +486,12 @@ global with sharing class DocGenMigrationRest {
             'apiName' => font.API_Name__c,
             'revisionKey' => font.Revision_Key__c,
             'licenseText' => licenseText,
-            'base64' => EncodingUtil.base64Encode(readable.VersionData),
+            'file' => readableFile(source.Id, MAX_FONT_FILE_BYTES),
             'status' => font.Status__c
         };
     }
 
-    private static Id stageFont(Map<String, Object> payload) {
+    private static String stageFont(Map<String, Object> payload) {
         if (payload.get('hostingRightsConfirmed') != true) {
             throw new DocGenException('Confirm that the target can host and embed this font under its license.');
         }
@@ -401,29 +499,27 @@ global with sharing class DocGenMigrationRest {
         if ([SELECT COUNT() FROM DocGen_Font_Face__c WHERE Revision_Key__c = :expectedKey WITH SYSTEM_MODE] > 0) {
             throw new DocGenException('This exact font revision already exists in the destination.');
         }
-        Blob bytes = EncodingUtil.base64Decode((String) payload.get('base64'));
-        if (bytes.size() == 0 || bytes.size() > 950000)
-            throw new DocGenException('Font file size is outside the migration limit.');
-        String assetKey = (String) payload.get('assetKey');
-        String stagedKey = DocGenFontController.inspectArchiveEntryWithApiName(
-            bytes,
-            assetKey + '.ttf',
-            assetKey,
-            (String) payload.get('apiName'),
-            (String) payload.get('licenseText')
+        ContentVersion staged = checkedStage((Map<String, Object>) payload.get('file'), MAX_FONT_FILE_BYTES);
+        if (!'ttf'.equalsIgnoreCase(staged.FileExtension))
+            throw new DocGenException('Expected a static TTF file.');
+        if (
+            !FeatureManagement.checkPermission('Manage_DocGen_Fonts') ||
+            String.isBlank(expectedKey) ||
+            !Pattern.matches('[a-f0-9]{64}', expectedKey)
+        ) {
+            throw new DocGenException('A valid font revision and Manage Portwood Fonts permission are required.');
+        }
+        return System.enqueueJob(
+            new DocGenFontOperation(
+                staged.Id,
+                (String) payload.get('assetKey'),
+                (String) payload.get('apiName'),
+                (String) payload.get('licenseText'),
+                expectedKey,
+                (String) payload.get('assetName'),
+                (String) payload.get('assetCategory')
+            )
         );
-        if (stagedKey != expectedKey)
-            throw new DocGenException('The destination font revision identity did not match.');
-        DocGen_Font_Face__c staged = DocGenFontController.load(stagedKey);
-        Database.update(
-            new DocGen_Asset__c(
-                Id = staged.Asset__c,
-                Name = (String) payload.get('assetName'),
-                Category__c = (String) payload.get('assetCategory')
-            ),
-            AccessLevel.USER_MODE
-        );
-        return staged.Id;
     }
 
     private static Map<String, Object> readSettings() {
@@ -495,7 +591,21 @@ global with sharing class DocGenMigrationRest {
             throw new DocGenException('A template already uses the API name ' + apiName + '.');
         }
         Id brandId = checkedBrand(payload);
-        Id templateId = DocGenController.importTemplate(JSON.serialize(payload));
+        Map<String, Object> fileData = (Map<String, Object>) payload.get('templateFile');
+        Id templateId;
+        if (fileData.get('file') == null) {
+            templateId = DocGenController.importTemplateFromMigrationFile(JSON.serialize(payload), null);
+        } else {
+            ContentVersion staged = checkedStage((Map<String, Object>) fileData.get('file'), MAX_FILE_BYTES);
+            if (
+                !new Set<String>{ 'docx', 'xlsx', 'xlsm', 'pptx', 'pdf' }
+                    .contains(staged.FileExtension.toLowerCase()) ||
+                !staged.FileExtension.equalsIgnoreCase((String) fileData.get('fileExtension'))
+            ) {
+                throw new DocGenException('Template file extension is unsupported or does not match its package.');
+            }
+            templateId = DocGenController.importTemplateFromMigrationFile(JSON.serialize(payload), staged);
+        }
         DocGen_Template__c imported = [
             SELECT API_Name__c
             FROM DocGen_Template__c

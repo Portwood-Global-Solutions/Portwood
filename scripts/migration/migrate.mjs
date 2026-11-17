@@ -1,5 +1,7 @@
 import { Org } from '@salesforce/core';
 import { readFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
+import { transferFile, validateFile } from './files.mjs';
 import { inspect, plan } from './portwood.mjs';
 
 const operations = new Map([
@@ -12,12 +14,13 @@ const operations = new Map([
     ['settings', 'settings']
 ]);
 const maxPayload = 1500000;
+const maxFontFileSize = 9000000;
 
-async function rest(connection, inventory, endpoint, payload) {
+async function rest(connection, inventory, endpoint, payload, method = payload === undefined ? 'GET' : 'POST') {
     const namespace = inventory.namespace ? inventory.namespace.slice(0, -2) + '/' : '';
     const url = '/services/apexrest/' + namespace + 'portwood/migration/v1/' + endpoint;
     const request = {
-        method: payload === undefined ? 'GET' : 'POST',
+        method,
         url,
         headers: { Accept: 'application/json' }
     };
@@ -125,10 +128,17 @@ function stableJson(value) {
     );
 }
 
+function fileIdentity(file) {
+    return { checksum: file.checksum?.toLowerCase(), size: file.size, extension: file.extension?.toLowerCase() };
+}
+
 function equivalent(resource, source, target) {
-    if (resource === 'font') {
-        const exact = ({ status, ...metadata }) => metadata;
-        return equivalent('asset', exact(source), exact(target));
+    if (resource === 'font' || resource === 'asset') {
+        const comparable = ({ status, file, ...metadata }) => ({
+            ...metadata,
+            file: { ...fileIdentity(file), ...(resource === 'asset' ? { title: file.title } : {}) }
+        });
+        return JSON.stringify(stableJson(comparable(source))) === JSON.stringify(stableJson(comparable(target)));
     }
     if (resource !== 'template') return JSON.stringify(stableJson(source)) === JSON.stringify(stableJson(target));
     if (source.assets?.length || target.assets?.length) return false;
@@ -136,10 +146,39 @@ function equivalent(resource, source, target) {
         template: bundle.template,
         brandId: bundle.brandId,
         extension: bundle.templateFile.fileExtension,
-        body: bundle.templateFile.base64,
+        body: bundle.templateFile.file ? fileIdentity(bundle.templateFile.file) : bundle.templateFile.base64,
         savedQueries: (bundle.savedQueries || []).map((query) => JSON.stringify(stableJson(query))).sort()
     });
     return JSON.stringify(stableJson(templateContent(source))) === JSON.stringify(stableJson(templateContent(target)));
+}
+
+function binaryPayload(resource, payload) {
+    if (resource === 'asset' || resource === 'font') return payload.file;
+    if (resource === 'template') return payload.templateFile.file;
+    return null;
+}
+
+function withStagedFile(resource, payload, stage) {
+    if (!stage) return payload;
+    if (resource === 'template') return { ...payload, templateFile: { ...payload.templateFile, file: stage } };
+    return { ...payload, file: stage };
+}
+
+async function awaitFont(connection, inventory, jobId, key) {
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+        const result = await rest(connection, inventory, 'font-job/' + encodeURIComponent(jobId));
+        if (result.status === 'Completed') {
+            return rest(connection, inventory, 'font-revision/' + encodeURIComponent(key));
+        }
+        if (result.status === 'Failed' || result.status === 'Aborted') {
+            const error = new Error(result.error || 'Destination font operation did not complete.');
+            error.fontJobFailed = true;
+            throw error;
+        }
+        await delay(2500);
+    }
+    throw new Error('Font import is still pending. Check Apex job ' + jobId + ' before retrying.');
 }
 
 function assertVisibleDependencies(resource, payload, selected, target) {
@@ -212,7 +251,10 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
     if (source.orgId === target.orgId) throw new Error('Source and target resolve to the same Salesforce org.');
     const report = plan(source, target);
     const fontAssets = new Set((source.records.fonts || []).map((font) => font.Asset));
-    const selected = report.items.filter((item) => !kinds?.length || kinds.includes(item.kind));
+    const selected = report.items.filter(
+        (item) =>
+            !kinds?.length || (kinds.includes(item.kind) && (item.assetType !== 'Font' || kinds.includes('fonts')))
+    );
     const fontAssetRows = selected.filter((item) => item.kind === 'assets' && item.assetType === 'Font');
     if (dryRun) return { ...report, items: selected, applySupportedKinds: [...operations.keys()] };
     if (!source.isSandbox || !target.isSandbox) {
@@ -249,7 +291,7 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
     const targetConnection = targetSession.getConnection();
     const from = await rest(sourceConnection, source, 'capabilities');
     const to = await rest(targetConnection, target, 'capabilities');
-    if (from.schemaVersion !== 1 || to.schemaVersion !== 1)
+    if (from.schemaVersion !== 2 || to.schemaVersion !== 2)
         throw new Error('Matching migration API version is required.');
     const selectedSettings = selected.some((item) => item.kind === 'settings');
     if (
@@ -284,6 +326,8 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
             );
             const brandSourceId = applyMappings(resource, payload, item, mappings, selectedBrands, target);
             assertVisibleDependencies(resource, payload, selected, target);
+            const file = binaryPayload(resource, payload);
+            if (file) validateFile(file, resource === 'font' ? maxFontFileSize : undefined);
             if (brandSourceId && brandTargets.has(brandSourceId)) {
                 payload.brandId = brandTargets.get(brandSourceId);
             } else if (brandSourceId && item.status === 'conflict') {
@@ -341,6 +385,8 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
             continue;
         }
         let created;
+        let stage;
+        let jobId;
         try {
             if (brandSourceId) {
                 const destinationBrand = brandTargets.get(brandSourceId);
@@ -351,8 +397,25 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
                 completed.push({ ...item, outcome: 'deferred-for-font-approval' });
                 continue;
             }
-            const request = resource === 'font' ? { ...payload, hostingRightsConfirmed: true } : payload;
-            created = await rest(targetConnection, target, resource, request);
+            const file = binaryPayload(resource, payload);
+            if (file) {
+                stage = await transferFile(
+                    sourceConnection,
+                    targetConnection,
+                    file,
+                    resource === 'font' ? maxFontFileSize : undefined
+                );
+            }
+            const stagedRequest = withStagedFile(resource, payload, stage);
+            const request = resource === 'font' ? { ...stagedRequest, hostingRightsConfirmed: true } : stagedRequest;
+            const submitted = await rest(targetConnection, target, resource, request);
+            if (resource === 'font') {
+                jobId = submitted.jobId;
+                if (!jobId) throw new Error('Destination did not return the font operation ID.');
+                created = await awaitFont(targetConnection, target, jobId, payload.revisionKey);
+            } else {
+                created = submitted;
+            }
             if (!created.id) throw new Error('Destination did not return a new resource ID.');
             const saved = await rest(
                 targetConnection,
@@ -381,10 +444,33 @@ export async function migrate({ sourceOrg, targetOrg, dryRun, mappingsPath, kind
                 targetIds: [created.id]
             });
         } catch (error) {
+            let stagingFileId = stage?.id;
+            let cleanupError;
+            if (stage && !created && (!jobId || error.fontJobFailed)) {
+                try {
+                    await rest(
+                        targetConnection,
+                        target,
+                        'staging/' + encodeURIComponent(stage.id),
+                        undefined,
+                        'DELETE'
+                    );
+                    stagingFileId = undefined;
+                } catch (cleanup) {
+                    cleanupError = cleanup.message;
+                }
+            }
             completed.push({
                 ...item,
-                outcome: created ? 'verification-failed' : 'failed',
+                outcome: created
+                    ? 'verification-failed'
+                    : jobId && !error.fontJobFailed
+                      ? 'font-job-pending'
+                      : 'failed',
                 targetIds: created?.id ? [created.id] : [],
+                ...(jobId ? { jobId } : {}),
+                ...(stagingFileId ? { stagingFileId } : {}),
+                ...(cleanupError ? { cleanupError } : {}),
                 error: error.message
             });
             return { ...report, complete: false, items: completed };
