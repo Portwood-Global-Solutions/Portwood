@@ -20,6 +20,68 @@ private class DocGenSignatureFlowActionTest {
         return r;
     }
 
+    @IsTest
+    static void createsRequestAsDocGenUserWithoutTokenFieldAccess() {
+        DocGenSignatureFlowAction.Request request = buildRequest();
+        User sender = new User(
+            Alias = 'docsend',
+            Email = 'docsend@example.test',
+            EmailEncodingKey = 'UTF-8',
+            LastName = 'DocGen Sender',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US',
+            TimeZoneSidKey = 'America/Los_Angeles',
+            ProfileId = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1]
+            .Id,
+            Username = 'docsend.' + System.now().getTime() + '@example.test'
+        );
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            insert sender;
+            insert new PermissionSetAssignment(
+                AssigneeId = sender.Id,
+                PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'DocGen_User' LIMIT 1]
+                .Id
+            );
+        }
+        update new Account(Id = request.relatedRecordId, OwnerId = sender.Id);
+        insert new DocGen_Template__Share(
+            ParentId = request.templateId,
+            UserOrGroupId = sender.Id,
+            AccessLevel = 'Read',
+            RowCause = Schema.DocGen_Template__Share.RowCause.Manual
+        );
+        request.sendEmails = false;
+        DocGenSignatureFlowAction.Result result;
+        System.runAs(sender) {
+            System.assertEquals(false, DocGen_Signature_Request__c.Secure_Token__c.getDescribe().isAccessible());
+            System.assertEquals(false, DocGen_Signature_Request__c.Secure_Token__c.getDescribe().isCreateable());
+            System.assertEquals(false, DocGen_Signer__c.Secure_Token__c.getDescribe().isAccessible());
+            System.assertEquals(false, DocGen_Signer__c.Secure_Token__c.getDescribe().isCreateable());
+            Test.startTest();
+            result = DocGenSignatureFlowAction.generate(new List<DocGenSignatureFlowAction.Request>{ request })[0];
+            Test.stopTest();
+        }
+
+        System.assertEquals(true, result.success, 'Signature request failed: ' + result.errorMessage);
+        System.assertNotEquals(null, result.signatureRequestId);
+        DocGen_Signature_Request__c stored = [
+            SELECT Secure_Token__c, Template__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :result.signatureRequestId
+        ];
+        System.assertEquals(request.templateId, stored.Template__c);
+        System.assert(String.isNotBlank(stored.Secure_Token__c), 'Request verification token must be generated');
+        List<DocGen_Signer__c> signers = [
+            SELECT Secure_Token__c
+            FROM DocGen_Signer__c
+            WHERE Signature_Request__c = :result.signatureRequestId
+        ];
+        System.assertEquals(2, signers.size());
+        for (DocGen_Signer__c signer : signers) {
+            System.assert(String.isNotBlank(signer.Secure_Token__c), 'Signer token must be generated');
+        }
+    }
+
     // =========================================================================
     // Happy path — default silent behavior from Flow
     // =========================================================================
