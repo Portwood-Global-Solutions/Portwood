@@ -5019,6 +5019,9 @@ private class DocGenControllerTests {
             tpl.API_Name__c = 'Clone_Source';
             tpl.Is_Active__c = true;
             tpl.Default_Email_Message__c = 'Please sign.';
+            tpl.Default_Signing_Order__c = 'Sequential';
+            tpl.Default_Signed_Title__c = '{Name} Agreement';
+            tpl.Default_Signature_Expiry_Days__c = 14;
             update tpl;
 
             ContentVersion cv = new ContentVersion(
@@ -5046,7 +5049,15 @@ private class DocGenControllerTests {
             System.assertNotEquals(null, cloneId, 'Clone should return the new template Id');
             System.assertNotEquals(tpl.Id, cloneId, 'Clone must be a new record');
             DocGen_Template__c copy = [
-                SELECT Name, Is_Active__c, Is_Default__c, API_Name__c, Default_Email_Message__c
+                SELECT
+                    Name,
+                    Is_Active__c,
+                    Is_Default__c,
+                    API_Name__c,
+                    Default_Email_Message__c,
+                    Default_Signing_Order__c,
+                    Default_Signed_Title__c,
+                    Default_Signature_Expiry_Days__c
                 FROM DocGen_Template__c
                 WHERE Id = :cloneId
             ];
@@ -5055,6 +5066,9 @@ private class DocGenControllerTests {
             System.assertEquals(false, copy.Is_Default__c, 'Clone must not steal the object default');
             System.assertNotEquals('Clone_Source', copy.API_Name__c, 'Clone must not reuse the unique API Name');
             System.assertEquals('Please sign.', copy.Default_Email_Message__c, 'Newer fields must survive the clone');
+            System.assertEquals('Sequential', copy.Default_Signing_Order__c);
+            System.assertEquals('{Name} Agreement', copy.Default_Signed_Title__c);
+            System.assertEquals(14, copy.Default_Signature_Expiry_Days__c);
             List<DocGen_Template_Version__c> cloneVers = [
                 SELECT Content_Version_Id__c, Is_Active__c
                 FROM DocGen_Template_Version__c

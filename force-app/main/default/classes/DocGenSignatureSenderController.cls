@@ -64,7 +64,10 @@ public with sharing class DocGenSignatureSenderController {
                 'Required_Permission_Sets__c',
                 'Record_Filter__c',
                 'Base_Object_API__c',
-                'Default_Email_Message__c'
+                'Default_Email_Message__c',
+                'Default_Signing_Order__c',
+                'Default_Signed_Title__c',
+                'Default_Signature_Expiry_Days__c'
             }
         );
         /* code-analyzer-suppress ApexFlsViolation */
@@ -78,7 +81,10 @@ public with sharing class DocGenSignatureSenderController {
                 Required_Permission_Sets__c,
                 Record_Filter__c,
                 Base_Object_API__c,
-                Default_Email_Message__c
+                Default_Email_Message__c,
+                Default_Signing_Order__c,
+                Default_Signed_Title__c,
+                Default_Signature_Expiry_Days__c
             FROM DocGen_Template__c
             WITH SYSTEM_MODE
             ORDER BY Sort_Order__c ASC NULLS LAST, Name ASC

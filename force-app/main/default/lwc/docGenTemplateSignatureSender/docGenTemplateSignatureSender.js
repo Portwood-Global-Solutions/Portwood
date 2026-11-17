@@ -80,7 +80,11 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
                 label: t.Name,
                 value: t.Id,
                 // #208 — namespace-aware read: prefixed in subscriber orgs, bare in dev.
-                defaultMessage: t.Default_Email_Message__c || t.portwoodglobal__Default_Email_Message__c || ''
+                defaultMessage: t.Default_Email_Message__c || t.portwoodglobal__Default_Email_Message__c || '',
+                defaultSigningOrder: t.Default_Signing_Order__c || t.portwoodglobal__Default_Signing_Order__c,
+                defaultSignedTitle: t.Default_Signed_Title__c || t.portwoodglobal__Default_Signed_Title__c,
+                defaultExpiryDays:
+                    t.Default_Signature_Expiry_Days__c ?? t.portwoodglobal__Default_Signature_Expiry_Days__c
             }));
         } else if (error) {
             this.docGenTemplateOptions = [];
@@ -200,6 +204,7 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
     }
 
     handleSigningOrderChange(event) {
+        this._overriddenSendDefaults.add('signingOrder');
         this.signingOrder = event.detail.value;
     }
 
@@ -244,6 +249,7 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
     }
 
     handleDocumentTitleChange(event) {
+        this._overriddenSendDefaults.add('documentTitleFormat');
         this.documentTitleFormat = event.detail.value || '';
     }
 
@@ -262,7 +268,25 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
     }
 
     handleExpirationDaysChange(event) {
+        this._overriddenSendDefaults.add('expirationDays');
         this.expirationDays = event.detail.value;
+    }
+
+    _overriddenSendDefaults = new Set();
+
+    _applyTemplateSendDefaults() {
+        const template = this.isSingleTemplate
+            ? this.docGenTemplateOptions.find((option) => option.value === this.selectedTemplates[0].templateId)
+            : null;
+        if (!this._overriddenSendDefaults.has('signingOrder')) {
+            this.signingOrder = template?.defaultSigningOrder === 'Sequential' ? 'Sequential' : 'Parallel';
+        }
+        if (!this._overriddenSendDefaults.has('documentTitleFormat')) {
+            this.documentTitleFormat = template?.defaultSignedTitle || '';
+        }
+        if (!this._overriddenSendDefaults.has('expirationDays')) {
+            this.expirationDays = template?.defaultExpiryDays ?? null;
+        }
     }
 
     // --- Template Selection ---
@@ -346,6 +370,7 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
             ];
 
             this._refreshAggregatedPlacements();
+            this._applyTemplateSendDefaults();
         } finally {
             this._pendingTemplateIds.delete(templateId);
         }
@@ -355,6 +380,7 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
         const idx = parseInt(event.currentTarget.dataset.index, 10);
         this.selectedTemplates = this.selectedTemplates.filter((_, i) => i !== idx);
         this._refreshAggregatedPlacements();
+        this._applyTemplateSendDefaults();
         // #208 — an auto-filled (never-touched) message belongs to the removed
         // template; clear it so the next selection can pre-fill its own default.
         if (!this._messageTouched && this.selectedTemplates.length === 0) {

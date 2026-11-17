@@ -3842,6 +3842,32 @@
                                             max-length="4000"
                                             field-level-help="Default text for the {Message} token in signature request emails sent from this template. Pre-filled for the sender; a message typed at send time always wins. Blank uses the generic default."
                                         ></lightning-textarea>
+                                        <lightning-combobox
+                                            class="slds-var-m-top_medium"
+                                            label="Default Signing Order"
+                                            value={editTemplateDefaultSigningOrder}
+                                            options={defaultSigningOrderOptions}
+                                            onchange={handleDefaultSigningOrderChange}
+                                        ></lightning-combobox>
+                                        <lightning-input
+                                            class="slds-var-m-top_medium"
+                                            label="Default Signed Document Title"
+                                            value={editTemplateDefaultSignedTitle}
+                                            onchange={handleDefaultSignedTitleChange}
+                                            max-length="255"
+                                            field-level-help="Supports merge tags. Leave blank to use the template name."
+                                        ></lightning-input>
+                                        <lightning-input
+                                            class="slds-var-m-top_medium"
+                                            type="number"
+                                            label="Default Link Expiration in Days"
+                                            value={editTemplateDefaultSignatureExpiryDays}
+                                            onchange={handleDefaultSignatureExpiryDaysChange}
+                                            min="1"
+                                            max="365"
+                                            step="1"
+                                            field-level-help="Leave blank to use the organization setting."
+                                        ></lightning-input>
                                     </div>
                                 </div>
                             </div>

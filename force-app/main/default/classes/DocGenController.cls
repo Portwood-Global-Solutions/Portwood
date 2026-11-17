@@ -2724,7 +2724,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Hide_Signer_Decline__c',
                 'Signature_Type_Only__c',
                 'API_Name__c',
-                'Default_Email_Message__c'
+                'Default_Email_Message__c',
+                'Default_Signing_Order__c',
+                'Default_Signed_Title__c',
+                'Default_Signature_Expiry_Days__c'
             }
         );
         /* code-analyzer-suppress ApexFlsViolation */
@@ -2760,6 +2763,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Signature_Type_Only__c,
                 API_Name__c,
                 Default_Email_Message__c,
+                Default_Signing_Order__c,
+                Default_Signed_Title__c,
+                Default_Signature_Expiry_Days__c,
                 CreatedDate,
                 LastModifiedDate,
                 (SELECT ContentDocumentId FROM ContentDocumentLinks ORDER BY ContentDocument.CreatedDate DESC LIMIT 1)
@@ -2812,6 +2818,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Signature_Type_Only__c',
                 'API_Name__c',
                 'Default_Email_Message__c',
+                'Default_Signing_Order__c',
+                'Default_Signed_Title__c',
+                'Default_Signature_Expiry_Days__c',
                 'Brand__c'
             }
         );
@@ -2848,6 +2857,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Signature_Type_Only__c,
                 API_Name__c,
                 Default_Email_Message__c,
+                Default_Signing_Order__c,
+                Default_Signed_Title__c,
+                Default_Signature_Expiry_Days__c,
                 Brand__c,
                 CreatedDate,
                 LastModifiedDate,
@@ -3070,6 +3082,17 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Default_Email_Message__c')) {
                 template.Default_Email_Message__c = (String) fields.get('Default_Email_Message__c');
             }
+            if (fields.containsKey('Default_Signing_Order__c')) {
+                template.Default_Signing_Order__c = parseDefaultSigningOrder(fields.get('Default_Signing_Order__c'));
+            }
+            if (fields.containsKey('Default_Signed_Title__c')) {
+                template.Default_Signed_Title__c = (String) fields.get('Default_Signed_Title__c');
+            }
+            if (fields.containsKey('Default_Signature_Expiry_Days__c')) {
+                template.Default_Signature_Expiry_Days__c = parseDefaultSignatureExpiry(
+                    fields.get('Default_Signature_Expiry_Days__c')
+                );
+            }
             // #369 — Sending Brand: which Portwood Brand this template's signature
             // emails use. Blank/omitted leaves the org-wide default in effect,
             // exactly as before this field existed.
@@ -3145,6 +3168,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Signature_Type_Only__c',
                     'API_Name__c',
                     'Default_Email_Message__c',
+                    'Default_Signing_Order__c',
+                    'Default_Signed_Title__c',
+                    'Default_Signature_Expiry_Days__c',
                     'Brand__c',
                     'Is_Active__c',
                     'Is_Default__c'
@@ -8188,6 +8214,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Hide_Signer_Decline__c',
                     'Signature_Type_Only__c',
                     'Default_Email_Message__c',
+                    'Default_Signing_Order__c',
+                    'Default_Signed_Title__c',
+                    'Default_Signature_Expiry_Days__c',
                     'Form_Fields_Config__c'
                 }
             );
@@ -8222,6 +8251,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Hide_Signer_Decline__c,
                     Signature_Type_Only__c,
                     Default_Email_Message__c,
+                    Default_Signing_Order__c,
+                    Default_Signed_Title__c,
+                    Default_Signature_Expiry_Days__c,
                     Form_Fields_Config__c,
                     (
                         SELECT
@@ -8287,6 +8319,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('Hide_Signer_Decline__c', tmpl.Hide_Signer_Decline__c);
             tmplData.put('Signature_Type_Only__c', tmpl.Signature_Type_Only__c);
             tmplData.put('Default_Email_Message__c', tmpl.Default_Email_Message__c);
+            tmplData.put('Default_Signing_Order__c', tmpl.Default_Signing_Order__c);
+            tmplData.put('Default_Signed_Title__c', tmpl.Default_Signed_Title__c);
+            tmplData.put('Default_Signature_Expiry_Days__c', tmpl.Default_Signature_Expiry_Days__c);
             tmplData.put('Form_Fields_Config__c', tmpl.Form_Fields_Config__c);
             bundle.put('template', tmplData);
 
@@ -8515,6 +8550,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmpl.Hide_Signer_Decline__c = tmplData.get('Hide_Signer_Decline__c') == true;
             tmpl.Signature_Type_Only__c = tmplData.get('Signature_Type_Only__c') == true;
             tmpl.Default_Email_Message__c = (String) tmplData.get('Default_Email_Message__c');
+            tmpl.Default_Signing_Order__c = parseDefaultSigningOrder(tmplData.get('Default_Signing_Order__c'));
+            tmpl.Default_Signed_Title__c = (String) tmplData.get('Default_Signed_Title__c');
+            tmpl.Default_Signature_Expiry_Days__c = parseDefaultSignatureExpiry(
+                tmplData.get('Default_Signature_Expiry_Days__c')
+            );
             tmpl.Form_Fields_Config__c = (String) tmplData.get('Form_Fields_Config__c');
             // API_Name__c is unique — keep it (the whole point is a stable key
             // across orgs) unless another template in this org already owns it.
@@ -8566,6 +8606,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Hide_Signer_Decline__c',
                     'Signature_Type_Only__c',
                     'Default_Email_Message__c',
+                    'Default_Signing_Order__c',
+                    'Default_Signed_Title__c',
+                    'Default_Signature_Expiry_Days__c',
                     'Form_Fields_Config__c',
                     'API_Name__c'
                 }
@@ -9367,5 +9410,32 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error deleting asset.');
         }
+    }
+    private static String parseDefaultSigningOrder(Object value) {
+        String order = (String) value;
+        if (String.isBlank(order)) {
+            return null;
+        }
+        if (order != 'Parallel' && order != 'Sequential') {
+            throw new DocGenException('Choose Parallel or Sequential for the default signing order.');
+        }
+        return order;
+    }
+
+    private static Integer parseDefaultSignatureExpiry(Object value) {
+        if (value == null || String.isBlank(String.valueOf(value))) {
+            return null;
+        }
+        String message = 'Set the default link expiration to a whole number from 1 to 365 days.';
+        Decimal days;
+        try {
+            days = Decimal.valueOf(String.valueOf(value));
+        } catch (Exception invalidNumber) {
+            throw new DocGenException(message);
+        }
+        if (days < 1 || days > 365 || days != days.intValue()) {
+            throw new DocGenException(message);
+        }
+        return days.intValue();
     }
 }
