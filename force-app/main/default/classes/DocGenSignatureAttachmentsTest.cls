@@ -161,7 +161,7 @@ private class DocGenSignatureAttachmentsTest {
         );
         DocGenPdfDocument merged = new DocGenPdfDocument(packet);
         Assert.areEqual(3, merged.pageList.size());
-        DocGenPdfDocument.Value cadPage = merged.pageList[0];
+        DocGenPdfDocument.Value cadPage = merged.resolve(merged.pageList[0]);
         Assert.areEqual(90, DocGenPdfDocument.intValue(cadPage.entries.get('Rotate')));
         List<Integer> crop = new List<Integer>();
         for (DocGenPdfDocument.Value part : cadPage.entries.get('CropBox').items) {
