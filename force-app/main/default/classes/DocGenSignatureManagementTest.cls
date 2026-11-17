@@ -2,11 +2,16 @@
 private class DocGenSignatureManagementTest {
     @TestSetup
     static void setup() {
-        insert new PermissionSetAssignment(
-            AssigneeId = UserInfo.getUserId(),
-            PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'DocGen_Admin' LIMIT 1]
-            .Id
-        );
+        Id userId = UserInfo.getUserId();
+        Id permissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'DocGen_Admin' LIMIT 1].Id;
+        if (
+            [
+                SELECT COUNT()
+                FROM PermissionSetAssignment
+                WHERE AssigneeId = :userId AND PermissionSetId = :permissionSetId
+            ] == 0
+        )
+            insert new PermissionSetAssignment(AssigneeId = userId, PermissionSetId = permissionSetId);
     }
 
     private static DocGen_Signature_Request__c makeRequest(Id recordId, String order) {
