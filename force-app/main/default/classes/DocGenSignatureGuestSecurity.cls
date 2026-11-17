@@ -81,6 +81,37 @@ public with sharing class DocGenSignatureGuestSecurity {
         }
     }
 
+    private static Set<String> lockedSignerTokens = new Set<String>();
+
+    /**
+     * Serialize token-bound writes with sender actions that rotate tokens.
+     * Callers resolve the signer by token after this lock, so an action that
+     * waited for a correction observes the invalidated token.
+     */
+    public static void lockSignerRequest(String token) {
+        if (!isValidTokenShape(token) || lockedSignerTokens.contains(token))
+            return;
+        List<DocGen_Signer__c> signers = [
+            SELECT Signature_Request__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE
+            LIMIT 1
+        ];
+        if (signers.isEmpty())
+            return;
+        Id requestId = signers[0].Signature_Request__c;
+        List<DocGen_Signature_Request__c> requests = [
+            SELECT Id
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :requestId
+            WITH SYSTEM_MODE
+            FOR UPDATE
+        ];
+        if (!requests.isEmpty())
+            lockedSignerTokens.add(token);
+    }
+
     /**
      * Asserts that DocGen_Signer__c is updateable for the allowlisted fields
      * used by the guest signing flow. Field allowlist:
@@ -101,6 +132,7 @@ public with sharing class DocGenSignatureGuestSecurity {
      *     base-object DML and the JSON keys never decide what gets written.
      */
     public static void assertSignerWritableFields(String token) {
+        lockSignerRequest(token);
         if (Schema.sObjectType.DocGen_Signer__c.isUpdateable()) {
             // Admin path — caller already has FLS via DocGen_Admin / Sender perm sets.
             return;

@@ -1,0 +1,117 @@
+<template>
+    <lightning-card title="Signature Requests" icon-name="standard:contract">
+        <lightning-button-icon
+            slot="actions"
+            icon-name="utility:refresh"
+            alternative-text="Refresh requests"
+            title="Refresh requests"
+            onclick={refresh}
+            disabled={busy}
+        ></lightning-button-icon>
+        <div class="slds-is-relative slds-p-around_medium">
+            <lightning-spinner lwc:if={busy} alternative-text="Working"></lightning-spinner>
+            <p lwc:if={error} class="slds-text-color_error" role="alert">{error}</p>
+            <template lwc:elseif={hasRequests}>
+                <lightning-accordion allow-multiple-sections-open>
+                    <lightning-accordion-section
+                        for:each={requests}
+                        for:item="request"
+                        key={request.id}
+                        name={request.id}
+                        label={request.title}
+                    >
+                        <p><strong>Status</strong> {request.status}</p>
+                        <p>
+                            <strong>Created</strong>
+                            <lightning-formatted-date-time
+                                value={request.created}
+                                year="numeric"
+                                month="short"
+                                day="numeric"
+                            ></lightning-formatted-date-time>
+                        </p>
+                        <p lwc:if={request.expires}>
+                            <strong>Expires</strong>
+                            <lightning-formatted-date-time
+                                value={request.expires}
+                                year="numeric"
+                                month="short"
+                                day="numeric"
+                                hour="2-digit"
+                                minute="2-digit"
+                            ></lightning-formatted-date-time>
+                        </p>
+                        <div class="slds-m-vertical_small">
+                            <lightning-button
+                                label="View request"
+                                data-id={request.id}
+                                onclick={view}
+                            ></lightning-button>
+                            <template lwc:if={request.active}>
+                                <lightning-button
+                                    class="slds-m-left_x-small"
+                                    lwc:if={request.canResend}
+                                    label="Resend"
+                                    data-id={request.id}
+                                    data-action="resend"
+                                    onclick={manage}
+                                    disabled={busy}
+                                ></lightning-button>
+                                <lightning-button
+                                    class="slds-m-left_x-small"
+                                    label="Revoke"
+                                    data-id={request.id}
+                                    data-action="revoke"
+                                    onclick={manage}
+                                    disabled={busy}
+                                ></lightning-button>
+                            </template>
+                        </div>
+                        <details lwc:if={request.deliveryStatus} class="slds-m-bottom_small">
+                            <summary>Email status</summary>
+                            <lightning-formatted-text value={request.deliveryStatus}></lightning-formatted-text>
+                        </details>
+                        <ul class="slds-has-dividers_bottom-space">
+                            <li class="slds-item" for:each={request.signers} for:item="signer" key={signer.id}>
+                                <p><strong>{signer.name}</strong> · {signer.role} · {signer.status}</p>
+                                <p>{signer.email}</p>
+                                <lightning-button
+                                    class="slds-m-top_x-small"
+                                    lwc:if={signer.canCorrect}
+                                    label="Correct email"
+                                    data-request={request.id}
+                                    data-signer={signer.id}
+                                    onclick={openCorrection}
+                                    disabled={busy}
+                                ></lightning-button>
+                            </li>
+                        </ul>
+                    </lightning-accordion-section>
+                </lightning-accordion>
+            </template>
+            <p lwc:elseif={busy}>Loading signature requests…</p>
+            <p lwc:else>No signature requests for this record.</p>
+            <section lwc:if={correction} class="slds-box slds-m-top_medium" aria-label="Correct signer email">
+                <p>Current address: {correction.expectedEmail}</p>
+                <p>The old signing link will be invalidated. Email already delivered cannot be recalled.</p>
+                <lightning-input
+                    data-corrected-email
+                    type="email"
+                    label="Corrected email"
+                    maxlength="80"
+                    required
+                ></lightning-input>
+                <div class="slds-m-top_small">
+                    <lightning-button label="Cancel" onclick={closeCorrection} disabled={busy}></lightning-button>
+                    <lightning-button
+                        class="slds-m-left_x-small"
+                        label="Correct email and resend"
+                        variant="brand"
+                        onclick={saveCorrection}
+                        disabled={busy}
+                    ></lightning-button>
+                </div>
+            </section>
+        </div>
+    </lightning-card>
+</template>

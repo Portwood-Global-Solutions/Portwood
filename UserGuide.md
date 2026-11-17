@@ -1867,6 +1867,12 @@ Open **Files** on the related record and inspect the signed PDF. Guided signing 
 
 An image merged into an ordinary document is not a completed Portwood signing request and does not create the same signing audit trail.
 
+#### Manage requests on a record page
+
+In Lightning App Builder, add **Portwood Signature Requests** to a record page. A user with **Portwood Admin** can view the latest 100 requests for that record and resend or revoke active requests.
+
+Choose **Correct email** next to an unsigned signer to replace a mistyped address. Confirm the new address before saving. Portwood replaces the signing link, resets email verification, and records the previous address, new address, acting user, and timestamp in **Portwood Signer Email Changes**. An email already delivered cannot be recalled. A later signer on a sequential request gets their new link when their turn arrives. If the signer already completed a signature field, revoke and recreate the request to avoid carrying over that person's entry.
+
 _Document senders · 5 min read · Reviewed for 3.60.0_
 
 **Next:** [Fix a signing problem](#fix-signing) · [Brand the signing experience](#brands-and-emails)

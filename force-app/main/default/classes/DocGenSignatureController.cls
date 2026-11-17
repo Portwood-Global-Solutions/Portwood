@@ -2299,6 +2299,7 @@ public without sharing class DocGenSignatureController {
         // Guest CRUD/FLS gate — write allowlist on DocGen_Signature_Placement__c
         // (Status__c, Signed_At__c, Signed_Value__c).
         DocGenSignatureGuestSecurity.assertPlacementWritableFields(token);
+        DocGenSignatureGuestSecurity.lockSignerRequest(token);
 
         DocGenFlsGuard.guestAssertAccessible(
             DocGen_Signer__c.sObjectType,

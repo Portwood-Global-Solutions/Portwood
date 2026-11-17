@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signer__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <label>Signer</label>
+    <referenceTo>DocGen_Signer__c</referenceTo>
+    <relationshipLabel>Email Changes</relationshipLabel>
+    <relationshipName>Email_Changes</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>
