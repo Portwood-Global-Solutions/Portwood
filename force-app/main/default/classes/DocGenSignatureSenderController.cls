@@ -2891,6 +2891,7 @@ public with sharing class DocGenSignatureSenderController {
             WHERE Id = :requestId
             WITH SYSTEM_MODE
             LIMIT 1
+            FOR UPDATE
         ];
 
         if (req.Status__c == 'Signed' || req.Status__c == 'Cancelled') {
@@ -3011,6 +3012,7 @@ public with sharing class DocGenSignatureSenderController {
             WHERE Id = :requestId
             WITH SYSTEM_MODE
             LIMIT 1
+            FOR UPDATE
         ];
 
         if (req.Status__c == 'Signed') {

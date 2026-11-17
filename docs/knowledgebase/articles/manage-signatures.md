@@ -35,3 +35,9 @@ Portwood Admin users can use **Sign In Person** when it is offered for a pending
 Open **Files** on the related record and inspect the signed PDF. Guided signing adds the marks and a **Certificate of Completion** with signer and verification information. The verification link supports checking the received file against the recorded document hash.
 
 An image merged into an ordinary document is not a completed Portwood signing request and does not create the same signing audit trail.
+
+#### Manage requests on a record page
+
+In Lightning App Builder, add **Portwood Signature Requests** to a record page. A user with **Portwood Admin** can view the latest 100 requests for that record and resend or revoke active requests.
+
+Choose **Correct email** next to an unsigned signer to replace a mistyped address. Confirm the new address before saving. Portwood replaces the signing link, resets email verification, and records the previous address, new address, acting user, and timestamp in **Portwood Signer Email Changes**. An email already delivered cannot be recalled. A later signer on a sequential request gets their new link when their turn arrives. If the signer already completed a signature field, revoke and recreate the request to avoid carrying over that person's entry.
