@@ -51,6 +51,25 @@ private class DocGenVerificationTest {
         ];
     }
 
+    @IsTest
+    static void certificateVerificationUsesPublicSiteBase() {
+        String token = DocGenSignatureSenderController.generateRequestVerificationToken();
+        DocGen_Signature_Request__c request = new DocGen_Signature_Request__c(
+            Secure_Token__c = token,
+            Status__c = 'Sent'
+        );
+        insert request;
+
+        String url = DocGenSignatureService.buildVerifyUrl(request.Id, ' verify.example.com/portal/s/ ');
+        System.assert(url.startsWith('https://verify.example.com/portal/apex/'), url);
+        System.assert(url.endsWith('DocGenVerify?token=' + token), url);
+        System.assertEquals(
+            null,
+            DocGenSignatureService.buildVerifyUrl(request.Id, 'https://<CONFIGURE_SITE_URL_IN_SETUP>')
+        );
+        System.assertEquals(null, DocGenSignatureService.buildVerifyUrl(request.Id, 'ftp://verify.example.com/portal'));
+    }
+
     // ---- Cascade: per-send override wins ----
     @IsTest
     static void perSendOverride_turnsVerificationOff() {
