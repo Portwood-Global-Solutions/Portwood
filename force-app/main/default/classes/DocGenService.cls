@@ -7368,7 +7368,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                             '<w:hyperlink w:docgen-url="' +
                             href.escapeXml() +
                             '">' +
-                            buildRun(linkText, inheritedRunProperties, false, false, true, false, null, null, '0563C1', null) +
+                            buildRun(
+                                linkText,
+                                inheritedRunProperties,
+                                false,
+                                false,
+                                true,
+                                false,
+                                null,
+                                null,
+                                '0563C1',
+                                null
+                            ) +
                             '</w:hyperlink>';
                     } else {
                         result += buildRun(
@@ -7447,7 +7458,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         String properties = inheritedRunProperties == ''
             ? ''
-            : inheritedRunProperties.substring(inheritedRunProperties.indexOf('>') + 1, inheritedRunProperties.length() - 8);
+            : inheritedRunProperties.substring(
+                  inheritedRunProperties.indexOf('>') + 1,
+                  inheritedRunProperties.length() - 8
+              );
         if (String.isNotBlank(fontFamily))
             properties = setRichTextRunProperty(
                 properties,
