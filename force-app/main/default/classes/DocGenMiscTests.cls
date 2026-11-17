@@ -4552,6 +4552,33 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testCurrencyIsoModifier() {
+        Map<String, Object> data = new Map<String, Object>{
+            'Amount' => 50,
+            'CurrencyIsoCode' => 'DKK',
+            'BillingCurrency__c' => 'SEK',
+            'Items' => new List<Object>{ new Map<String, Object>{ 'Price' => 50 } }
+        };
+        System.assertEquals('SEK 50.00', DocGenService.processXmlForTest('{Amount:currency:SEK:iso}', data));
+        System.assertEquals('DKK 50.00', DocGenService.processXmlForTest('{Amount:currency:DKK:iso}', data));
+        System.assertEquals('kr 50.00', DocGenService.processXmlForTest('{Amount:currency:SEK}', data));
+        System.assertEquals('50,00 DKK', DocGenService.processXmlForTest('{Amount:currency:auto:de_DE:iso}', data));
+        System.assertEquals(
+            '50,00 SEK',
+            DocGenService.processXmlForTest('{Amount:currency:auto=BillingCurrency__c:de_DE:iso}', data)
+        );
+        System.assertEquals(
+            '50,00 DKK',
+            DocGenService.processXmlForTest('{SUM:Items.Price:currency:auto:de_DE:iso}', data)
+        );
+        System.assertEquals(
+            '50,00 DKK',
+            DocGenService.processXmlForTest('{Amount:currency:DKK:de_DE:iso:convert}', data)
+        );
+        System.assertEquals('JPY 50', DocGenService.processXmlForTest('{Amount:currency:JPY:iso}', data));
+    }
+
+    @IsTest
     static void testAggregateCurrencyAuto() {
         Map<String, Object> data = new Map<String, Object>{
             'CurrencyIsoCode' => 'GBP',
