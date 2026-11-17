@@ -3277,6 +3277,65 @@ private class DocGenHtmlRendererTest {
         System.assert(!result.contains('<mc:AlternateContent'), 'AlternateContent textbox should be unwrapped');
     }
 
+    private static String floatingTextbox(String label, Integer verticalOffset) {
+        return '<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor>' +
+            '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+            '<wp:positionV relativeFrom="paragraph"><wp:posOffset>' +
+            verticalOffset +
+            '</wp:posOffset></wp:positionV><wp:extent cx="2743200" cy="228600"/>' +
+            '<wps:wsp><wps:txbx><w:txbxContent><w:p><w:r><w:t>' +
+            label +
+            '</w:t></w:r></w:p></w:txbxContent></wps:txbx></wps:wsp>' +
+            '</wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict><v:textbox><w:txbxContent>' +
+            '<w:p><w:r><w:t>Duplicate fallback</w:t></w:r></w:p>' +
+            '</w:txbxContent></v:textbox></w:pict></mc:Fallback></mc:AlternateContent></w:r>';
+    }
+
+    @IsTest
+    static void unwrapTextboxes_keepsSiblingBoxesInBodyHeaderAndFooter() {
+        String body =
+            '<w:p>' +
+            floatingTextbox('First body box', 0) +
+            floatingTextbox('Second body box', 300000) +
+            '</w:p>';
+        String header =
+            '<w:p>' +
+            floatingTextbox('First header box', 0) +
+            floatingTextbox('Second header box', 300000) +
+            '</w:p>';
+        String footer =
+            '<w:p>' +
+            floatingTextbox('First footer box', 0) +
+            floatingTextbox('Second footer box', 300000) +
+            '</w:p>';
+        String following = '<w:p><w:r><w:t>Following paragraph</w:t></w:r></w:p>';
+        String xml =
+            '<w:document><w:body>' +
+            body +
+            following +
+            '</w:body></w:document>' +
+            '<!-- DOCGEN_HEADER_START --><w:hdr>' +
+            header +
+            '</w:hdr><!-- DOCGEN_HEADER_END -->' +
+            '<!-- DOCGEN_FOOTER_START --><w:ftr>' +
+            footer +
+            '</w:ftr><!-- DOCGEN_FOOTER_END -->';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+        for (String region : new List<String>{ 'body', 'header', 'footer' }) {
+            Integer first = html.indexOf('First ' + region + ' box');
+            Integer second = html.indexOf('Second ' + region + ' box');
+            System.assert(first >= 0 && second > first, 'Preserve both ' + region + ' textboxes in order');
+            System.assertEquals(second, html.lastIndexOf('Second ' + region + ' box'), 'Emit each textbox once');
+        }
+        System.assert(
+            html.indexOf('Following paragraph') > html.indexOf('Second body box'),
+            'Keep following paragraph'
+        );
+        System.assert(!html.contains('Duplicate fallback'), 'Use the modern Choice once');
+        System.assert(!html.contains('__DGTXBX_'), 'Resolve all textbox markers');
+    }
+
     @IsTest
     static void findEnclosingParagraphStart_skipsPrefixFalseMatches() {
         // <w:pPr>/<w:pStyle> share the '<w:p' prefix; the helper must skip them and
