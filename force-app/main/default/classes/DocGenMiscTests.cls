@@ -6607,6 +6607,45 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testRichTextInheritsTokenRunFormatting() {
+        String tokenProperties = '<w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:color w:val="6B6660"/></w:rPr>';
+        String template = '<w:p><w:r>' + tokenProperties + '<w:t>{Description__c} after</w:t></w:r></w:p>';
+        Map<String, Object> data = new Map<String, Object>{ 'Description__c' => '<div>Hello</div><div>Again</div>' };
+        String merged = DocGenService.processXmlForTest(template, data);
+        for (String text : new List<String>{ 'Hello', 'Again', ' after' }) {
+            System.assert(
+                merged.contains('<w:r>' + tokenProperties + '<w:t xml:space="preserve">' + text + '</w:t></w:r>'),
+                'Expected inherited run formatting for ' + text + ': ' + merged
+            );
+        }
+    }
+
+    @IsTest
+    static void testRichTextInlineFormattingOverridesTokenProperties() {
+        String template =
+            '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:color w:val="6B6660"/>' +
+            '<w:b w:val="0"/><w:bCs/></w:rPr><w:t>{Description__c}</w:t></w:r></w:p>';
+        Map<String, Object> data = new Map<String, Object>{
+            'Description__c' => '<div><b><span style="color: #123456">Styled</span></b> plain</div>'
+        };
+        String merged = DocGenService.processXmlForTest(template, data);
+        System.assert(
+            merged.contains(
+                '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:bCs/><w:b/>' +
+                '<w:color w:val="123456"/></w:rPr><w:t xml:space="preserve">Styled</w:t></w:r>'
+            ),
+            'Inline markup should override matching properties and retain the rest: ' + merged
+        );
+        System.assert(
+            merged.contains(
+                '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="19"/><w:color w:val="6B6660"/>' +
+                '<w:b w:val="0"/><w:bCs/></w:rPr><w:t xml:space="preserve"> plain</w:t></w:r>'
+            ),
+            'Closing the inline markup should restore inherited properties: ' + merged
+        );
+    }
+
+    @IsTest
     static void testIfConditionalInsideTableRowDoesNotCorruptDocx() {
         // Issue #53: {#IF X = Y}…{/IF} placed inside a <w:tr> caused the
         // smart-container expansion to backtrack the row's opening tags. When
