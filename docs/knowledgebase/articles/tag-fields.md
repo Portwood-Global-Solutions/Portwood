@@ -48,6 +48,10 @@ Zero-decimal currencies (JPY, KRW, CLP, VND, HUF, ISK, TWD) format without decim
 
 ##### Auto-detecting the currency from the record
 
+Add the `:iso` modifier to show the currency code where the symbol usually appears. For example,
+`{Amount:currency:SEK:iso}` distinguishes SEK from DKK, and `{Amount:currency:auto:de_DE:iso}`
+uses the record's code with German number formatting. For conversion, put `:convert` last.
+
 Use `:currency:auto` when the symbol should follow the **record's own currency** rather than a fixed ISO code — ideal for multi-currency orgs.
 
 ```

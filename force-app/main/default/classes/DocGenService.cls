@@ -6396,6 +6396,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
 
+        Boolean showIso = segments.size() > 2 && 'iso'.equalsIgnoreCase(segments[segments.size() - 1].trim());
+        if (showIso) {
+            segments = segments.clone();
+            segments.remove(segments.size() - 1);
+        }
+
         String spec = segments[1].trim();
         String lowerSpec = spec.toLowerCase();
 
@@ -6408,13 +6414,13 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 return formatCurrencyDollarFallback(num);
             }
             String autoLocale = segments.size() >= 3 ? segments[2].trim() : UserInfo.getLocale();
-            return formatCurrencyWithIso(num, autoIso, autoLocale);
+            return formatCurrencyWithIso(num, autoIso, autoLocale, showIso);
         }
 
         // :currency:ISO or :currency:ISO:locale
         String iso = spec.toUpperCase();
         String locale = segments.size() >= 3 ? segments[2].trim() : null;
-        return formatCurrencyWithIso(num, iso, locale);
+        return formatCurrencyWithIso(num, iso, locale, showIso);
     }
 
     /**
@@ -6448,9 +6454,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     /** Formats `num` with the symbol for `iso` and the separators/placement for `locale`. */
-    private static String formatCurrencyWithIso(Decimal num, String iso, String locale) {
+    private static String formatCurrencyWithIso(Decimal num, String iso, String locale, Boolean showIso) {
         // Resolve symbol
-        String symbol = CURRENCY_SYMBOLS.containsKey(iso) ? CURRENCY_SYMBOLS.get(iso) : iso + ' ';
+        String symbol = !showIso && CURRENCY_SYMBOLS.containsKey(iso) ? CURRENCY_SYMBOLS.get(iso) : iso + ' ';
 
         // Determine decimal places (0 for JPY, KRW, etc.)
         Integer scale = ZERO_DECIMAL_CURRENCIES.contains(iso) ? 0 : 2;
