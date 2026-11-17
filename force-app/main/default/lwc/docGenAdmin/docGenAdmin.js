@@ -1,4 +1,7 @@
 import { LightningElement, track, wire } from 'lwc';
+import getTemplatePdfAttachments from '@salesforce/apex/DocGenController.getTemplatePdfAttachments';
+import findTemplatePdfAttachmentFiles from '@salesforce/apex/DocGenController.findTemplatePdfAttachmentFiles';
+import saveTemplatePdfAttachments from '@salesforce/apex/DocGenController.saveTemplatePdfAttachments';
 import { createRecord, updateRecord } from 'lightning/uiRecordApi';
 // #236 — Type__c is a RESTRICTED picklist and the wizard defaults to 'HTML', a value
 // added in v1.61.0. Orgs installed before that and later upgraded may not have it, in
@@ -475,6 +478,142 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // Edit State
     @track isEditModalOpen = false;
     @track activeEditTab = 'details';
+    templatePdfAttachments = [];
+    pdfAttachmentOptions = [];
+    pdfAttachmentSearch = '';
+    pdfAttachmentSelected = '';
+    pdfAttachmentsTemplateId;
+    pdfAttachmentsBusy = false;
+    pdfAttachmentsReady = false;
+    pdfAttachmentSequence = 0;
+    pdfAttachmentPlacements = [
+        { label: 'Before generated document', value: 'before' },
+        { label: 'After generated document', value: 'after' }
+    ];
+
+    get disablePdfAttachmentSearch() {
+        return this.pdfAttachmentsBusy || this.pdfAttachmentSearch.trim().length < 2;
+    }
+
+    get disableAddPdfAttachment() {
+        return !this.pdfAttachmentsReady || !this.pdfAttachmentSelected || this.pdfAttachmentsBusy;
+    }
+
+    get disableSavePdfAttachments() {
+        return !this.pdfAttachmentsReady || this.pdfAttachmentsBusy;
+    }
+
+    _setTemplatePdfAttachments(config) {
+        const entries = JSON.parse(config || '[]');
+        this.templatePdfAttachments = entries.map((entry) => ({ ...entry, key: ++this.pdfAttachmentSequence }));
+    }
+
+    async handlePdfAttachmentsActive() {
+        const templateId = this.editTemplateId;
+        if (!templateId || (this.pdfAttachmentsTemplateId === templateId && this.pdfAttachmentsReady)) return;
+        this.pdfAttachmentsTemplateId = templateId;
+        this.pdfAttachmentsBusy = true;
+        this.pdfAttachmentsReady = false;
+        this.templatePdfAttachments = [];
+        this.pdfAttachmentOptions = [];
+        this.pdfAttachmentSearch = '';
+        this.pdfAttachmentSelected = '';
+        try {
+            const config = await getTemplatePdfAttachments({ templateId });
+            if (this.pdfAttachmentsTemplateId !== templateId || this.editTemplateId !== templateId) return;
+            this._setTemplatePdfAttachments(config);
+            this.pdfAttachmentsReady = true;
+        } catch (error) {
+            this.showToast('Could not load PDF attachments', error.body?.message || error.message, 'error');
+        } finally {
+            if (this.pdfAttachmentsTemplateId === templateId) this.pdfAttachmentsBusy = false;
+        }
+    }
+
+    handlePdfAttachmentSearchChange(event) {
+        this.pdfAttachmentSearch = event.target.value || '';
+    }
+
+    async handleFindPdfAttachments() {
+        this.pdfAttachmentsBusy = true;
+        this.pdfAttachmentSelected = '';
+        const templateId = this.editTemplateId;
+        try {
+            const options = await findTemplatePdfAttachmentFiles({ title: this.pdfAttachmentSearch });
+            if (this.editTemplateId !== templateId || this.pdfAttachmentsTemplateId !== templateId) return;
+            this.pdfAttachmentOptions = options;
+            if (!options.length) this.showToast('No PDFs found', 'Try another file name.', 'info');
+        } catch (error) {
+            this.showToast('Could not find PDFs', error.body?.message || error.message, 'error');
+        } finally {
+            if (this.pdfAttachmentsTemplateId === templateId) this.pdfAttachmentsBusy = false;
+        }
+    }
+
+    handlePdfAttachmentSelection(event) {
+        this.pdfAttachmentSelected = event.detail.value;
+    }
+
+    handleAddPdfAttachment() {
+        const choice = this.pdfAttachmentOptions.find((item) => item.value === this.pdfAttachmentSelected);
+        if (!choice) return;
+        this.templatePdfAttachments = [
+            ...this.templatePdfAttachments,
+            { key: ++this.pdfAttachmentSequence, versionId: choice.value, title: choice.label, placement: 'after' }
+        ];
+        this.pdfAttachmentSelected = '';
+    }
+
+    handlePdfAttachmentPlacement(event) {
+        const key = Number(event.currentTarget.dataset.key);
+        const placement = event.detail.value;
+        this.templatePdfAttachments = this.templatePdfAttachments.map((entry) =>
+            entry.key === key ? { ...entry, placement } : entry
+        );
+    }
+
+    handleMovePdfAttachment(event) {
+        const key = Number(event.currentTarget.dataset.key);
+        const index = this.templatePdfAttachments.findIndex((entry) => entry.key === key);
+        const target = index + Number(event.currentTarget.dataset.step);
+        if (index < 0 || target < 0 || target >= this.templatePdfAttachments.length) return;
+        const reordered = [...this.templatePdfAttachments];
+        const [entry] = reordered.splice(index, 1);
+        reordered.splice(target, 0, entry);
+        this.templatePdfAttachments = reordered;
+    }
+
+    handleRemovePdfAttachment(event) {
+        const key = Number(event.currentTarget.dataset.key);
+        this.templatePdfAttachments = this.templatePdfAttachments.filter((entry) => entry.key !== key);
+    }
+
+    async handleSavePdfAttachments() {
+        const templateId = this.editTemplateId;
+        if (this.disableSavePdfAttachments || this.pdfAttachmentsTemplateId !== templateId) return;
+        this.pdfAttachmentsBusy = true;
+        try {
+            const config = JSON.stringify(
+                this.templatePdfAttachments.map(({ versionId, placement }) => ({
+                    versionId,
+                    placement
+                }))
+            );
+            const saved = await saveTemplatePdfAttachments({ templateId, config });
+            if (this.editTemplateId !== templateId) return;
+            this._setTemplatePdfAttachments(saved);
+            this.showToast(
+                'PDF attachments saved',
+                'They will be included in generated PDFs for this template.',
+                'success'
+            );
+        } catch (error) {
+            this.showToast('Could not save PDF attachments', error.body?.message || error.message, 'error');
+        } finally {
+            if (this.pdfAttachmentsTemplateId === templateId) this.pdfAttachmentsBusy = false;
+        }
+    }
+
     editTemplateId;
     editTemplateName;
     editTemplateCategory;
@@ -5343,6 +5482,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             this._editContext = true;
             this.editTemplateId = row.Id;
+            this.pdfAttachmentsTemplateId = null;
+            this.pdfAttachmentsReady = false;
             // Findings belong to the body that was linted — a different template
             // must never see the previous one's report.
             this.lintFindings = [];

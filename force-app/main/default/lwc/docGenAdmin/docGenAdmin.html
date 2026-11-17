@@ -5123,6 +5123,90 @@
                             </lightning-tab>
                         </template>
 
+                        <lightning-tab
+                            label="PDF Attachments"
+                            value="pdfAttachments"
+                            onactive={handlePdfAttachmentsActive}
+                        >
+                            <div class="slds-var-p-around_small">
+                                <p class="slds-var-m-bottom_small">
+                                    These file versions are included automatically in PDF output. Use the arrows to set
+                                    the order of files on each side of the generated document.
+                                </p>
+                                <lightning-input
+                                    type="search"
+                                    label="Find a PDF in Salesforce Files"
+                                    value={pdfAttachmentSearch}
+                                    onchange={handlePdfAttachmentSearchChange}
+                                ></lightning-input>
+                                <lightning-button
+                                    label="Find PDFs"
+                                    onclick={handleFindPdfAttachments}
+                                    disabled={disablePdfAttachmentSearch}
+                                ></lightning-button>
+                                <lightning-combobox
+                                    label="PDF file version"
+                                    options={pdfAttachmentOptions}
+                                    value={pdfAttachmentSelected}
+                                    onchange={handlePdfAttachmentSelection}
+                                ></lightning-combobox>
+                                <lightning-button
+                                    label="Add PDF"
+                                    onclick={handleAddPdfAttachment}
+                                    disabled={disableAddPdfAttachment}
+                                ></lightning-button>
+                                <ul class="slds-var-m-vertical_medium">
+                                    <template for:each={templatePdfAttachments} for:item="attachment">
+                                        <li key={attachment.key} class="slds-box slds-var-m-bottom_x-small">
+                                            <p>{attachment.title}</p>
+                                            <lightning-input
+                                                label="Pinned version ID"
+                                                value={attachment.versionId}
+                                                read-only
+                                            ></lightning-input>
+                                            <lightning-combobox
+                                                data-key={attachment.key}
+                                                label="Placement"
+                                                value={attachment.placement}
+                                                options={pdfAttachmentPlacements}
+                                                onchange={handlePdfAttachmentPlacement}
+                                                disabled={pdfAttachmentsBusy}
+                                            ></lightning-combobox>
+                                            <lightning-button-icon
+                                                data-key={attachment.key}
+                                                data-step="-1"
+                                                alternative-text="Move PDF up"
+                                                icon-name="utility:up"
+                                                onclick={handleMovePdfAttachment}
+                                                disabled={pdfAttachmentsBusy}
+                                            ></lightning-button-icon>
+                                            <lightning-button-icon
+                                                data-key={attachment.key}
+                                                data-step="1"
+                                                alternative-text="Move PDF down"
+                                                icon-name="utility:down"
+                                                onclick={handleMovePdfAttachment}
+                                                disabled={pdfAttachmentsBusy}
+                                            ></lightning-button-icon>
+                                            <lightning-button-icon
+                                                data-key={attachment.key}
+                                                alternative-text="Remove PDF"
+                                                icon-name="utility:delete"
+                                                onclick={handleRemovePdfAttachment}
+                                                disabled={pdfAttachmentsBusy}
+                                            ></lightning-button-icon>
+                                        </li>
+                                    </template>
+                                </ul>
+                                <lightning-button
+                                    label="Save PDF Attachments"
+                                    variant="brand"
+                                    onclick={handleSavePdfAttachments}
+                                    disabled={disableSavePdfAttachments}
+                                ></lightning-button>
+                            </div>
+                        </lightning-tab>
+
                         <!-- Tab 4: Document & History -->
                         <lightning-tab label="Document & History" value="document">
                             <div class="slds-var-p-around_small">

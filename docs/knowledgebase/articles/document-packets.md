@@ -30,3 +30,22 @@ For a PDF template, use **Combine with existing PDFs on this record** if offered
 Packets and PDF combines are download workflows. If the result also belongs on the record, upload the finished packet to Files.
 
 For a packet that needs signatures, use the [template signing workflow](#sign-template) instead of treating a combined unsigned download as a completed signing request.
+
+#### Automatically include PDFs from a template
+
+Open an existing template and select **PDF Attachments**. Find a Salesforce File
+by name, choose its exact PDF version, and add it before or after the generated
+document. Use the arrows to set the order on each side, then select **Save PDF
+Attachments**.
+
+Standard PDF generation in Runner and the **Generate Document** Flow action
+include every configured file. A later upload to the same Salesforce File does
+not change the pinned version. The generating user needs access to each file,
+and generation stops if a required file is unavailable or cannot be merged.
+The native merger's size limits apply to the complete packet. Giant Query PDF
+output does not support template attachments. For one-off Flow additions, use
+the **Portwood: Merge PDFs** action on the generated file.
+
+The configuration belongs to the template record and applies when switching
+between versions of that record. Configure the PDF files again when moving a
+template to another org.
