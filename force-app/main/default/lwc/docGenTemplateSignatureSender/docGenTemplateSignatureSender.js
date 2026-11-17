@@ -10,6 +10,7 @@ import getContactInfo from '@salesforce/apex/DocGenSignatureSenderController.get
 import getPendingSignatureRequests from '@salesforce/apex/DocGenSignatureSenderController.getPendingSignatureRequests';
 import getDocGenTemplates from '@salesforce/apex/DocGenSignatureSenderController.getDocGenTemplatesForRecord';
 import getTemplateSignaturePlacements from '@salesforce/apex/DocGenSignatureSenderController.getTemplateSignaturePlacements';
+import getCombinedSigningPreview from '@salesforce/apex/DocGenSignatureSenderController.getCombinedSigningPreview';
 import getDocumentPreviewPdfBase64 from '@salesforce/apex/DocGenSignatureSenderController.getDocumentPreviewPdfBase64';
 import resendSignatureRequest from '@salesforce/apex/DocGenSignatureSenderController.resendSignatureRequest';
 import cancelSignatureRequest from '@salesforce/apex/DocGenSignatureSenderController.cancelSignatureRequest';
@@ -580,6 +581,8 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
         this._revokePreviewUrls();
         this.previewDocuments = [];
 
+        const versionIds = this.orderedSelectedAttachments.map((file) => file.contentVersionId);
+        const position = this.attachmentPosition;
         const runId = (this._previewRunId || 0) + 1;
         this._previewRunId = runId;
 
@@ -616,20 +619,45 @@ export default class DocGenTemplateSignatureSender extends NavigationMixin(Light
                         : tmpl.name;
                 try {
                     this.previewStatus = 'Rendering ' + label + '...';
-                    const pdfBase64 = await getDocumentPreviewPdfBase64({
-                        templateId: tmpl.templateId,
-                        relatedRecordId: this.recordId
-                    });
-                    if (this._previewRunId !== runId) {
+                    const request = { templateId: tmpl.templateId, relatedRecordId: this.recordId };
+                    let preview;
+                    if (versionIds.length) {
+                        try {
+                            preview = await getCombinedSigningPreview({
+                                ...request,
+                                attachmentVersionIds: versionIds,
+                                attachmentPosition: position
+                            });
+                        } catch (err) {
+                            // Governor failures abort the Apex transaction, so try the ordinary
+                            // template preview in a fresh request if the combined call failed.
+                            if (this._previewRunId !== runId || !this.previewLoading) {
+                                return;
+                            }
+                            preview = {
+                                pdfBase64: await getDocumentPreviewPdfBase64(request),
+                                notice: 'Combined preview is unavailable. Use View files for the attachments.'
+                            };
+                        }
+                    } else {
+                        preview = { pdfBase64: await getDocumentPreviewPdfBase64(request) };
+                    }
+                    if (this._previewRunId !== runId || !this.previewLoading) {
                         return;
                     }
                     docs.push({
                         id: tmpl.id,
-                        name: label,
-                        url: pdfBase64 ? this._pdfObjectUrlFromBase64(pdfBase64) : '',
-                        error: pdfBase64 ? '' : 'Preview unavailable for ' + tmpl.name
+                        name: preview.combined ? 'Combined signing preview' : label,
+                        url: preview.pdfBase64 ? this._pdfObjectUrlFromBase64(preview.pdfBase64) : '',
+                        description: preview.combined
+                            ? 'Shows the template and attachments in signing order. Signers open each document separately.'
+                            : preview.notice,
+                        error: preview.pdfBase64 ? '' : 'Preview unavailable for ' + tmpl.name
                     });
                 } catch (err) {
+                    if (this._previewRunId !== runId || !this.previewLoading) {
+                        return;
+                    }
                     docs.push({
                         id: tmpl.id,
                         name: label,

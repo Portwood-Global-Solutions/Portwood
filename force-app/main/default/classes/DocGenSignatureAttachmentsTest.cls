@@ -33,6 +33,156 @@ private class DocGenSignatureAttachmentsTest {
         );
     }
 
+    @IsTest
+    static void combinedPreviewUsesExactLinkedVersionsAndSupportsBothPositions() {
+        Account record = account();
+        Blob templatePdf = DocGenPdfMergeFixtures.generation();
+        ContentVersion first = new ContentVersion(
+            Title = 'Pinned drawing',
+            PathOnClient = 'drawing.pdf',
+            FirstPublishLocationId = record.Id,
+            VersionData = DocGenPdfMergeFixtures.inherited()
+        );
+        insert first;
+        first = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Id = :first.Id];
+        insert new ContentVersion(
+            Title = 'Updated drawing',
+            PathOnClient = 'drawing.pdf',
+            ContentDocumentId = first.ContentDocumentId,
+            VersionData = templatePdf
+        );
+        ContentVersion second = new ContentVersion(
+            Title = 'Compressed drawing',
+            PathOnClient = 'compressed.pdf',
+            FirstPublishLocationId = record.Id,
+            VersionData = DocGenPdfMergeFixtures.modern()
+        );
+        insert second;
+        List<Id> selected = new List<Id>{ first.Id, second.Id };
+        Blob before = DocGenSignatureSenderController.mergeSigningPreview(templatePdf, record.Id, selected, 'Before');
+        Blob after = DocGenSignatureSenderController.mergeSigningPreview(templatePdf, record.Id, selected, 'After');
+        Assert.areEqual(
+            EncodingUtil.base64Encode(
+                DocGenPdfMerger.mergePdfs(
+                    new List<Blob>{ DocGenPdfMergeFixtures.inherited(), DocGenPdfMergeFixtures.modern(), templatePdf },
+                    false
+                )
+            ),
+            EncodingUtil.base64Encode(before),
+            'Exact selected versions must precede the template'
+        );
+        Assert.areEqual(
+            EncodingUtil.base64Encode(
+                DocGenPdfMerger.mergePdfs(
+                    new List<Blob>{ templatePdf, DocGenPdfMergeFixtures.inherited(), DocGenPdfMergeFixtures.modern() },
+                    false
+                )
+            ),
+            EncodingUtil.base64Encode(after),
+            'Exact selected versions must follow the template'
+        );
+    }
+
+    @IsTest
+    static void combinedPreviewKeepsTemplatePreviewWhenPacketIsUnavailable() {
+        Id template = createTaggedTemplate();
+        Account related = account();
+        Account other = new Account(Name = 'Different record');
+        insert other;
+        Id version = [SELECT Id FROM ContentVersion WHERE Title = 'GA-001 General Arrangement' LIMIT 1].Id;
+        Map<String, Object> wrongRecord = DocGenSignatureSenderController.getCombinedSigningPreview(
+            template,
+            other.Id,
+            new List<Id>{ version },
+            'Before'
+        );
+        Assert.areEqual(false, wrongRecord.get('combined'));
+        Assert.isNotNull(wrongRecord.get('pdfBase64'));
+        Assert.isTrue(String.valueOf(wrongRecord.get('notice')).contains('View files'));
+        Map<String, Object> malformed = DocGenSignatureSenderController.getCombinedSigningPreview(
+            template,
+            related.Id,
+            new List<Id>{ version },
+            'Before'
+        );
+        Assert.areEqual(false, malformed.get('combined'));
+        Assert.isNotNull(malformed.get('pdfBase64'));
+        List<Id> tooMany = new List<Id>();
+        for (Integer i = 0; i < 11; i++) {
+            tooMany.add(version);
+        }
+        Assert.isNull(
+            DocGenSignatureSenderController.mergeSigningPreview(
+                DocGenPdfMergeFixtures.generation(),
+                related.Id,
+                tooMany,
+                'Before'
+            )
+        );
+    }
+
+    @IsTest
+    static void combinedPreviewPreservesCadGeometryAndScanImageStream() {
+        // Synthetic A3 CAD-style vector sheet with inherited crop and rotation, a
+        // PDF 1.5 object stream, and a separate raster-only scanner-style page.
+        Blob drawing = EncodingUtil.base64Decode(
+            'JVBERi0xLjUKJb/3ov4KMSAwIG9iago8PCAvVHlwZSAvT2JqU3RtIC9MZW5ndGggNDEzIC9GaWx0ZXIgL0ZsYXRlRGVjb2RlIC9OIDYgL0ZpcnN0IDMzID4+CnN0cmVhbQp4nIVSS0/jMBC+76+YG+kBxXZJ2iJUqY+tFvFQVUAcKAc3GYpR64lsZ5f++x07rVjthUMyr28+f56xAgF9kCVcgBRDKEAN+lBCX5UwgKIc/bi6gnwhGSNgBeNxiqfa44JsgPwX7n5jMJWG/KetqDZ2C/mzsRPrzVfiXu8xseQP7SYcGg4e+S87w5XIdeSesY82eBimE/M7rI2e0ie8cCxAypGE4YWCV8iX2jGSdSbgCj21rkIPSXKkVF1l6ah6wMAM+XK+4EPxk6Vf7/UWp0c7O9pr5h2PGeK0TUQpSCKXXD6JjP4d1Zx98nhP9lj2Jy1dx0wHvaPtqWnShndykGlL9rCn1vcY4lAHQ3auA0I2v1RClVLKUikpi/JcFGdCnJ1w/zff4OEPudpDxgHL+Y6E51C3FTLLChty4VZvIA7k1mycdgc4h3VGDdpujuteL+3rA6sAWWt9g5V5M1hz+tGEHcZkiE7KON00WPPg9c7j1zIZAjLqp6ZbYilgwGsUBVv+eI03hq/wwg8wjo7jFYV4kZH4d/I+Uv4F8K7E5gplbmRzdHJlYW0KZW5kb2JqCjggMCBvYmoKPDwgL0xlbmd0aCAzOTQgL0ZpbHRlciAvRmxhdGVEZWNvZGUgPj4Kc3RyZWFtCnicVdTLahRBGIbh/VzFvzQuYvd/qMMyIVECMog2eAGiC8m4cJPbz8wY35mPpmrxUl1P0Q212nJ81vP842B2v9mHj6utbtsvW/M2bftsj9vurXueuo/bcenr2xbrslirxbaDvXv4evf9af/JMlf78rTfPz7c2Pbbtvend46bvuz+nNefxuE811zs2b6dutNdetJTeqM36YM+rrvjuriO6+I6rovruC6u' +
+            '47q4gRviBm6IG7ghbuCGuIEb4iZuipu4KW7ipriJm+ImbopbuCVu4Za4hVviFm6JW7glbsNt4jbcJm7DbeI23CZuw23idtwubsft4nbcLm7H7eJ23C7uwB3iDtwh7sAd4g7cIe7AHeJO3CnuxJ3iTtwp7sSd4k7cKe7l3vi/4qo73aUnPaU3epM+6OO6O66L67guruO6uI7r4jquixu4IW7ghriBG+IGbogbuCFu4qa4iZviJm6Km7gpbuKmuHX57+IWbolbuCVu4Za4hVsXt5f5ejxJ/ftqf38es+1eASd0dUAKZW5kc3RyZWFtCmVuZG9iago5IDAgb2JqCjw8IC9UeXBlIC9YUmVmIC9MZW5ndGggMzQgL0ZpbHRlciAvRmxhdGVEZWNvZGUgL0RlY29kZVBhcm1zIDw8IC9Db2x1bW5zIDQgL1ByZWRpY3RvciAxMiA+PiAvVyBbIDEgMiAxIF0gL0luZm8gNiAwIFIgL1Jvb3QgNSAwIFIgL1NpemUgMTAgL0lEIFs8OGE2ZDlhYzEyMGFhZGRlNGNlYjQ1MzE2MGY5NzU0YWY+PDczODU2ZDQ5OTVmYjk5ODI1ZWM2ZjIwNTJhYmJlYTgyPl0gPj4Kc3RyZWFtCnicY2IAAiZGBn4Q8YmBCchjxEr8ZxL4zcTAeIkBADmEA/wKZW5kc3RyZWFtCmVuZG9iagpzdGFydHhyZWYKOTk1CiUlRU9GCg=='
+        );
+        Blob scan = EncodingUtil.base64Decode(
+            'JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0JpdHNQZXJDb21wb25lbnQgOCAvQ29sb3JTcGFjZSAvRGV2aWNlR3JheSAvRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0hlaWdodCA5MDAgL0xlbmd0aCA0MTQ0IC9TdWJ0eXBlIC9JbWFnZSAKICAvVHlwZSAvWE9iamVjdCAvV2lkdGggNjAwCj4+CnN0cmVhbQpHYiIwVHFobzwmclA3clFAZkQzVCQsZG9CLE5vQitdUlprO2tFOy9bLF9bR0krUXU5bCJAZU4sNiwvZSM2PWZtamZoIj5YLTU/ZG4mTFxvVmkuWjdBWE06SUJCQCEqWW1CbypgVCFkLWpxN0wmJzRZcVAuVENbSGVjWShTSk9rIlJTenp6enp6enp6enp6enp6ek5WTSpBOlJ1cC9xcz51aXBWIWosVl5GXC08bkNXIkNAVHQ3cV1FI3VoVk5ddG5hIS85U20majtwUU5TcnBRa0VPPSQ2K0tmQTYpdFk1QCZ0JiYuRSNnWztUR2MoKFBrZEVRVFFJc1UmLmttdEE/UzY+ZD1RW2Vla0BPTFNpRUclIVlKKSdpOShWZFwuaypjMEQoKj9sXWghLFc4cy86Oz1laVVKMm81PlhvZnN1R15HKXRMTkZaL2dkakY9YiFKJXRtQmBGbik+ZlkpZS5wJW9PZW5iaSlxVEN0SjpyLzhhKnMqPGYs' +
+                'LV04TSVZJEphI2VeTj9iVEFGdFNpXzlZYkc1IUxtcFsyKkhiVyRMWTRhJF9AMDZCLVg9VC0uRF5ab15NWWg0ZyIoS1VGP3BNanBDbGMmMmA1P1dBWW1dM0JpPmwrKWg4LGlBU2JISDwiNDdLUGhoaWpHYUgxSWgmWTJBJmRMTWpqKXFLJVJjR2p1MEIiXi03WXJkPUNlYzhwQ0NXTlAiUWpRYytvWTVSOEcvKy5dXV4zPzRFb2wjPDIqSS03WyhWN1lxRHAxMFgpODYhc2lyPzE5cmw9I2ZnLEhTUihJJy0tcFlGcUtTOWZZV0ZfXkFUXCwsZHFeJitFUTUhOFxiaCxqT0BsLW5JKCV0PUpsSGYkYEowPXUjaUlJTmYuRW1ALTxEcjolUnBcSmBWMy4lQHJySWByJURnMSU3Ml9HcCxyKj8/LGcmJ0ZocjsrXyswQ0Y9cXEhZGJMR0AwbUxaZXQiImgwUVplZ1QwR1pTbU0/TXJlalFfKktHT0hJL0JuTFlCRS8xbSY6NkhtWEREPGxlXz5OYjw3bi1lUzpfQisuKGppSiVZXiokWzRlSEkpWU0kTXVXSktjZzhDKl1vT2EvSWQoWShqV0YoMTA+JGs/KXBeV2w5czFgJHp6enp6ISEmWkNCLi1kSmVPWWliKmtjVHQib25XJ3ohISEja2I1Sk9yXWxMO0dQMixUa1EkWUBnenohMipFXUxNYzpASFNwdUlOXnA7LldyVzIjenpdbEg+Ujk8Wy1PT1gsLTVIS0FIQnp6ISEpNUpxZEo0bWcwLGx1VGRHcUwyM1IkXEdENFc5O3JkYj9IU2xeYzc0WWMhcE1oWT4kITU4aW5eLk9vUS47VkxhZ1QwK0U8UVBiTHQvNSRsPVNbIk5ZdU9ZWDsyJiJcZFVLVFYkWmsyQzUiVXMjMiQjdS1HPWVyKCJEOlxEbUtNNmtLW3BGL0clXSxibUoiNF09KGctYl5ScXQudEIxO0NwUjwzbFtn' +
+                'Xz4vMkJAdUhoaGk7clJpUVxIU3B1SThYQipjLnA4dC9YJjVHY2hocHVzSkMsKk9WYVZTV25XYFVAVTZLXlFNTG9gUFRWSVVJVzRPVkcwRlYlPDcyQyhpInQ4c1YkVG8lTDw5LCY4R3BsRlxlLWRpIz5bM0QzWUhRYEZuUFAyQ0cjUyVsZlYlYCcvLFhZYS4wJiNENTlcKHNFK3EyIk9bSkVEWjh0YiZBW1BjRi9hJFk3NGtFXVs4WkQhXEMtJC5wLUBWOChwU29TPjtvVl9kQmxnSUlQJWlDMEZcczZfVzpULlhOSDNTRE5NWD8mIz85XzBlVGc0YWxGYGlQOkU8IS4oS0JfMks7ZU5qbDkwQ20yLicsJ0I1XykrPSZcZU5Sb11AMDwuPWFXPElaW1AmKCUqVkRQX21yUmFdM0cxYmhCc2dBJ3U1KWNPLD5PVUdsNk4rT25mKzNiNUJLU0ZCPlRpJWlBZTZPbWc5XGwvS01QYy0tPiU5TT1mSmtaKnBYLltFNGNLOGJBc0lHMWdvSFFKZS5VJC48UyE6UVk9Ok1qcjNrIzI4Q19HRiVbbkI7LlpOOk1VTFZpTGVjKVxyPEpiPkZmP0ZlK0tuZW5QNEJoUGFEVnQjJEtrcE5KaD1QWVRDVjUmVGotP1w8bV1GZjpXOTMhYGJuIXBScDhiWWVAPVxLbVJmZVVPUy5OcTQkc0FsNWBGRFNFTzxGI1ErQ2ddXjkoKzBMKCpfISIzNlwlKjg6T2xmVmZxb1Q7aDo+YWMrUCNlUCxJMUVbVEUnW1JYNnBfTVksLjpkXUFqanFPby5gWV4rMjsqR2FBZlU0blVjRF9CRXU4IjJIJEdhW1NkUzNzczNuS3VPKEBjVz4kY1JpVmRMYm1ALmpGPkddM1Y5c24oNjFFSk4uU2NiSzhyKmVXLXRHZDRkMyw9Z1RaPVYsQXU+SVBLdEJAXS9LMEJkdTMhPm8nQjs1Z2MiYGk9KHBlYlpATyZdNSZR' +
+                'dE5GMEEmclRnTT1WWC1vajJdYyZtNnMzV18hcHNZKVYyPls1TE07QyxkciJCRDpJMzxvZkJySiZJJ05BKD8haHNFYCJcZ2tBSjAuclYmTE8xN09wWVx0RkBoMUtxJHNWckw2OmAyVTtPTTU+Z1p0Wl5BZFI2QFQ3KzE7Ljw0Nm1TUkZlQ0A0cm5oaGR0Y05WcmtKQEZNWytdYydJOzRLWjxOQjxUPjhNdVBzbTdjUS9SI0RiKVEsbkVtYC80cHRaYGBTSGY4PCZgO0gnZlo1ZC4mZVFgaERGJEhBazUzX3Q0ZSJOKDU8UCJyMzFzQS4wcS9WOHNLUTRBKF9KTGo1RjprcWtMdFBCN11hVmImb1lPNCxBRkw8IiM2ZWskcEFvYSgrTFA/I2A8KUcsZjc9PmJHamIqVyRLPChXcUUzaVx1UkUjaHBrJCtRUVpDJVBWKlFTZVFAVmI3cyxmJGJxKUlkPzZdN19lVjw4Wz4yTUhHVXEpWUUoRmZlRWBsJyRNRjZEUDx1ckhiK3FrO08icjA2bF9ALFxwJWcpIzVlTVIiKjBeREJnQkxAIy1NTTcjYWtYJC5wMWNRb2xoYkJQUzlGazwpLEBlbWcnamxiNUFjLyhZK0lWaUMiSC5NaU8lcEtjI0REMGRxMTt1MkduKjhqWWZ0Sy4tMz9hQi4yayI7Lmg8PTJHbio4allmdEsuLTM/YUIuMmsiOy5oPD0yR24qOGpZZyEhVzRcMkZbVVBDXFxROiJJZW9LJD49JHVkVV5QUCE9LkNZLXA2UmZMJDNeWUAqTSluIVFbdSEuNS5DWS1wNlJmTCQzXllAKk0pbiFRW3UhLjUuQ1ktcDZSZkwkM15ZQCpNKW4hUVt1IS41LkNZLXA2UmZMJDNeWUAqTSluIVFbdSEuNS5DWS1wN3FJK3NbTWJaKDR0OkteN1NNOFhwTS5waVFobDBiJSZbQXFEMi1OQlQvT1QkZjIlbXBbLU9YN0U4KCE2QWlU' +
+                'MlNCZXU5JnJObUc7XTcvSEJWZDJOKCZyPi4wUjIiclo7J3EhQ0k/WzxzPzY8YFZXN09QLSdeRz9nLUE/Ym9QWSYsK2hnMy9AT285IktxRyNLZHBNKHMmVE83KlE8Pm82NGZAKSUqSWQ/Nl03X2VWPDhZYjBoXGcuby0qRT51ZFw7aSY8J080Lm48IW9lJzhoKCJyOydoV2BhKF5dM19yRVJGVnI7V2FVc25mbToiIWEjUzBmSGxuTC1pR1RdL2grTidZRlgnSClPXDdrKGBNK2pccnBDPEBVLj0hUGZuQj0xZnJmckssZlpAQTVfajNbPE00W3BYVjYjKT9JYWIvKFtNaW49RTBwWEM/cFBDVUcuSklPMipcSSwjMGNocUBCZV5lZHBGJWFDMj44TFItOGtORzBkX0NcaEJnK01qQlUpQD5eRVI6MEo2YDRHSztIcjYna09mUyJgUCpDYmsmUGZlI3VFY09oPnBDKlhaUlorWlUkNjEzOWpUNU9gSzlMO1xeVlAncGo7W0VFXERTY1hHOEcnIjJrRllCPVkwbEYpOSg7OU9fOGkwRW0nKmFtVDJPbHNEITloKigtLTZtZnIjVXJEPDBCSihBTjVCaTZjMEsyZkBFbWs3ST5tKWc6Xz03KlFabm1eV0lLaFpiKko3UFAiY1M5ZHBSaG1qbmM1LlJJOkFLc0MiNFEiQW49IUw7YmpTIT1cXFE6I05HaScxbzlxNFNgYjQtaCgsJE8sQm9CJFtmRjBwNSFNJXIpJlpvTmo6Y1QuXFJicSljWDhALkZva1dLbyFlLG1SRipHPGU1S1IiQWgpNzByUEVedVAoJ0xDVHI2LGtISE44UUZmLzRrWUFFZWtrSCc7MFckJklbKjtvXydYYDs9ajg9anAqRzpsZSxMN0RmZDNlMVY1TyVqMS4wXCkpKGAhLFQvKyFkdTBLKFxENCxeTDZmU1Fab2hSVylaSWplaVInLiVEI0lyTlgkaiNhPkZo' +
+                'ZjFOUDtTOCpOTEFZaEVbOGw8TW1Tb0JRMGREMWpCPDlOYDtfN0RQPVVsLmIzMDcxY0ErSlJfIj9RTDhlQlU9NCxNT1EjI1M5KUIsRlFjLmtjRUsvQjxicWUwTiFHJjAkVSxBZy0lUFU6OkRNJzNlZF5uITs5Njw7UHQ2Rydnb0JuI01SUFY+QWplT1ZHbVA3bTowNW5WL2BdYyc+PnFZTmg2TE1wREFKIjxWOG0qMlUqRXA+ZjUjZG11N1hsZzFoYzNwWkRlPWtCOjc1XllzU0dGazteKFo5JGdHUk4paFFaOlZXNEdfQz4icid1ZG9qU2hrSGFBNS46IypnPFFkRFU8UUJnREVDcF8+aVE+bXAsPWR1SkMjdHRLMjdDWkFcJisxcllHLHM8a2VqWi5cVF8tQ2FYVDQrQSRyciMycj5eJUtoPUwwaDlSN2pmUC5EKSlfQ1BWLyVKYFYpP3AqWztyRWN0Wi9UWitcLSJIWjsmPEJiQDdYO0M+byVNclAmMXFTU1lfai9ZblYyTzczJG5Wam84NUBycmMiPW4lSUdUQickWy9DWG9ecVtxaSNfXCE/IS5aaSROQENcQ0UwPEMraVRkQyhOYlhrPj1SXi1AR2ViXURbTS5cPGNBMDdFQ1VKMjBpRm5bOXBPWGJncUZXbycvKE9TYEpAYjc4QykzMCs1PW42PTBlcE0odHEqVWZYdXBScSlSM2BHaVxRIkI5O11ZPW1iM1Aja08/JkkuYGUjSG9JRU1eaTVwazhqVURGPTlQakNKOUtaMVciWFEtIkglYiU3UT5OMFJqLTxmLz9aLU5GLEghISVuQHFkRV1Ual4qb2xcYDsnZnBNJ1sueno1ZC9yUmdYN1ZIQypebkFPJ11AdSFycjwkeiEhISJGamFQako/RmEsXjhhXmlxYi5TXG56eiE3MzdqX21dM1tdYydJX2EubGAoZUdvUkx6enp6enp6enp6enp6enp6enp6enp6enp6enp6' +
+                'enohISEiTGByLXU5K1UscH4+ZW5kc3RyZWFtCmVuZG9iago0IDAgb2JqCjw8Ci9Db250ZW50cyA4IDAgUiAvTWVkaWFCb3ggWyAwIDAgNDAwIDYwMCBdIC9QYXJlbnQgNyAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXSAvWE9iamVjdCA8PAovRm9ybVhvYi4wMDU3Y2VmYWMwZTI4OGYwYTE2YzhlMTMxMjM0MWRkZCAzIDAgUgo+Pgo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNSAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDcgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9BdXRob3IgKGFub255bW91cykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MTExNjIyMTE1Ni0wNScwMCcpIC9DcmVhdG9yIChhbm9ueW1vdXMpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MTExNjIyMTE1Ni0wNScwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0ICh1bnNwZWNpZmllZCkgL1RpdGxlICh1bnRpdGxlZCkgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNCAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMTMwCj4+CnN0cmVh' +
+                'bQpHYXBAQzBiL2dpJi1WbFdgUCk9aUQqcVB1SlZqWlIiWURhaFNSaixJMCtvRWJkUylITXJvJUYoXmJdRCgjcytqaEwqN1tWPUhcJVdXKlwpJ2Y6JVk2czBlXTsjTSYnSVY0T1InYEU7Zm9DcERAOXE3ckxWPzxxYCpxdUFGYSkvZn4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDA5MiAwMDAwMCBuIAowMDAwMDAwMTk5IDAwMDAwIG4gCjAwMDAwMDQ1MzUgMDAwMDAgbiAKMDAwMDAwNDc5MSAwMDAwMCBuIAowMDAwMDA0ODU5IDAwMDAwIG4gCjAwMDAwMDUxMjAgMDAwMDAgbiAKMDAwMDAwNTE3OSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwwYjgzYTIzY2M4NDA2MDQ0YjZlZDEzZTFkNmZkOTQ3Nj48MGI4M2EyM2NjODQwNjA0NGI2ZWQxM2UxZDZmZDk0NzY+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjUzOTkKJSVFT0YK'
+        );
+        Account record = account();
+        ContentVersion cadFile = new ContentVersion(
+            Title = 'CAD vector sheet',
+            PathOnClient = 'cad.pdf',
+            FirstPublishLocationId = record.Id,
+            VersionData = drawing
+        );
+        ContentVersion scanFile = new ContentVersion(
+            Title = 'Scanner sheet',
+            PathOnClient = 'scan.pdf',
+            FirstPublishLocationId = record.Id,
+            VersionData = scan
+        );
+        insert new List<ContentVersion>{ cadFile, scanFile };
+        Blob packet = DocGenSignatureSenderController.mergeSigningPreview(
+            DocGenPdfMergeFixtures.generation(),
+            record.Id,
+            new List<Id>{ cadFile.Id, scanFile.Id },
+            'Before'
+        );
+        DocGenPdfDocument merged = new DocGenPdfDocument(packet);
+        Assert.areEqual(3, merged.pageList.size());
+        DocGenPdfDocument.Value cadPage = merged.resolve(merged.pageList[0]);
+        DocGenPdfDocument.Value cadPageTree = merged.resolve(cadPage.entries.get('Parent'));
+        Assert.areEqual(90, DocGenPdfDocument.intValue(cadPageTree.entries.get('Rotate')));
+        List<Integer> crop = new List<Integer>();
+        for (DocGenPdfDocument.Value part : cadPageTree.entries.get('CropBox').items) {
+            crop.add(DocGenPdfDocument.intValue(part));
+        }
+        Assert.areEqual(new List<Integer>{ 60, 70, 1050, 750 }, crop);
+        String originalImage = imageStream(new DocGenPdfDocument(scan));
+        Assert.isNotNull(originalImage);
+        Assert.areEqual(originalImage, imageStream(merged), 'The raster image must survive byte for byte');
+    }
+
+    private static String imageStream(DocGenPdfDocument doc) {
+        for (DocGenPdfDocument.PdfObject obj : doc.objects.values()) {
+            if (obj.value.entries != null && DocGenPdfDocument.name(obj.value.entries.get('Subtype')) == 'Image') {
+                return obj.streamHex;
+            }
+        }
+        return null;
+    }
+
     // ---------------------------------------------------------------- helpers
 
     // An approval template that takes attached documents (the template opts in).

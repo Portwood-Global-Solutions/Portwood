@@ -638,10 +638,11 @@
                                                     ></lightning-icon>
                                                     <div class="preview-ready-body">
                                                         <p class="slds-text-title_bold">PDF preview ready</p>
-                                                        <p class="slds-text-body_small slds-text-color_weak">
-                                                            Opens from a browser blob URL so Salesforce page chrome does
-                                                            not affect pagination.
-                                                        </p>
+                                                        <template if:true={doc.description}>
+                                                            <p class="slds-text-body_small slds-text-color_weak">
+                                                                {doc.description}
+                                                            </p>
+                                                        </template>
                                                         <a
                                                             class="slds-button slds-button_brand slds-var-m-top_small"
                                                             href={doc.url}

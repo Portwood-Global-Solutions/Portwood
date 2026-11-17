@@ -3289,6 +3289,104 @@ public with sharing class DocGenSignatureSenderController {
         }
     }
 
+    // Smaller than the standalone merge budget because the template is rendered first.
+    private static final Integer COMBINED_PREVIEW_BYTES = 262144;
+    private static final Integer COMBINED_PREVIEW_FILES = 10;
+
+    @AuraEnabled
+    public static Map<String, Object> getCombinedSigningPreview(
+        Id templateId,
+        String relatedRecordId,
+        List<Id> attachmentVersionIds,
+        String attachmentPosition
+    ) {
+        String fallback = 'Open the template preview and use View files for the attachments.';
+        Blob templatePdf = buildDocumentPreviewPdfBlob(templateId, relatedRecordId);
+        if (templatePdf == null) {
+            return new Map<String, Object>();
+        }
+        Blob preview = templatePdf;
+        Boolean combined = false;
+        try {
+            Blob packet = mergeSigningPreview(templatePdf, relatedRecordId, attachmentVersionIds, attachmentPosition);
+            if (packet != null) {
+                preview = packet;
+                combined = true;
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'Portwood: combined signing preview unavailable: ' + e.getMessage());
+        }
+        return new Map<String, Object>{
+            'pdfBase64' => EncodingUtil.base64Encode(preview),
+            'combined' => combined,
+            'notice' => combined ? null : 'Combined preview is unavailable for this selection. ' + fallback
+        };
+    }
+
+    @TestVisible
+    private static Blob mergeSigningPreview(
+        Blob templatePdf,
+        String relatedRecordId,
+        List<Id> versionIds,
+        String position
+    ) {
+        if (versionIds == null || versionIds.isEmpty() || versionIds.size() > COMBINED_PREVIEW_FILES) {
+            return null;
+        }
+        List<String> ids = new List<String>();
+        for (Id versionId : versionIds) {
+            if (versionId == null || versionId.getSObjectType() != ContentVersion.sObjectType) {
+                return null;
+            }
+            ids.add(String.valueOf(versionId));
+        }
+        List<DocGenSignatureAttachments.AttachmentSpec> specs = DocGenSignatureAttachments.resolveForSend(
+            relatedRecordId,
+            ids,
+            position
+        );
+        if (specs.size() != versionIds.size()) {
+            return null; // A combined preview may never omit a requested file.
+        }
+
+        Long total = templatePdf.size();
+        for (DocGenSignatureAttachments.AttachmentSpec spec : specs) {
+            total += spec.size == null ? 0 : spec.size;
+        }
+        if (
+            total > COMBINED_PREVIEW_BYTES ||
+            total * 14 > Limits.getLimitHeapSize() - Limits.getHeapSize() ||
+            Limits.getCpuTime() > Limits.getLimitCpuTime() - 2000
+        ) {
+            return null;
+        }
+
+        Map<Id, ContentVersion> versions = new Map<Id, ContentVersion>(
+            [
+                SELECT Id, VersionData
+                FROM ContentVersion
+                WHERE Id IN :versionIds AND ContentLocation = 'S' AND FileType = 'PDF'
+                WITH USER_MODE
+            ]
+        );
+        List<Blob> parts = new List<Blob>();
+        Boolean after = specs[0].position == DocGenSignatureAttachments.POSITION_AFTER;
+        if (after) {
+            parts.add(templatePdf);
+        }
+        for (DocGenSignatureAttachments.AttachmentSpec spec : specs) {
+            ContentVersion file = versions.get(spec.contentVersionId);
+            if (file == null || file.VersionData == null) {
+                return null;
+            }
+            parts.add(file.VersionData);
+        }
+        if (!after) {
+            parts.add(templatePdf);
+        }
+        return DocGenPdfMerger.mergePdfs(parts, false);
+    }
+
     private static Blob buildDocumentPreviewPdfBlob(Id templateId, String relatedRecordId) {
         Map<String, Object> mergeData = DocGenService.mergeTemplateForSignature(templateId, relatedRecordId);
         Map<String, String> pdfImageMap = (Map<String, String>) mergeData.get('pdfImageMap');
