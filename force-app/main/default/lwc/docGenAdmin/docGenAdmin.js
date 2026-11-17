@@ -289,6 +289,15 @@ const F = {
     DefaultEmailMessage:
         QUERY_CONFIG_FIELD.fieldApiName.slice(0, QUERY_CONFIG_FIELD.fieldApiName.length - 'Query_Config__c'.length) +
         'Default_Email_Message__c',
+    DefaultSigningOrder:
+        QUERY_CONFIG_FIELD.fieldApiName.slice(0, QUERY_CONFIG_FIELD.fieldApiName.length - 'Query_Config__c'.length) +
+        'Default_Signing_Order__c',
+    DefaultSignedTitle:
+        QUERY_CONFIG_FIELD.fieldApiName.slice(0, QUERY_CONFIG_FIELD.fieldApiName.length - 'Query_Config__c'.length) +
+        'Default_Signed_Title__c',
+    DefaultSignatureExpiryDays:
+        QUERY_CONFIG_FIELD.fieldApiName.slice(0, QUERY_CONFIG_FIELD.fieldApiName.length - 'Query_Config__c'.length) +
+        'Default_Signature_Expiry_Days__c',
     // Version fields
     VerIsActive: VER_IS_ACTIVE_FIELD.fieldApiName,
     VerCvId: VER_CV_ID_FIELD.fieldApiName,
@@ -513,6 +522,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track editTemplateApiName = '';
     // #208 — per-template default {Message} for signature emails
     @track editTemplateDefaultEmailMessage = '';
+    @track editTemplateDefaultSignatureExpiryDays = null;
+    @track editTemplateDefaultSignedTitle = '';
+    @track editTemplateDefaultSigningOrder = '';
     @track editTemplatePrefillSignerEmail = 'Inherit';
     // #367 — "Hide Decline Button" for this template; unchecked by default (Decline shown).
     @track editTemplateHideDecline = false;
@@ -4563,6 +4575,26 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplateApiName = (event.detail.value || '').trim();
     }
 
+    get defaultSigningOrderOptions() {
+        return [
+            { label: 'Use sender default', value: '' },
+            { label: 'All at once (parallel)', value: 'Parallel' },
+            { label: 'One at a time (sequential)', value: 'Sequential' }
+        ];
+    }
+
+    handleDefaultSigningOrderChange(event) {
+        this.editTemplateDefaultSigningOrder = event.detail.value || '';
+    }
+
+    handleDefaultSignedTitleChange(event) {
+        this.editTemplateDefaultSignedTitle = event.detail.value || '';
+    }
+
+    handleDefaultSignatureExpiryDaysChange(event) {
+        this.editTemplateDefaultSignatureExpiryDays = event.detail.value || null;
+    }
+
     handleDefaultEmailMessageChange(event) {
         this.editTemplateDefaultEmailMessage = event.detail.value || '';
     }
@@ -5402,6 +5434,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateTypeOnly = row[F.SignatureTypeOnly] === true;
             this.editTemplateApiName = row[F.ApiName] || '';
             this.editTemplateDefaultEmailMessage = row[F.DefaultEmailMessage] || '';
+            this.editTemplateDefaultSignatureExpiryDays = row[F.DefaultSignatureExpiryDays] ?? null;
+            this.editTemplateDefaultSignedTitle = row[F.DefaultSignedTitle] ?? '';
+            this.editTemplateDefaultSigningOrder = row[F.DefaultSigningOrder] ?? '';
             this.editTemplateSpecificRecordIds = row[F.SpecificRecordIds];
             this.editTemplateRequiredPermissionSets = row[F.RequiredPermSets];
             this.editTemplateRecordFilter = row[F.RecordFilter];
@@ -5530,7 +5565,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateHideDecline,
             this.editTemplateTypeOnly,
             this.editTemplateApiName,
-            this.editTemplateDefaultEmailMessage
+            this.editTemplateDefaultEmailMessage,
+            this.editTemplateDefaultSigningOrder
         ]);
     }
 
@@ -6125,7 +6161,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Hide_Signer_Decline__c: this.editTemplateHideDecline,
             Signature_Type_Only__c: this.editTemplateTypeOnly,
             API_Name__c: this.editTemplateApiName,
-            Default_Email_Message__c: this.editTemplateDefaultEmailMessage
+            Default_Email_Message__c: this.editTemplateDefaultEmailMessage,
+            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 
@@ -6223,7 +6260,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Hide_Signer_Decline__c: this.editTemplateHideDecline,
             Signature_Type_Only__c: this.editTemplateTypeOnly,
             API_Name__c: this.editTemplateApiName,
-            Default_Email_Message__c: this.editTemplateDefaultEmailMessage
+            Default_Email_Message__c: this.editTemplateDefaultEmailMessage,
+            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 

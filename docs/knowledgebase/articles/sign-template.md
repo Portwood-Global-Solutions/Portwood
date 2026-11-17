@@ -18,6 +18,8 @@ The role **Customer** must match the signer's role in the request. Keep each sig
 
 Use `Initials` for initials and `DatePick` for a date the signer chooses. Use `:inline` as a final suffix when you intentionally want a compact mark instead of the default signature card.
 
+In **Edit Template**, set a default signing order, signed document title, or link expiration for single-template requests. The sender can change any of these when preparing a request. Leave the title blank to use the template name, or leave expiration blank to use the organization setting.
+
 #### Send a request
 
 1. Open the Salesforce record and find **Portwood Signature Sender**.
