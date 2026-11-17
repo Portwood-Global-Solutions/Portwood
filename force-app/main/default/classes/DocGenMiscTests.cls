@@ -4375,6 +4375,27 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testNumberFormatOptionalDecimals() {
+        Map<String, Object> data = new Map<String, Object>{
+            'Whole' => 100,
+            'Tenth' => 100.1,
+            'Hundredth' => 100.01,
+            'Small' => 100.00001,
+            'Negative' => -1234.50001,
+            'Carry' => 999.999996
+        };
+
+        String result = DocGenService.processXmlForTest(
+            '<p>{Whole:#,##0.#####}|{Tenth:#,##0.#####}|{Hundredth:#,##0.0####}|{Small:#,##0.#####}|' +
+            '{Whole:#,##0.0####}|{Negative:#,##0.##}|{Carry:#,##0.#####}|{Whole:#,##0.00}</p>',
+            data,
+            'HTML'
+        );
+
+        System.assertEquals('<p>100|100.1|100.01|100.00001|100.0|-1,234.5|1,000|100.00</p>', result);
+    }
+
+    @IsTest
     static void testNumberFormatNoDecimals() {
         Map<String, Object> data = new Map<String, Object>{ 'ItemCount' => 9876 };
 
