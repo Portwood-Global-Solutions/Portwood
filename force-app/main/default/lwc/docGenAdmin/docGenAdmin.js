@@ -1,4 +1,4 @@
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { createRecord, updateRecord } from 'lightning/uiRecordApi';
 // #236 — Type__c is a RESTRICTED picklist and the wizard defaults to 'HTML', a value
 // added in v1.61.0. Orgs installed before that and later upgraded may not have it, in
@@ -432,6 +432,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track versions = [];
 
     // Form/Wizard State
+    @api initialTab = 'new_template';
     @track activeMainTab = 'new_template';
     @track currentWizardStep = '1';
 
@@ -1357,6 +1358,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     @track isInstallingSamples = false;
     _samplesChecked = false;
+    templateListLoading = true;
+    templateListFailed = false;
 
     // LIST light, LOAD heavy on demand. getTemplateList returns only what the
     // grid, the search and the pickers read — no long-text bodies, no attached
@@ -1366,6 +1369,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     wiredTemplates(result) {
         this.wiredTemplatesResult = result;
         if (result.data) {
+            this.templateListLoading = false;
+            this.templateListFailed = false;
             this.templates = result.data.map((t) => {
                 // F.IsActive may be undefined on rows created before the field
                 // shipped — treat null/undefined as Active to match the server
@@ -1391,6 +1396,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             });
             this._samplesChecked = true;
         } else if (result.error) {
+            this.templateListLoading = false;
+            this.templateListFailed = true;
             this.showToast('Error', 'Error loading templates', 'error');
         }
     }
@@ -1531,19 +1538,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // --- Wizard Logic ---
 
     connectedCallback() {
-        // Both the wizard's AI step and the designer toolbar key off this, so
-        // resolve it once on mount rather than per-surface. Never awaited and
-        // never throws — an org without Einstein simply keeps the copy-paste
-        // path as the only visible option.
-        this._refreshAgentforceAvailability();
-        // #369 — load the Sending Brand options for the template editor + email tab.
+        this.activeMainTab = this.initialTab;
+    }
+
+    handleTemplateSettingsActive() {
         this.loadBrandOptions();
-        // #367 — the per-template Decline toggle is moot (and hidden) once the org
-        // has hidden Decline everywhere. Never awaited and never throws — worst case
-        // the template toggle stays visible until the next load, it never blocks the
-        // editor.
         this._refreshOrgHideDecline();
-        this._loadDesignerFonts();
     }
 
     // #367
@@ -2350,6 +2350,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     handleWizardTabActive() {
+        this._refreshAgentforceAvailability();
         this.activeMainTab = 'new_template';
         this.resetForm();
         // Existing shared assets feed the logo picker and the AI prompt.
@@ -11890,6 +11891,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     _enterVisualMode(html) {
+        this._loadDesignerFonts();
         // Regions: the source the author edits is ONE document, header and footer
         // included. The canvas only ever renders the body, and the bands render the
         // chrome, so peel them apart on the way in. A legacy template carries no
