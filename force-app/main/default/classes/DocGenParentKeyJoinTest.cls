@@ -99,6 +99,29 @@ private class DocGenParentKeyJoinTest {
     }
 
     @IsTest
+    static void singleUsesTheSameDefaultOrderInSyncAndBulk() {
+        Contact first = [SELECT Id FROM Contact WHERE Account.Name = 'DocGen Test Account' ORDER BY Id LIMIT 1];
+        Contact parent = firstContact();
+        Contact other = [SELECT Id FROM Contact WHERE LastName = 'Contact 2' LIMIT 1];
+        Contact orphan = new Contact(LastName = 'Orphan');
+        insert orphan;
+        Map<String, Object> cfg = config(new Map<String, Object>{ 'single' => true, 'orderBy' => null });
+
+        Test.startTest();
+        Map<String, Object> syncResult = (Map<String, Object>) dataFor(parent.Id, cfg).get('Colleagues');
+        Map<Id, Map<String, Object>> bulkResults = DocGenDataRetriever.getRecordDataV3Bulk(
+            new Set<Id>{ parent.Id, other.Id, orphan.Id },
+            cfg
+        );
+        Test.stopTest();
+
+        System.assertEquals(first.Id, syncResult.get('Id'));
+        System.assertEquals(syncResult, bulkResults.get(parent.Id).get('Colleagues'));
+        System.assertEquals(syncResult, bulkResults.get(other.Id).get('Colleagues'));
+        System.assertEquals(0, ((Map<String, Object>) bulkResults.get(orphan.Id).get('Colleagues')).size());
+    }
+
+    @IsTest
     static void singleWithNoMatchStitchesAnEmptyObject() {
         Contact c = firstContact();
         Map<String, Object> cfg = config(
@@ -231,9 +254,18 @@ private class DocGenParentKeyJoinTest {
                 'parentFields' => new List<Object>()
             }
         );
+        DocGen_Template__c template = TestDataFactory.getTestTemplate();
+        template.Base_Object_API__c = 'Contact';
+        template.Query_Config__c = JSON.serialize(cfg);
+        update template;
+
         Test.startTest();
-        Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(c.Id, JSON.serialize(cfg));
+        Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(c.Id, template.Query_Config__c);
+        Map<String, Object> scout = DocGenController.scoutChildCounts(c.Id, template.Id);
         Test.stopTest();
+
+        Map<String, Map<String, Object>> childNodes = (Map<String, Map<String, Object>>) scout.get('childNodes');
+        System.assertEquals(new Set<String>{ 'Cases' }, childNodes.keySet(), 'Runner only gets supported children');
 
         // The scout counts children against the record's own Id, which is the wrong key for
         // a parentKeyField node, and the giant-query path can follow neither that join nor a

@@ -600,6 +600,31 @@ public with sharing class DocGenDataRetriever {
             tn.parentKeyField = null;
         }
         tn.single = n.get('single') == true;
+        if (tn.single) {
+            if (String.isBlank(tn.orderByClause)) {
+                tn.orderByClause = 'Id';
+            } else {
+                Boolean ordersById = false;
+                for (String term : tn.orderByClause.split(',')) {
+                    if (term.trim().split('\\s+')[0].equalsIgnoreCase('Id')) {
+                        ordersById = true;
+                        break;
+                    }
+                }
+                if (!ordersById) {
+                    tn.orderByClause += ', Id';
+                }
+            }
+            if (String.isBlank(tn.limitClause)) {
+                tn.limitClause = '1';
+            }
+        }
+    }
+
+    /** Whether the node can be harvested as a Giant Query collection of this record. */
+    public static Boolean supportsGiantQueryCollection(Map<String, Object> node) {
+        Object parentKey = node.get('parentKeyField');
+        return (parentKey == null || String.isBlank(String.valueOf(parentKey))) && node.get('single') != true;
     }
 
     /**
@@ -626,16 +651,7 @@ public with sharing class DocGenDataRetriever {
                 );
             }
             tn.parentKeyField = f.getDescribe().getName();
-            Boolean selected = false;
-            for (String existing : parent.fields) {
-                if (existing.equalsIgnoreCase(tn.parentKeyField)) {
-                    selected = true;
-                    break;
-                }
-            }
-            if (!selected) {
-                parent.fields.add(tn.parentKeyField);
-            }
+            addFieldOnce(parent.fields, tn.parentKeyField);
         }
     }
 
@@ -2531,9 +2547,7 @@ public with sharing class DocGenDataRetriever {
             // Id, so a count against recordId means nothing, and the giant-query path cannot
             // follow that join. A single node merges one record, however many match. Leaving
             // either uncounted keeps it on the standard path.
-            Boolean joinsThroughLookup =
-                n.get('parentKeyField') != null && String.isNotBlank(String.valueOf(n.get('parentKeyField')));
-            if (joinsThroughLookup || n.get('single') == true) {
+            if (!supportsGiantQueryCollection(n)) {
                 continue;
             }
 

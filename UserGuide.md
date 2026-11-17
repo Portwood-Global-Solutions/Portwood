@@ -5344,7 +5344,7 @@ A child node normally fetches the records whose `lookupField` points at its pare
 
 - `parentKeyField` must be a lookup (reference) field on the parent node's object. Anything else stops generation with a clear error. You don't need to add it to the parent's `fields`; Portwood selects it.
 - When the parent's lookup is blank, the node merges empty: tags render blank and loops render no rows.
-- `single: true` merges the first matching record as one object, so its fields read like a lookup, with no loop: `{Architect.Contact.Name}`. With no match the tags render blank. Use `where` to narrow the matches, and `orderBy` to choose which record comes first. Without `orderBy`, Portwood sorts by record ID.
+- `single: true` merges the first matching record as one object, so its fields read like a lookup, with no loop: `{Architect.Contact.Name}`. With no match the tags render blank. Use `where` to narrow the matches, and `orderBy` to choose which record comes first. Portwood uses the record ID as a tiebreaker and as the default sort.
 - `single` matters most in Excel, where a loop that is its row's only tag repeats the row per record and removes it when there are none. Single tags never add or remove rows.
 - In bulk generation, records that share one lookup value (two projects on one Opportunity) each get the same related records, from one query.
 - `parentKeyField` and `single` nodes are skipped when choosing a Giant Query collection.
