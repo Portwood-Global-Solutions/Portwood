@@ -41,9 +41,8 @@ public with sharing class DocGenSignatureSenderController {
     }
 
     /**
-     * Returns templates filtered by audience (Required_Permission_Sets__c) and optionally
-     * by per-record visibility (Specific_Record_Ids__c). Pass relatedRecordId to enable
-     * per-record filtering; pass null to apply only the audience filter.
+     * Returns active templates the sender can use. On a record page, also
+     * filters by base object and per-record visibility.
      */
     @AuraEnabled(cacheable=true)
     public static List<DocGen_Template__c> getDocGenTemplatesForRecord(String relatedRecordId) {
@@ -64,6 +63,7 @@ public with sharing class DocGenSignatureSenderController {
                 'Required_Permission_Sets__c',
                 'Record_Filter__c',
                 'Base_Object_API__c',
+                'Is_Active__c',
                 'Default_Email_Message__c'
             }
         );
@@ -80,11 +80,24 @@ public with sharing class DocGenSignatureSenderController {
                 Base_Object_API__c,
                 Default_Email_Message__c
             FROM DocGen_Template__c
+            WHERE Is_Active__c != FALSE
             WITH SYSTEM_MODE
             ORDER BY Sort_Order__c ASC NULLS LAST, Name ASC
         ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by Portwood permission sets
 
-        return DocGenController.filterTemplatesForSender(all, relatedRecordId);
+        if (String.isBlank(relatedRecordId)) {
+            return DocGenController.filterTemplatesForSender(all, relatedRecordId);
+        }
+
+        Id recordId = Id.valueOf(relatedRecordId);
+        String objectApiName = recordId.getSObjectType().getDescribe().getName();
+        List<DocGen_Template__c> matchingObject = new List<DocGen_Template__c>();
+        for (DocGen_Template__c template : all) {
+            if (objectApiName.equalsIgnoreCase(template.Base_Object_API__c)) {
+                matchingObject.add(template);
+            }
+        }
+        return DocGenController.filterTemplatesForSender(matchingObject, relatedRecordId);
     }
 
     /**
