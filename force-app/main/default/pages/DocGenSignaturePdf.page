@@ -2561,6 +2561,72 @@
                         }
                     }
 
+                    var koreanSigningFontPromise;
+
+                    function shortSigningDate(date, locale) {
+                        var options = { year: 'numeric', month: 'short', day: 'numeric' };
+                        try {
+                            var localized = date.toLocaleDateString(locale, options);
+                            if (/^ko(?:-|$)/i.test(locale || '') || /^[\u0020-\u007e\u00a0-\u00ff]+$/.test(localized)) {
+                                return localized;
+                            }
+                        } catch (error) {
+                            // Unsupported locale identifiers use the standard caption date.
+                        }
+                        return date.toLocaleDateString('en-US', options);
+                    }
+
+                    function needsKoreanSigningFont(text) {
+                        return /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7ff]/.test(text || '');
+                    }
+
+                    function loadKoreanSigningFont() {
+                        if (!koreanSigningFontPromise) {
+                            var fontkitReady = new Promise(function (resolve, reject) {
+                                if (window.fontkit) {
+                                    resolve(window.fontkit);
+                                    return;
+                                }
+                                var script = document.createElement('script');
+                                script.src = "{!URLFOR($Resource.DocGenKoreanSigningFont, 'fontkit.umd.min.js')}";
+                                script.onload = function () {
+                                    if (window.fontkit) resolve(window.fontkit);
+                                    else reject(new Error('Korean signing font library did not load.'));
+                                };
+                                script.onerror = function () {
+                                    reject(new Error('Korean signing font library did not load.'));
+                                };
+                                document.head.appendChild(script);
+                            });
+                            var fontReady = fetch("{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}")
+                                .then(function (response) {
+                                    if (!response.ok) throw new Error('Korean signing font did not load.');
+                                    return response.arrayBuffer();
+                                });
+                            koreanSigningFontPromise = Promise.all([fontkitReady, fontReady]).catch(function (error) {
+                                koreanSigningFontPromise = null;
+                                throw error;
+                            });
+                        }
+                        return koreanSigningFontPromise;
+                    }
+
+                    function signingPdfFonts(doc, useKoreanFont) {
+                        if (useKoreanFont) {
+                            return loadKoreanSigningFont().then(function (resources) {
+                                doc.registerFontkit(resources[0]);
+                                return doc.embedFont(resources[1], { subset: true }).then(function (font) {
+                                    return [font, font, font];
+                                });
+                            });
+                        }
+                        return Promise.all([
+                            doc.embedFont(PDFLib.StandardFonts.HelveticaOblique),
+                            doc.embedFont(PDFLib.StandardFonts.Helvetica),
+                            doc.embedFont(PDFLib.StandardFonts.HelveticaBold)
+                        ]);
+                    }
+
                     // Composite ALL captured fields (drawn images + typed text + dates) onto
                     // the source PDF with pdf-lib, add signature attribution captions, and —
                     // when this signer completes the request — a Certificate of Completion
@@ -2575,26 +2641,20 @@
                         // Short date for the inline caption (full timestamp lives on the
                         // certificate page) so the caption fits beside the signature without
                         // bleeding into an adjacent column.
-                        var capShort = (function () {
-                            try {
-                                return new Date().toLocaleDateString(undefined, {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric'
-                                });
-                            } catch (e) {
-                                return '';
-                            }
-                        })();
+                        var capShort = shortSigningDate(new Date(), navigator.language);
                         return getCertificateData()
                             .then(function (cert) {
                                 var bytes = b64ToBytes(sourcePdfBase64);
                                 return PDFLib.PDFDocument.load(bytes).then(function (doc) {
-                                    return Promise.all([
-                                        doc.embedFont(PDFLib.StandardFonts.HelveticaOblique),
-                                        doc.embedFont(PDFLib.StandardFonts.Helvetica),
-                                        doc.embedFont(PDFLib.StandardFonts.HelveticaBold)
-                                    ]).then(function (fonts) {
+                                    var spotValues = guided && guided.spots
+                                        ? guided.spots.map(function (spot) {
+                                            return spot.value || spot.placement.signedValue;
+                                        })
+                                        : [];
+                                    var useKoreanFont = needsKoreanSigningFont(
+                                        [capShort, typedName, formFieldJson, JSON.stringify(cert)].concat(spotValues).join(' ')
+                                    );
+                                    return signingPdfFonts(doc, useKoreanFont).then(function (fonts) {
                                         var oblique = fonts[0],
                                             helv = fonts[1],
                                             helvBold = fonts[2];
