@@ -298,9 +298,13 @@
             "title": "Fill an existing PDF form",
             "group": "design",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Map actual PDF form fields to Salesforce values.",
-            "sources": ["force-app/main/default/lwc/docGenAdmin", "force-app/main/default/classes/DocGenService.cls"],
+            "minutes": 7,
+            "summary": "Map actual PDF form fields to Salesforce values, and optionally flatten the result.",
+            "sources": [
+                "force-app/main/default/lwc/docGenAdmin",
+                "force-app/main/default/classes/DocGenService.cls",
+                "force-app/main/default/classes/DocGenAcroFormService.cls"
+            ],
             "related": ["choose-data", "limits"],
             "aliases": [],
             "review": {

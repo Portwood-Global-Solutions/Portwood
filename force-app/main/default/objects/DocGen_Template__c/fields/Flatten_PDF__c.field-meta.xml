@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Flatten_PDF__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+    >Per-template "Flatten PDF on generation" switch (#534). Applies to PDF (fillable AcroForm) templates only. Unchecked (the default) — merged form fields stay fillable in the generated PDF. Check it to flatten the form after merge, so record values become static page content the recipient cannot edit.</description>
+    <externalId>false</externalId>
+    <inlineHelpText
+    >Fillable PDF templates only. When checked, merged form fields are flattened into the page so recipients cannot edit Salesforce values after download.</inlineHelpText>
+    <label>Flatten PDF on Generation</label>
+    <type>Checkbox</type>
+</CustomField>

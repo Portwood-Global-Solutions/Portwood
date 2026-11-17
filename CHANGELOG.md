@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### Added
+
+- **Flatten fillable PDF templates on generation (#534).** A new **Flatten PDF on
+  generation** option appears on Create Template (**Bring an Existing Template**, Type =
+  **PDF**) and on Edit Template → **Settings** → **Output & Page Setup** for PDF templates.
+  When it is on, Portwood fills the form, draws each field's value into the page, and
+  removes the form, so recipients cannot edit Salesforce values after download. It applies
+  to every generation path: download, preview, save to record, bulk, Flow, and signature
+  documents. Off by default; existing templates are unchanged. Template export and import
+  carry the setting; older bundles import with it off.
+- New field `DocGen_Template__c.Flatten_PDF__c` (checkbox, default unchecked), readable in
+  **DocGen_User** and **DocGen_Guest_Signature** and editable in **DocGen_Admin**, and
+  added to the template page layout.
+
+### Changed
+
+- **Upgrade-safe access to the new field.** Users whose Portwood access comes from custom
+  permission sets or profiles without the new field are never blocked: the template list,
+  editor, save, export, import, and generation all keep working, and the Flatten option is
+  hidden until an admin grants access. Generation always honors a template's flatten
+  setting, whoever runs it.
+- **New fillable-PDF uploads are stored server-ready more often.** A PDF that keeps any
+  objects in compressed object streams is now normalized at upload, not only when its form
+  fields are compressed. Its content is unchanged; document metadata such as the PDF's
+  title and author is not carried over. Templates already uploaded are untouched.
+- If flattening is on and a template's pages are still stored in compressed object
+  streams, generation stops with a message asking to upload the PDF again as a new version,
+  instead of returning an editable PDF.
+
+### Fixed
+
+- **Filling a field that already had an appearance no longer leaves fragments behind.**
+  Removing a dictionary value, such as an existing checkbox `/AP << /N << … >> >>`, cut
+  only its first characters and left the rest inside the field. The whole value is now
+  removed, matching the browser-side decomposer.
+- **Text fields set to Auto font size now render.** A field whose default appearance used
+  size 0 received an appearance with invisible text. The text is now sized to fit the
+  field, up to 12 pt.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
