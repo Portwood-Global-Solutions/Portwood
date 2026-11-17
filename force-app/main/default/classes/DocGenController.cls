@@ -1286,6 +1286,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 };
             }
 
+            if (template.Output_Format__c == 'PDF') {
+                DocGenPdfAttachments.assertGiantPdfSupported(templateId);
+            }
             // Giant Query path: create Job, extract loop body, launch batch.
             // Load the template body: for DOCX use pre-decomposed word/document.xml
             // (or zip fallback); for HTML the active version's Content_Version_Id__c
@@ -1649,6 +1652,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (recordId == null) {
                 throw new DocGenException('Record ID is missing.');
             }
+
+            DocGenPdfAttachments.assertGiantPdfSupported(templateId);
 
             Map<String, Object> childNodeConfig = (Map<String, Object>) JSON.deserializeUntyped(childNodeConfigJson);
 
@@ -5237,6 +5242,56 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    @AuraEnabled
+    public static String getTemplatePdfAttachments(Id templateId) {
+        try {
+            return JSON.serialize(DocGenPdfAttachments.read(templateId));
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Could not load template PDF attachments.');
+        }
+    }
+
+    @AuraEnabled
+    public static List<Map<String, String>> findTemplatePdfAttachmentFiles(String title) {
+        if (String.isBlank(title) || title.trim().length() < 2) {
+            return new List<Map<String, String>>();
+        }
+        String matchingTitle =
+            '%' +
+            title.trim().left(100).replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') +
+            '%';
+        List<Map<String, String>> options = new List<Map<String, String>>();
+        for (ContentVersion file : [
+            SELECT Id, Title, VersionNumber
+            FROM ContentVersion
+            WHERE Title LIKE :matchingTitle AND FileType = 'PDF' AND ContentLocation = 'S'
+            WITH USER_MODE
+            ORDER BY Title ASC, CreatedDate DESC, Id DESC
+            LIMIT 50
+        ]) {
+            options.add(
+                new Map<String, String>{
+                    'label' => file.Title +
+                    ' (version ' +
+                    file.VersionNumber +
+                    ')',
+                    'value' => String.valueOf(file.Id)
+                }
+            );
+        }
+        return options;
+    }
+
+    @AuraEnabled
+    public static String saveTemplatePdfAttachments(Id templateId, String config) {
+        try {
+            DocGenPdfAttachments.save(templateId, config);
+            return JSON.serialize(DocGenPdfAttachments.read(templateId));
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Could not save template PDF attachments.');
+        }
+    }
+
     /**
      * Async counterpart to generatePdf(saveToRecord=true). Enqueues a Queueable that
      * runs the full render + ContentVersion insert + ContentDocumentLink server-side,
@@ -5249,6 +5304,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     @AuraEnabled
     public static Id generatePdfAsync(Id templateId, Id recordId) {
         try {
+            DocGenPdfAttachments.preflight(templateId);
             return System.enqueueJob(new DocGenPdfSaveQueueable(templateId, recordId));
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error queueing PDF generation.');

@@ -2982,7 +2982,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
 
         if (mr.templateType == 'PDF') {
-            return new Map<String, Object>{ 'blob' => mr.pdfBlob, 'title' => mr.docTitle };
+            return new Map<String, Object>{
+                'blob' => DocGenPdfAttachments.includeInPdf(templateId, mr.pdfBlob),
+                'title' => mr.docTitle
+            };
         }
 
         if (mr.templateType == 'PowerPoint') {
@@ -2993,7 +2996,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Blob pdfBlob = renderPdf(mr, templateId, recordId);
 
-        return new Map<String, Object>{ 'blob' => pdfBlob, 'title' => mr.docTitle };
+        return new Map<String, Object>{
+            'blob' => DocGenPdfAttachments.includeInPdf(templateId, pdfBlob),
+            'title' => mr.docTitle
+        };
     }
 
     /**
@@ -3088,12 +3094,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         if (mr.outputFormat == 'PDF' && mr.templateType == 'PDF') {
-            return savePdfFile(mr.pdfBlob, mr.docTitle, attachmentRecordId);
+            return savePdfFile(
+                DocGenPdfAttachments.includeInPdf(templateId, mr.pdfBlob),
+                mr.docTitle,
+                attachmentRecordId
+            );
         }
 
         if (mr.outputFormat == 'PDF' && (mr.templateType == 'Word' || mr.templateType == 'HTML')) {
             Blob pdfBlob = renderPdf(mr, templateId, recordId);
-            return savePdfFile(pdfBlob, mr.docTitle, attachmentRecordId);
+            return savePdfFile(DocGenPdfAttachments.includeInPdf(templateId, pdfBlob), mr.docTitle, attachmentRecordId);
         }
 
         // Native DOCX/PPTX path

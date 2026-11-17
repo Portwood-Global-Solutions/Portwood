@@ -51,6 +51,10 @@ global with sharing class DocGenPdfMergeFlowAction { // NOPMD AvoidGlobalModifie
     private static final Integer ASYNC_INPUT_LIMIT = 786432;
     private static final Integer MAX_PARTS = 100;
 
+    public static Integer inputLimit() {
+        return isAsync() ? ASYNC_INPUT_LIMIT : SYNC_INPUT_LIMIT;
+    }
+
     @InvocableMethod(
         label='Portwood: Merge PDFs'
         description='Merge uploaded PDFs entirely in Salesforce, in the supplied ContentVersion ID order. Creates a new PDF File and returns its IDs. Enforces file access and Apex size limits; encrypted, signed and XFA PDFs are rejected.'
@@ -93,7 +97,7 @@ global with sharing class DocGenPdfMergeFlowAction { // NOPMD AvoidGlobalModifie
         }
         List<ContentVersion> outputs = new List<ContentVersion>();
         List<Integer> outputIndexes = new List<Integer>();
-        Integer remaining = isAsync() ? ASYNC_INPUT_LIMIT : SYNC_INPUT_LIMIT;
+        Integer remaining = inputLimit();
         for (Integer i = 0; i < requests.size(); i++) {
             if (responses[i].errorMessage != null)
                 continue;

@@ -42,11 +42,24 @@ global with sharing class DocGenPdfMerger {
         return finish(packet);
     }
 
+    public static Blob mergeAroundPdf(List<Id> before, Blob primary, List<Id> after) {
+        Packet packet = new Packet();
+        appendVersions(packet, before, false, 0);
+        addPart(packet, primary, false, before.size() + 1);
+        appendVersions(packet, after, false, before.size() + 1);
+        return finish(packet);
+    }
+
     /** Exact versions, in caller order. Duplicate IDs intentionally repeat pages. */
     global static Blob mergePdfCvs(List<Id> partCvIds, Boolean padOddDocuments) {
         if (partCvIds == null || partCvIds.isEmpty())
             throw new DocGenPdfMergeException('No PDFs supplied to merge.');
         Packet packet = new Packet();
+        appendVersions(packet, partCvIds, padOddDocuments, 0);
+        return finish(packet);
+    }
+
+    private static void appendVersions(Packet packet, List<Id> partCvIds, Boolean padOddDocuments, Integer offset) {
         // Bound query count for bulk packets, while releasing each chunk before
         // loading the next. Flow performs metadata/aggregate-size checks first.
         for (Integer start = 0; start < partCvIds.size(); start += 40) {
@@ -60,10 +73,9 @@ global with sharing class DocGenPdfMerger {
                 ContentVersion cv = loaded.get(chunk[i]);
                 if (cv == null)
                     throw new DocGenPdfMergeException('A source ContentVersion is missing or inaccessible.');
-                addPart(packet, cv.VersionData, padOddDocuments == true, start + i + 1);
+                addPart(packet, cv.VersionData, padOddDocuments == true, offset + start + i + 1);
             }
         }
-        return finish(packet);
     }
 
     private static void addPart(Packet packet, Blob input, Boolean pad, Integer partNumber) {

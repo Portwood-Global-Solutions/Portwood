@@ -970,6 +970,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Template__c.Pdf_Attachments__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Template__c.Header_Html__c</field>
         <readable>true</readable>
     </fieldPermissions>
