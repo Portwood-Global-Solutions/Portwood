@@ -28,7 +28,17 @@ private class DocGenButtonAdminControllerTest {
 
         System.assertNotEquals(null, cfgs, 'Button configs list should be returned');
         System.assertNotEquals(null, tpls, 'Template options should be returned');
-        System.assertNotEquals(null, rts, 'Record-type options should be returned (possibly empty)');
+        Set<String> expectedRecordTypes = new Set<String>();
+        for (Schema.RecordTypeInfo recordType : Account.SObjectType.getDescribe().getRecordTypeInfos()) {
+            if (recordType.isActive() && !recordType.isMaster()) {
+                expectedRecordTypes.add(recordType.getDeveloperName());
+            }
+        }
+        Set<String> listedRecordTypes = new Set<String>();
+        for (DocGenButtonAdminController.Option recordType : rts) {
+            listedRecordTypes.add(recordType.value);
+        }
+        System.assertEquals(expectedRecordTypes, listedRecordTypes, 'List all active non-master Account record types');
         System.assertEquals(0, none.size(), 'A blank object yields no record types');
         System.assertEquals(0, bogus.size(), 'An unknown object yields no record types');
     }
