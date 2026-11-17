@@ -36,6 +36,17 @@
             >
         </div>
 
+        <template if:true={hasKeptNodes}>
+            <div
+                role="note"
+                style="padding: 6px 14px; border-bottom: 1px solid #e5e5e5; background: #f3f3f3; color: #444"
+            >
+                <lightning-icon icon-name="utility:info" size="xx-small" style="margin-right: 6px"></lightning-icon>
+                Kept as configured, not editable here: {keptNodeLabels}. These join through a lookup on their parent
+                record (parentKeyField); edit them in Manual Query.
+            </div>
+        </template>
+
         <template if:true={hasRoot}>
             <div style="padding: 0">
                 <!-- ═══ Render root node ═══ -->

@@ -188,7 +188,7 @@ public with sharing class DocGenGiantQueryRouter {
                     String alias = (String) n.get('alias');
                     String rel = (String) n.get('relationshipName');
                     String effectiveKey = String.isNotBlank(alias) ? alias : rel;
-                    if (relKey.equals(effectiveKey)) {
+                    if (relKey.equals(effectiveKey) && DocGenDataRetriever.supportsGiantQueryCollection(n)) {
                         return n;
                     }
                 }

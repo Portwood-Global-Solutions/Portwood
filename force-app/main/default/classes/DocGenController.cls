@@ -1254,7 +1254,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                             String effectiveKey = String.isNotBlank(nodeAlias)
                                 ? nodeAlias
                                 : (String) n.get('relationshipName');
-                            if (giantRelationship.equals(effectiveKey)) {
+                            if (
+                                giantRelationship.equals(effectiveKey) &&
+                                DocGenDataRetriever.supportsGiantQueryCollection(n)
+                            ) {
                                 giantNodeConfig = n;
                                 break;
                             }
@@ -1818,9 +1821,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 for (Object nodeObj : nodes) {
                     Map<String, Object> n = (Map<String, Object>) nodeObj;
                     String relName = (String) n.get('relationshipName');
-                    if (String.isNotBlank(relName) && n.get('parentNode') != null) {
+                    if (
+                        String.isNotBlank(relName) &&
+                        n.get('parentNode') != null &&
+                        DocGenDataRetriever.supportsGiantQueryCollection(n)
+                    ) {
+                        String alias = (String) n.get('alias');
                         childNodes.put(
-                            relName,
+                            String.isNotBlank(alias) ? alias : relName,
                             new Map<String, Object>{
                                 'object' => n.get('object'),
                                 'lookupField' => n.get('lookupField'),

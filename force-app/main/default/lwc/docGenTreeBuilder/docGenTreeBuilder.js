@@ -53,6 +53,11 @@ export default class DocGenTreeBuilder extends LightningElement {
     _pendingConfig = null;
     _suppressNotify = false;
     _schemaCache = {};
+    // V3 nodes the tree cannot represent or edit — a node with parentKeyField joins
+    // through a lookup on its parent, a relationship the parent's schema does not list —
+    // kept verbatim, with their descendants, and re-emitted on every save so that
+    // editing anything else never drops them. Entries: { node, anchorPath }.
+    _passThrough = [];
 
     handleGlobalSearch(event) {
         this._globalSearch = (event.target.value || '').toLowerCase();
@@ -68,6 +73,7 @@ export default class DocGenTreeBuilder extends LightningElement {
         if (!obj) return;
         const schema = await this._loadSchema(obj);
         this._root = this._makeNode('root', obj, obj, schema, false);
+        this._passThrough = [];
         this._rootLoaded = true;
         if (this._pendingConfig) {
             await this._parseIncoming(this._pendingConfig);
@@ -104,7 +110,8 @@ export default class DocGenTreeBuilder extends LightningElement {
             alias: '', // optional override for the merge-tag name on this loop ({#Alias}…{/Alias})
             whereClause: '',
             orderBy: '',
-            limitAmount: ''
+            limitAmount: '',
+            single: false // V3 only: stitch the first match as an object ({Alias.Field}), not a loop
         };
     }
 
@@ -413,7 +420,7 @@ export default class DocGenTreeBuilder extends LightningElement {
     // to V3 JSON since V1 SOQL has no place to store an alias.
     _buildQueryString() {
         if (!this._root) return '';
-        if (this._anyNodeHasAlias(this._root)) {
+        if (this._passThrough.length > 0 || this._anyNodeHasAlias(this._root)) {
             return this._buildV3Json();
         }
         const parts = [];
@@ -423,6 +430,7 @@ export default class DocGenTreeBuilder extends LightningElement {
 
     _anyNodeHasAlias(node) {
         if (node.alias && node.alias.trim()) return true;
+        if (node.single) return true; // V1 SOQL has no way to say "one record, not a list"
         // Duplicate-slot relationships (filtered subsets) can't be expressed
         // in V1 SOQL — flag them so emit switches to V3 JSON.
         const seen = new Set();
@@ -438,8 +446,10 @@ export default class DocGenTreeBuilder extends LightningElement {
     _buildV3Json() {
         const nodes = [];
         let nextId = 0;
+        const idByPath = {};
         const walk = (node, parentNodeId) => {
             const myId = 'n' + nextId++;
+            idByPath[node.path] = myId;
             const fields = node.fields.filter((f) => f.checked).map((f) => f.apiName);
             const parentFields = [];
             for (const pr of node.parentRels) {
@@ -472,6 +482,7 @@ export default class DocGenTreeBuilder extends LightningElement {
                 if (node.whereClause) n.where = node.whereClause;
                 if (node.orderBy) n.orderBy = node.orderBy;
                 if (node.limitAmount) n.limit = String(node.limitAmount);
+                if (node.single) n.single = true;
             }
             nodes.push(n);
             for (const cr of node.childRels) {
@@ -479,7 +490,35 @@ export default class DocGenTreeBuilder extends LightningElement {
             }
         };
         walk(this._root, null);
+        // Re-attach kept nodes under the renumbered ids. A kept node whose tree parent the
+        // user has since removed goes with it, like any other child of a removed node.
+        const keptIds = {};
+        for (const entry of this._passThrough) {
+            keptIds[entry.node.id] = 'n' + nextId++;
+        }
+        for (const entry of this._passThrough) {
+            const parentId = entry.anchorPath ? idByPath[entry.anchorPath] : keptIds[entry.node.parentNode];
+            if (!parentId) continue;
+            nodes.push({ ...entry.node, id: keptIds[entry.node.id], parentNode: parentId });
+        }
         return JSON.stringify({ v: 3, root: this._root.objectName, nodes });
+    }
+
+    // A kept node's children are kept with it, verbatim; their anchor is the kept parent.
+    _keepSubtree(cfgNodes, kid, anchorPath) {
+        this._passThrough.push({ node: kid, anchorPath });
+        for (const child of cfgNodes.filter((n) => n.parentNode === kid.id)) {
+            this._keepSubtree(cfgNodes, child, null);
+        }
+    }
+
+    // Names shown in the builder for the related-record queries it keeps but cannot edit.
+    get keptNodeLabels() {
+        return this._passThrough.map((e) => e.node.alias || e.node.relationshipName || e.node.object).join(', ');
+    }
+
+    get hasKeptNodes() {
+        return this._passThrough.length > 0;
     }
 
     _findParentByChildPath(searchNode, childPath) {
@@ -553,6 +592,7 @@ export default class DocGenTreeBuilder extends LightningElement {
     async _parseIncoming(configStr) {
         if (!configStr || !this._root) return;
         this._suppressNotify = true;
+        this._passThrough = [];
 
         // V3 JSON: tree-shaped config. Walk nodes, expand each child's path,
         // restore alias + WHERE + ORDER + LIMIT.
@@ -601,6 +641,12 @@ export default class DocGenTreeBuilder extends LightningElement {
                 const expandChildren = async (parentJsonNode, parentTreeNode) => {
                     const kids = (cfg.nodes || []).filter((n) => n.parentNode === parentJsonNode.id);
                     for (const kid of kids) {
+                        if (kid.parentKeyField && String(kid.parentKeyField).trim()) {
+                            // Joins through a lookup on the parent, which the schema tree
+                            // cannot show: keep it (and its children) exactly as configured.
+                            this._keepSubtree(cfg.nodes, kid, parentTreeNode.path);
+                            continue;
+                        }
                         // Find an unclaimed slot for this relationship. Multiple kids
                         // with the same relationshipName (filtered subsets) land in
                         // separate slots — first claims primary, subsequent claim
@@ -644,6 +690,7 @@ export default class DocGenTreeBuilder extends LightningElement {
                         cr.nodeData.whereClause = kid.where || '';
                         cr.nodeData.orderBy = kid.orderBy || '';
                         cr.nodeData.limitAmount = kid.limit || '';
+                        cr.nodeData.single = kid.single === true;
                         for (const fname of kid.fields || []) {
                             const f = cr.nodeData.fields.find((ff) => ff.apiName === fname);
                             if (f) f.checked = true;
