@@ -4735,6 +4735,7 @@
                                                                 <lightning-input
                                                                     type="text"
                                                                     variant="label-hidden"
+                                                                    label="Signer field label"
                                                                     value={row.label}
                                                                     data-index={row.index}
                                                                     placeholder="Field label"
@@ -4805,6 +4806,14 @@
                                                                 ></lightning-input>
                                                             </td>
                                                             <td>
+                                                                <lightning-input
+                                                                    type="text"
+                                                                    label="Merge tag key"
+                                                                    variant="label-hidden"
+                                                                    value={row.key}
+                                                                    data-index={row.index}
+                                                                    onblur={handleSignerFieldKeyChange}
+                                                                ></lightning-input>
                                                                 <code
                                                                     class="tag-click"
                                                                     data-tag={row.mergeTag}
