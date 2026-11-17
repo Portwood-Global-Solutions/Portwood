@@ -1754,6 +1754,12 @@ These choices apply to template requests. The uploaded-PDF preparation path uses
 
 A signature packet gives the signer one session for the selected templates. Review the complete packet, including every role and signing spot. Completion produces a combined signed PDF with its completion certificate.
 
+#### Attach drawings or other record PDFs
+
+Set **Attached Documents** on the signing template to **Optional** or **Required**. The sender can then choose PDFs already linked to the record and show them before or after the template. Portwood pins each selected file version. Decline must be available when sending attachments.
+
+The signer opens every attachment and confirms the review before signing. The signed approval PDF includes a register identifying each attachment. The attached PDF files remain on the record.
+
 #### Check the first request
 
 In a test org, verify the signer sees the correct values and only their own signing fields. After completion, open the signed PDF and check its marks and certificate.
@@ -2439,6 +2445,8 @@ The **Send Branded Emails = False** input suppresses the initial invitations. On
 Legacy custom-signature actions do not accept modern v3 signer tokens. Use the returned Portwood signing link for current requests; see the [automation reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/automation.md) for compatibility and advanced options.
 
 Use [Collect signer answers](#signer-inputs) for `{?key}` fields, optional certificate entries, and single-signer record writeback.
+
+For an attachment-enabled template, pass the ordered record PDF IDs to **Attached Documents** and select **Before** or **After** in **Attached Documents Position**. Use ContentVersion IDs to pin the exact versions in the Flow.
 
 _Flow builders · 8 min read · Reviewed for 3.60.0_
 
@@ -5085,6 +5093,8 @@ global String emailSubject
 global Boolean requireEmailVerification
 global Boolean prefillSignerEmail
 global Integer expirationDays
+global List<String> attachedDocumentIds
+global String attachedDocumentPosition
 global class Result
 global Id signatureRequestId
 global List<String> signerUrls

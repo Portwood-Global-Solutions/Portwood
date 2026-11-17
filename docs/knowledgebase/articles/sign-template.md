@@ -41,6 +41,12 @@ These choices apply to template requests. The uploaded-PDF preparation path uses
 
 A signature packet gives the signer one session for the selected templates. Review the complete packet, including every role and signing spot. Completion produces a combined signed PDF with its completion certificate.
 
+#### Attach drawings or other record PDFs
+
+Set **Attached Documents** on the signing template to **Optional** or **Required**. The sender can then choose PDFs already linked to the record and show them before or after the template. Portwood pins each selected file version. Decline must be available when sending attachments.
+
+The signer opens every attachment and confirms the review before signing. The signed approval PDF includes a register identifying each attachment. The attached PDF files remain on the record.
+
 #### Check the first request
 
 In a test org, verify the signer sees the correct values and only their own signing fields. After completion, open the signed PDF and check its marks and certificate.

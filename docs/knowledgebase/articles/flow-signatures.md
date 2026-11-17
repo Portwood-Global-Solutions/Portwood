@@ -46,3 +46,5 @@ The **Send Branded Emails = False** input suppresses the initial invitations. On
 Legacy custom-signature actions do not accept modern v3 signer tokens. Use the returned Portwood signing link for current requests; see the [automation reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/automation.md) for compatibility and advanced options.
 
 Use [Collect signer answers](#signer-inputs) for `{?key}` fields, optional certificate entries, and single-signer record writeback.
+
+For an attachment-enabled template, pass the ordered record PDF IDs to **Attached Documents** and select **Before** or **After** in **Attached Documents Position**. Use ContentVersion IDs to pin the exact versions in the Flow.
