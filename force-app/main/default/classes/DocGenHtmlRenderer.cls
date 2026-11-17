@@ -5979,61 +5979,27 @@ public with sharing class DocGenHtmlRenderer {
 
         String out = '';
         Integer cursor = 0;
+        Integer copyFrom = 0;
         while (cursor < xml.length()) {
             Integer altStart = xml.indexOf('<mc:AlternateContent', cursor);
             Integer pictStart = xml.indexOf('<w:pict', cursor);
-
-            Integer nextStart = -1;
-            Boolean isAlt = false;
-            if (altStart != -1 && (pictStart == -1 || altStart < pictStart)) {
-                nextStart = altStart;
-                isAlt = true;
-            } else if (pictStart != -1) {
-                // Only treat <w:pict> as a textbox if it contains <v:textbox>
-                Integer pictTagEnd = xml.indexOf('>', pictStart);
-                Integer pictClose = xml.indexOf('</w:pict>', pictStart);
-                if (pictClose != -1 && pictTagEnd != -1) {
-                    String pictBody = xml.substring(pictTagEnd, pictClose);
-                    if (pictBody.contains('<v:textbox')) {
-                        nextStart = pictStart;
-                    }
-                }
-            }
-
+            Boolean isAlt = altStart != -1 && (pictStart == -1 || altStart < pictStart);
+            Integer nextStart = isAlt ? altStart : pictStart;
             if (nextStart == -1) {
-                out += xml.substring(cursor);
                 break;
-            }
-
-            // Walk backwards from nextStart to find the enclosing <w:p>...</w:p>.
-            // The textbox structure lives inside <w:p><w:r>...</w:r></w:p>; we need
-            // to replace the WHOLE outer paragraph so the unwrapped textbox content
-            // becomes a body-level sibling rather than nested inside a single <p>.
-            Integer outerPStart = findEnclosingParagraphStart(xml, nextStart);
-            Integer outerPEnd = -1;
-            if (outerPStart != -1) {
-                outerPEnd = findClosingTag(xml, outerPStart, 'w:p');
             }
 
             String endTag = isAlt ? '</mc:AlternateContent>' : '</w:pict>';
             Integer endIdx = xml.indexOf(endTag, nextStart);
             if (endIdx == -1) {
-                out += xml.substring(cursor);
                 break;
             }
             Integer blockEnd = endIdx + endTag.length();
-
-            // Use the enclosing <w:p> bounds if it cleanly wraps this textbox;
-            // otherwise fall back to just the block to avoid eating sibling content.
-            Boolean useOuter = (outerPStart != -1 &&
-            outerPEnd != -1 &&
-            outerPStart <= nextStart &&
-            outerPEnd >= blockEnd);
-            Integer replaceFrom = useOuter ? outerPStart : nextStart;
-            Integer replaceTo = useOuter ? outerPEnd : blockEnd;
-
-            out += xml.substring(cursor, replaceFrom);
             String block = xml.substring(nextStart, blockEnd);
+            cursor = blockEnd;
+            if (!block.contains('<w:txbxContent')) {
+                continue;
+            }
 
             // Prefer modern Choice branch for AlternateContent. Either way, pull
             // the first <w:txbxContent> we can find.
@@ -6059,6 +6025,20 @@ public with sharing class DocGenHtmlRenderer {
                 }
             } else {
                 tbInner = block; // <w:pict>...</w:pict>
+            }
+
+            if (!tbInner.contains('<w:txbxContent')) {
+                continue;
+            }
+
+            // Replace the outer paragraph once, but keep scanning its remaining
+            // blocks so sibling textboxes become body-level paragraphs in order.
+            if (nextStart >= copyFrom) {
+                Integer outerPStart = findEnclosingParagraphStart(xml, nextStart);
+                Integer outerPEnd = outerPStart >= copyFrom ? findClosingTag(xml, outerPStart, 'w:p') : -1;
+                Boolean useOuter = outerPEnd >= blockEnd;
+                out += xml.substring(copyFrom, useOuter ? outerPStart : nextStart);
+                copyFrom = useOuter ? outerPEnd : blockEnd;
             }
 
             // Pull positioning + orientation hints. EMU values convert at
@@ -6208,10 +6188,8 @@ public with sharing class DocGenHtmlRenderer {
                     out += '<w:p><w:r><w:t>__DGTXBX_CLOSE__</w:t></w:r></w:p>';
                 }
             }
-
-            cursor = replaceTo;
         }
-        return out;
+        return out + xml.substring(copyFrom);
     }
 
     /**
