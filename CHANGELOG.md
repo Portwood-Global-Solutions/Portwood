@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+
+- **Sign a document inside a Screen Flow (#533).** A new **Portwood: Sign in Flow** screen
+  component lets a signed-in user review and sign a Portwood signature request in the same
+  tab, on a Lightning page, a record page, or an Experience Cloud site, then continues the
+  Flow once the signature is recorded. Pass it the **Signer URLs** from **Portwood: Create
+  Signature Request**. Signers click **SIGN HERE** on the document to open the signing
+  dialog over it, draw or type their signature, and confirm consent in a **Complete
+  Signing** dialog. Signed fields show as a compact mark on the signature line, as on the
+  signing page. It supports guided signature, initials, date and date-picker fields, signer
+  form fields, email verification, decline, and multi-signer progress. The component returns
+  **Signed**, **Declined**, **Request complete**, **Signer status**, and **Error message**
+  for branching, and moves to the next screen automatically unless **Wait for the user to
+  select Next after signing** is on. It uses the same signing service as the emailed link, so
+  the audit record, document hash, Certificate of Completion, and completion emails are the
+  same. Guests are refused, and prepared uploaded-PDF requests still use the signing link.
+  Includes a **Portwood Portal Signer** permission set for Experience Cloud signers.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,

@@ -45,6 +45,11 @@ const CONSENT_TEXT =
 const MAX_PAGE_SCALE = 1.8;
 const DEFAULT_BRAND = '#0176d3';
 const CHIP_LABEL = { Full: 'SIGN HERE', Initials: 'INITIAL HERE', Date: 'DATE', DatePick: 'DATE' };
+// Signed-field look, matching the signing page's .spot-chip.signed: the mark on a green line with a
+// small green check tab above it, and a drawn mark capped at the page's 26px height.
+const SIGNED_GREEN = '#2e844a';
+const SIGNED_IMG_MAX_H = 26;
+const SCRIPT_FONT = "'Segoe Script','Brush Script MT','Snell Roundhand',cursive";
 
 /**
  * Sign a document inside a Screen Flow, in the same tab.
@@ -130,6 +135,7 @@ export default class DocGenFlowSigner extends LightningElement {
     captureBusy = false;
     padInked = false;
     consentChecked = false;
+    consentOpen = false;
     waitingOn = 0;
     // signer form fields
     formFields = [];
@@ -267,8 +273,13 @@ export default class DocGenFlowSigner extends LightningElement {
     get showCapture() {
         return this.signingOpen && !!this.activeSpot;
     }
+    // Once every field is done, consent is a modal (as on the signing page). Save & Next on the last
+    // field opens it straight away; after a plain Save, or if it is closed, "Finish & Submit" reopens it.
     get showConsent() {
-        return this.signingOpen && !this.legacy && this.allSigned && !this.activeSpot;
+        return this.signingOpen && !this.legacy && this.allSigned && !this.activeSpot && this.consentOpen;
+    }
+    get showFinishButton() {
+        return this.signingOpen && !this.legacy && this.allSigned && !this.activeSpot && !this.consentOpen;
     }
     get showLegacy() {
         return this.signingOpen && this.legacy;
@@ -820,38 +831,59 @@ export default class DocGenFlowSigner extends LightningElement {
         if (spot.signed) this._styleSigned(spot);
     }
 
+    /**
+     * A signed field, drawn like the signing page's: the mark sits ON the field's line (the bottom
+     * of the "SIGN HERE" box) and grows upward from it, with a small green check tab above. The
+     * drawn image is height-capped; without a cap (max-height:100% of an auto-height box) it rendered
+     * at the pad's full size and covered much of the page.
+     */
     _styleSigned(spot) {
         const chip = spot.chip;
-        // Let a longer value grow the chip (a date is wider than "SIGN HERE"), but never shrink
-        // below the anchor it covers, so no tail of the @@SIG-n@@ text shows from underneath.
-        const covered = chip.offsetWidth;
-        chip.style.width = 'auto';
-        chip.style.minWidth = covered + 'px';
-        chip.style.height = 'auto';
-        chip.style.minHeight = chip.style.minHeight || '22px';
-        chip.style.padding = '0 4px';
-        chip.style.overflow = 'visible';
-        chip.style.border = '2px solid #2e844a';
-        chip.style.background = 'rgba(255,255,255,.96)';
-        chip.style.color = '#16324f';
-        chip.style.boxShadow = 'none';
-        chip.style.cursor = 'default';
+        const b = spot.hit.box;
+        const type = spot.placement.type;
+        // Never narrower than the "SIGN HERE" box it replaces, so no tail of the @@SIG-n@@ anchor shows.
+        const covered = Math.max(b.w, 56);
+        const lineY = b.y + Math.max(b.h, 22);
+        chip.style.cssText =
+            'position:absolute;box-sizing:border-box;left:' +
+            b.x +
+            'px;top:' +
+            lineY +
+            'px;transform:translateY(-100%);min-width:' +
+            covered +
+            'px;min-height:20px;padding:0 3px 1px 3px;display:flex;align-items:flex-end;' +
+            'justify-content:flex-start;background:#fff;border:none;border-bottom:1.5px solid ' +
+            SIGNED_GREEN +
+            ';border-radius:0;box-shadow:none;cursor:default;overflow:visible;white-space:nowrap;color:#161616;';
+        chip.removeAttribute('role');
+        chip.removeAttribute('tabindex');
         while (chip.firstChild) chip.removeChild(chip.firstChild);
-        const tick = document.createElement('span');
-        tick.textContent = '✓ ';
-        tick.style.cssText = 'color:#2e844a;font-weight:700;margin-right:4px;';
-        chip.appendChild(tick);
+
+        const tab = document.createElement('span');
+        tab.textContent = '✓';
+        tab.setAttribute('aria-hidden', 'true');
+        tab.style.cssText =
+            'position:absolute;left:-2px;top:-18px;padding:1px 7px;border-radius:3px;background:' +
+            SIGNED_GREEN +
+            ';color:#fff;font:700 10px/1.4 Arial,sans-serif;';
+        chip.appendChild(tab);
+
         if (spot.imageData) {
             const img = document.createElement('img');
             img.src = spot.imageData;
-            img.style.cssText = 'max-height:100%;max-width:100%;display:block;';
+            img.alt = type === 'Initials' ? 'Drawn initials' : 'Drawn signature';
+            img.style.cssText =
+                'display:block;width:auto;height:auto;max-height:' + SIGNED_IMG_MAX_H + 'px;max-width:240px;';
             chip.appendChild(img);
-        } else {
-            const t = document.createElement('span');
-            t.textContent = spot.value || spot.placement.signedValue || '';
-            t.style.cssText = 'font:italic 13px Arial,sans-serif;white-space:nowrap;';
-            chip.appendChild(t);
+            return;
         }
+        const t = document.createElement('span');
+        t.textContent = spot.value || spot.placement.signedValue || '';
+        t.style.cssText =
+            type === 'Date' || type === 'DatePick'
+                ? 'font:600 12px/1.2 Arial,sans-serif;color:#161616;'
+                : 'font-family:' + SCRIPT_FONT + ';font-size:17px;font-weight:400;line-height:1.1;color:#16324f;';
+        chip.appendChild(t);
     }
 
     _refreshChips() {
@@ -968,7 +1000,13 @@ export default class DocGenFlowSigner extends LightningElement {
         this.typedValue = e.target.value;
     }
     handleDate(e) {
-        this.dateValue = e.detail.value;
+        this.dateValue = e.target.value; // native <input type="date">: yyyy-mm-dd
+    }
+    handleModalKey(e) {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        if (this.showConsent) this.handleCloseConsent();
+        else if (!this.captureBusy) this.handleCancelCapture();
     }
     handleClearPad() {
         if (this._pad) this._pad.clear();
@@ -1053,6 +1091,8 @@ export default class DocGenFlowSigner extends LightningElement {
         const next = this._firstPending();
         if (!next) {
             this.consentChecked = false;
+            // Fast path opens the final consent modal; the deliberate path leaves "Finish & Submit".
+            if (openNext) this.handleOpenConsent();
             return;
         }
         this._scrollTo(next);
@@ -1060,6 +1100,17 @@ export default class DocGenFlowSigner extends LightningElement {
     }
 
     // ---------------------------------------------------------------- consent + submit
+
+    handleOpenConsent() {
+        this.bannerText = '';
+        this.consentChecked = false;
+        this.consentOpen = true;
+    }
+
+    handleCloseConsent() {
+        if (this.state === 'submitting') return;
+        this.consentOpen = false;
+    }
 
     handleConsent(e) {
         this.consentChecked = e.target.checked;

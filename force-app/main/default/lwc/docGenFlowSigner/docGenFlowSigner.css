@@ -1,6 +1,6 @@
 /* Self-contained: an Experience Cloud LWR site does not load SLDS utility classes, so nothing
-   here depends on them. No position:fixed and no 100vh: this sits inside a Flow screen and must
-   not assume it owns the window (the signing page does, which is why it cannot just be dropped in).
+   here depends on them. The layout itself never takes over the window (no 100vh); only the signing
+   and consent modals are position:fixed, to match the signing page's modal over the document.
    --pw-brand is set inline from the signing brand (validated in JS), default Salesforce blue. */
 :host {
     display: block;
@@ -157,36 +157,217 @@
     color: #2e844a;
 }
 
-.pad-label {
-    margin: 0.5rem 0 0.25rem 0;
+/* ---- signing / consent modal: same look as the signing page's #sign-modal ---- */
+.pw-modal-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.58);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+.pw-modal-dialog {
+    width: 100%;
+    max-width: 680px;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 18px 55px rgba(15, 23, 42, 0.3);
+}
+
+.pw-modal-header {
+    position: relative;
+    padding: 1.4rem 4rem 1.2rem 1.75rem;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+}
+
+.pw-modal-title {
+    margin: 0;
+    font-size: 1.35rem;
     font-weight: 700;
+    color: var(--pw-brand, #0176d3);
+}
+
+.pw-modal-subtitle {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.9rem;
+    color: #706e6b;
+}
+
+.pw-modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #706e6b;
+    cursor: pointer;
+}
+
+.pw-modal-close:hover {
+    background: #f1f5f9;
+    color: var(--pw-brand, #0176d3);
+}
+
+.pw-modal-body {
+    padding: 1.5rem 1.75rem 1.75rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+}
+
+.pw-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.75rem;
+    border-top: 1px solid #e5e5e5;
+    background: #fafbfc;
+}
+
+.pw-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.pw-label {
+    display: block;
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.pw-label-plain {
+    font-weight: 400;
+    color: #181818;
+}
+
+.pw-input {
+    display: block;
+    width: 100%;
+    min-height: 46px;
+    box-sizing: border-box;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #c9c9c9;
+    border-radius: 7px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.95rem;
+    color: #181818;
+}
+
+.pw-input:focus {
+    outline: none;
+    border-color: var(--pw-brand, #0176d3);
+    box-shadow: 0 0 0 3px rgba(1, 118, 211, 0.18);
+}
+
+.pad-group {
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
 }
 
 .pad-foot {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-top: 4px;
 }
 
 .pad-hint {
     font-size: 0.75rem;
-    color: #5c6b7a;
-}
-
-.pad-wrap {
-    margin-bottom: 0.25rem;
+    color: #706e6b;
 }
 
 .pad {
     display: block;
     width: 100%;
-    height: 160px;
-    border: 1px dashed #8a99a8;
-    border-radius: 4px;
-    background: #fbfcfd;
+    height: 150px;
+    box-sizing: border-box;
+    border: 2px dashed #cbd5e1;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
     cursor: crosshair;
     touch-action: none; /* a stroke must not scroll the page on touch devices */
+}
+
+.consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid #d9e2ec;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.consent-row input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0 0;
+    cursor: pointer;
+}
+
+.consent-row label {
+    font-size: 0.84rem;
+    line-height: 1.5;
+    color: #181818;
+    cursor: pointer;
+}
+
+.pw-btn {
+    min-height: 44px;
+    padding: 0 1.25rem;
+    border: 1px solid #c9c9c9;
+    border-radius: 7px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #181818;
+    cursor: pointer;
+}
+
+.pw-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.pw-btn-brand {
+    border-color: var(--pw-brand, #0176d3);
+    background: var(--pw-brand, #0176d3);
+    color: #fff;
+}
+
+.pw-btn:disabled {
+    border-color: #c9c9c9;
+    background: #c9c9c9;
+    color: #fff;
+    cursor: not-allowed;
+}
+
+.pw-btn-small {
+    min-height: 0;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .field-error {
@@ -203,8 +384,8 @@
 }
 
 /* The document scrolls inside its own box so a field can be brought into view without scrolling
-   the page (which would carry the capture panel away). Height is relative to the window, not a
-   fixed 100vh takeover: this still sits inside a Flow screen. */
+   the page. Height is relative to the window, not a fixed 100vh takeover: this still sits inside a
+   Flow screen. */
 .viewer {
     max-width: 100%;
     max-height: 70vh;

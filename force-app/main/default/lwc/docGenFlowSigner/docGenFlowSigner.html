@@ -250,86 +250,14 @@
             </div>
         </template>
 
-        <template lwc:if={showCapture}>
-            <div class="panel" data-id="capture">
-                <p class="panel-title">{captureTitle}</p>
-                <p class="notice-text">{captureSubtitle}</p>
-                <template lwc:if={isDatePick}>
-                    <lightning-input
-                        type="date"
-                        label="Date"
-                        value={dateValue}
-                        onchange={handleDate}
-                        data-id="date-input"
-                    ></lightning-input>
-                </template>
-                <template lwc:if={showPad}>
-                    <p class="pad-label">Draw your signature</p>
-                    <div class="pad-wrap">
-                        <canvas class="pad" aria-label="Signature drawing area"></canvas>
-                    </div>
-                    <div class="pad-foot">
-                        <span class="pad-hint">Draw above, or type below.</span>
-                        <lightning-button
-                            label="Clear"
-                            variant="base"
-                            onclick={handleClearPad}
-                            data-id="clear"
-                        ></lightning-button>
-                    </div>
-                </template>
-                <template lwc:if={showTyped}>
-                    <lightning-input
-                        type="text"
-                        label={typedLabel}
-                        value={typedValue}
-                        maxlength="60"
-                        onchange={handleTyped}
-                        data-id="typed"
-                    ></lightning-input>
-                </template>
-                <template lwc:if={captureError}>
-                    <p class="field-error" role="alert" data-id="capture-error">{captureError}</p>
-                </template>
-                <div class="actions">
-                    <lightning-button label="Cancel" onclick={handleCancelCapture} data-id="cancel"></lightning-button>
-                    <lightning-button
-                        label="Save"
-                        disabled={saveDisabled}
-                        onclick={handleSave}
-                        data-id="save"
-                    ></lightning-button>
-                    <lightning-button
-                        variant="brand"
-                        label="Save &amp; Next"
-                        disabled={saveDisabled}
-                        onclick={handleSaveNext}
-                        data-id="save-next"
-                    ></lightning-button>
-                </div>
-            </div>
-        </template>
-
-        <template lwc:if={showConsent}>
-            <div class="panel" data-id="consent">
-                <p class="panel-title">Complete Signing</p>
-                <p class="notice-text">{consentSubtitle}</p>
-                <lightning-input
-                    type="checkbox"
-                    label={consentText}
-                    checked={consentChecked}
-                    onchange={handleConsent}
-                    data-id="consent-box"
-                ></lightning-input>
-                <div class="actions">
-                    <lightning-button
-                        variant="brand"
-                        label="Finish &amp; Submit"
-                        disabled={submitDisabled}
-                        onclick={handleFinish}
-                        data-id="finish"
-                    ></lightning-button>
-                </div>
+        <template lwc:if={showFinishButton}>
+            <div class="actions">
+                <lightning-button
+                    variant="brand"
+                    label="Finish &amp; Submit"
+                    onclick={handleOpenConsent}
+                    data-id="open-consent"
+                ></lightning-button>
             </div>
         </template>
 
@@ -375,5 +303,151 @@
         <div class={viewerClass} data-id="viewer">
             <div class="pdf-pages" lwc:dom="manual"></div>
         </div>
+
+        <!-- Signing and consent open as a modal over the document, the same look as the signing
+             page's #sign-modal: blurred dark backdrop, white rounded dialog. -->
+        <template lwc:if={showCapture}>
+            <div class="pw-modal-backdrop" data-id="capture" onkeydown={handleModalKey}>
+                <div class="pw-modal-dialog" role="dialog" aria-modal="true" aria-label={captureTitle}>
+                    <div class="pw-modal-header">
+                        <h2 class="pw-modal-title">{captureTitle}</h2>
+                        <p class="pw-modal-subtitle">{captureSubtitle}</p>
+                        <button
+                            type="button"
+                            class="pw-modal-close"
+                            aria-label="Close"
+                            onclick={handleCancelCapture}
+                            data-id="close"
+                        >
+                            &#10005;
+                        </button>
+                    </div>
+                    <div class="pw-modal-body">
+                        <template lwc:if={isDatePick}>
+                            <div class="pw-form-group">
+                                <label class="pw-label" for="pw-date">Date</label>
+                                <input
+                                    id="pw-date"
+                                    class="pw-input"
+                                    type="date"
+                                    value={dateValue}
+                                    onchange={handleDate}
+                                    oninput={handleDate}
+                                    data-id="date-input"
+                                />
+                            </div>
+                        </template>
+                        <template lwc:if={showPad}>
+                            <div class="pw-form-group pad-group">
+                                <p class="pw-label">Draw your signature</p>
+                                <canvas class="pad" aria-label="Signature drawing area"></canvas>
+                                <div class="pad-foot">
+                                    <span class="pad-hint">Draw above, or type below.</span>
+                                    <button
+                                        type="button"
+                                        class="pw-btn pw-btn-small"
+                                        onclick={handleClearPad}
+                                        data-id="clear"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template lwc:if={showTyped}>
+                            <div class="pw-form-group">
+                                <label class="pw-label pw-label-plain" for="pw-typed">{typedLabel}</label>
+                                <input
+                                    id="pw-typed"
+                                    class="pw-input"
+                                    type="text"
+                                    value={typedValue}
+                                    maxlength="60"
+                                    placeholder="e.g., John Smith"
+                                    autocomplete="name"
+                                    oninput={handleTyped}
+                                    data-id="typed"
+                                />
+                            </div>
+                        </template>
+                        <template lwc:if={captureError}>
+                            <p class="field-error" role="alert" data-id="capture-error">{captureError}</p>
+                        </template>
+                    </div>
+                    <div class="pw-modal-footer">
+                        <button type="button" class="pw-btn" onclick={handleCancelCapture} data-id="cancel">
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="pw-btn"
+                            disabled={saveDisabled}
+                            onclick={handleSave}
+                            data-id="save"
+                        >
+                            Save
+                        </button>
+                        <button
+                            type="button"
+                            class="pw-btn pw-btn-brand"
+                            disabled={saveDisabled}
+                            onclick={handleSaveNext}
+                            data-id="save-next"
+                        >
+                            Save &amp; Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={showConsent}>
+            <div class="pw-modal-backdrop" data-id="consent" onkeydown={handleModalKey}>
+                <div class="pw-modal-dialog" role="dialog" aria-modal="true" aria-label="Complete Signing">
+                    <div class="pw-modal-header">
+                        <h2 class="pw-modal-title">Complete Signing</h2>
+                        <p class="pw-modal-subtitle">{consentSubtitle}</p>
+                        <button
+                            type="button"
+                            class="pw-modal-close"
+                            aria-label="Close"
+                            onclick={handleCloseConsent}
+                            data-id="consent-close"
+                        >
+                            &#10005;
+                        </button>
+                    </div>
+                    <div class="pw-modal-body">
+                        <template lwc:if={bannerText}>
+                            <p class="field-error" role="alert" data-id="consent-error">{bannerText}</p>
+                        </template>
+                        <div class="consent-row">
+                            <input
+                                id="pw-consent"
+                                type="checkbox"
+                                checked={consentChecked}
+                                onchange={handleConsent}
+                                data-id="consent-box"
+                            />
+                            <label for="pw-consent">{consentText}</label>
+                        </div>
+                    </div>
+                    <div class="pw-modal-footer">
+                        <button type="button" class="pw-btn" onclick={handleCloseConsent} data-id="consent-cancel">
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="pw-btn pw-btn-brand"
+                            disabled={submitDisabled}
+                            onclick={handleFinish}
+                            data-id="finish"
+                        >
+                            Finish &amp; Submit
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
     </div>
 </template>
