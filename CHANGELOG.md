@@ -100,6 +100,7 @@
   showed the same image correctly. These images now render in every generation mode.
   Only addresses on your own org's domains are converted. The image's size and other
   settings are kept, and File addresses from any other site are left out of the PDF.
+- Word-to-PDF conversion preserves zero page margins and header/footer distances so full-page covers fit on the intended page (#479).
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
