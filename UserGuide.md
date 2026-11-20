@@ -2774,7 +2774,7 @@ _Template administrators · 6 min read · Reviewed for 3.60.0_
 
 Copy your Portwood setup — templates, brands, fonts, snippets, shared images, email templates, and signing settings — from one org to another with a single command. Use it to rebuild a sandbox or scratch org, or to keep two non-production orgs in step. To move one template by hand instead, see [Move a template between orgs](#move-templates).
 
-This is a draft tool. It writes only between sandboxes and scratch orgs; it refuses a production org.
+This is a draft tool. The command writes only between sandboxes and scratch orgs; it refuses a production org. That check is in the command, not in your org — see **Who can use the migration API** below.
 
 #### Before you start
 
@@ -2790,6 +2790,19 @@ You need:
 sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org source-org
 sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org target-org
 ```
+
+#### Who can use the migration API
+
+The command talks to Portwood through a REST API in your org. The API accepts a request only from a signed-in, non-guest user who has the **Migrate Portwood Configuration** custom permission.
+
+Assigning **Portwood Configuration Migration** is one way to grant that permission, but not the only one. When Portwood is installed, Salesforce also grants the package's custom permissions to profiles:
+
+- **Install for Admins Only** — the System Administrator profile gets it.
+- **Install for All Users** — most profiles get it.
+
+What protects your data is that every API request runs with the caller's own object and field access. A user can read or change only the Portwood records they could already see or edit in Salesforce; users without Portwood access get nothing.
+
+The API itself does not check whether the org is a sandbox. Someone calling it directly, without the command, can write to a production org, within their own access. If you want to limit who can call it, remove the **Migrate Portwood Configuration** custom permission from profiles in Setup and grant it only through the permission set.
 
 #### Install the command
 
