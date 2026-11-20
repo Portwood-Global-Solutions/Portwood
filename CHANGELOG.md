@@ -101,6 +101,14 @@
   Only addresses on your own org's domains are converted. The image's size and other
   settings are kept, and File addresses from any other site are left out of the PDF.
 - Word-to-PDF conversion preserves zero page margins and header/footer distances so full-page covers fit on the intended page (#479).
+- **Signing-page PDFs stay sharp on phones, HiDPI screens and when zoomed (#413).**
+  The guided signing page now draws each PDF page at the screen's real pixel density
+  (up to 3×), so contract text and fine print no longer look soft on phones and Retina
+  displays. When the signer pinch-zooms or uses browser zoom, the pages in view are redrawn
+  at the zoomed resolution, and they return to normal resolution when zoom is reset. Per-page
+  and whole-document pixel limits keep memory safe on mobile browsers. Signature, initial and
+  field positions are unchanged, and only the on-screen viewer is affected: the signed PDF
+  itself is the same as before.
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
