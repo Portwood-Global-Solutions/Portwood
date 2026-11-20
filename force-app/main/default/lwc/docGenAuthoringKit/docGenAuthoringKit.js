@@ -802,6 +802,51 @@ export function prettyPrintHtml(html) {
  * are stripped. Merge tags render as-is — this is a layout preview, not a
  * data merge.
  */
+// Static Resource fonts can be requested from Lightning itself. Use the current
+// origin for same-org URLs; the inert authored stylesheet keeps the original URL.
+function scopePreviewFontResources(css) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : null;
+    const orgIdentity = (host) => {
+        const match = host.match(/^(.*?)\.(?:my\.salesforce\.com|lightning\.force\.com)$/i);
+        return match ? match[1].toLowerCase() : null;
+    };
+
+    return css.replace(/@font-face\b\s*\{[^{}]*\}/gi, (face) => {
+        const rule = face.replace(/\/\*[\s\S]*?\*\//g, '');
+        if (!origin || rule.includes('\\')) {
+            return '';
+        }
+        const current = new URL(origin);
+        const currentOrg = orgIdentity(current.hostname);
+        return rule.replace(/url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi, (_url, double, single, raw) => {
+            const value = (double ?? single ?? raw ?? '').trim();
+            // Keep embedded fonts and root-relative assets used by existing templates.
+            if (/^data:/i.test(value) || (value.startsWith('/') && !value.startsWith('//'))) {
+                return _url;
+            }
+            try {
+                const source = new URL(value, current);
+                if (
+                    source.protocol !== 'https:' ||
+                    source.username ||
+                    source.password ||
+                    (source.origin !== origin &&
+                        (!currentOrg ||
+                            orgIdentity(source.hostname) !== currentOrg ||
+                            source.port ||
+                            current.port ||
+                            !/^\/resource\//i.test(source.pathname)))
+                ) {
+                    return 'local("")';
+                }
+                return 'url("' + (source.pathname + source.search + source.hash).replace(/"/g, '%22') + '")';
+            } catch {
+                return 'local("")';
+            }
+        });
+    });
+}
+
 export function scopeHtmlForInlinePreview(html) {
     let work = (html || '').replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<link\b[^>]*>/gi, '');
     const styles = [];
@@ -818,7 +863,7 @@ export function scopeHtmlForInlinePreview(html) {
     // Strip inline event handlers (on*="...") — static preview only.
     content = content.replace(/\son\w+\s*=\s*(["'])[\s\S]*?\1/gi, '');
 
-    let css = styles.join('\n').replace(/@page\b[^{]*{[^}]*}/gi, '');
+    let css = scopePreviewFontResources(styles.join('\n')).replace(/@page\b[^{]*{[^}]*}/gi, '');
     // Prefix every selector with the scope class. Handles the flat CSS 2.1
     // rules templates use; at-rule headers (@media etc.) pass through and
     // their inner rules get scoped by the same pass.
