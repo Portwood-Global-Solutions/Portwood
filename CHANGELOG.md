@@ -132,6 +132,13 @@
   built for a different object, so choosing the wrong one produced an error or an empty
   document. The list now shows only templates whose base object matches the record you are
   on, and deactivated templates are left out.
+- **Command Hub shows every navigation tab straight away (#531).** Reloading Portwood
+  briefly showed only part of the left-hand navigation — **Buttons** and **Send Email**
+  were missing until the page finished loading, then appeared on their own with no action
+  from you. The navigation now renders immediately, and the two tabs whose visibility
+  depends on your permissions show a short "Checking available actions…" note while that
+  is confirmed, instead of being absent. The Command Hub also no longer loads the whole
+  template list just to draw its navigation, so it opens faster.
 - **Reactivate a deactivated image asset from the Assets tab (#580).** Deactivating a
   shared image asset was previously irreversible from the UI — the row menu offered no
   Activate action and the list gave no sign of which assets were inactive, so the only
