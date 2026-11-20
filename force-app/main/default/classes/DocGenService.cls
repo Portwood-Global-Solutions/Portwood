@@ -379,6 +379,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private static Integer HEAP_CHECK_EVERY_N_ITERS = 50;
     @TestVisible
     private static Decimal HEAP_PRESSURE_RATIO = 0.60;
+    // Compacted worksheets leave headroom for the current sheet, archive and file save.
+    private static final Integer EXPANDED_ASYNC_HEAP_BYTES = 25000000;
+    private static final Decimal ASYNC_EXCEL_MEMORY_RATIO = 0.80;
+    private static Boolean compactingExcelSheets = false;
     // @TestVisible hook — tests set this to force checkHeapPressure into the pressure branch
     @TestVisible
     private static Boolean forceHeapPressureForTest = false;
@@ -654,6 +658,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private class MergeResult { // NOPMD TooManyFields — data transfer object requires all fields
         String documentXml; // Processed word/document.xml
         Map<String, String> processedXmlEntries; // All processed XML entries (name → xml)
+        Map<String, Blob> compactedExcelSheets;
         Map<String, Blob> passthroughEntries; // Non-XML ZIP entries passed through as-is
         String contentTypesXml; // [Content_Types].xml
         String relsXml; // word/_rels/document.xml.rels
@@ -695,6 +700,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Id recordId,
         Map<String, String> resolvedImages,
         String outputFormatOverride
+    ) {
+        return mergeTemplate(templateId, recordId, resolvedImages, outputFormatOverride, false);
+    }
+
+    private static MergeResult mergeTemplate(
+        Id templateId,
+        Id recordId,
+        Map<String, String> resolvedImages,
+        String outputFormatOverride,
+        Boolean compactAsyncExcel
     ) {
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
@@ -912,16 +927,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Excel second pass: inline shared strings into worksheets, then merge tags
         if (templateType == 'Excel' && !pendingExcelSheets.isEmpty()) {
             currentTemplateType = 'Excel';
+            if (compactAsyncExcel) {
+                mr.compactedExcelSheets = new Map<String, Blob>();
+            }
             List<String> sharedStrings = parseSharedStrings(excelSharedStringsXml);
             for (String sheetName : pendingExcelSheets.keySet()) {
                 String xml = pendingExcelSheets.get(sheetName);
                 xml = inlineSharedStrings(xml, sharedStrings);
                 currentEntryName = sheetName;
-                xml = processXml(xml, recordDataMap);
+                Boolean previousCompaction = compactingExcelSheets;
+                compactingExcelSheets = compactAsyncExcel;
+                try {
+                    xml = processXml(xml, recordDataMap);
+                } finally {
+                    compactingExcelSheets = previousCompaction;
+                }
                 // Loop expansion clones <row> elements with duplicate indices/refs;
                 // reassign them so Excel doesn't flag the sheet as corrupt.
                 xml = renumberExcelRows(xml);
-                mr.processedXmlEntries.put(sheetName, xml);
+                if (compactAsyncExcel) {
+                    checkAsyncExcelMemory();
+                    // Keep only the compressed worksheet between merge passes. The
+                    // final writer still materializes each sheet, after the merge data
+                    // and expanded worksheet strings have gone out of scope.
+                    Compression.ZipWriter sheetArchive = new Compression.ZipWriter();
+                    sheetArchive.addEntry(sheetName, Blob.valueOf(xml));
+                    mr.compactedExcelSheets.put(sheetName, sheetArchive.getArchive());
+                    xml = null;
+                } else {
+                    mr.processedXmlEntries.put(sheetName, xml);
+                }
             }
             // Cells are now inline, but workbook.xml.rels and [Content_Types].xml
             // still reference the sharedStrings part — removing it outright leaves a
@@ -1201,9 +1236,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Add processed XML entries in deterministic path order.
         List<String> processedNames = new List<String>(mr.processedXmlEntries.keySet());
+        if (mr.compactedExcelSheets != null) {
+            processedNames.addAll(mr.compactedExcelSheets.keySet());
+        }
         processedNames.sort();
         for (String name : processedNames) {
-            writer.addEntry(name, Blob.valueOf(mr.processedXmlEntries.get(name)));
+            if (mr.compactedExcelSheets != null && mr.compactedExcelSheets.containsKey(name)) {
+                checkAsyncExcelMemory();
+                Compression.ZipReader sheetArchive = new Compression.ZipReader(mr.compactedExcelSheets.remove(name));
+                writer.addEntry(name, sheetArchive.extract(name));
+            } else {
+                writer.addEntry(name, Blob.valueOf(mr.processedXmlEntries.get(name)));
+            }
         }
 
         // Add passthrough entries in deterministic path order, skipping entries
@@ -1230,6 +1274,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             writer.addEntry(mr.relsPath, Blob.valueOf(mr.relsXml));
         }
 
+        if (mr.compactedExcelSheets != null) {
+            checkAsyncExcelMemory();
+        }
         return writer.getArchive();
     }
 
@@ -3082,7 +3129,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Id attachmentRecordId
     ) {
         validateOutputFormatOverride(templateId, outputFormatOverride);
-        MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride);
+        // Only saved native workbooks need the final server-side archive. Keep the
+        // XML-parts API and legacy-heap orgs on the same merge path as before.
+        Boolean compactAsyncExcel =
+            (System.isBatch() || System.isQueueable()) && Limits.getLimitHeapSize() >= EXPANDED_ASYNC_HEAP_BYTES;
+        MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride, compactAsyncExcel);
         if (String.isNotBlank(documentTitle)) {
             mr.docTitle = documentTitle;
         }
@@ -3098,6 +3149,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Native DOCX/PPTX path
         Blob resultBlob = assembleZip(mr);
+        if (mr.compactedExcelSheets != null) {
+            checkAsyncExcelMemory();
+        }
         return saveFile(
             resultBlob,
             mr.docTitle,
@@ -6549,6 +6603,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      */
     @TestVisible
     private static void checkHeapPressure(String relationshipName) {
+        if (compactingExcelSheets && currentTemplateType == 'Excel' && !forceHeapPressureForTest) {
+            checkAsyncExcelMemory();
+            return;
+        }
         Integer heap = Limits.getHeapSize();
         Integer heapLimit = Limits.getLimitHeapSize();
         Boolean overThreshold =
@@ -6565,6 +6623,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             );
             e.relationshipName = relationshipName;
             throw e;
+        }
+    }
+
+    private static void checkAsyncExcelMemory() {
+        Integer heapLimit = Limits.getLimitHeapSize();
+        if (Limits.getHeapSize() >= (Integer) (heapLimit * ASYNC_EXCEL_MEMORY_RATIO)) {
+            throw new DocGenException(
+                'This workbook exceeds the asynchronous Excel memory budget. Reduce the rows or columns in the workbook and retry.'
+            );
         }
     }
 

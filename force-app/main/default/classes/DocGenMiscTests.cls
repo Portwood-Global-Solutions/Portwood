@@ -4906,6 +4906,82 @@ private class DocGenMiscTests {
         );
     }
 
+    @IsTest
+    static void testAsyncExcelSavesMacroWorkbookWithMergedWorksheets() {
+        Account account = TestDataFactory.getTestAccount();
+        DocGen_Template__c template = new DocGen_Template__c(
+            Name = 'Async macro workbook',
+            Type__c = 'Excel',
+            Output_Format__c = 'Native',
+            Base_Object_API__c = 'Account',
+            Query_Config__c = 'Name'
+        );
+        insert template;
+
+        String firstSheet =
+            '<worksheet><dimension ref="A1:B1"/><sheetData><row r="1">' +
+            '<c r="A1" t="inlineStr"><is><t>{Name}</t></is></c><c r="B1"><f>COUNTA(A1)</f></c>' +
+            '</row></sheetData><sheetProtection sheet="1"/></worksheet>';
+        String secondSheet = firstSheet.replace('COUNTA(A1)', 'LEN(A1)');
+        Blob vba = EncodingUtil.convertFromHex('D0CF11E0A1B11AE100');
+        Compression.ZipWriter templateZip = new Compression.ZipWriter();
+        templateZip.addEntry('[Content_Types].xml', Blob.valueOf('<Types/>'));
+        templateZip.addEntry('xl/worksheets/sheet1.xml', Blob.valueOf(firstSheet));
+        templateZip.addEntry('xl/worksheets/sheet2.xml', Blob.valueOf(secondSheet));
+        templateZip.addEntry('xl/vbaProject.bin', vba);
+        ContentVersion version = new ContentVersion(
+            Title = 'Async macro template',
+            PathOnClient = 'async-template.xlsm',
+            VersionData = templateZip.getArchive(),
+            FirstPublishLocationId = template.Id
+        );
+        insert version;
+        insert new DocGen_Template_Version__c(
+            Template__c = template.Id,
+            Content_Version_Id__c = version.Id,
+            Is_Active__c = true
+        );
+
+        Test.startTest();
+        System.enqueueJob(new AsyncExcelGeneration(template.Id, account.Id));
+        Test.stopTest();
+
+        ContentVersion saved = [
+            SELECT PathOnClient, VersionData
+            FROM ContentVersion
+            WHERE Title = 'Async macro result'
+            LIMIT 1
+        ];
+        System.assertEquals('Async macro result.xlsm', saved.PathOnClient);
+        Compression.ZipReader resultZip = new Compression.ZipReader(saved.VersionData);
+        System.assertEquals(
+            EncodingUtil.convertToHex(vba),
+            EncodingUtil.convertToHex(resultZip.extract('xl/vbaProject.bin'))
+        );
+        System.assertEquals(
+            firstSheet.replace('{Name}', account.Name.escapeXml()),
+            resultZip.extract('xl/worksheets/sheet1.xml').toString()
+        );
+        System.assertEquals(
+            secondSheet.replace('{Name}', account.Name.escapeXml()),
+            resultZip.extract('xl/worksheets/sheet2.xml').toString()
+        );
+    }
+
+    private class AsyncExcelGeneration implements Queueable {
+        private Id templateId;
+        private Id recordId;
+
+        private AsyncExcelGeneration(Id templateId, Id recordId) {
+            this.templateId = templateId;
+            this.recordId = recordId;
+        }
+
+        public void execute(QueueableContext context) {
+            DocGenService.generateDocument(templateId, recordId, null, 'Async macro result');
+        }
+    }
+
     /** @description Minimal XLSX container shared by the Excel corruption regression tests. */
     private static Blob buildTestXlsx(String sharedStringsXml, String sheetXml) {
         Compression.ZipWriter zw = new Compression.ZipWriter();
