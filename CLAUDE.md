@@ -144,7 +144,7 @@ The `versionDescription` field in `sfdx-project.json` (and what shows up in the 
 
 **Good** (consumer-friendly):
 
-> Portwood generates PDFs and Word documents from any Salesforce record. v2.1 strengthens permission enforcement so users only see and modify the fields their permission set grants. 100% native Salesforce — no external services or callouts. Free for all users.
+> Portwood generates PDFs and Word documents from any Salesforce record. v2.1 strengthens permission enforcement so users only see and modify the fields their permission set grants. 100% native Salesforce — no external services or callouts.
 
 The detailed engineering-language belongs in `CHANGELOG.md` (and the local-only `docs/appexchange/` bundle), not in the package metadata customers see at install time.
 
