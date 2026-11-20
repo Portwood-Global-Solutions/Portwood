@@ -2834,11 +2834,12 @@
                                 };
                                 document.head.appendChild(script);
                             });
-                            var fontReady = fetch("{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}")
-                                .then(function (response) {
-                                    if (!response.ok) throw new Error('Korean signing font did not load.');
-                                    return response.arrayBuffer();
-                                });
+                            var fontReady = fetch(
+                                "{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}"
+                            ).then(function (response) {
+                                if (!response.ok) throw new Error('Korean signing font did not load.');
+                                return response.arrayBuffer();
+                            });
                             koreanSigningFontPromise = Promise.all([fontkitReady, fontReady]).catch(function (error) {
                                 koreanSigningFontPromise = null;
                                 throw error;
@@ -2882,13 +2883,16 @@
                             .then(function (cert) {
                                 var bytes = b64ToBytes(sourcePdfBase64);
                                 return PDFLib.PDFDocument.load(bytes).then(function (doc) {
-                                    var spotValues = guided && guided.spots
-                                        ? guided.spots.map(function (spot) {
-                                            return spot.value || spot.placement.signedValue;
-                                        })
-                                        : [];
+                                    var spotValues =
+                                        guided && guided.spots
+                                            ? guided.spots.map(function (spot) {
+                                                  return spot.value || spot.placement.signedValue;
+                                              })
+                                            : [];
                                     var useKoreanFont = needsKoreanSigningFont(
-                                        [capShort, typedName, formFieldJson, JSON.stringify(cert)].concat(spotValues).join(' ')
+                                        [capShort, typedName, formFieldJson, JSON.stringify(cert)]
+                                            .concat(spotValues)
+                                            .join(' ')
                                     );
                                     return signingPdfFonts(doc, useKoreanFont).then(function (fonts) {
                                         var oblique = fonts[0],
@@ -3390,7 +3394,12 @@
                             nameInput.type = type === 'DatePick' ? 'date' : 'text';
                             if (type === 'Initials') {
                                 titleEl.textContent = 'Add Initials';
-                                subEl.textContent = 'Draw or type your initials for this field.';
+                                // #582 — only promise drawing when the pad is actually offered.
+                                // allowDraw is false when the org or template turns on "Allow
+                                // Typed Signatures Only" (#500), which hides the draw group.
+                                subEl.textContent = allowDraw
+                                    ? 'Draw or type your initials for this field.'
+                                    : 'Type your initials for this field.';
                                 nameLabel.textContent = 'Your initials';
                                 nameInput.placeholder = 'e.g., JS';
                                 nameInput.value = '';

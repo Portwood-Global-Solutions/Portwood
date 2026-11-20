@@ -53,6 +53,12 @@
   multi-sheet workbook is merged. Generating from a record page is unchanged. A workbook
   that is still too large to finish now stops with a clear message asking you to reduce
   its rows or columns, instead of failing without explanation.
+- **Clearer wording on the signing screen for initials fields (#582).** The Add Initials
+  window now says "Draw or type your initials for this field." instead of "Type your
+  initials for this field.", and the drawing area is labelled "Draw your initials" instead
+  of "Draw your signature". Signature fields keep the "Draw your signature" label. Where
+  **Allow Typed Signatures Only** is turned on for the organization or the template, there
+  is no drawing area, so the wording stays "Type your initials for this field."
 
 ### Fixed
 
@@ -146,12 +152,6 @@
   Inactive** status column, the row menu offers **Activate** on an inactive asset (and
   **Deactivate** on an active one), and reactivating restores the same latest image
   version, so templates using `{%asset:key}` render it again.
-### Changed
-
-- **Clearer wording on the signing screen for initials fields.** The Add Initials window now
-  says "Draw or type your initials for this field." instead of "Type your initials for this
-  field.", and the drawing area is labelled "Draw your initials" instead of "Draw your
-  signature". Signature fields keep the "Draw your signature" label.
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
