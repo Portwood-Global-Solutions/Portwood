@@ -13,6 +13,7 @@ import LightningConfirm from 'lightning/confirm';
 import renameAsset from '@salesforce/apex/DocGenController.renameAsset';
 import setAssetCategory from '@salesforce/apex/DocGenController.setAssetCategory';
 import deactivateAsset from '@salesforce/apex/DocGenController.deactivateAsset';
+import reactivateAsset from '@salesforce/apex/DocGenController.reactivateAsset';
 import getLatestContentVersionId from '@salesforce/apex/DocGenController.getLatestContentVersionId';
 
 // Client-side mirror of DocGenAssetKeyHandler.normalizeKey for the live tag
@@ -31,9 +32,29 @@ function slugify(value) {
         .replace(/-+$/g, '');
 }
 
+// Row-menu actions, computed per row so a deactivated asset offers "Activate"
+// and an active one offers "Deactivate" — the pair is mutually exclusive. A
+// static action list is what left deactivated assets with no reversal path
+// (issue #580). Reads only `row`, so it lives at module scope.
+function getRowActions(row, doneCallback) {
+    const actions = [
+        { label: 'Upload New Version', name: 'uploadVersion' },
+        { label: 'Edit', name: 'rename' },
+        { label: 'Preview', name: 'preview' }
+    ];
+    if (row.isActive === false) {
+        actions.push({ label: 'Activate', name: 'activate' });
+    } else {
+        actions.push({ label: 'Deactivate', name: 'deactivate' });
+    }
+    actions.push({ label: 'Delete', name: 'delete' });
+    doneCallback(actions);
+}
+
 const COLUMNS = [
     { label: 'Name', fieldName: 'name' },
     { label: 'Category', fieldName: 'category', initialWidth: 130 },
+    { label: 'Status', fieldName: 'statusLabel', initialWidth: 100 },
     {
         label: 'Merge Tag',
         fieldName: 'mergeTag',
@@ -78,15 +99,7 @@ const COLUMNS = [
     },
     {
         type: 'action',
-        typeAttributes: {
-            rowActions: [
-                { label: 'Upload New Version', name: 'uploadVersion' },
-                { label: 'Edit', name: 'rename' },
-                { label: 'Preview', name: 'preview' },
-                { label: 'Deactivate', name: 'deactivate' },
-                { label: 'Delete', name: 'delete' }
-            ]
-        }
+        typeAttributes: { rowActions: getRowActions }
     }
 ];
 
@@ -175,6 +188,9 @@ export default class DocGenAssets extends LightningElement {
         return {
             ...row,
             mergeTag: row.mergeTag || '{%asset:' + key + '}',
+            // Inactive assets stay in the list (getAssets returns both) but were
+            // visually indistinguishable until this column — issue #580.
+            statusLabel: row.isActive === false ? 'Inactive' : 'Active',
             thumbnailUrl: row.latestVersionCvId
                 ? '/sfc/servlet.shepherd/version/download/' + row.latestVersionCvId
                 : null
@@ -287,6 +303,8 @@ export default class DocGenAssets extends LightningElement {
             }
         } else if (actionName === 'deactivate') {
             await this.handleDeactivate(row);
+        } else if (actionName === 'activate') {
+            await this.handleReactivate(row);
         } else if (actionName === 'delete') {
             await this.handleDelete(row);
         }
@@ -508,6 +526,18 @@ export default class DocGenAssets extends LightningElement {
             await refreshApex(this.wiredAssetsResult);
         } catch (error) {
             this.showToast('Error deactivating asset', this.errMsg(error), 'error');
+        }
+    }
+
+    // ===== Reactivate (issue #580) =====
+
+    async handleReactivate(row) {
+        try {
+            await reactivateAsset({ assetId: row.id });
+            this.showToast('Activated', '"' + row.name + '" is active again.', 'success');
+            await refreshApex(this.wiredAssetsResult);
+        } catch (error) {
+            this.showToast('Error activating asset', this.errMsg(error), 'error');
         }
     }
 

@@ -109,6 +109,15 @@
   and whole-document pixel limits keep memory safe on mobile browsers. Signature, initial and
   field positions are unchanged, and only the on-screen viewer is affected: the signed PDF
   itself is the same as before.
+### Fixed
+
+- **Reactivate a deactivated image asset from the Assets tab (#580).** Deactivating a
+  shared image asset was previously irreversible from the UI — the row menu offered no
+  Activate action and the list gave no sign of which assets were inactive, so the only
+  way back was editing the record by hand. The Assets list now shows an **Active /
+  Inactive** status column, the row menu offers **Activate** on an inactive asset (and
+  **Deactivate** on an active one), and reactivating restores the same latest image
+  version, so templates using `{%asset:key}` render it again.
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
