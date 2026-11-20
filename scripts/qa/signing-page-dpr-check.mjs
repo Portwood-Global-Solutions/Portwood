@@ -97,7 +97,7 @@ ok(
 ok(/canvas\.style\.width\s*=\s*viewport\.width/.test(render), 'canvas displayed at the CSS-pixel viewport size');
 ok(/viewport:\s*renderViewport/.test(render), 'PDF.js renders with the device-resolution viewport');
 ok(
-    /pages\.push\(\{[\s\S]*?viewport:\s*viewport,/.test(render),
+    /var entry = \{[\s\S]*?viewport:\s*viewport,[\s\S]*?pages\.push\(entry\)/.test(render),
     'pages[] keeps the CSS-pixel viewport (anchors + hitToPdfRect read it)'
 );
 ok(!/canvas\.(width|height)/.test(extractFunction('itemDeviceBox') || ''), 'anchor boxes never read canvas dimensions');
@@ -139,7 +139,7 @@ ok(
     'listens for panning while zoomed'
 );
 ok(
-    /window\.addEventListener\('resize', scheduleRefresh\)/.test(src),
+    /window\.addEventListener\('resize', function \(\) \{[\s\S]*?scheduleRefresh\(\)/.test(src),
     'listens for browser zoom (devicePixelRatio change)'
 );
 ok(
