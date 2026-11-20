@@ -30,6 +30,25 @@
 - New field `DocGen_Template__c.Flatten_PDF__c` (checkbox, default unchecked), readable in
   **DocGen_User** and **DocGen_Guest_Signature** and editable in **DocGen_Admin**, and
   added to the template page layout.
+- **Migrate Portwood configuration between orgs with one command (#573, #532).** A new
+  Salesforce CLI plugin in `scripts/migration` adds `sf portwood migrate`, which copies
+  shared images, fonts, snippets, brands, email templates, templates, and selected signing
+  settings from a source org to a destination org. `--dry-run` compares stable keys and
+  reports items to create, conflicts, missing or ambiguous keys, and settings that need
+  mapping, without writing. Apply checks every source item first, writes each item in its
+  own transaction, stops at the first failure with a report of what was applied, and reuses
+  matching items on a rerun. Org-specific values (record IDs, org-wide email addresses,
+  signing-site URLs) come from a `--mappings` JSON file. `--only <kind>` limits the scope and
+  `--conflict skip` leaves differing destination items in place. Writes are limited to
+  sandboxes and scratch orgs.
+- Native template bodies (DOCX, XLSX, XLSM, PPTX, PDF) and shared images up to
+  10,000,000 bytes, and static TTF fonts up to 9,000,000 bytes, stream through Salesforce
+  Files with byte-count and checksum verification. Migrated fonts arrive **Staged** and must
+  be approved in Portwood Assets before templates that use them are copied.
+- New `/portwood/migration/v1/` REST API (`DocGenMigrationRest`) behind the new
+  **Portwood Configuration Migration** permission set (`DocGen_Migration`) and its
+  `Migrate_DocGen_Configuration` custom permission. Guest users are always refused.
+- New user guide lesson: **Migrate your Portwood setup between orgs**.
 
 ### Changed
 
@@ -152,28 +171,6 @@
   Inactive** status column, the row menu offers **Activate** on an inactive asset (and
   **Deactivate** on an active one), and reactivating restores the same latest image
   version, so templates using `{%asset:key}` render it again.
-- **Migrate Portwood configuration between orgs with one command (#573, #532).** A new
-  Salesforce CLI plugin in `scripts/migration` adds `sf portwood migrate`, which copies
-  shared images, fonts, snippets, brands, email templates, templates, and selected signing
-  settings from a source org to a destination org. `--dry-run` compares stable keys and
-  reports items to create, conflicts, missing or ambiguous keys, and settings that need
-  mapping, without writing. Apply checks every source item first, writes each item in its
-  own transaction, stops at the first failure with a report of what was applied, and reuses
-  matching items on a rerun. Org-specific values (record IDs, org-wide email addresses,
-  signing-site URLs) come from a `--mappings` JSON file. `--only <kind>` limits the scope and
-  `--conflict skip` leaves differing destination items in place. Writes are limited to
-  sandboxes and scratch orgs.
-- Native template bodies (DOCX, XLSX, XLSM, PPTX, PDF) and shared images up to
-  10,000,000 bytes, and static TTF fonts up to 9,000,000 bytes, stream through Salesforce
-  Files with byte-count and checksum verification. Migrated fonts arrive **Staged** and must
-  be approved in Portwood Assets before templates that use them are copied.
-- New `/portwood/migration/v1/` REST API (`DocGenMigrationRest`) behind the new
-  **Portwood Configuration Migration** permission set (`DocGen_Migration`) and its
-  `Migrate_DocGen_Configuration` custom permission. Guest users are always refused.
-- New user guide lesson: **Migrate your Portwood setup between orgs**.
-
-### Fixed
-
 - **The migration command runs on Windows.** It failed in PowerShell, Command Prompt, and
   Git Bash with "Salesforce CLI request failed", because Node cannot start the CLI's
   `sf.cmd` launcher directly. It now launches `sf.cmd` through `cmd.exe` with arguments
