@@ -25,22 +25,54 @@ const scopes = [
     ['settings', 'Settings', ['Experience_Site_Url', 'Signature_OWA_Id', 'AI_Provider_Class', 'AI_Prompt_Template']]
 ];
 
+// cmd.exe metacharacters. Each is prefixed with ^ so cmd.exe treats it literally.
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+// On Windows the Salesforce CLI is a batch file (sf.cmd), which Node cannot start
+// without cmd.exe. Build a cmd.exe line in which each argument survives both cmd.exe
+// parses (the /c line and the batch file's %* re-expansion) and reaches node.exe intact.
+export function windowsCommandLine(command, args) {
+    const quoted = args.map((arg) => {
+        let value = String(arg);
+        // MSVCRT rules: backslashes before a quote are doubled, the quote escaped,
+        // and trailing backslashes doubled so they do not escape the closing quote.
+        value = value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, '$1$1');
+        value = '"' + value + '"';
+        // Escape twice: once for the /c line, once for the %* expansion in sf.cmd.
+        return value.replace(CMD_META, '^$1').replace(CMD_META, '^$1');
+    });
+    return [command, ...quoted].join(' ');
+}
+
+function runSalesforceCli(args, options) {
+    if (process.platform !== 'win32') return execFileSync('sf', args, options);
+    return execFileSync(
+        process.env.ComSpec || 'cmd.exe',
+        ['/d', '/s', '/c', '"' + windowsCommandLine('sf', args) + '"'],
+        { ...options, windowsVerbatimArguments: true }
+    );
+}
+
 function salesforce(org, args) {
     let response;
     try {
         response = JSON.parse(
-            execFileSync('sf', [...args, '--target-org', org, '--json'], {
+            runSalesforceCli([...args, '--target-org', org, '--json'], {
                 encoding: 'utf8',
                 maxBuffer: 64 * 1024 * 1024,
-                stdio: ['ignore', 'pipe', 'pipe']
+                stdio: ['ignore', 'pipe', 'pipe'],
+                windowsHide: true
             })
         );
     } catch (error) {
         try {
             response = JSON.parse(error.stdout);
         } catch {
+            const reason = error.code || error.stderr?.toString().trim() || error.message;
             throw new Error(
-                'Salesforce CLI request failed. Confirm sf is installed and the org alias is authenticated.'
+                'Salesforce CLI request failed (' +
+                    reason +
+                    '). Confirm sf is installed and on PATH, and that the org alias is authenticated.'
             );
         }
     }
