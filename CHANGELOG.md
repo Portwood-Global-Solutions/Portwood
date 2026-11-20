@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- **Clearer wording on the signing screen for initials fields.** The Add Initials window now
+  says "Draw or type your initials for this field." instead of "Type your initials for this
+  field.", and the drawing area is labelled "Draw your initials" instead of "Draw your
+  signature". Signature fields keep the "Draw your signature" label.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,

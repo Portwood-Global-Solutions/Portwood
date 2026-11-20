@@ -1029,7 +1029,7 @@
                              draws with mouse/finger; the strokes are composited onto the PDF
                              with pdf-lib at finish. Falls back to the typed name below. -->
                         <div class="form-group" id="modal-draw-group" style="display: none">
-                            <label>Draw your signature</label>
+                            <label id="modal-draw-label">Draw your signature</label>
                             <canvas
                                 id="modal-draw-canvas"
                                 width="440"
@@ -3076,6 +3076,8 @@
                         DrawPad.clear();
                         signatureInputSource = null;
                         drawGroup.style.display = allowDraw ? '' : 'none';
+                        document.getElementById('modal-draw-label').textContent =
+                            type === 'Initials' ? 'Draw your initials' : 'Draw your signature';
 
                         if (type === 'Date') {
                             modalMode = 'spot';
@@ -3092,7 +3094,7 @@
                             nameInput.type = type === 'DatePick' ? 'date' : 'text';
                             if (type === 'Initials') {
                                 titleEl.textContent = 'Add Initials';
-                                subEl.textContent = 'Type your initials for this field.';
+                                subEl.textContent = 'Draw or type your initials for this field.';
                                 nameLabel.textContent = 'Your initials';
                                 nameInput.placeholder = 'e.g., JS';
                                 nameInput.value = '';
