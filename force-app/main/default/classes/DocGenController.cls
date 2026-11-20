@@ -2723,6 +2723,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Prefill_Signer_Email__c',
                 'Hide_Signer_Decline__c',
                 'Signature_Type_Only__c',
+                'Attached_Documents__c',
                 'API_Name__c',
                 'Default_Email_Message__c'
             }
@@ -2758,6 +2759,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
                 Signature_Type_Only__c,
+                Attached_Documents__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 CreatedDate,
@@ -2810,6 +2812,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Prefill_Signer_Email__c',
                 'Hide_Signer_Decline__c',
                 'Signature_Type_Only__c',
+                'Attached_Documents__c',
                 'API_Name__c',
                 'Default_Email_Message__c',
                 'Brand__c'
@@ -2846,6 +2849,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
                 Signature_Type_Only__c,
+                Attached_Documents__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 Brand__c,
@@ -3059,6 +3063,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (fields.containsKey('Hide_Signer_Decline__c')) {
                 template.Hide_Signer_Decline__c = (Boolean) fields.get('Hide_Signer_Decline__c');
             }
+            // #412 — per-template attached documents: Off / Optional / Required
+            if (fields.containsKey('Attached_Documents__c')) {
+                String attachedMode = (String) fields.get('Attached_Documents__c');
+                template.Attached_Documents__c = String.isBlank(attachedMode) ? 'Off' : attachedMode;
+            }
             // PHD-9 — stable developer key for Flow lookups. Blank means "leave
             // unchanged": Flows/buttons reference this key, and the create-wizard's
             // follow-up saves (which don't re-collect the API name) must never wipe
@@ -3143,6 +3152,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
                     'Signature_Type_Only__c',
+                    'Attached_Documents__c',
                     'API_Name__c',
                     'Default_Email_Message__c',
                     'Brand__c',
@@ -8187,6 +8197,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
                     'Signature_Type_Only__c',
+                    'Attached_Documents__c',
                     'Default_Email_Message__c',
                     'Form_Fields_Config__c'
                 }
@@ -8221,6 +8232,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Prefill_Signer_Email__c,
                     Hide_Signer_Decline__c,
                     Signature_Type_Only__c,
+                    Attached_Documents__c,
                     Default_Email_Message__c,
                     Form_Fields_Config__c,
                     (
@@ -8286,6 +8298,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('Prefill_Signer_Email__c', tmpl.Prefill_Signer_Email__c);
             tmplData.put('Hide_Signer_Decline__c', tmpl.Hide_Signer_Decline__c);
             tmplData.put('Signature_Type_Only__c', tmpl.Signature_Type_Only__c);
+            tmplData.put('Attached_Documents__c', tmpl.Attached_Documents__c);
             tmplData.put('Default_Email_Message__c', tmpl.Default_Email_Message__c);
             tmplData.put('Form_Fields_Config__c', tmpl.Form_Fields_Config__c);
             bundle.put('template', tmplData);
@@ -8514,6 +8527,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // #367 — a bundle without the key (older export) keeps Decline shown
             tmpl.Hide_Signer_Decline__c = tmplData.get('Hide_Signer_Decline__c') == true;
             tmpl.Signature_Type_Only__c = tmplData.get('Signature_Type_Only__c') == true;
+            // #412 — a bundle without the key (older export) gets the default: Off
+            String importedAttachedMode = (String) tmplData.get('Attached_Documents__c');
+            tmpl.Attached_Documents__c = String.isBlank(importedAttachedMode) ? 'Off' : importedAttachedMode;
             tmpl.Default_Email_Message__c = (String) tmplData.get('Default_Email_Message__c');
             tmpl.Form_Fields_Config__c = (String) tmplData.get('Form_Fields_Config__c');
             // API_Name__c is unique — keep it (the whole point is a stable key
@@ -8565,6 +8581,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Prefill_Signer_Email__c',
                     'Hide_Signer_Decline__c',
                     'Signature_Type_Only__c',
+                    'Attached_Documents__c',
                     'Default_Email_Message__c',
                     'Form_Fields_Config__c',
                     'API_Name__c'

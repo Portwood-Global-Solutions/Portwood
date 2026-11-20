@@ -243,6 +243,8 @@
             "global Boolean requireEmailVerification",
             "global Boolean prefillSignerEmail",
             "global Integer expirationDays",
+            "global List<String> attachedDocumentIds",
+            "global String attachedDocumentPosition",
             "global class Result",
             "global Id signatureRequestId",
             "global List<String> signerUrls",
