@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v3.64.0 — Sign inside a Screen Flow, flatten fillable PDFs, configuration migration, and signing in Korean
+
+Released 2026-11-20 · `04tVx000001FBU1IAO` (build 3.64.0-1) · ancestor 3.63.0 · 2,357 tests,
+79% coverage
+
+Seventeen PRs land together. People who are already signed in can now review and sign a document inside a Screen Flow without leaving it, and a fillable PDF template can flatten its form on generation so recipients cannot edit the Salesforce values. A new draft `sf portwood migrate` command copies your Portwood setup between sandboxes and scratch orgs. Signing now works in Korean and other non-Latin languages and stays sharp on phones and high-resolution screens, large Excel workbooks generate reliably in the background, and number formats honor optional decimal places. The rest is a sweep of signing, fillable-PDF, bulk-filter, asset and Command Hub fixes.
+
 ### Added
 
 - **Sign a document inside a Screen Flow (#533).** A new **Portwood: Sign in Flow** screen
