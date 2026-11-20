@@ -1,5 +1,7 @@
 Move a working template from a sandbox to production, or share it with another Portwood org.
 
+To copy your whole Portwood setup between sandboxes or scratch orgs in one step, see [Migrate your Portwood setup between orgs](#migrate-configuration).
+
 #### Export from the first org
 
 1. Open **My Templates → Your Templates**.

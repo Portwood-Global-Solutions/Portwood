@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <classAccesses>
+        <apexClass>DocGenMigrationRest</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Migrate_DocGen_Configuration</name>
+    </customPermissions>
+    <description
+    >Permit authentication to the Portwood configuration migration REST API. Assign alongside the appropriate Portwood configuration permissions.</description>
+    <label>Portwood Configuration Migration</label>
+</PermissionSet>

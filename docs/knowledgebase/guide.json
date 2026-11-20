@@ -997,7 +997,7 @@
                 "force-app/main/default/lwc/docGenAdmin",
                 "force-app/main/default/classes/DocGenController.cls"
             ],
-            "related": ["template-versions", "upgrade-portwood"],
+            "related": ["template-versions", "migrate-configuration", "upgrade-portwood"],
             "aliases": [
                 "511-api-name-a-stable-key-for-automation-v328",
                 "511-api-name--a-stable-key-for-automation-v328",
@@ -1007,6 +1007,25 @@
             "review": {
                 "version": "3.60.0",
                 "date": "2026-10-24",
+                "method": "source"
+            }
+        },
+        {
+            "slug": "migrate-configuration",
+            "title": "Migrate your Portwood setup between orgs",
+            "group": "manage",
+            "audience": "Salesforce administrators",
+            "minutes": 9,
+            "summary": "Copy templates, brands, fonts, snippets, and signing settings to another org with one command.",
+            "sources": [
+                "scripts/migration",
+                "force-app/main/default/classes/DocGenMigrationRest.cls",
+                "force-app/main/default/permissionsets/DocGen_Migration.permissionset-meta.xml"
+            ],
+            "related": ["move-templates", "custom-fonts", "brands-and-emails", "manage-access"],
+            "review": {
+                "version": "3.63.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },

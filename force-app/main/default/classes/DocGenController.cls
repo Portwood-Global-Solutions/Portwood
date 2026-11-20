@@ -8179,6 +8179,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static String exportTemplate(Id templateId) {
+        return exportTemplateBundle(templateId, false);
+    }
+
+    // Migration reads non-HTML body bytes through the user's native Files API instead of Apex JSON.
+    public static String exportTemplateForMigration(Id templateId) {
+        return exportTemplateBundle(templateId, true);
+    }
+
+    private static String exportTemplateBundle(Id templateId, Boolean streamOfficeBody) {
         try {
             DocGenFlsGuard.assertAccessible(
                 DocGen_Template__c.sObjectType,
@@ -8326,35 +8335,59 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (!tmpl.Versions__r.isEmpty()) {
                 ver = tmpl.Versions__r[0];
                 if (String.isNotBlank(ver.Content_Version_Id__c)) {
-                    // FLS-guard + SYSTEM_MODE, NOT USER_MODE. Template-internal CVs
-                    // (docgen_html_body_*, the uploaded template file) carry
-                    // ContentDocumentLinks that default to Visibility=InternalUsers,
-                    // which USER_MODE reads silently drop — the #114 quirk. Under
-                    // USER_MODE this returned empty and the export produced a bundle
-                    // with NO body at all, so the clone was created blank with no error.
-                    DocGenFlsGuard.assertAccessible(
-                        ContentVersion.sObjectType,
-                        new Set<String>{ 'VersionData', 'FileExtension', 'Title' }
-                    );
-                    /* code-analyzer-suppress ApexFlsViolation */
-                    List<ContentVersion> cvs = [
-                        SELECT VersionData, FileExtension, Title
-                        FROM ContentVersion
-                        WHERE Id = :ver.Content_Version_Id__c
-                        WITH SYSTEM_MODE
-                        LIMIT 1 // NOPMD — internal template file read
-                    ];
-                    if (!cvs.isEmpty()) {
-                        Map<String, Object> fileData = new Map<String, Object>();
-                        fileData.put('fileName', cvs[0].Title);
-                        fileData.put('fileExtension', cvs[0].FileExtension);
-                        fileData.put('base64', EncodingUtil.base64Encode(cvs[0].VersionData));
-                        bundle.put('templateFile', fileData);
-                        // For HTML templates, the body bytes are HTML text containing
-                        // shepherd URLs that reference inline-image CVs — capture the
-                        // text so we can scan it for asset IDs below.
-                        if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
-                            htmlBodyText = cvs[0].VersionData.toString();
+                    if (streamOfficeBody && !DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                        Id bodyId = Id.valueOf(ver.Content_Version_Id__c);
+                        ContentVersion file = [
+                            SELECT Id, Title, FileExtension, ContentSize, Checksum
+                            FROM ContentVersion
+                            WHERE Id = :bodyId
+                            WITH USER_MODE
+                        ];
+                        bundle.put(
+                            'templateFile',
+                            new Map<String, Object>{
+                                'fileName' => file.Title,
+                                'fileExtension' => file.FileExtension,
+                                'file' => new Map<String, Object>{
+                                    'id' => file.Id,
+                                    'title' => file.Title,
+                                    'extension' => file.FileExtension,
+                                    'size' => file.ContentSize,
+                                    'checksum' => file.Checksum
+                                }
+                            }
+                        );
+                    } else {
+                        // FLS-guard + SYSTEM_MODE, NOT USER_MODE. Template-internal CVs
+                        // (docgen_html_body_*, the uploaded template file) carry
+                        // ContentDocumentLinks that default to Visibility=InternalUsers,
+                        // which USER_MODE reads silently drop — the #114 quirk. Under
+                        // USER_MODE this returned empty and the export produced a bundle
+                        // with NO body at all, so the clone was created blank with no error.
+                        DocGenFlsGuard.assertAccessible(
+                            ContentVersion.sObjectType,
+                            new Set<String>{ 'VersionData', 'FileExtension', 'Title' }
+                        );
+                        /* code-analyzer-suppress ApexFlsViolation */
+                        List<ContentVersion> cvs = [
+                            SELECT VersionData, FileExtension, Title
+                            FROM ContentVersion
+                            WHERE Id = :ver.Content_Version_Id__c
+                            WITH SYSTEM_MODE
+                            LIMIT 1 // NOPMD — internal template file read
+                        ];
+                        if (!cvs.isEmpty()) {
+                            Map<String, Object> fileData = new Map<String, Object>();
+                            fileData.put('fileName', cvs[0].Title);
+                            fileData.put('fileExtension', cvs[0].FileExtension);
+                            fileData.put('base64', EncodingUtil.base64Encode(cvs[0].VersionData));
+                            bundle.put('templateFile', fileData);
+                            // For HTML templates, the body bytes are HTML text containing
+                            // shepherd URLs that reference inline-image CVs — capture the
+                            // text so we can scan it for asset IDs below.
+                            if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                                htmlBodyText = cvs[0].VersionData.toString();
+                            }
                         }
                     }
                 }
@@ -8464,6 +8497,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             return JSON.serialize(bundle);
         } catch (Exception e) {
+            if (streamOfficeBody)
+                throw e;
             throw DocGenService.ahe(e, 'Error exporting template.');
         }
     }
@@ -8502,6 +8537,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static Id importTemplate(String jsonData) {
+        return importTemplateBundle(jsonData, null, false);
+    }
+
+    // Accepts a user-owned staging file validated by the authenticated migration transport.
+    public static Id importTemplateFromMigrationFile(String jsonData, ContentVersion stagedFile) {
+        return importTemplateBundle(jsonData, stagedFile, true);
+    }
+
+    private static Id importTemplateBundle(String jsonData, ContentVersion stagedFile, Boolean migration) {
         try {
             Map<String, Object> bundle = (Map<String, Object>) JSON.deserializeUntyped(jsonData);
             Map<String, Object> tmplData = (Map<String, Object>) bundle.get('template');
@@ -8678,7 +8722,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // 2. Upload template file if present
             Map<String, Object> fileData = (Map<String, Object>) bundle.get('templateFile');
             String cvId = null;
-            if (fileData != null && String.isNotBlank((String) fileData.get('base64'))) {
+            if (stagedFile != null) {
+                if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                    throw new DocGenException('HTML templates with inline image references use the JSON import path.');
+                }
+                Database.update(new ContentVersion(Id = stagedFile.Id, Title = tmpl.Name), AccessLevel.USER_MODE);
+                Database.insert(
+                    new ContentDocumentLink(
+                        ContentDocumentId = stagedFile.ContentDocumentId,
+                        LinkedEntityId = tmpl.Id,
+                        ShareType = 'V'
+                    ),
+                    AccessLevel.USER_MODE
+                );
+                cvId = stagedFile.Id;
+            } else if (fileData != null && String.isNotBlank((String) fileData.get('base64'))) {
                 ContentVersion cv = new ContentVersion();
                 // HTML bodies MUST keep the docgen_html_body_<templateId>_<ts> convention:
                 // getHtmlTemplateBody finds the body by that title prefix, so titling it
@@ -8826,6 +8884,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             return tmpl.Id;
         } catch (Exception e) {
+            if (migration)
+                throw e;
             throw DocGenService.ahe(e, 'Error importing template.');
         }
     }
