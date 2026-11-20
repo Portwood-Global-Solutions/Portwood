@@ -38,3 +38,9 @@ when versions change, and disclose it in AppExchange security materials.
 - **MIT License** (pdf-lib): https://opensource.org/licenses/MIT
 
 Full upstream license text is retained in each project's repository linked above.
+
+### Korean signing PDF assets
+
+The `DocGenKoreanSigningFont` static resource contains Nanum Gothic Regular
+under the SIL Open Font License and the `@pdf-lib/fontkit` 1.1.1 UMD bundle
+under the MIT license. The resource includes both license texts.
