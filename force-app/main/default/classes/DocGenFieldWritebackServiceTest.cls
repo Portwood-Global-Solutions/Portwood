@@ -43,6 +43,57 @@ private class DocGenFieldWritebackServiceTest {
         return req.Id;
     }
 
+    @IsTest
+    static void sentFieldLabelsAndKeysSurviveTemplateRename() {
+        String oldConfig = '{"formFields":[{"key":"old_key","label":"Old label"}]}';
+        String newConfig = '{"formFields":[{"key":"new_key","label":"New label"}]}';
+        Id requestId = buildRequest(oldConfig, null, null);
+        DocGen_Signature_Request__c request = [
+            SELECT Id, Template__c, Form_Fields_Snapshot__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :requestId
+        ];
+        System.assertEquals(oldConfig, request.Form_Fields_Snapshot__c);
+        Id templateId = request.Template__c;
+        // Simulate a request sent before this field existed.
+        request.Form_Fields_Snapshot__c = null;
+        update request;
+
+        update new DocGen_Template__c(Id = templateId, Form_Fields_Config__c = newConfig);
+        request = [
+            SELECT Form_Fields_Snapshot__c, Template__r.Form_Fields_Config__c
+            FROM DocGen_Signature_Request__c
+            WHERE Id = :requestId
+        ];
+        System.assertEquals(oldConfig, DocGenFieldWritebackService.requestConfig(request));
+        System.assertEquals(newConfig, request.Template__r.Form_Fields_Config__c);
+
+        DocGen_Signature_Request__c nextRequest = new DocGen_Signature_Request__c(
+            Status__c = 'Sent',
+            Template__c = templateId,
+            Signer_Name__c = 'New Signer',
+            Signer_Email__c = 'new@example.test'
+        );
+        insert nextRequest;
+        nextRequest = [SELECT Form_Fields_Snapshot__c FROM DocGen_Signature_Request__c WHERE Id = :nextRequest.Id];
+        System.assertEquals(newConfig, nextRequest.Form_Fields_Snapshot__c);
+    }
+
+    @IsTest
+    static void rejectDuplicateSignerFieldKeys() {
+        Id requestId = buildRequest('{"formFields":[{"key":"first"}]}', null, null);
+        Id templateId = [SELECT Template__c FROM DocGen_Signature_Request__c WHERE Id = :requestId].Template__c;
+        Database.SaveResult result = Database.update(
+            new DocGen_Template__c(
+                Id = templateId,
+                Form_Fields_Config__c = '{"formFields":[{"key":"first"},{"key":"FIRST"}]}'
+            ),
+            false
+        );
+        System.assertEquals(false, result.isSuccess());
+        System.assert(result.getErrors()[0].getMessage().contains('keys must be unique'));
+    }
+
     private static Integer auditCount(Id requestId) {
         return [SELECT COUNT() FROM DocGen_Signature_Audit__c WHERE Signature_Request__c = :requestId];
     }

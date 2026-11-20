@@ -253,7 +253,7 @@ public without sharing class DocGenSignatureController {
         );
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signature_Request__c> reqs = [
-            SELECT Template__c, Template__r.Form_Fields_Config__c
+            SELECT Template__c, Form_Fields_Snapshot__c, Template__r.Form_Fields_Config__c
             FROM DocGen_Signature_Request__c
             WHERE Id = :requestId
             WITH SYSTEM_MODE
@@ -264,7 +264,7 @@ public without sharing class DocGenSignatureController {
         }
 
         List<DocGenFieldWritebackService.FormFieldDef> defs = DocGenFieldWritebackService.parseConfig(
-            reqs[0].Template__r.Form_Fields_Config__c
+            DocGenFieldWritebackService.requestConfig(reqs[0])
         );
         // validateAndClean enforces required + coerces + drops unknown keys, and
         // returns null when there are no configured form fields.
@@ -403,6 +403,7 @@ public without sharing class DocGenSignatureController {
                 Signature_Request__r.Template__c,
                 Signature_Request__r.Template__r.Name,
                 Signature_Request__r.Template__r.Form_Fields_Config__c,
+                Signature_Request__r.Form_Fields_Snapshot__c,
                 Signature_Request__r.Template__r.Hide_Signer_Decline__c,
                 Signature_Request__r.Template__r.Signature_Type_Only__c
             FROM DocGen_Signer__c
@@ -881,7 +882,9 @@ public without sharing class DocGenSignatureController {
         // only). The writeback flags + base-field API names from the config never
         // leave the server; the writeback allowlist is re-derived at completion.
         if (parentReq.Template__c != null && parentReq.Template__r != null) {
-            res.formFields = DocGenFieldWritebackService.publicFormFields(parentReq.Template__r.Form_Fields_Config__c);
+            res.formFields = DocGenFieldWritebackService.publicFormFields(
+                DocGenFieldWritebackService.requestConfig(parentReq)
+            );
         }
 
         return res;

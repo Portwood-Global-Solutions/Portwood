@@ -411,11 +411,20 @@ public without sharing class DocGenSignatureService {
      * finalize context). Returns an empty list when the template has none or can't
      * be read — the certificate then renders without a Form Field Responses section.
      */
-    private static List<DocGenFieldWritebackService.FormFieldDef> loadCertFieldDefs(Id templateId) {
+    private static List<DocGenFieldWritebackService.FormFieldDef> loadCertFieldDefs(Id requestId, Id templateId) {
         if (templateId == null) {
             return new List<DocGenFieldWritebackService.FormFieldDef>();
         }
         try {
+            List<DocGen_Signature_Request__c> requests = [
+                SELECT Form_Fields_Snapshot__c
+                FROM DocGen_Signature_Request__c
+                WHERE Id = :requestId
+                WITH SYSTEM_MODE
+            ];
+            if (!requests.isEmpty() && String.isNotBlank(requests[0].Form_Fields_Snapshot__c)) {
+                return DocGenFieldWritebackService.parseConfig(requests[0].Form_Fields_Snapshot__c);
+            }
             DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Form_Fields_Config__c' });
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             List<DocGen_Template__c> tmpls = [
@@ -2107,7 +2116,7 @@ public without sharing class DocGenSignatureService {
             String verifyBlock = buildVerificationBlockHtml(
                 reqId,
                 fullSigners,
-                loadCertFieldDefs(templateId),
+                loadCertFieldDefs(reqId, templateId),
                 formValues
             );
             html = injectVerifyBlockBeforeLastBody(html, verifyBlock);
@@ -2332,7 +2341,7 @@ public without sharing class DocGenSignatureService {
             String verifyBlock = buildVerificationBlockHtml(
                 reqId,
                 fullSigners,
-                loadCertFieldDefs(templateIds.isEmpty() ? null : templateIds[0]),
+                loadCertFieldDefs(reqId, templateIds.isEmpty() ? null : templateIds[0]),
                 formValues
             );
             // injectVerifyBlockBeforeLastBody handles the multi-</body> case —

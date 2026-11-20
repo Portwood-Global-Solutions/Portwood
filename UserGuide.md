@@ -2259,10 +2259,12 @@ Ask a signer for a PO number, selected date, acknowledgement, or other informati
 2. Click **Add Field**.
 3. Set the **Label** and **Type**: text, number, date, checkbox, or picklist. Supply choices for a picklist.
 4. Choose **Required** if the signer must answer.
-5. Copy the generated **Merge Tag**. Its stable key uses letters, numbers, and underscores.
+5. Set the **Merge Tag Key** or keep the generated key, then copy the tag. Keys must be unique and use letters, numbers, and underscores.
 6. Choose **On Certificate** if the answer should appear on the completion certificate.
 7. To update Salesforce after signing, select a suitable **Mapped Field** on the related record and enable **Write Back**.
 8. Save the intended version and test a practice signing request.
+
+The **Label** is what signers see. Changing it keeps the merge tag intact. If you change the **Merge Tag Key**, use **Save as New Version**. Portwood updates references in HTML and Canvas drafts. For a template uploaded in another format, update the tags in the source file and upload it before saving. Open signing requests keep their original field definitions.
 
 #### Place the answer
 

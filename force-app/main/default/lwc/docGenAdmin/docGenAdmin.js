@@ -723,6 +723,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // mergeTag, choices, listOnCertificate }.
     @track _allUpdateableFields = [];
     @track signerFields = [];
+    _signerKeyRenames = {};
 
     get builderFieldsTabClass() {
         return this.builderTab === 'fields' ? 'builder-tab-active' : '';
@@ -4100,11 +4101,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // ============================================================
     // #161 — Signer Inputs (form fields with optional record writeback)
     // ------------------------------------------------------------
-    // Rows live as parsed.formFields on the editTemplateQuery JSON:
+    // Rows live in the dedicated signer fields configuration:
     //   { key, label, fieldApiName, type, required, writeback, mergeTag,
     //     choices, listOnCertificate }
-    // `key` is a stable [A-Za-z0-9_]+ id generated once and NEVER reused after
-    // delete; `mergeTag` is `{?<key>}` and never changes when the label is edited.
+    // The signer-facing label and the document merge key are independent.
     // ============================================================
 
     get signerFieldTypeOptions() {
@@ -4207,6 +4207,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             }
         }
         this.signerFields = rows;
+        this._signerKeyRenames = {};
     }
 
     // Serialize the current signerFields into the dedicated Form_Fields_Config__c
@@ -4284,6 +4285,86 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this._updateSignerFieldRow(Number(event.currentTarget.dataset.index), {
             label: event.detail ? event.detail.value : event.target.value
         });
+    }
+
+    handleSignerFieldKeyChange(event) {
+        const input = event.currentTarget;
+        const index = Number(input.dataset.index);
+        const row = this.signerFields[index];
+        if (!row) return;
+
+        const key = String(input.value || '').trim();
+        const originals = Object.keys(this._signerKeyRenames);
+        const original = originals.find((previous) => this._signerKeyRenames[previous] === row.key) || row.key;
+        const duplicate =
+            this.signerFields.some(
+                (field, i) => i !== index && String(field.key || '').toLowerCase() === key.toLowerCase()
+            ) || originals.some((previous) => previous !== original && previous.toLowerCase() === key.toLowerCase());
+        const error = !/^[A-Za-z0-9_]+$/.test(key)
+            ? 'Use letters, numbers, and underscores.'
+            : duplicate
+              ? 'Use a unique merge tag key.'
+              : '';
+        input.setCustomValidity(error);
+        input.reportValidity();
+        if (error) {
+            input.value = row.key;
+            this.showToast('Merge tag key unchanged', error, 'error');
+            return;
+        }
+        if (key === row.key) return;
+
+        const renames = { ...this._signerKeyRenames, [original]: key };
+        if (key === original) delete renames[original];
+        this._signerKeyRenames = renames;
+        this._updateSignerFieldRow(index, { key, mergeTag: this._buildSignerMergeTag(key) });
+    }
+
+    get hasSignerKeyRenames() {
+        return Object.keys(this._signerKeyRenames).length > 0;
+    }
+
+    _rewriteSignerTags(html) {
+        return (html || '').replace(/\{\?([A-Za-z0-9_]+)(?=[|}])/g, (match, key) =>
+            Object.prototype.hasOwnProperty.call(this._signerKeyRenames, key)
+                ? '{?' + this._signerKeyRenames[key]
+                : match
+        );
+    }
+
+    async _stageSignerTagRenames() {
+        if (!this.hasSignerKeyRenames) return;
+        if (this.editTemplateType !== 'HTML' && !this.isCanvasTemplate) {
+            if (!this.uploadedContentVersionId) {
+                throw new Error('Update the tags in your source file and upload it before saving a new version.');
+            }
+        } else {
+            const active = (this.versions || []).find((version) => version.isActive);
+            const canvas = this.isCanvasTemplate && this.template.querySelector('c-doc-gen-canvas');
+            const draft = this.isCanvasTemplate ? canvas?.getSerializedHtml() : this._currentDraftHtml();
+            const source =
+                draft ||
+                (active && (await getVersionBody({ versionId: active.Id }))) ||
+                (await getHtmlTemplateBody({ templateId: this.editTemplateId }));
+            const body = this._rewriteSignerTags(source);
+            if (body && (body !== source || this.htmlEditorDirty)) {
+                if (this.isCanvasTemplate) {
+                    const staged = await saveHtmlTemplateBody({
+                        templateId: this.editTemplateId,
+                        fileName: 'canvas.html',
+                        htmlContent: body
+                    });
+                    this.uploadedContentVersionId = staged.contentVersionId;
+                    this.uploadedFileName = 'canvas.html';
+                } else {
+                    const fileName = this._legacyHtmlVersionFileName(this.uploadedFileName || 'template.html');
+                    await this._processAndSaveHtmlBody(this.editTemplateId, body, fileName, null, 'editor');
+                }
+                this.htmlEditorDirty = false;
+            }
+        }
+        this.editTemplateHeaderHtml = this._rewriteSignerTags(this.editTemplateHeaderHtml);
+        this.editTemplateFooterHtml = this._rewriteSignerTags(this.editTemplateFooterHtml);
     }
 
     handleSignerFieldMappedChange(event) {
@@ -6111,6 +6192,14 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     async handleSaveOnly() {
+        if (this.hasSignerKeyRenames) {
+            this.showToast(
+                'Save a new version',
+                'Use Save as New Version to apply the renamed signer merge tags.',
+                'info'
+            );
+            return;
+        }
         if (!this.editTemplateName || !this.editTemplateType) {
             this.showToast('Error', 'Name and Type are required.', 'error');
             return;
@@ -6208,10 +6297,11 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // dropped by a save that looked completely successful.
         try {
             this._liveChrome();
+            await this._stageSignerTagRenames();
             await this._materializeHeaderFooterImages();
         } catch (err) {
             const msg = err && err.message ? err.message : String(err);
-            this.showToast('Could not read the header/footer', msg, 'error');
+            this.showToast('Could not prepare template changes', msg, 'error');
             return;
         }
         // Designer: unapplied visual/source edits fold into the staged body
@@ -6220,7 +6310,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         // the decision is a CONTENT comparison against the last staged body,
         // so a missed input event can never silently drop edits (the
         // "saved successfully but changes gone on reload" class of report).
-        if (this.activeMainTab === 'design' && this.editTemplateType === 'HTML') {
+        if (!this.hasSignerKeyRenames && this.activeMainTab === 'design' && this.editTemplateType === 'HTML') {
             const draft = (this._currentDraftHtml() || '').trim();
             const lastStaged = (this._lastUploadedHtmlText || '').trim();
             // Whitespace-insensitive: serialize/pretty-print round-trips shift
@@ -6291,6 +6381,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 contentVersionId: templateBodyContentVersionId
             });
             const versionId = saveResult && saveResult.createdVersionId ? saveResult.createdVersionId : null;
+            this._signerKeyRenames = {};
             // #272 fidelity report for Word/PowerPoint uploads: the linter's
             // warnings ride the saveTemplate response (same contract as the HTML
             // path's saveHtmlTemplateBody). Advisory only — the version is already
