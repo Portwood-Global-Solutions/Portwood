@@ -325,6 +325,13 @@ global with sharing class DocGenMigrationRest {
                 throw new DocGenException('Only a private migration staging file can be discarded.');
             }
             ensurePrivateStage(version.ContentDocumentId);
+            // #532 — AccessLevel.USER_MODE enforces the caller's own ContentDocument delete
+            // access, and the query above already narrows to a staging file this user both
+            // owns and created, whose Title matches the staging pattern, with
+            // ensurePrivateStage() refusing anything that carries a sharing link or a public
+            // distribution. sfge reaches this from the @HttpDelete entry point and cannot
+            // see USER_MODE as a CRUD check, so it reports ApexFlsViolation here.
+            /* code-analyzer-suppress ApexFlsViolation */
             Database.delete(new ContentDocument(Id = version.ContentDocumentId), AccessLevel.USER_MODE);
             respond(200, new Map<String, Object>{ 'discarded' => true });
         } catch (Exception error) {
