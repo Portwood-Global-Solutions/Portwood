@@ -39,15 +39,24 @@
   own transaction, stops at the first failure with a report of what was applied, and reuses
   matching items on a rerun. Org-specific values (record IDs, org-wide email addresses,
   signing-site URLs) come from a `--mappings` JSON file. `--only <kind>` limits the scope and
-  `--conflict skip` leaves differing destination items in place. Writes are limited to
-  sandboxes and scratch orgs.
+  `--conflict skip` leaves differing destination items in place. The command writes only
+  between sandboxes and scratch orgs and refuses a production org. That check lives in the
+  command, not in the org: the REST API below accepts writes in any org, including
+  production, from a user who has migration access, always limited to that user's own
+  object and field access.
 - Native template bodies (DOCX, XLSX, XLSM, PPTX, PDF) and shared images up to
   10,000,000 bytes, and static TTF fonts up to 9,000,000 bytes, stream through Salesforce
   Files with byte-count and checksum verification. Migrated fonts arrive **Staged** and must
   be approved in Portwood Assets before templates that use them are copied.
-- New `/portwood/migration/v1/` REST API (`DocGenMigrationRest`) behind the new
-  **Portwood Configuration Migration** permission set (`DocGen_Migration`) and its
-  `Migrate_DocGen_Configuration` custom permission. Guest users are always refused.
+- New `/portwood/migration/v1/` REST API (`DocGenMigrationRest`), gated by the new
+  `Migrate_DocGen_Configuration` custom permission, which the new **Portwood Configuration
+  Migration** permission set (`DocGen_Migration`) grants. Guest users are always refused.
+  Salesforce also grants a package's custom permissions at install time: an **Install for
+  Admins Only** install gives this one to the System Administrator profile, and an
+  **Install for All Users** install gives it to most profiles, so the permission set is not
+  the only way users get it. Every request still runs with the caller's own object and
+  field access — the API never returns or changes records the user could not already see or
+  edit in Salesforce.
 - New user guide lesson: **Migrate your Portwood setup between orgs**.
 
 ### Changed
