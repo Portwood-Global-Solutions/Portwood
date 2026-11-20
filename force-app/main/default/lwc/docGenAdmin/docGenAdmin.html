@@ -1631,23 +1631,36 @@
                                 ></lightning-button>
                             </div>
                         </template>
-                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
-                            {templateCountLabel}
+                        <template lwc:if={templateListLoading}>
+                            <div class="slds-is-relative slds-var-p-around_large">
+                                <lightning-spinner
+                                    alternative-text="Loading templates"
+                                    size="small"
+                                ></lightning-spinner>
+                            </div>
+                        </template>
+                        <p lwc:elseif={templateListFailed} role="alert">
+                            Templates could not be loaded. Use Refresh to try again.
                         </p>
-                        <div class="table-container">
-                            <lightning-datatable
-                                key-field="Id"
-                                data={filteredTemplates}
-                                columns={columns}
-                                onrowaction={handleRowAction}
-                                sorted-by={templateSortedBy}
-                                sorted-direction={templateSortedDirection}
-                                onsort={handleTemplateSort}
-                                min-column-width="70"
-                                hide-checkbox-column
-                            >
-                            </lightning-datatable>
-                        </div>
+                        <template lwc:else>
+                            <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
+                                {templateCountLabel}
+                            </p>
+                            <div class="table-container">
+                                <lightning-datatable
+                                    key-field="Id"
+                                    data={filteredTemplates}
+                                    columns={columns}
+                                    onrowaction={handleRowAction}
+                                    sorted-by={templateSortedBy}
+                                    sorted-direction={templateSortedDirection}
+                                    onsort={handleTemplateSort}
+                                    min-column-width="70"
+                                    hide-checkbox-column
+                                >
+                                </lightning-datatable>
+                            </div>
+                        </template>
                     </template>
                 </div>
             </lightning-tab>
@@ -3623,7 +3636,7 @@
 
                     <lightning-tabset variant="scoped" active-tab-value={activeEditTab}>
                         <!-- Tab 1: Settings -->
-                        <lightning-tab label="Settings" value="details">
+                        <lightning-tab label="Settings" value="details" onactive={handleTemplateSettingsActive}>
                             <!-- Grouped into balanced sections so the tab fits without heavy scrolling -->
                             <div class="slds-var-p-around_small">
                                 <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">Template</h3>
