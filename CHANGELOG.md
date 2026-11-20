@@ -19,12 +19,6 @@
   the audit record, document hash, Certificate of Completion, and completion emails are the
   same. Guests are refused, and prepared uploaded-PDF requests still use the signing link.
   Includes a **Portwood Portal Signer** permission set for Experience Cloud signers.
-- **The Download button after a file preview now downloads the file (#516).** A record
-  button set to the **Preview and download** delivery mode opens the generated document in
-  the Salesforce file preview. The dialog behind the preview offers a copy to download, but
-  clicking **Download** could do nothing, with no file and no error. **Download** is now a
-  standard link to the exact file just generated, so the browser downloads it directly. The
-  **Download** and **Preview** delivery modes are unchanged.
 - **Flatten fillable PDF templates on generation (#534).** A new **Flatten PDF on
   generation** option appears on Create Template (**Bring an Existing Template**, Type =
   **PDF**) and on Edit Template → **Settings** → **Output & Page Setup** for PDF templates.
@@ -51,9 +45,23 @@
 - If flattening is on and a template's pages are still stored in compressed object
   streams, generation stops with a message asking to upload the PDF again as a new version,
   instead of returning an editable PDF.
+- **Large Excel and macro workbooks generate reliably in the background (#529).**
+  Asynchronous Excel generation — bulk runs, Flows and scheduled jobs — now keeps each
+  merged worksheet compressed between passes instead of holding every sheet in memory at
+  once, so workbooks that previously failed partway through with an out-of-memory error
+  now finish. Macro-enabled `.xlsm` workbooks keep their macros, and every sheet in a
+  multi-sheet workbook is merged. Generating from a record page is unchanged. A workbook
+  that is still too large to finish now stops with a clear message asking you to reduce
+  its rows or columns, instead of failing without explanation.
 
 ### Fixed
 
+- **The Download button after a file preview now downloads the file (#516).** A record
+  button set to the **Preview and download** delivery mode opens the generated document in
+  the Salesforce file preview. The dialog behind the preview offers a copy to download, but
+  clicking **Download** could do nothing, with no file and no error. **Download** is now a
+  standard link to the exact file just generated, so the browser downloads it directly. The
+  **Download** and **Preview** delivery modes are unchanged.
 - **Filling a field that already had an appearance no longer leaves fragments behind.**
   Removing a dictionary value, such as an existing checkbox `/AP << /N << … >> >>`, cut
   only its first characters and left the rest inside the field. The whole value is now
@@ -61,8 +69,6 @@
 - **Text fields set to Auto font size now render.** A field whose default appearance used
   size 0 received an appearance with invisible text. The text is now sized to fit the
   field, up to 12 pt.
-### Fixed
-
 - **Bulk Generation record filters accept Record Type and other standard relationship fields
   (#535).** Step 2 (Record Filter) rejected valid SOQL such as
   `RecordType.DeveloperName = 'Partner_Account'` or `RecordType.Name = 'Partner Account'` with
@@ -109,8 +115,23 @@
   and whole-document pixel limits keep memory safe on mobile browsers. Signature, initial and
   field positions are unchanged, and only the on-screen viewer is affected: the signed PDF
   itself is the same as before.
-### Fixed
-
+- **Signing works in Korean and other non-Latin languages (#513).** Signing failed with an
+  encoding error when the signer's browser was set to Korean — or any language whose names
+  and dates fall outside the Latin alphabet — because the date stamp could not be written
+  into the PDF. The signing page now embeds a font that covers those characters, so the
+  signer's name, the signing date and the Certificate of Completion all render correctly.
+  Only the characters actually used are embedded, so the signed file stays small.
+- **Number formats with optional decimal places now honor them (#484).** A custom number
+  format using `#` after the decimal point — such as `{Amount:#,##0.##}` — always padded the
+  value out to a fixed number of decimals, so `100` printed as `100.00`. Optional places are
+  now dropped when they are not needed and kept when they are: `100` prints as `100`, `100.1`
+  as `100.1`, and places written as `0` are still always shown. This applies everywhere a
+  number format is used, including grand totals on very large templates.
+- **The signature template list only offers templates that fit the record (#446).** Sending
+  a document for signature from a record page listed every active template, including ones
+  built for a different object, so choosing the wrong one produced an error or an empty
+  document. The list now shows only templates whose base object matches the record you are
+  on, and deactivated templates are left out.
 - **Reactivate a deactivated image asset from the Assets tab (#580).** Deactivating a
   shared image asset was previously irreversible from the UI — the row menu offered no
   Activate action and the list gave no sign of which assets were inactive, so the only
