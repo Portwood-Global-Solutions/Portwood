@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Salesforce File images in HTML rich-text fields now render on Download (#478).**
+  When an HTML template merged a rich-text value whose image pointed at a Salesforce File
+  by its full web address, **Download** showed a broken-image icon, while **Save to Record**
+  showed the same image correctly. These images now render in every generation mode.
+  Only addresses on your own org's domains are converted. The image's size and other
+  settings are kept, and File addresses from any other site are left out of the PDF.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
