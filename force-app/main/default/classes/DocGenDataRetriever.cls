@@ -64,35 +64,21 @@ public with sharing class DocGenDataRetriever {
      * @return Map of field names to values, with child relationships nested
      */
     public static Map<String, Object> getRecordData(Id recordId, String baseObject, String fieldsConfig) {
+        return getRecordData(recordId, baseObject, fieldsConfig, null);
+    }
+
+    /** Omit direct V3 queries that the Word runner will read in pages. */
+    public static Map<String, Object> getRecordData(
+        Id recordId,
+        String baseObject,
+        String fieldsConfig,
+        Set<String> excludedRootChildKeys
+    ) {
         if (String.isBlank(baseObject) || String.isBlank(fieldsConfig) || recordId == null) {
             throw new DocGenException('Invalid parameters for data retrieval.');
         }
 
-        // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
-        fieldsConfig = fieldsConfig.trim();
-        if (fieldsConfig.toUpperCase().startsWith('SELECT ') && !fieldsConfig.startsWith('{')) {
-            fieldsConfig = fieldsConfig.substring(7).trim();
-            // Find the last FROM at outermost paren level, strip it and everything after
-            Integer lastFromAt = -1;
-            Integer pLevel = 0;
-            String upper = fieldsConfig.toUpperCase();
-            for (Integer idx = 0; idx < fieldsConfig.length(); idx++) {
-                String ch = fieldsConfig.substring(idx, idx + 1);
-                if (ch == '(')
-                    pLevel++;
-                if (ch == ')')
-                    pLevel--;
-                if (pLevel == 0 && upper.substring(idx).startsWith('FROM ')) {
-                    lastFromAt = idx;
-                }
-            }
-            if (lastFromAt > 0) {
-                fieldsConfig = fieldsConfig.substring(0, lastFromAt).trim();
-                if (fieldsConfig.endsWith(',')) {
-                    fieldsConfig = fieldsConfig.substring(0, fieldsConfig.length() - 1).trim();
-                }
-            }
-        }
+        fieldsConfig = flatConfigProjection(fieldsConfig);
 
         // JSON config: route by version
         if (fieldsConfig.trim().startsWith('{')) {
@@ -100,14 +86,21 @@ public with sharing class DocGenDataRetriever {
             Object versionObj = jsonConfig.get('v');
             Integer version = (versionObj != null) ? Integer.valueOf(String.valueOf(versionObj)) : 2;
 
+            if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty() && version != 3) {
+                throw new DocGenException('Multiple giant Word queries require a V3 query configuration.');
+            }
             // V4: Custom Apex Data Provider
             if (version == 4) {
                 return getRecordDataV4(recordId, jsonConfig);
             }
             if (version >= 3) {
-                return getRecordDataV3(recordId, jsonConfig);
+                return getRecordDataV3(recordId, jsonConfig, excludedRootChildKeys);
             }
             return getRecordDataV2(recordId, baseObject, fieldsConfig);
+        }
+
+        if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty()) {
+            throw new DocGenException('Multiple giant Word queries require a V3 query configuration.');
         }
 
         SObjectType objType = Schema.getGlobalDescribe().get(baseObject);
@@ -167,7 +160,7 @@ public with sharing class DocGenDataRetriever {
         // Stitch deeper levels (grandchildren, great-grandchildren)
         for (SubquerySpec spec : deepSpecs) {
             if (!spec.children.isEmpty()) {
-                stitchGrandchildren(data, spec);
+                stitchGrandchildren(data, spec, false);
             }
         }
 
@@ -581,7 +574,11 @@ public with sharing class DocGenDataRetriever {
      * executing one SOQL query per node and stitching results into the
      * parent's data map.
      */
-    private static Map<String, Object> getRecordDataV3(Id recordId, Map<String, Object> config) {
+    private static Map<String, Object> getRecordDataV3(
+        Id recordId,
+        Map<String, Object> config,
+        Set<String> excludedRootChildKeys
+    ) {
         // Parse all nodes
         List<TreeNode> allNodes = new List<TreeNode>();
         Map<String, TreeNode> nodeMap = new Map<String, TreeNode>();
@@ -675,6 +672,25 @@ public with sharing class DocGenDataRetriever {
             seenKeysPerParent.add(key);
         }
 
+        if (excludedRootChildKeys != null && !excludedRootChildKeys.isEmpty()) {
+            Set<String> directChildKeys = new Set<String>();
+            for (TreeNode child : allNodes) {
+                if (
+                    child.parentNodeId == root.id &&
+                    child.junction == null &&
+                    String.isNotBlank(child.lookupField) &&
+                    String.isNotBlank(child.relationshipName)
+                ) {
+                    directChildKeys.add(child.dataMapKey());
+                }
+            }
+            for (String key : excludedRootChildKeys) {
+                if (!directChildKeys.contains(key)) {
+                    throw new DocGenException('Giant Word query must use a direct child lookup: ' + key + '.');
+                }
+            }
+        }
+
         // Query root: SELECT fields, parentFields FROM object WHERE Id = :recordId
         List<String> rootSelect = new List<String>();
         rootSelect.addAll(root.fields);
@@ -705,7 +721,7 @@ public with sharing class DocGenDataRetriever {
         }
 
         // Walk the tree: process children of each node
-        processChildNodes(root.id, rootData, allNodes, nodeMap, true);
+        processChildNodes(root.id, rootData, allNodes, nodeMap, true, excludedRootChildKeys);
 
         return rootData;
     }
@@ -863,18 +879,23 @@ public with sharing class DocGenDataRetriever {
      * @param allNodes All tree nodes
      * @param nodeMap Map of node ID → TreeNode
      * @param isSingleParent True if parent is a single record (root), false if batch
+     * @param excludedChildKeys Effective keys fetched by the caller at this level
      */
     private static void processChildNodes(
         String parentId,
         Map<String, Object> parentDataMap,
         List<TreeNode> allNodes,
         Map<String, TreeNode> nodeMap,
-        Boolean isSingleParent
+        Boolean isSingleParent,
+        Set<String> excludedChildKeys
     ) {
         // Find children of this parent
         List<TreeNode> children = new List<TreeNode>();
         for (TreeNode tn : allNodes) {
-            if (tn.parentNodeId == parentId) {
+            if (
+                tn.parentNodeId == parentId &&
+                (excludedChildKeys == null || !excludedChildKeys.contains(tn.dataMapKey()))
+            ) {
                 children.add(tn);
             }
         }
@@ -1035,7 +1056,7 @@ public with sharing class DocGenDataRetriever {
 
                 // Recurse: process this child's children for each child record
                 for (Map<String, Object> childRec : childRecords) {
-                    processChildNodes(child.id, childRec, allNodes, nodeMap, true);
+                    processChildNodes(child.id, childRec, allNodes, nodeMap, true, null);
                 }
             }
         }
@@ -1683,7 +1704,11 @@ public with sharing class DocGenDataRetriever {
      * For each child record in the parent's child list, queries grandchildren
      * using IN :parentIds and injects them into the child record's map.
      */
-    private static void stitchGrandchildren(Map<String, Object> data, SubquerySpec parentSpec) {
+    private static void stitchGrandchildren(
+        Map<String, Object> data,
+        SubquerySpec parentSpec,
+        Boolean requireCompleteData
+    ) {
         // Get the child records list from the data map
         Object childData = data.get(parentSpec.relationshipName);
         if (childData == null || !(childData instanceof Map<String, Object>)) {
@@ -1782,6 +1807,9 @@ public with sharing class DocGenDataRetriever {
                 try {
                     piResults = Database.query(piQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
+                    if (requireCompleteData) {
+                        throw e;
+                    }
                     // ProcessInstance subquery failed — skip this relationship
                     continue;
                 }
@@ -1816,6 +1844,9 @@ public with sharing class DocGenDataRetriever {
                 try {
                     gcResults = Database.query(gcQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 } catch (Exception e) {
+                    if (requireCompleteData) {
+                        throw e;
+                    }
                     // Grandchild query failed — skip this relationship
                     continue;
                 }
@@ -1892,7 +1923,7 @@ public with sharing class DocGenDataRetriever {
                             'records' => allGrandchildren
                         }
                     };
-                    stitchGrandchildren(syntheticParent, grandchildSpec);
+                    stitchGrandchildren(syntheticParent, grandchildSpec, requireCompleteData);
                 }
             }
         }
@@ -2247,6 +2278,152 @@ public with sharing class DocGenDataRetriever {
         return data;
     }
 
+    /** Opens one sorted, user-mode cursor for a direct V3 child dataset. */
+    private static String flatConfigProjection(String fieldsConfig) {
+        // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
+        fieldsConfig = fieldsConfig.trim();
+        if (fieldsConfig.toUpperCase().startsWith('SELECT ')) {
+            fieldsConfig = fieldsConfig.substring(7).trim();
+            // Find the last FROM at outermost paren level, strip it and everything after
+            Integer lastFromAt = -1;
+            Integer pLevel = 0;
+            String upper = fieldsConfig.toUpperCase();
+            for (Integer idx = 0; idx < fieldsConfig.length(); idx++) {
+                String ch = fieldsConfig.substring(idx, idx + 1);
+                if (ch == '(')
+                    pLevel++;
+                if (ch == ')')
+                    pLevel--;
+                if (pLevel == 0 && upper.substring(idx).startsWith('FROM ')) {
+                    lastFromAt = idx;
+                }
+            }
+            if (lastFromAt > 0) {
+                fieldsConfig = fieldsConfig.substring(0, lastFromAt).trim();
+                if (fieldsConfig.endsWith(',')) {
+                    fieldsConfig = fieldsConfig.substring(0, fieldsConfig.length() - 1).trim();
+                }
+            }
+        }
+
+        return fieldsConfig;
+    }
+
+    /** Resolve outer datasets without interpreting nested SELECTs as root relationships. */
+    public static Map<String, Map<String, Object>> planFlatGiantDatasets(Id recordId, String config) {
+        Map<String, Map<String, Object>> datasets = new Map<String, Map<String, Object>>();
+        if (recordId == null || String.isBlank(config) || config.trim().startsWith('{')) {
+            return datasets;
+        }
+        String rootObject = recordId.getSObjectType().getDescribe().getName();
+        Boolean hasNested = false;
+        for (String part : splitTopLevel(flatConfigProjection(config))) {
+            String token = part.trim();
+            if (!token.startsWith('(')) {
+                continue;
+            }
+            SubquerySpec spec = parseSubquerySpec(token, rootObject);
+            if (spec == null || String.isBlank(spec.childObjectApiName) || String.isBlank(spec.parentIdField)) {
+                continue;
+            }
+            hasNested = hasNested || !spec.children.isEmpty();
+            List<Object> fields = new List<Object>();
+            for (String name : spec.fieldsOnly.split(',')) {
+                fields.add(name.trim());
+            }
+            datasets.put(
+                spec.relationshipName,
+                new Map<String, Object>{
+                    'object' => spec.childObjectApiName,
+                    'lookupField' => spec.parentIdField,
+                    'where' => spec.whereClause,
+                    'orderBy' => spec.orderByClause,
+                    'limit' => spec.limitClause,
+                    'fields' => fields,
+                    'nestedQuery' => spec.children.isEmpty() ? null : token
+                }
+            );
+        }
+        return hasNested ? datasets : new Map<String, Map<String, Object>>();
+    }
+
+    public static Map<String, Object> getGroupedGiantRootData(Id recordId, String config) {
+        List<String> rootFields = new List<String>{ 'Id' };
+        for (String part : splitTopLevel(flatConfigProjection(config))) {
+            String token = part.trim();
+            if (!token.startsWith('(') && !token.equalsIgnoreCase('Id')) {
+                rootFields.add(token);
+            }
+        }
+        String objectName = recordId.getSObjectType().getDescribe().getName();
+        return getRecordData(recordId, objectName, String.join(rootFields, ', '));
+    }
+
+    /** Load the complete nested relationship data for one outer record, in user mode. */
+    public static Map<String, Object> loadGiantGroup(Id recordId, String nestedQuery, SObject row) {
+        SubquerySpec spec = parseSubquerySpec(nestedQuery, recordId.getSObjectType().getDescribe().getName());
+        Map<String, Object> groupData = mapSObject(row);
+        Map<String, Object> wrapper = new Map<String, Object>{
+            spec.relationshipName => new Map<String, Object>{ 'records' => new List<Object>{ groupData } }
+        };
+        stitchGrandchildren(wrapper, spec, true);
+        return groupData;
+    }
+
+    public static Database.Cursor openGiantQueryCursor(
+        Id recordId,
+        Map<String, Object> childNode,
+        List<String> requestedFields
+    ) {
+        String objectName = (String) childNode.get('object');
+        SObjectType childType = validateObjectName(objectName);
+        Map<String, SObjectField> fieldMap = childType.getDescribe().fields.getMap();
+        String lookup = (String) childNode.get('lookupField');
+        if (String.isBlank(lookup) || !fieldMap.containsKey(lookup.toLowerCase())) {
+            throw new DocGenException('Invalid or inaccessible lookup field: ' + lookup);
+        }
+        lookup = fieldMap.get(lookup.toLowerCase()).getDescribe().getName();
+
+        List<String> fields = new List<String>{ 'Id' };
+        Set<String> selected = new Set<String>{ 'id' };
+        for (String field : validateFieldList(requestedFields, childType)) {
+            if (selected.add(field.toLowerCase())) {
+                fields.add(field);
+            }
+        }
+
+        String rawWhere = (String) childNode.get('where');
+        String filter = sanitizeWhereClause(rawWhere == null ? (String) childNode.get('whereClause') : rawWhere);
+        String sortClause = sanitizeClause((String) childNode.get('orderBy'), 'ORDER BY', fieldMap);
+        Object rawLimit = childNode.get('limit') ?? childNode.get('limitClause');
+        String rowLimit = rawLimit == null ? null : sanitizeClause(String.valueOf(rawLimit), 'LIMIT');
+        if (String.isBlank(sortClause)) {
+            sortClause = 'Id ASC';
+        } else if (!Pattern.compile('(?i)(?:^|,)\\s*Id(?:\\s|,|$)').matcher(sortClause).find()) {
+            sortClause += ', Id ASC';
+        }
+        String query =
+            'SELECT ' +
+            String.join(fields, ', ') +
+            ' FROM ' +
+            objectName +
+            ' WHERE ' +
+            lookup +
+            ' = :parentId';
+        if (String.isNotBlank(filter)) {
+            query += ' AND (' + filter + ')';
+        }
+        query += ' ORDER BY ' + sortClause;
+        if (String.isNotBlank(rowLimit)) {
+            query += ' LIMIT ' + rowLimit;
+        }
+        return Database.getCursorWithBinds(
+            query,
+            new Map<String, Object>{ 'parentId' => recordId },
+            AccessLevel.USER_MODE
+        );
+    }
+
     /**
      * Counts child records per relationship for a given parent record.
      * Used by Giant Query to determine if async processing is needed.
@@ -2436,7 +2613,7 @@ public with sharing class DocGenDataRetriever {
                     validatedLookupField +
                     ' = :recordId';
                 if (String.isNotBlank(whereClause)) {
-                    countQuery += ' AND ' + sanitizeClause(whereClause, 'WHERE');
+                    countQuery += ' AND (' + sanitizeClause(whereClause, 'WHERE') + ')';
                 }
                 Integer cnt = Database.countQuery(countQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — childObject + lookupField allowlist-validated; whereClause sanitized; USER_MODE enforced
                 counts.put(countsKey, cnt);
