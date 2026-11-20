@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Portwood: Sign in Flow</masterLabel>
+    <description
+    >Review and sign a Portwood signature request inside a Screen Flow, in the same tab, then continue the Flow once the signature is recorded. For signed-in users only; guests are refused.</description>
+    <targets>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__FlowScreen">
+            <property
+                name="signerUrl"
+                type="String"
+                role="inputOnly"
+                label="Signer URL"
+                description="The signing link from the Create Signature Request action (one entry of Signer URLs). The signer token is read from it."
+            />
+            <property
+                name="signerUrls"
+                type="String[]"
+                role="inputOnly"
+                label="Signer URLs (collection)"
+                description="Alternative to Signer URL: the whole Signer URLs collection from Create Signature Request. The first entry is used, so use this only for a single-signer request."
+            />
+            <property
+                name="token"
+                type="String"
+                role="inputOnly"
+                label="Signer token"
+                description="Alternative to Signer URL: the 64-character signer token itself."
+            />
+            <property
+                name="waitForNext"
+                type="Boolean"
+                role="inputOnly"
+                label="Wait for the user to select Next after signing"
+                description="Off (default): the Flow moves to the next screen as soon as the server has recorded the signature. On: the signer selects Next themselves. Next is blocked until signing is recorded either way."
+            />
+            <property
+                name="signed"
+                type="Boolean"
+                role="outputOnly"
+                label="Signed"
+                description="True once this signer's signature is recorded."
+            />
+            <property
+                name="declined"
+                type="Boolean"
+                role="outputOnly"
+                label="Declined"
+                description="True if the signer declined the request. The Flow continues so you can branch on this."
+            />
+            <property
+                name="requestComplete"
+                type="Boolean"
+                role="outputOnly"
+                label="Request complete"
+                description="True when every signer on the request has signed."
+            />
+            <property name="signerStatus" type="String" role="outputOnly" label="Signer status" />
+            <property
+                name="errorMessage"
+                type="String"
+                role="outputOnly"
+                label="Error message"
+                description="Why signing could not proceed, if it could not."
+            />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
