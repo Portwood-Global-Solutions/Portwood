@@ -19,6 +19,12 @@
   the audit record, document hash, Certificate of Completion, and completion emails are the
   same. Guests are refused, and prepared uploaded-PDF requests still use the signing link.
   Includes a **Portwood Portal Signer** permission set for Experience Cloud signers.
+- **The Download button after a file preview now downloads the file (#516).** A record
+  button set to the **Preview and download** delivery mode opens the generated document in
+  the Salesforce file preview. The dialog behind the preview offers a copy to download, but
+  clicking **Download** could do nothing, with no file and no error. **Download** is now a
+  standard link to the exact file just generated, so the browser downloads it directly. The
+  **Download** and **Preview** delivery modes are unchanged.
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 

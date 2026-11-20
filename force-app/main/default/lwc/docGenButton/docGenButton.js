@@ -39,8 +39,8 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
     statusMessage = 'Preparing…';
     errorMessage;
     doneMessage;
-    showDownload = false;
-    _result;
+    previewDownloadUrl;
+    previewDownloadName;
     options = [];
     showPicker = false;
 
@@ -133,12 +133,12 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
                 // or after opening the preview, either cancels it or leaves no preview at all (the
                 // component is gone by the time a delayed navigation fires). The dialog therefore stays
                 // behind the preview and, once the preview is closed, shows a finished state: a Close
-                // button, plus a Download button for "preview and download".
+                // button, plus a native download link for "preview and download".
                 this.preview(res.contentDocumentId);
-                this._result = res;
                 this.loading = false;
-                this.showDownload = previewThenDownload;
-                this.doneMessage = previewThenDownload
+                this.previewDownloadUrl = previewThenDownload ? res.downloadUrl : null;
+                this.previewDownloadName = res.fileName || 'document';
+                this.doneMessage = this.previewDownloadUrl
                     ? 'Your document opened in the file preview. Download a copy below.'
                     : 'Your document opened in the file preview. You can close this window.';
             } else {
@@ -193,12 +193,6 @@ export default class DocGenButton extends NavigationMixin(LightningElement) {
             attributes: { pageName: 'filePreview' },
             state: { selectedRecordId: contentDocumentId }
         });
-    }
-
-    handleDownload() {
-        if (this._result) {
-            this.deliver(this._result);
-        }
     }
 
     successMessage(fileName, downloaded, previewed) {
