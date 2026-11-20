@@ -61,6 +61,20 @@
 - **Text fields set to Auto font size now render.** A field whose default appearance used
   size 0 received an appearance with invisible text. The text is now sized to fit the
   field, up to 12 pt.
+### Fixed
+
+- **Bulk Generation record filters accept Record Type and other standard relationship fields
+  (#535).** Step 2 (Record Filter) rejected valid SOQL such as
+  `RecordType.DeveloperName = 'Partner_Account'` or `RecordType.Name = 'Partner Account'` with
+  "Invalid field in filter condition", so a bulk run could not be limited to one Record Type.
+  Filters can now traverse any standard lookup — `RecordType.*`, `Owner.*`, `CreatedBy.*`,
+  `Account.*` on Contact — as well as custom `__r` relationships, and the same rule applies to
+  child-record filters. `RecordTypeId='012…'` also validates when typed without spaces round the
+  operator.
+- **Clearer Step 2 filter errors.** Filtering by Record Type on an object that has no Record
+  Types now says so, and a malformed value (for example `RecordTypeId = 'abc'`) reports the
+  Salesforce reason instead of a generic error. Unknown fields and disallowed SOQL keywords are
+  still rejected exactly as before.
 
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 

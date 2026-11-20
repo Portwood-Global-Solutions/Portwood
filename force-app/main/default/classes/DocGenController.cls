@@ -5820,8 +5820,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
         // Strip quoted string literals so they don't confuse the tokenizer
         String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
-        // Tokenize on whitespace and parentheses
-        List<String> tokens = stripped.split('[\\s(),]+');
+        // Tokenize on whitespace, parentheses, commas and comparison operators (matches
+        // DocGenBulkController.validateWhereClauseFields)
+        List<String> tokens = stripped.split('[\\s(),=<>!]+');
         // SOQL operators and keywords to skip
         Set<String> skipTokens = new Set<String>{
             '=',
@@ -5886,16 +5887,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (Pattern.matches('LAST_N_.*:\\d+', upper) || Pattern.matches('NEXT_N_.*:\\d+', upper)) {
                 continue;
             }
-            // This looks like a field name — validate against Schema
-            String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
-            if (!fieldMap.containsKey(baseField)) {
-                // Try __r → __c for custom relationship traversals
-                String asLookup = baseField.endsWith('__r')
-                    ? baseField.substring(0, baseField.length() - 3) + '__c'
-                    : baseField;
-                if (!fieldMap.containsKey(asLookup)) {
-                    throw new DocGenException('Invalid field in WHERE clause: ' + t);
-                }
+            // This looks like a field name — validate against Schema (shared allowlist, #535:
+            // accepts standard relationship paths such as RecordType.DeveloperName)
+            if (!DocGenBulkController.isAllowedFieldPath(t, fieldMap)) {
+                throw new DocGenException(
+                    DocGenBulkController.invalidFieldMessage('Invalid field in WHERE clause: ', t, fieldMap)
+                );
             }
         }
     }
