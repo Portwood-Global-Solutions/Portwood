@@ -8099,11 +8099,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * The DOCX path (convertRichTextToDocxXml) emits DrawingML which Flying
      * Saucer can't parse, so HTML templates referencing a rich-text field
      * previously lost both text formatting and images entirely. Here the
-     * rich-text HTML is already valid HTML — pass it through verbatim,
-     * rewriting only `<img src="...rtaImage?...&refid=<id>">` URLs to the
-     * relative `/sfc/servlet.shepherd/version/download/<cvId>` form that
-     * Blob.toPdf can fetch. Data-URI images are dropped (Blob.toPdf rejects
-     * them).
+     * rich-text HTML is already valid HTML. Normalize same-org File URLs and
+     * resolvable rtaImage references to relative File paths that Blob.toPdf
+     * can fetch. Data-URI images are dropped because Blob.toPdf rejects them.
      */
     @TestVisible
     private static String convertRichTextToHtml(String html) {
@@ -8138,8 +8136,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     /**
      * Returns the <img> tag with src rewritten for HTML-template output, or
      * empty string when the image can't be rendered (data URI, unresolvable).
-     * Already-relative /sfc/ URLs and arbitrary http(s) URLs pass through
-     * unchanged.
+     * Same-org Salesforce File URLs are normalized for the PDF renderer.
+     * Other rich-text image URLs keep their existing handling.
      */
     private static String rewriteRichTextImgForHtml(String imgTag) {
         Integer srcIdx = imgTag.indexOfIgnoreCase('src=');
@@ -8170,6 +8168,19 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (src.toLowerCase().startsWith('/sfc/')) {
             return imgTag;
         }
+        Matcher fileUrl = Pattern.compile('(?i)^(https?)://([^/?#]+)(/sfc/servlet\\.shepherd/.*)$').matcher(src);
+        if (fileUrl.matches()) {
+            String host = fileUrl.group(2).toLowerCase();
+            String relativeSrc = fileUrl.group(3);
+            if (
+                !'https'.equalsIgnoreCase(fileUrl.group(1)) ||
+                !isOrgFileHost(host) ||
+                !isLocalFileImagePath(relativeSrc)
+            ) {
+                return '';
+            }
+            return imgTag.substring(0, valStart) + relativeSrc.escapeHtml4() + imgTag.substring(valEnd);
+        }
         if (src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
             Integer refStart = src.toLowerCase().indexOf('refid=') + 6;
             Integer refEnd = src.indexOf('&', refStart);
@@ -8189,6 +8200,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             // hosts from authenticated/Automated-Process context.
         }
         return imgTag;
+    }
+
+    private static Boolean isOrgFileHost(String host) {
+        return host == URL.getOrgDomainUrl().getHost().toLowerCase() ||
+            host.equalsIgnoreCase(DomainCreator.getContentHostname()) ||
+            host.equalsIgnoreCase(DomainCreator.getLightningHostname());
+    }
+
+    private static Boolean isLocalFileImagePath(String relativeSrc) {
+        Integer queryStart = relativeSrc.indexOf('?');
+        String path = queryStart < 0 ? relativeSrc : relativeSrc.substring(0, queryStart);
+        if (!Pattern.matches('(?i)/sfc/servlet\\.shepherd/[a-z0-9_./-]+', path) || path.contains('..')) {
+            return false;
+        }
+        String decoded = relativeSrc;
+        try {
+            for (Integer i = 0; i < 3; i++) {
+                String next = EncodingUtil.urlDecode(decoded, 'UTF-8');
+                if (next == decoded) {
+                    break;
+                }
+                decoded = next;
+            }
+        } catch (Exception invalidUrl) {
+            return false;
+        }
+        return !Pattern.compile('(?i)[?&](returl|starturl|redirect_uri|redirect|destination|target|url)=')
+            .matcher(decoded)
+            .find();
     }
 
     /**
