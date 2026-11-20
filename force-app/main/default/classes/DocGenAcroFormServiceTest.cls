@@ -294,6 +294,196 @@ private class DocGenAcroFormServiceTest {
         System.assert(threw, 'Encrypted PDFs without a saved snapshot should fail before AcroForm parsing');
     }
 
+    // ---- #534 Flatten PDF on generation ----
+
+    @IsTest
+    static void flattenDrawsWidgetAppearancesIntoPageAndDropsForm() {
+        Blob flat = DocGenAcroFormService.flattenFilledPdf(Blob.valueOf(flattenablePdf()));
+
+        System.assert(
+            blobContains(flat, '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>'),
+            'Catalog should no longer reference the AcroForm'
+        );
+        System.assert(blobContains(flat, '/Annots [10 0 R]'), 'Widgets leave /Annots; the link annotation stays');
+        System.assert(
+            blobContains(flat, '/Contents [13 0 R 7 0 R 14 0 R]'),
+            'Original content is wrapped between a q stream and the field drawing stream'
+        );
+        System.assert(
+            blobContains(flat, 'q 1 0 0 1 10 10 cm /PwFlat5 Do Q'),
+            'Text widget appearance should be painted on its /Rect'
+        );
+        System.assert(
+            blobContains(flat, 'q 1 0 0 1 10 40 cm /PwFlat6 Do Q'),
+            'Checkbox appearance should be painted on its /Rect'
+        );
+        System.assert(blobContains(flat, '/PwFlat5 8 0 R'), 'Text appearance stream registered as page XObject');
+        System.assert(blobContains(flat, '/PwFlat6 12 0 R'), 'Checkbox should flatten its /AS (Yes) state stream');
+        System.assert(blobContains(flat, '/F1 9 0 R'), 'Inherited page fonts are preserved');
+        System.assert(
+            blobContains(flat, '/Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica'),
+            'Appearances without their own resources get the form default font on the page'
+        );
+        System.assert(blobContains(flat, '/Prev 0'), 'Flatten is appended as an incremental update');
+    }
+
+    @IsTest
+    static void flattenGeneratesAppearanceForValueOnlyFields() {
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(
+            Blob.valueOf(simpleAcroFormPdf()),
+            new Map<String, Object>{ 'Name' => 'Ada' }
+        );
+
+        Blob flat = DocGenAcroFormService.flattenFilledPdf(filled);
+
+        System.assert(blobContains(flat, '(Ada) Tj'), 'A value without an appearance must still be drawn');
+        System.assert(blobContains(flat, 'cm /PwFlat5 Do Q'), 'Generated appearance should be painted on the page');
+        System.assert(
+            blobContains(flat, '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>'),
+            'Flattened output should have no AcroForm'
+        );
+    }
+
+    @IsTest
+    static void flattenUsesReadableSizeForAutoFontFields() {
+        String pdf = simpleAcroFormPdf()
+            .replace(
+                '3 0 obj\n<< /Fields [5 0 R 6 0 R] >>',
+                '3 0 obj\n<< /Fields [5 0 R 6 0 R] /DA (/Helv 0 Tf 0 g) >>'
+            );
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(
+            Blob.valueOf(pdf),
+            new Map<String, Object>{ 'Name' => 'Ada' }
+        );
+
+        Blob flat = DocGenAcroFormService.flattenFilledPdf(filled);
+
+        System.assert(blobContains(flat, 'BT /Helv 12 Tf'), 'Auto (0) font size should become a visible size');
+    }
+
+    @IsTest
+    static void fillFlattensOnlyWhenTemplateOptsIn() {
+        DocGen_Template__c flatTemplate = new DocGen_Template__c(
+            Name = 'Flatten On',
+            Type__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name',
+            Flatten_PDF__c = true
+        );
+        DocGen_Template__c fillableTemplate = new DocGen_Template__c(
+            Name = 'Flatten Off',
+            Type__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name'
+        );
+        insert new List<DocGen_Template__c>{ flatTemplate, fillableTemplate };
+        Blob pdf = Blob.valueOf(simpleAcroFormPdf());
+        Map<String, Object> data = new Map<String, Object>{ 'Name' => 'Ada' };
+
+        Blob flat = DocGenAcroFormService.fillPdfTemplate(pdf, data, flatTemplate.Id);
+        Blob fillable = DocGenAcroFormService.fillPdfTemplate(pdf, data, fillableTemplate.Id);
+
+        System.assert(blobContains(flat, '/PwFlat5'), 'Flatten_PDF__c = true should flatten the generated PDF');
+        System.assert(!blobContains(fillable, '/PwFlat'), 'Templates without the option stay fillable');
+        System.assert(blobContains(fillable, '/NeedAppearances true'), 'Unflattened output keeps the live form');
+    }
+
+    @IsTest
+    static void templateEditorSavesFlattenOption() {
+        DocGen_Template__c template = new DocGen_Template__c(
+            Name = 'Flatten Edit',
+            Type__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Output_Format__c = 'PDF',
+            Query_Config__c = 'Name'
+        );
+        insert template;
+        Map<String, Object> fields = new Map<String, Object>{
+            'Id' => template.Id,
+            'Name' => 'Flatten Edit',
+            'Type__c' => 'PDF',
+            'Base_Object_API__c' => 'Account',
+            'Query_Config__c' => 'Name',
+            'Flatten_PDF__c' => true
+        };
+
+        DocGenController.saveTemplate(fields, false, null);
+        System.assertEquals(
+            true,
+            [SELECT Flatten_PDF__c FROM DocGen_Template__c WHERE Id = :template.Id].Flatten_PDF__c,
+            'Edit Template save should persist Flatten PDF on generation'
+        );
+
+        fields.put('Flatten_PDF__c', false);
+        DocGenController.saveTemplate(fields, false, null);
+        System.assertEquals(
+            false,
+            [SELECT Flatten_PDF__c FROM DocGen_Template__c WHERE Id = :template.Id].Flatten_PDF__c,
+            'Turning the toggle off should persist too'
+        );
+    }
+
+    @IsTest
+    static void flattenLeavesPdfWithoutFormUnchanged() {
+        Blob pdf = Blob.valueOf(
+            '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+            'trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n'
+        );
+
+        System.assertEquals(pdf.size(), DocGenAcroFormService.flattenFilledPdf(pdf).size(), 'Nothing to flatten');
+    }
+
+    @IsTest
+    static void flattenFailsClearlyWhenPagesAreUnreadable() {
+        Boolean threw = false;
+        try {
+            DocGenAcroFormService.flattenFilledPdf(
+                Blob.valueOf(
+                    '%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +
+                        '3 0 obj\n<< /Fields [] >>\nendobj\n' +
+                        'trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n'
+                )
+            );
+        } catch (DocGenException e) {
+            threw = e.getMessage().contains('Flatten PDF on generation');
+        }
+
+        System.assert(threw, 'Pages hidden in object streams must fail loudly, never ship an editable PDF');
+    }
+
+    @IsTest
+    static void removingDictionaryValuedKeysLeavesNoFragments() {
+        Blob filled = DocGenAcroFormService.fillPdfTemplate(
+            Blob.valueOf(buttonAcroFormPdf()),
+            new Map<String, Object>{ 'Approved__c' => true }
+        );
+
+        // The old helper cut only "/AP <" and left "/Rect [10 10 30 30] < /N << /Off 7 0 R …" behind.
+        System.assert(!blobContains(filled, '30] < /N'), 'Removing /AP must remove its whole dictionary value');
+        System.assert(blobContains(filled, '/AS /Yes'), 'Button state is still written');
+    }
+
+    private static String flattenablePdf() {
+        return '%PDF-1.4\n' +
+            '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +
+            '2 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 /Resources << /Font << /F1 9 0 R >> >> >>\nendobj\n' +
+            '3 0 obj\n<< /Fields [5 0 R 6 0 R] /NeedAppearances true >>\nendobj\n' +
+            '4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Annots [5 0 R 10 0 R 6 0 R] >>\nendobj\n' +
+            '5 0 obj\n<< /FT /Tx /T (Name) /Subtype /Widget /Rect [10 10 200 30] /V (Ada) /AP << /N 8 0 R >> >>\nendobj\n' +
+            '6 0 obj\n<< /FT /Btn /T (Approved) /Subtype /Widget /Rect [10 40 30 60] /V /Yes /AS /Yes /AP << /N << /Off 11 0 R /Yes 12 0 R >> >> >>\nendobj\n' +
+            '7 0 obj\n<< /Length 5 >>\nstream\nBT ET\nendstream\nendobj\n' +
+            '8 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 190 20] /Length 21 >>\nstream\nBT /Helv 9 Tf (Ada) Tj\nendstream\nendobj\n' +
+            '9 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>\nendobj\n' +
+            '10 0 obj\n<< /Type /Annot /Subtype /Link /Rect [0 0 5 5] >>\nendobj\n' +
+            '11 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>\nstream\n\nendstream\nendobj\n' +
+            '12 0 obj\n<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>\nstream\n\nendstream\nendobj\n' +
+            'trailer\n<< /Size 13 /Root 1 0 R >>\n' +
+            'startxref\n0\n' +
+            '%%EOF\n';
+    }
+
     private static String simpleAcroFormPdf() {
         return '%PDF-1.4\n' +
             '1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 3 0 R >>\nendobj\n' +

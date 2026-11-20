@@ -22,14 +22,55 @@ public with sharing class DocGenAcroFormService {
         String xml;
     }
 
+    /** #534 — latest body of every top-level object in a PDF, located by hex offsets. */
+    private class PdfObjectIndex {
+        String hex;
+        Map<Integer, Integer> starts = new Map<Integer, Integer>();
+        Map<Integer, Integer> ends = new Map<Integer, Integer>();
+        Map<Integer, String> texts = new Map<Integer, String>();
+        Set<Integer> streams = new Set<Integer>();
+        Integer maxNum = 0;
+    }
+
+    /** #534 — a leaf page plus the Resources dictionary it effectively uses (own or inherited). */
+    private class FlattenPage {
+        Integer num;
+        List<List<String>> dict;
+        String resources;
+    }
+
+    /** #534 — objects the flatten update writes, keyed by object number (Latin-1 body text). */
+    private class FlattenState {
+        Map<Integer, String> bodies = new Map<Integer, String>();
+        Map<Integer, String> generatedAppearanceDicts = new Map<Integer, String>();
+        Integer nextNum;
+    }
+
     private static final String UNSUPPORTED_XFA_MESSAGE = 'XFA PDF forms are not supported yet. Use a standard AcroForm PDF with uncompressed field dictionaries.';
     private static final String UNSUPPORTED_OBJECT_STREAM_MESSAGE = 'PDF AcroForm fields are stored in compressed object streams, which are not supported yet.';
+    private static final String FLATTEN_UNREADABLE_MESSAGE = 'Flatten PDF on generation could not read this PDF\'s page structure because it is stored in compressed object streams. Upload the PDF again as a new template version so Portwood can store a server-ready copy, or turn off Flatten PDF on generation for this template.';
+    private static final String HELVETICA_FONT_DICT = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+    private static Map<Id, Boolean> flattenByTemplateId = new Map<Id, Boolean>();
 
     public static Blob fillPdfTemplate(Blob pdfBlob, Map<String, Object> data) {
         return fillPdfTemplate(pdfBlob, data, null);
     }
 
+    /**
+     * Fills the AcroForm, then — when the template has Flatten_PDF__c checked (#534) —
+     * bakes every field into the page content so the output is no longer fillable.
+     * Every generation path (download, preview, save-to-record, bulk, Flow,
+     * signatures) reaches the PDF template type through here.
+     */
     public static Blob fillPdfTemplate(Blob pdfBlob, Map<String, Object> data, Id templateId) {
+        Blob filled = fillPdfTemplateFields(pdfBlob, data, templateId);
+        if (isFlattenEnabled(templateId)) {
+            return flattenFilledPdf(filled);
+        }
+        return filled;
+    }
+
+    private static Blob fillPdfTemplateFields(Blob pdfBlob, Map<String, Object> data, Id templateId) {
         if (pdfBlob == null) {
             throw new DocGenException('PDF template file is missing.');
         }
@@ -828,6 +869,12 @@ public with sharing class DocGenAcroFormService {
             fontName = fontMatcher.group(1);
             fontSize = fontMatcher.group(2);
         }
+        // A DA size of 0 means "Auto" (Acrobat's default for new text fields). Writing
+        // "0 Tf" into the appearance draws invisible text, which a flattened PDF (#534)
+        // can no longer hide behind NeedAppearances — so pick a size that fits the box.
+        if (Decimal.valueOf(fontSize) <= 0) {
+            fontSize = decimalToPdf(autoFontSize(width, height, value));
+        }
         String fontResources = extractDictionary(acroFormBody, '/Font');
         String resources = String.isBlank(fontResources) ? '' : '/Resources<</Font<<' + fontResources + '>>>>';
         Decimal textY = ((height - Decimal.valueOf(fontSize)) / 2) + Decimal.valueOf(1);
@@ -856,6 +903,17 @@ public with sharing class DocGenAcroFormService {
             '>>stream\n' +
             content +
             '\nendstream';
+    }
+
+    /** Single-line auto size: fit the box height (capped at 12pt), then shrink to fit the width. */
+    private static Decimal autoFontSize(Decimal width, Decimal height, String value) {
+        Decimal size = Math.min(Decimal.valueOf(12), (height - 2).divide(Decimal.valueOf('1.2'), 3));
+        Integer chars = value == null ? 0 : value.length();
+        if (chars > 0) {
+            Decimal widthFit = (width - 4).divide(Decimal.valueOf(chars) * Decimal.valueOf('0.55'), 3);
+            size = Math.min(size, widthFit);
+        }
+        return Math.max(Decimal.valueOf(4), size).setScale(1);
     }
 
     private static String withNormalAppearance(String body, Integer appearanceObjectNumber) {
@@ -1361,9 +1419,12 @@ public with sharing class DocGenAcroFormService {
             Integer closeIdx = body.indexOf('>', i + 1);
             return closeIdx == -1 ? i + 1 : closeIdx + 1;
         }
-        if (ch == '[') {
-            Integer closeIdx = body.indexOf(']', i + 1);
-            return closeIdx == -1 ? i + 1 : closeIdx + 1;
+        // Dictionary and array values (e.g. "/AP << /N << /Off 9 0 R /Yes 10 0 R >> >>")
+        // must be skipped whole. Before this, removing such a key cut only "/AP <" and
+        // left the rest of the dictionary behind — the JS decomposer already did this.
+        if (ch == '<' || ch == '[') {
+            Integer closeIdx = findBalancedClose(body, i);
+            return closeIdx == -1 ? i + 1 : closeIdx;
         }
         if (ch == '/') {
             Matcher nameMatcher = Pattern.compile('^/[^\\s<>\\[\\]()/]+').matcher(body.substring(i));
@@ -1375,6 +1436,55 @@ public with sharing class DocGenAcroFormService {
         }
         Matcher scalarMatcher = Pattern.compile('^[^\\s<>\\[\\]()/]+').matcher(body.substring(i));
         return scalarMatcher.find() ? i + scalarMatcher.end() : i + 1;
+    }
+
+    /**
+     * Index just past the "]" or ">>" that closes the array/dictionary opening at
+     * openIdx, skipping literal and hex strings. -1 when unbalanced.
+     */
+    private static Integer findBalancedClose(String body, Integer openIdx) {
+        Integer depth = 0;
+        Integer n = body.length();
+        Integer i = openIdx;
+        while (i < n) {
+            String ch = body.substring(i, i + 1);
+            if (ch == '(') {
+                Integer closeIdx = findLiteralClose(body, i);
+                if (closeIdx == -1) {
+                    return -1;
+                }
+                i = closeIdx + 1;
+            } else if (ch == '<') {
+                if (i + 1 < n && body.substring(i + 1, i + 2) == '<') {
+                    depth++;
+                    i += 2;
+                } else {
+                    Integer closeIdx = body.indexOf('>', i + 1);
+                    if (closeIdx == -1) {
+                        return -1;
+                    }
+                    i = closeIdx + 1;
+                }
+            } else if (ch == '>' && i + 1 < n && body.substring(i + 1, i + 2) == '>') {
+                depth--;
+                i += 2;
+                if (depth == 0) {
+                    return i;
+                }
+            } else if (ch == '[') {
+                depth++;
+                i++;
+            } else if (ch == ']') {
+                depth--;
+                i++;
+                if (depth == 0) {
+                    return i;
+                }
+            } else {
+                i++;
+            }
+        }
+        return -1;
     }
 
     private static Integer skipPdfWhitespace(String body, Integer index) {
@@ -1769,6 +1879,699 @@ public with sharing class DocGenAcroFormService {
             }
         }
         return out;
+    }
+
+    // ---------------------------------------------------------------------
+    // #534 — Flatten PDF on generation
+    //
+    // Appends one more incremental update to the filled PDF that, page by page,
+    // draws each form widget's normal appearance into the page content (as a Form
+    // XObject placed on the widget's /Rect), removes the widgets from /Annots,
+    // and drops /AcroForm from the catalog. The merged values become static page
+    // content; nothing is left for a recipient to edit.
+    // ---------------------------------------------------------------------
+
+    @TestVisible
+    private static Boolean isFlattenEnabled(Id templateId) {
+        if (templateId == null) {
+            return false;
+        }
+        if (!flattenByTemplateId.containsKey(templateId)) {
+            // Advisory-only: this is template configuration the generator must honour for
+            // every caller — guest signers, the Automated Process user, and users whose
+            // custom permission sets predate this field. Throwing here would break every
+            // PDF-template generation after an upgrade; ignoring the flag would silently
+            // ship editable PDFs. So read it in system mode and never throw.
+            DocGenFlsGuard.advisoryAssertAccessible(
+                DocGen_Template__c.sObjectType,
+                new Set<String>{ 'Flatten_PDF__c' }
+            );
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Template__c> rows = [
+                SELECT Flatten_PDF__c
+                FROM DocGen_Template__c
+                WHERE Id = :templateId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            flattenByTemplateId.put(templateId, !rows.isEmpty() && rows[0].Flatten_PDF__c == true);
+        }
+        return flattenByTemplateId.get(templateId);
+    }
+
+    @TestVisible
+    private static Blob flattenFilledPdf(Blob pdfBlob) {
+        String pdfHex = EncodingUtil.convertToHex(pdfBlob);
+        String tailText = pdfTailToLatin1(pdfHex);
+        PdfObjectIndex idx = indexPdfObjects(pdfHex);
+
+        Integer rootNum = parseRootNum(tailText, null);
+        List<List<String>> rootDict = parsePdfDict(requirePdfObject(idx, rootNum));
+        String acroFormValue = pdfDictGet(rootDict, '/AcroForm');
+        if (String.isBlank(acroFormValue)) {
+            return pdfBlob; // no interactive form — already flat
+        }
+        List<List<String>> acroForm = parsePdfDict(resolvePdfValueOrNull(idx, acroFormValue));
+        String formDa = pdfDictGet(acroForm, '/DA');
+        String drFontEntries = resolveDefaultFontEntries(idx, acroForm);
+
+        FlattenState state = new FlattenState();
+        state.nextNum = Math.max(parseTrailerSize(tailText), idx.maxNum + 1);
+
+        List<FlattenPage> pages = new List<FlattenPage>();
+        collectFlattenPages(idx, pdfRefNumber(pdfDictGet(rootDict, '/Pages')), null, pages, new Set<Integer>());
+        for (FlattenPage page : pages) {
+            flattenPage(idx, page, state, drFontEntries, formDa);
+        }
+
+        rootDict = pdfDictRemove(pdfDictRemove(rootDict, '/AcroForm'), '/NeedsRendering');
+        state.bodies.put(rootNum, serializePdfDict(rootDict));
+        return appendFlattenUpdate(pdfHex, tailText, state, rootNum);
+    }
+
+    private static void collectFlattenPages(
+        PdfObjectIndex idx,
+        Integer nodeNum,
+        String inheritedResources,
+        List<FlattenPage> pages,
+        Set<Integer> visited
+    ) {
+        if (nodeNum == null || visited.contains(nodeNum)) {
+            return;
+        }
+        visited.add(nodeNum);
+        List<List<String>> node = parsePdfDict(requirePdfObject(idx, nodeNum));
+        String resourcesValue = pdfDictGet(node, '/Resources');
+        String resources = resourcesValue == null ? inheritedResources : resolvePdfValue(idx, resourcesValue);
+        String kidsValue = pdfDictGet(node, '/Kids');
+        if ('/Page'.equals(pdfDictGet(node, '/Type')) || kidsValue == null) {
+            FlattenPage page = new FlattenPage();
+            page.num = nodeNum;
+            page.dict = node;
+            page.resources = resources;
+            pages.add(page);
+            return;
+        }
+        for (Integer kid : pdfRefsIn(resolvePdfValue(idx, kidsValue))) {
+            collectFlattenPages(idx, kid, resources, pages, visited);
+        }
+    }
+
+    private static void flattenPage(
+        PdfObjectIndex idx,
+        FlattenPage page,
+        FlattenState state,
+        String drFontEntries,
+        String formDa
+    ) {
+        String annotsValue = pdfDictGet(page.dict, '/Annots');
+        if (String.isBlank(annotsValue)) {
+            return;
+        }
+        List<String> keptAnnots = new List<String>();
+        List<List<String>> xobjects = new List<List<String>>();
+        String drawOps = '';
+        Boolean hasWidgets = false;
+        Boolean needsFormFonts = false;
+
+        for (Integer annotNum : pdfRefsIn(resolvePdfValue(idx, annotsValue))) {
+            List<List<String>> annot = parsePdfDict(requirePdfObject(idx, annotNum));
+            if (!'/Widget'.equals(pdfDictGet(annot, '/Subtype'))) {
+                keptAnnots.add(annotNum + ' 0 R');
+                continue;
+            }
+            hasWidgets = true;
+            Integer flags = pdfInteger(pdfDictGet(annot, '/F'));
+            // Hidden (2) and NoView (32) widgets are not drawn by viewers, so they flatten to nothing.
+            if ((flags & 2) != 0 || (flags & 32) != 0) {
+                continue;
+            }
+            List<Decimal> rect = pdfNumbers(pdfDictGet(annot, '/Rect'));
+            if (rect.size() < 4) {
+                continue;
+            }
+            Integer apNum = normalAppearanceNumber(idx, annot);
+            String apDict = apNum == null ? null : idx.texts.get(apNum);
+            if (apNum == null) {
+                apNum = generateMissingAppearance(idx, annot, rect, state, drFontEntries, formDa);
+                apDict = apNum == null ? null : state.generatedAppearanceDicts.get(apNum);
+            }
+            if (apNum == null || apDict == null) {
+                continue;
+            }
+            String xobjectName = '/PwFlat' + annotNum;
+            String op = appearancePlacementOp(parsePdfDict(apDict), rect, xobjectName);
+            if (op == null) {
+                continue;
+            }
+            drawOps += op;
+            xobjects.add(new List<String>{ xobjectName, apNum + ' 0 R' });
+            if (!apDict.contains('/Resources')) {
+                needsFormFonts = true;
+            }
+        }
+        if (!hasWidgets) {
+            return;
+        }
+
+        List<List<String>> pageDict = pdfDictRemove(page.dict, '/Annots');
+        if (!keptAnnots.isEmpty()) {
+            pageDict = pdfDictPut(pageDict, '/Annots', '[' + String.join(keptAnnots, ' ') + ']');
+        }
+        if (String.isNotBlank(drawOps)) {
+            // Wrap the original content in q … Q so its graphics state can't skew the fields.
+            Integer openNum = state.nextNum;
+            Integer drawNum = state.nextNum + 1;
+            state.nextNum += 2;
+            state.bodies.put(openNum, pdfStreamObject('q\n'));
+            state.bodies.put(drawNum, pdfStreamObject('Q\n' + drawOps));
+            List<String> contents = new List<String>{ openNum + ' 0 R' };
+            contents.addAll(pageContentRefs(idx, pdfDictGet(pageDict, '/Contents')));
+            contents.add(drawNum + ' 0 R');
+            pageDict = pdfDictPut(pageDict, '/Contents', '[' + String.join(contents, ' ') + ']');
+
+            List<List<String>> resources = parsePdfDict(page.resources);
+            String xobjectValue = pdfDictGet(resources, '/XObject');
+            List<List<String>> xobjectDict = xobjectValue == null
+                ? new List<List<String>>()
+                : parsePdfDict(resolvePdfValue(idx, xobjectValue));
+            xobjectDict.addAll(xobjects);
+            resources = pdfDictPut(resources, '/XObject', serializePdfDict(xobjectDict));
+            // Appearance streams without their own /Resources resolve font names (e.g. /Helv)
+            // against the page they are painted on, so give the page the form's default fonts.
+            if (needsFormFonts && String.isNotBlank(drFontEntries)) {
+                String fontValue = pdfDictGet(resources, '/Font');
+                List<List<String>> fontDict = fontValue == null
+                    ? new List<List<String>>()
+                    : parsePdfDict(resolvePdfValue(idx, fontValue));
+                for (List<String> entry : parsePdfDict('<<' + drFontEntries + '>>')) {
+                    if (pdfDictGet(fontDict, entry[0]) == null) {
+                        fontDict.add(entry);
+                    }
+                }
+                resources = pdfDictPut(resources, '/Font', serializePdfDict(fontDict));
+            }
+            pageDict = pdfDictPut(pageDict, '/Resources', serializePdfDict(resources));
+        }
+        state.bodies.put(page.num, serializePdfDict(pageDict));
+    }
+
+    /** Object number of the widget's normal appearance stream for its current state, or null. */
+    private static Integer normalAppearanceNumber(PdfObjectIndex idx, List<List<String>> annot) {
+        String apValue = pdfDictGet(annot, '/AP');
+        if (apValue == null) {
+            return null;
+        }
+        String normal = pdfDictGet(parsePdfDict(resolvePdfValueOrNull(idx, apValue)), '/N');
+        Integer normalNum = pdfRefNumber(normal);
+        if (normalNum != null) {
+            if (pdfObjectText(idx, normalNum) == null) {
+                return null;
+            }
+            if (idx.streams.contains(normalNum)) {
+                return normalNum;
+            }
+            normal = idx.texts.get(normalNum);
+        }
+        if (normal == null || !normal.trim().startsWith('<<')) {
+            return null;
+        }
+        // State dictionary (checkboxes / radios): pick the stream named by /AS.
+        String state = pdfDictGet(annot, '/AS');
+        if (state == null) {
+            return null;
+        }
+        Integer stateNum = pdfRefNumber(pdfDictGet(parsePdfDict(normal), state));
+        return stateNum != null &&
+            pdfObjectText(idx, stateNum) != null &&
+            idx.streams.contains(stateNum)
+            ? stateNum
+            : null;
+    }
+
+    /**
+     * A text/choice field that carries a value but no appearance (the legacy fill path
+     * relies on NeedAppearances) would vanish when flattened, so build its appearance.
+     */
+    private static Integer generateMissingAppearance(
+        PdfObjectIndex idx,
+        List<List<String>> annot,
+        List<Decimal> rect,
+        FlattenState state,
+        String drFontEntries,
+        String formDa
+    ) {
+        String fieldType = pdfDictGet(annot, '/FT');
+        String value = pdfDictGet(annot, '/V');
+        String da = pdfDictGet(annot, '/DA');
+        String parentValue = pdfDictGet(annot, '/Parent');
+        Integer guard = 0;
+        while ((fieldType == null || value == null || da == null) && parentValue != null && guard < 10) {
+            Integer parentNum = pdfRefNumber(parentValue);
+            String parentText = parentNum == null ? null : pdfObjectText(idx, parentNum);
+            if (parentText == null) {
+                break;
+            }
+            List<List<String>> parent = parsePdfDict(parentText);
+            fieldType = fieldType == null ? pdfDictGet(parent, '/FT') : fieldType;
+            value = value == null ? pdfDictGet(parent, '/V') : value;
+            da = da == null ? pdfDictGet(parent, '/DA') : da;
+            parentValue = pdfDictGet(parent, '/Parent');
+            guard++;
+        }
+        if (!'/Tx'.equals(fieldType) && !'/Ch'.equals(fieldType)) {
+            return null;
+        }
+        String text = decodePdfTextValue(value);
+        if (String.isBlank(text)) {
+            return null;
+        }
+        String fieldBody =
+            '<< /Rect [' +
+            decimalToPdf(Math.min(rect[0], rect[2])) +
+            ' ' +
+            decimalToPdf(Math.min(rect[1], rect[3])) +
+            ' ' +
+            decimalToPdf(Math.max(rect[0], rect[2])) +
+            ' ' +
+            decimalToPdf(Math.max(rect[1], rect[3])) +
+            ']' +
+            (da == null ? '' : ' /DA ' + da) +
+            ' >>';
+        String formBody =
+            '<< ' +
+            (formDa == null ? '' : '/DA ' + formDa + ' ') +
+            (String.isBlank(drFontEntries) ? '' : '/DR << /Font <<' + drFontEntries + '>> >> ') +
+            '>>';
+        String body = buildTextAppearanceBody(fieldBody, text, formBody);
+        if (body == null) {
+            return null;
+        }
+        Integer num = state.nextNum;
+        state.nextNum += 1;
+        state.bodies.put(num, body);
+        state.generatedAppearanceDicts.put(num, body.substring(0, body.indexOf('stream')));
+        return num;
+    }
+
+    /**
+     * "q a 0 0 d e f cm /Name Do Q" — maps the appearance's BBox (transformed by its
+     * /Matrix) onto the widget /Rect, per ISO 32000-1 §12.5.5.
+     */
+    private static String appearancePlacementOp(List<List<String>> apDict, List<Decimal> rect, String xobjectName) {
+        List<Decimal> bbox = pdfNumbers(pdfDictGet(apDict, '/BBox'));
+        if (bbox.size() < 4) {
+            return null;
+        }
+        List<Decimal> m = pdfNumbers(pdfDictGet(apDict, '/Matrix'));
+        if (m.size() < 6) {
+            m = new List<Decimal>{ 1.0, 0.0, 0.0, 1.0, 0.0, 0.0 };
+        }
+        Decimal minX;
+        Decimal maxX;
+        Decimal minY;
+        Decimal maxY;
+        for (Integer c = 0; c < 4; c++) {
+            Decimal x = c < 2 ? bbox[0] : bbox[2];
+            Decimal y = Math.mod(c, 2) == 0 ? bbox[1] : bbox[3];
+            Decimal tx = m[0] * x + m[2] * y + m[4];
+            Decimal ty = m[1] * x + m[3] * y + m[5];
+            minX = minX == null ? tx : Math.min(minX, tx);
+            maxX = maxX == null ? tx : Math.max(maxX, tx);
+            minY = minY == null ? ty : Math.min(minY, ty);
+            maxY = maxY == null ? ty : Math.max(maxY, ty);
+        }
+        Decimal boxWidth = maxX - minX;
+        Decimal boxHeight = maxY - minY;
+        if (boxWidth == 0 || boxHeight == 0) {
+            return null;
+        }
+        Decimal rectX = Math.min(rect[0], rect[2]);
+        Decimal rectY = Math.min(rect[1], rect[3]);
+        Decimal scaleX = (Math.max(rect[0], rect[2]) - rectX).divide(boxWidth, 6);
+        Decimal scaleY = (Math.max(rect[1], rect[3]) - rectY).divide(boxHeight, 6);
+        return 'q ' +
+            pdfNumber(scaleX) +
+            ' 0 0 ' +
+            pdfNumber(scaleY) +
+            ' ' +
+            pdfNumber(rectX - minX * scaleX) +
+            ' ' +
+            pdfNumber(rectY - minY * scaleY) +
+            ' cm ' +
+            xobjectName +
+            ' Do Q\n';
+    }
+
+    /** The page's existing content stream refs: single stream, inline array, or indirect array. */
+    private static List<String> pageContentRefs(PdfObjectIndex idx, String contentsValue) {
+        List<String> refs = new List<String>();
+        if (String.isBlank(contentsValue)) {
+            return refs;
+        }
+        String arrayText = contentsValue.trim().startsWith('[') ? contentsValue : null;
+        Integer num = pdfRefNumber(contentsValue);
+        if (num != null) {
+            String target = requirePdfObject(idx, num);
+            if (idx.streams.contains(num)) {
+                refs.add(num + ' 0 R');
+                return refs;
+            }
+            arrayText = target;
+        }
+        for (Integer ref : pdfRefsIn(arrayText)) {
+            refs.add(ref + ' 0 R');
+        }
+        return refs;
+    }
+
+    /** The AcroForm /DR font entries (inner dictionary text), always including /Helv. */
+    private static String resolveDefaultFontEntries(PdfObjectIndex idx, List<List<String>> acroForm) {
+        List<List<String>> fonts = new List<List<String>>();
+        String drValue = pdfDictGet(acroForm, '/DR');
+        if (drValue != null) {
+            String fontValue = pdfDictGet(parsePdfDict(resolvePdfValueOrNull(idx, drValue)), '/Font');
+            if (fontValue != null) {
+                fonts = parsePdfDict(resolvePdfValueOrNull(idx, fontValue));
+            }
+        }
+        if (pdfDictGet(fonts, '/Helv') == null) {
+            fonts.add(new List<String>{ '/Helv', HELVETICA_FONT_DICT });
+        }
+        String entries = '';
+        for (List<String> entry : fonts) {
+            entries += ' ' + entry[0] + ' ' + entry[1];
+        }
+        return entries + ' ';
+    }
+
+    private static Blob appendFlattenUpdate(String pdfHex, String tailText, FlattenState state, Integer rootNum) {
+        List<Integer> nums = new List<Integer>(state.bodies.keySet());
+        nums.sort();
+        List<String> hexParts = new List<String>{ pdfHex, '0a' };
+        Integer offset = pdfHex.length() / 2 + 1;
+        Map<Integer, Integer> offsets = new Map<Integer, Integer>();
+        Integer size = Math.max(parseTrailerSize(tailText), state.nextNum);
+        for (Integer num : nums) {
+            String objectHex = latin1ToHex(num + ' 0 obj\n' + state.bodies.get(num) + '\nendobj\n');
+            offsets.put(num, offset);
+            offset += objectHex.length() / 2;
+            hexParts.add(objectHex);
+            size = Math.max(size, num + 1);
+        }
+        Integer prevStartXref = parsePreviousStartXref(tailText);
+        Integer xrefStart = offset;
+
+        if (isXrefStreamPdf(tailText)) {
+            Integer xrefNum = size;
+            offsets.put(xrefNum, xrefStart);
+            List<Integer> xrefNums = new List<Integer>(nums);
+            xrefNums.add(xrefNum);
+            xrefNums.sort();
+            String streamHex = '';
+            for (Integer num : xrefNums) {
+                streamHex += '01' + fixedWidthHex(offsets.get(num), 4) + '0000';
+            }
+            hexParts.add(
+                latin1ToHex(
+                    xrefNum +
+                        ' 0 obj\n<< /Type /XRef /Size ' +
+                        (size + 1) +
+                        ' /Root ' +
+                        rootNum +
+                        ' 0 R /Prev ' +
+                        prevStartXref +
+                        ' /W [1 4 2] /Index [' +
+                        buildXrefIndex(xrefNums) +
+                        '] /Length ' +
+                        (streamHex.length() / 2) +
+                        ' >>\nstream\n'
+                )
+            );
+            hexParts.add(streamHex);
+            hexParts.add(latin1ToHex('\nendstream\nendobj\nstartxref\n' + xrefStart + '\n%%EOF\n'));
+        } else {
+            String xref = 'xref\n';
+            Integer i = 0;
+            while (i < nums.size()) {
+                Integer start = nums[i];
+                List<Integer> run = new List<Integer>{ start };
+                i++;
+                while (i < nums.size() && nums[i] == run[run.size() - 1] + 1) {
+                    run.add(nums[i]);
+                    i++;
+                }
+                xref += start + ' ' + run.size() + '\n';
+                for (Integer num : run) {
+                    xref += String.valueOf(offsets.get(num)).leftPad(10, '0') + ' 00000 n \n';
+                }
+            }
+            xref +=
+                'trailer\n<< /Size ' +
+                size +
+                ' /Root ' +
+                rootNum +
+                ' 0 R /Prev ' +
+                prevStartXref +
+                ' >>\nstartxref\n' +
+                xrefStart +
+                '\n%%EOF\n';
+            hexParts.add(latin1ToHex(xref));
+        }
+        return EncodingUtil.convertFromHex(String.join(hexParts, ''));
+    }
+
+    /** Locates the latest "N 0 obj … endobj" for every object (later incremental updates win). */
+    private static PdfObjectIndex indexPdfObjects(String pdfHex) {
+        PdfObjectIndex idx = new PdfObjectIndex();
+        idx.hex = pdfHex;
+        String objToken = '2030206f626a'; // " 0 obj"
+        String endObjToken = '656e646f626a'; // "endobj"
+        Integer pos = 0;
+        while (true) {
+            Integer tokenIndex = hexTokenIndex(pdfHex, objToken, pos);
+            if (tokenIndex < 0) {
+                break;
+            }
+            Integer bodyStart = tokenIndex + objToken.length();
+            Integer digitStart = tokenIndex - 2;
+            while (digitStart >= 0 && isDigitHexByte(pdfHex.substring(digitStart, digitStart + 2))) {
+                digitStart -= 2;
+            }
+            digitStart += 2;
+            Integer digitCount = (tokenIndex - digitStart) / 2;
+            if (digitCount < 1 || digitCount > 9) {
+                pos = bodyStart;
+                continue;
+            }
+            Integer endIndex = hexTokenIndex(pdfHex, endObjToken, bodyStart);
+            if (endIndex < 0) {
+                break;
+            }
+            Integer num = asciiDigitHexToInteger(pdfHex.substring(digitStart, tokenIndex));
+            idx.starts.put(num, bodyStart);
+            idx.ends.put(num, endIndex);
+            idx.maxNum = Math.max(idx.maxNum, num);
+            pos = endIndex + endObjToken.length();
+        }
+        return idx;
+    }
+
+    /** indexOf for a hex token that only accepts byte-aligned (even) positions. */
+    private static Integer hexTokenIndex(String hex, String token, Integer fromIndex) {
+        Integer i = hex.indexOf(token, fromIndex);
+        while (i >= 0 && Math.mod(i, 2) == 1) {
+            i = hex.indexOf(token, i + 1);
+        }
+        return i;
+    }
+
+    /** Dictionary/array text of an object (stream data excluded), or null when not present. */
+    private static String pdfObjectText(PdfObjectIndex idx, Integer num) {
+        if (num == null || !idx.starts.containsKey(num)) {
+            return null;
+        }
+        if (!idx.texts.containsKey(num)) {
+            String bodyHex = idx.hex.substring(idx.starts.get(num), idx.ends.get(num));
+            Integer streamAt = hexTokenIndex(bodyHex, '73747265616d', 0); // "stream"
+            if (streamAt >= 0) {
+                idx.streams.add(num);
+                bodyHex = bodyHex.substring(0, streamAt);
+            }
+            idx.texts.put(num, bytesToLatin1Hex(bodyHex).trim());
+        }
+        return idx.texts.get(num);
+    }
+
+    private static String requirePdfObject(PdfObjectIndex idx, Integer num) {
+        String text = pdfObjectText(idx, num);
+        if (text == null) {
+            throw new DocGenException(FLATTEN_UNREADABLE_MESSAGE);
+        }
+        return text;
+    }
+
+    /** Follows an "N 0 R" value to its object text; direct values are returned as-is. */
+    private static String resolvePdfValue(PdfObjectIndex idx, String value) {
+        Integer num = pdfRefNumber(value);
+        return num == null ? value : requirePdfObject(idx, num);
+    }
+
+    private static String resolvePdfValueOrNull(PdfObjectIndex idx, String value) {
+        Integer num = pdfRefNumber(value);
+        return num == null ? value : pdfObjectText(idx, num);
+    }
+
+    /** Top-level entries of the first dictionary in text, as [key, value] pairs. Empty when none. */
+    private static List<List<String>> parsePdfDict(String text) {
+        List<List<String>> entries = new List<List<String>>();
+        if (String.isBlank(text)) {
+            return entries;
+        }
+        Integer open = text.indexOf('<<');
+        if (open < 0) {
+            return entries;
+        }
+        Integer n = text.length();
+        Integer i = open + 2;
+        while (true) {
+            i = skipPdfWhitespace(text, i);
+            if (i >= n || (i + 1 < n && text.substring(i, i + 2) == '>>')) {
+                break;
+            }
+            Integer keyEnd = findPdfValueEnd(text, i);
+            if (text.substring(i, i + 1) != '/') {
+                i = Math.max(keyEnd, i + 1); // stray token — skip it
+                continue;
+            }
+            Integer valueEnd = findPdfValueEnd(text, keyEnd);
+            entries.add(new List<String>{ text.substring(i, keyEnd), text.substring(keyEnd, valueEnd).trim() });
+            i = Math.max(valueEnd, keyEnd + 1);
+        }
+        return entries;
+    }
+
+    private static String serializePdfDict(List<List<String>> entries) {
+        String out = '<<';
+        for (List<String> entry : entries) {
+            out += ' ' + entry[0] + ' ' + entry[1];
+        }
+        return out + ' >>';
+    }
+
+    private static String pdfDictGet(List<List<String>> entries, String key) {
+        if (entries != null) {
+            for (List<String> entry : entries) {
+                if (key.equals(entry[0])) {
+                    return entry[1];
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<List<String>> pdfDictRemove(List<List<String>> entries, String key) {
+        List<List<String>> out = new List<List<String>>();
+        for (List<String> entry : entries) {
+            if (!key.equals(entry[0])) {
+                out.add(entry);
+            }
+        }
+        return out;
+    }
+
+    private static List<List<String>> pdfDictPut(List<List<String>> entries, String key, String value) {
+        List<List<String>> out = pdfDictRemove(entries, key);
+        out.add(new List<String>{ key, value });
+        return out;
+    }
+
+    private static Integer pdfRefNumber(String value) {
+        if (value == null) {
+            return null;
+        }
+        Matcher matcher = Pattern.compile('^\\s*(\\d+)\\s+\\d+\\s+R\\s*$').matcher(value);
+        return matcher.matches() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    private static List<Integer> pdfRefsIn(String text) {
+        List<Integer> refs = new List<Integer>();
+        if (text == null) {
+            return refs;
+        }
+        Matcher matcher = Pattern.compile('(\\d+)\\s+\\d+\\s+R\\b').matcher(text);
+        while (matcher.find()) {
+            refs.add(Integer.valueOf(matcher.group(1)));
+        }
+        return refs;
+    }
+
+    private static List<Decimal> pdfNumbers(String text) {
+        List<Decimal> values = new List<Decimal>();
+        if (text == null) {
+            return values;
+        }
+        Matcher matcher = Pattern.compile('-?(?:\\d+\\.?\\d*|\\.\\d+)').matcher(text);
+        while (matcher.find()) {
+            values.add(Decimal.valueOf(matcher.group(0).removeEnd('.')));
+        }
+        return values;
+    }
+
+    private static Integer pdfInteger(String value) {
+        List<Decimal> values = pdfNumbers(value);
+        return values.isEmpty() ? 0 : values[0].intValue();
+    }
+
+    private static String pdfNumber(Decimal value) {
+        String out = String.valueOf(value.setScale(5));
+        while (out.contains('.') && out.endsWith('0')) {
+            out = out.substring(0, out.length() - 1);
+        }
+        return out.endsWith('.') ? out.substring(0, out.length() - 1) : out;
+    }
+
+    private static String pdfStreamObject(String content) {
+        return '<< /Length ' + Blob.valueOf(content).size() + ' >>\nstream\n' + content + '\nendstream';
+    }
+
+    /** Decodes a PDF text value — "(literal)" or "<hex>" (UTF-16BE with BOM, or single-byte). */
+    private static String decodePdfTextValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String v = value.trim();
+        if (v.startsWith('(') && v.endsWith(')')) {
+            return unescapePdfString(v.substring(1, v.length() - 1));
+        }
+        if (v.startsWith('<') && v.endsWith('>') && !v.startsWith('<<')) {
+            String hex = v.substring(1, v.length() - 1).replaceAll('\\s', '');
+            List<Integer> chars = new List<Integer>();
+            if (hex.toUpperCase().startsWith('FEFF')) {
+                for (Integer i = 4; i + 4 <= hex.length(); i += 4) {
+                    chars.add(hexByteToInt(hex.substring(i, i + 2)) * 256 + hexByteToInt(hex.substring(i + 2, i + 4)));
+                }
+            } else {
+                for (Integer i = 0; i + 2 <= hex.length(); i += 2) {
+                    chars.add(hexByteToInt(hex.substring(i, i + 2)));
+                }
+            }
+            return String.fromCharArray(chars);
+        }
+        return null;
+    }
+
+    /** Latin-1 text → hex, one byte per char, so bodies read via bytesToLatin1Hex round-trip exactly. */
+    private static String latin1ToHex(String text) {
+        Blob utf8 = Blob.valueOf(text);
+        if (utf8.size() == text.length()) {
+            return EncodingUtil.convertToHex(utf8); // pure ASCII
+        }
+        List<String> out = new List<String>();
+        for (Integer code : text.getChars()) {
+            out.add(code < 256 ? byteToHex(code) : '3F');
+        }
+        return String.join(out, '');
     }
 
     private static String bytesToLatin1(Blob input) {

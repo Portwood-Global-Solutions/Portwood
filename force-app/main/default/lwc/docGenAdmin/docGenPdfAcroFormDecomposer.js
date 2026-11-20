@@ -1525,7 +1525,11 @@ export async function decomposePdfAcroFormBase64(base64) {
         const obj = objects.get(fieldNumber);
         return obj && obj.fromObjectStream;
     });
-    const shouldNormalizePdf = Boolean(encryption) || hasObjectStreamFields;
+    // #534 — "Flatten PDF on generation" rewrites page dictionaries on the server, and
+    // Apex cannot inflate object streams. Normalize whenever ANY object (pages,
+    // resources, annotation arrays) lives in one, not only the field objects.
+    const hasObjectStreamObjects = Array.from(objects.values()).some((obj) => obj && obj.fromObjectStream);
+    const shouldNormalizePdf = Boolean(encryption) || hasObjectStreamFields || hasObjectStreamObjects;
     const normalizedPdfBase64 = shouldNormalizePdf
         ? bytesToBase64Local(await normalizePdfBytes(objects, encryption, rootObjectNumber, fieldObjectNumbers))
         : null;
