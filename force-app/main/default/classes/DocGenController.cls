@@ -9300,7 +9300,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * Retires an asset by clearing Is_Active__c. The resolver skips inactive
      * assets, so any template still using the tag renders a placeholder + logs an
-     * error rather than the old image. Reversible (re-activate via the platform).
+     * error rather than the old image. Reversible via reactivateAsset.
      */
     @AuraEnabled
     public static void deactivateAsset(Id assetId) {
@@ -9314,6 +9314,29 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             Database.update(asset, AccessLevel.SYSTEM_MODE);
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error deactivating asset.');
+        }
+    }
+
+    /**
+     * Reactivates a previously deactivated asset by setting Is_Active__c back to
+     * TRUE — the exact reverse of deactivateAsset. The resolver immediately
+     * resumes serving the asset's latest version, so templates using
+     * {%asset:<key>} render the image again instead of the missing-asset
+     * placeholder. Deactivation touches only Is_Active__c and never changes the
+     * version pointer, so the same latest version is restored.
+     */
+    @AuraEnabled
+    public static void reactivateAsset(Id assetId) {
+        if (assetId == null) {
+            throw DocGenService.ahe('Asset Id is required.');
+        }
+        try {
+            DocGen_Asset__c asset = new DocGen_Asset__c(Id = assetId, Is_Active__c = true);
+            DocGenFlsGuard.assertUpdateable(asset, new Set<String>{ 'Is_Active__c' });
+            /* code-analyzer-suppress ApexFlsViolation */
+            Database.update(asset, AccessLevel.SYSTEM_MODE);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error reactivating asset.');
         }
     }
 
