@@ -1090,6 +1090,15 @@ Use the [image tag reference](https://github.com/Portwood-Global-Solutions/Portw
 
 Update the asset's image, then generate a document using it. Because templates refer to the key, you do not need to replace the tag in every template. Check headers, footers, and emails too if they use that asset.
 
+#### Deactivate or reactivate an image
+
+Each asset has an **Active / Inactive** status, shown in the asset list. Deactivating an asset stops it from rendering: a template that still uses its tag shows a missing-image placeholder instead of the picture. This is a safe, reversible alternative to deleting.
+
+- To deactivate, open the asset's row menu and choose **Deactivate**.
+- To bring it back, open the row menu again and choose **Activate**. The asset returns to its most recent image version, so any template using the tag renders it again.
+
+Deleting an asset, by contrast, cannot be undone. Prefer Deactivate when you might want the image back.
+
 Email images need publicly accessible links. Document images and email images have different access requirements; see [Brand the signing experience](#brands-and-emails) before putting a private Salesforce file URL in an email.
 
 **You are done when:** The image appears in a real generated PDF at the intended size. An image visible only in the browser preview is not enough.

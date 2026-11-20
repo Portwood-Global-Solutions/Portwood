@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Reactivate a deactivated image asset from the Assets tab (#580).** Deactivating a
+  shared image asset was previously irreversible from the UI — the row menu offered no
+  Activate action and the list gave no sign of which assets were inactive, so the only
+  way back was editing the record by hand. The Assets list now shows an **Active /
+  Inactive** status column, the row menu offers **Activate** on an inactive asset (and
+  **Deactivate** on an active one), and reactivating restores the same latest image
+  version, so templates using `{%asset:key}` render it again.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
