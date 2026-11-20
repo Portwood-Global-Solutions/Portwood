@@ -6389,13 +6389,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         } else if (baseFormat == 'number') {
             return formatPlainNumber(num, segments);
         } else {
-            // Custom pattern: #,##0 or #,##0.00 — unchanged behavior, always US separators
-            Integer decimals = 0;
-            String lower = fmt.toLowerCase().trim();
-            if (lower.contains('.')) {
-                decimals = lower.substringAfter('.').length();
+            // Custom patterns always use US separators.
+            String fraction = fmt.contains('.') ? fmt.trim().substringAfter('.') : '';
+            Decimal rounded = num.setScale(fraction.length(), RoundingMode.HALF_UP);
+            if (Pattern.matches('0*#+', fraction)) {
+                // Round first, then trim optional zeros without losing required places.
+                Integer requiredPlaces = fraction.indexOf('#');
+                rounded = rounded.stripTrailingZeros();
+                if (rounded.scale() < requiredPlaces) {
+                    rounded = rounded.setScale(requiredPlaces);
+                }
             }
-            return formatNumberLocale(num.setScale(decimals, RoundingMode.HALF_UP), ',', '.');
+            return formatNumberLocale(rounded, ',', '.');
         }
     }
 
