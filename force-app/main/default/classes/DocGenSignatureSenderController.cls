@@ -629,7 +629,8 @@ public with sharing class DocGenSignatureSenderController {
         req.Secure_Token__c = generateRequestVerificationToken();
         req.Expires_At__c = DocGenSignatureExpiry.computeExpiry(null);
         // Package-internal object — CRUD controlled by Portwood permission sets
-        // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Create").
+        // Check user-facing fields. The server generates the token and writes it in system mode.
+        // Token field permissions remain restricted.
         DocGenFlsGuard.assertCreateable(
             req,
             new Set<String>{
@@ -638,7 +639,6 @@ public with sharing class DocGenSignatureSenderController {
                 'Status__c',
                 'Signing_Order__c',
                 'Document_Title_Format__c',
-                'Secure_Token__c',
                 'Expires_At__c'
             }
         );
@@ -1631,7 +1631,6 @@ public with sharing class DocGenSignatureSenderController {
             'Status__c',
             'Signing_Order__c',
             'Document_Title_Format__c',
-            'Secure_Token__c',
             'Expires_At__c'
         };
         if (String.isNotBlank(frozenJson)) {
@@ -1901,7 +1900,6 @@ public with sharing class DocGenSignatureSenderController {
             'Status__c',
             'Signing_Order__c',
             'Document_Title_Format__c',
-            'Secure_Token__c',
             'Expires_At__c'
         };
         if (String.isNotBlank(frozenJson)) {
@@ -2036,7 +2034,6 @@ public with sharing class DocGenSignatureSenderController {
                 'Signer_Email__c',
                 'Source_Document_Id__c',
                 'Related_Record_Id__c',
-                'Secure_Token__c',
                 'Status__c',
                 'Expires_At__c'
             }
@@ -2785,7 +2782,7 @@ public with sharing class DocGenSignatureSenderController {
         }
 
         // Package-internal object — CRUD controlled by Portwood permission sets
-        // v2.0.1 — per-field FLS enforcement (Checkmarx "FLS Create").
+        // The server generates signer tokens. They are not caller-editable fields.
         DocGenFlsGuard.assertCreateable(
             signerRecords,
             new Set<String>{
@@ -2793,7 +2790,6 @@ public with sharing class DocGenSignatureSenderController {
                 'Role_Name__c',
                 'Signer_Name__c',
                 'Signer_Email__c',
-                'Secure_Token__c',
                 'Status__c',
                 'Sort_Order__c',
                 'Contact__c'
