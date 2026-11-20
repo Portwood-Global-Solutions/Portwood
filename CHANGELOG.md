@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Certificate verification links are clickable on signed uploaded PDFs (#476).** The
+  Certificate of Completion added to a signed uploaded or existing PDF now carries a real
+  clickable link over the full verification URL, including every line when the URL wraps.
+  Before, PDF readers often left the wrapped link unclickable or opened only its first line.
+  The same certificate renderer serves template-generated signatures, so they get the
+  clickable link too.
+- **Certificate verification URLs use the correct site address (#476).** Verification
+  links now normalize the signing site URL the same way signing links do: a missing
+  `https://` is added, and trailing `/` and an Experience Cloud `/s` suffix are removed. When
+  no valid http or https site URL is configured, the certificate omits the link instead of
+  printing a broken one. Document-upload verification on the verify page still works.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
