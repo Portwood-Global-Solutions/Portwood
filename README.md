@@ -4,7 +4,7 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
-[![Version](https://img.shields.io/badge/version-3.63.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-3.64.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -18,10 +18,10 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 ## Install
 
 ```bash
-sf package install --package 04tVx000001CfejIAC --wait 10 --target-org <your-org>
+sf package install --package 04tVx000001FBU1IAO --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001CfejIAC)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO)
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
@@ -458,12 +458,13 @@ Decompress → Merge XML tags → Recompress
 
 ## Releases
 
-Portwood ships **every two weeks, on a Friday**. Next release: **2026-11-20**, then 12-04, 12-18.
+Portwood ships **every two weeks, on a Friday**. Next release: **2026-12-04**, then 12-18, 2027-01-01.
 
 Milestones on the issue board are release dates rather than version numbers, so you can see when a fix or a merged PR would actually ship. Bug reports are welcome at any time and don't wait for a release — they're triaged as they arrive.
 
 | Version     | Headline                                                                                                                                            |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v3.64.0** | Sign inside a Screen Flow, flatten fillable PDFs on generation, configuration migration between orgs, and signing in Korean and other languages     |
 | **v3.63.0** | Hotfix: upgrading to 3.62.0 from an earlier version failed with "The post install script failed"                                                    |
 | **v3.62.0** | Resend and revoke signatures, typed-signatures-only mode, reusable terms and snippets, a native PDF-merge Flow action, and version-activation fixes |
 | **v3.61.0** | Hotfix: correct signer names in parallel-signing emails, signing-page UX, and large-HTML template saves                                             |
@@ -487,6 +488,8 @@ Milestones on the issue board are release dates rather than version numbers, so 
 
 <details>
 <summary>Longer narrative of recent releases</summary>
+
+**v3.64.0 — Sign inside a Screen Flow, flatten fillable PDFs, and configuration migration**: a new **Portwood: Sign in Flow** screen component lets a signed-in user review and sign a signature request without leaving a Screen Flow, using the same signing service, audit record and Certificate of Completion as the emailed link. A fillable PDF template can now flatten its form on generation, so recipients cannot edit the Salesforce values; it is off by default, so existing templates are unchanged. A draft `sf portwood migrate` command copies templates, brands, fonts, snippets and settings between sandboxes and scratch orgs. Signing now works in Korean and other non-Latin languages and stays sharp on high-resolution screens, and large Excel workbooks generate reliably in the background. Number formats with optional decimal places such as `#,##0.##` now drop the places they do not need: a template that used `.##` expecting two fixed decimals should switch to `.00`.
 
 **v3.63.0 — Hotfix: upgrading to 3.62.0 failed**: upgrading an existing install to 3.62.0 failed with "The post install script failed" and was rolled back; fresh installs were not affected. The script that creates the default email templates after an install can no longer fail an install or upgrade. If you are on 3.61 or earlier, upgrade straight to 3.63.0. On an org that upgraded (rather than installed fresh), an admin who wants to customize the new **Signature Request Revoked** email adds the value `Signature_Revoked` to **Email Template → Type** in Setup; the email still sends with its built-in text and every other email type is unaffected.
 
@@ -603,7 +606,8 @@ The optional **Portwood Agentforce Extension** versions independently: **v1.1.0*
 
 | Version | Channel                                 | Package ID           |
 | ------- | --------------------------------------- | -------------------- |
-| v3.63.0 | **Latest (Released)**                   | `04tVx000001CfejIAC` |
+| v3.64.0 | **Latest (Released)**                   | `04tVx000001FBU1IAO` |
+| v3.63.0 | Released                                | `04tVx000001CfejIAC` |
 | v3.62.0 | Released — upgrade fails, use 3.63.0    | `04tVx000001CeFdIAK` |
 | v3.61.0 | Released                                | `04tVx000001BaZ3IAK` |
 | v3.60.0 | Released                                | `04tVx000001BOsrIAG` |
