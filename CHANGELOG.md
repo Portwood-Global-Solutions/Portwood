@@ -2,6 +2,181 @@
 
 ## Unreleased
 
+### Added
+
+- **Sign a document inside a Screen Flow (#533).** A new **Portwood: Sign in Flow** screen
+  component lets a signed-in user review and sign a Portwood signature request in the same
+  tab, on a Lightning page, a record page, or an Experience Cloud site, then continues the
+  Flow once the signature is recorded. Pass it the **Signer URLs** from **Portwood: Create
+  Signature Request**. Signers click **SIGN HERE** on the document to open the signing
+  dialog over it, draw or type their signature, and confirm consent in a **Complete
+  Signing** dialog. Signed fields show as a compact mark on the signature line, as on the
+  signing page. It supports guided signature, initials, date and date-picker fields, signer
+  form fields, email verification, decline, and multi-signer progress. The component returns
+  **Signed**, **Declined**, **Request complete**, **Signer status**, and **Error message**
+  for branching, and moves to the next screen automatically unless **Wait for the user to
+  select Next after signing** is on. It uses the same signing service as the emailed link, so
+  the audit record, document hash, Certificate of Completion, and completion emails are the
+  same. Guests are refused, and prepared uploaded-PDF requests still use the signing link.
+  Includes a **Portwood Portal Signer** permission set for Experience Cloud signers.
+- **Flatten fillable PDF templates on generation (#534).** A new **Flatten PDF on
+  generation** option appears on Create Template (**Bring an Existing Template**, Type =
+  **PDF**) and on Edit Template → **Settings** → **Output & Page Setup** for PDF templates.
+  When it is on, Portwood fills the form, draws each field's value into the page, and
+  removes the form, so recipients cannot edit Salesforce values after download. It applies
+  to every generation path: download, preview, save to record, bulk, Flow, and signature
+  documents. Off by default; existing templates are unchanged. Template export and import
+  carry the setting; older bundles import with it off.
+- New field `DocGen_Template__c.Flatten_PDF__c` (checkbox, default unchecked), readable in
+  **DocGen_User** and **DocGen_Guest_Signature** and editable in **DocGen_Admin**, and
+  added to the template page layout.
+- **Migrate Portwood configuration between orgs with one command (#573, #532).** A new
+  Salesforce CLI plugin in `scripts/migration` adds `sf portwood migrate`, which copies
+  shared images, fonts, snippets, brands, email templates, templates, and selected signing
+  settings from a source org to a destination org. `--dry-run` compares stable keys and
+  reports items to create, conflicts, missing or ambiguous keys, and settings that need
+  mapping, without writing. Apply checks every source item first, writes each item in its
+  own transaction, stops at the first failure with a report of what was applied, and reuses
+  matching items on a rerun. Org-specific values (record IDs, org-wide email addresses,
+  signing-site URLs) come from a `--mappings` JSON file. `--only <kind>` limits the scope and
+  `--conflict skip` leaves differing destination items in place. Writes are limited to
+  sandboxes and scratch orgs.
+- Native template bodies (DOCX, XLSX, XLSM, PPTX, PDF) and shared images up to
+  10,000,000 bytes, and static TTF fonts up to 9,000,000 bytes, stream through Salesforce
+  Files with byte-count and checksum verification. Migrated fonts arrive **Staged** and must
+  be approved in Portwood Assets before templates that use them are copied.
+- New `/portwood/migration/v1/` REST API (`DocGenMigrationRest`) behind the new
+  **Portwood Configuration Migration** permission set (`DocGen_Migration`) and its
+  `Migrate_DocGen_Configuration` custom permission. Guest users are always refused.
+- New user guide lesson: **Migrate your Portwood setup between orgs**.
+
+### Changed
+
+- **Upgrade-safe access to the new field.** Users whose Portwood access comes from custom
+  permission sets or profiles without the new field are never blocked: the template list,
+  editor, save, export, import, and generation all keep working, and the Flatten option is
+  hidden until an admin grants access. Generation always honors a template's flatten
+  setting, whoever runs it.
+- **New fillable-PDF uploads are stored server-ready more often.** A PDF that keeps any
+  objects in compressed object streams is now normalized at upload, not only when its form
+  fields are compressed. Its content is unchanged; document metadata such as the PDF's
+  title and author is not carried over. Templates already uploaded are untouched.
+- If flattening is on and a template's pages are still stored in compressed object
+  streams, generation stops with a message asking to upload the PDF again as a new version,
+  instead of returning an editable PDF.
+- **Large Excel and macro workbooks generate reliably in the background (#529).**
+  Asynchronous Excel generation — bulk runs, Flows and scheduled jobs — now keeps each
+  merged worksheet compressed between passes instead of holding every sheet in memory at
+  once, so workbooks that previously failed partway through with an out-of-memory error
+  now finish. Macro-enabled `.xlsm` workbooks keep their macros, and every sheet in a
+  multi-sheet workbook is merged. Generating from a record page is unchanged. A workbook
+  that is still too large to finish now stops with a clear message asking you to reduce
+  its rows or columns, instead of failing without explanation.
+- **Clearer wording on the signing screen for initials fields (#582).** The Add Initials
+  window now says "Draw or type your initials for this field." instead of "Type your
+  initials for this field.", and the drawing area is labelled "Draw your initials" instead
+  of "Draw your signature". Signature fields keep the "Draw your signature" label. Where
+  **Allow Typed Signatures Only** is turned on for the organization or the template, there
+  is no drawing area, so the wording stays "Type your initials for this field."
+
+### Fixed
+
+- **The Download button after a file preview now downloads the file (#516).** A record
+  button set to the **Preview and download** delivery mode opens the generated document in
+  the Salesforce file preview. The dialog behind the preview offers a copy to download, but
+  clicking **Download** could do nothing, with no file and no error. **Download** is now a
+  standard link to the exact file just generated, so the browser downloads it directly. The
+  **Download** and **Preview** delivery modes are unchanged.
+- **Filling a field that already had an appearance no longer leaves fragments behind.**
+  Removing a dictionary value, such as an existing checkbox `/AP << /N << … >> >>`, cut
+  only its first characters and left the rest inside the field. The whole value is now
+  removed, matching the browser-side decomposer.
+- **Text fields set to Auto font size now render.** A field whose default appearance used
+  size 0 received an appearance with invisible text. The text is now sized to fit the
+  field, up to 12 pt.
+- **Bulk Generation record filters accept Record Type and other standard relationship fields
+  (#535).** Step 2 (Record Filter) rejected valid SOQL such as
+  `RecordType.DeveloperName = 'Partner_Account'` or `RecordType.Name = 'Partner Account'` with
+  "Invalid field in filter condition", so a bulk run could not be limited to one Record Type.
+  Filters can now traverse any standard lookup — `RecordType.*`, `Owner.*`, `CreatedBy.*`,
+  `Account.*` on Contact — as well as custom `__r` relationships, and the same rule applies to
+  child-record filters. `RecordTypeId='012…'` also validates when typed without spaces round the
+  operator.
+- **Clearer Step 2 filter errors.** Filtering by Record Type on an object that has no Record
+  Types now says so, and a malformed value (for example `RecordTypeId = 'abc'`) reports the
+  Salesforce reason instead of a generic error. Unknown fields and disallowed SOQL keywords are
+  still rejected exactly as before.
+- **Portwood User can send signature requests without Portwood Admin (#409).** Users with
+  only the Portwood User permission set got `Insufficient FLS to create DocGen_Signature_Request__c.Template__c`
+  when sending a document for signature, from both the record-page sender and the
+  **Portwood: Create Signature Request** Flow action. Portwood User now has Edit on Signature
+  Requests, Create on Signers, and Edit on the fields the send fills in (template, status,
+  related record, snapshot fields, and the signer's name, email, role, contact, order, and
+  status). Signing tokens are still generated by the server and stay unreadable and
+  uneditable for senders.
+- **Certificate verification links are clickable on signed uploaded PDFs (#476).** The
+  Certificate of Completion added to a signed uploaded or existing PDF now carries a real
+  clickable link over the full verification URL, including every line when the URL wraps.
+  Before, PDF readers often left the wrapped link unclickable or opened only its first line.
+  The same certificate renderer serves template-generated signatures, so they get the
+  clickable link too.
+- **Certificate verification URLs use the correct site address (#476).** Verification
+  links now normalize the signing site URL the same way signing links do: a missing
+  `https://` is added, and trailing `/` and an Experience Cloud `/s` suffix are removed. When
+  no valid http or https site URL is configured, the certificate omits the link instead of
+  printing a broken one. Document-upload verification on the verify page still works.
+- **Salesforce File images in HTML rich-text fields now render on Download (#478).**
+  When an HTML template merged a rich-text value whose image pointed at a Salesforce File
+  by its full web address, **Download** showed a broken-image icon, while **Save to Record**
+  showed the same image correctly. These images now render in every generation mode.
+  Only addresses on your own org's domains are converted. The image's size and other
+  settings are kept, and File addresses from any other site are left out of the PDF.
+- Word-to-PDF conversion preserves zero page margins and header/footer distances so full-page covers fit on the intended page (#479).
+- **Signing-page PDFs stay sharp on phones, HiDPI screens and when zoomed (#413).**
+  The guided signing page now draws each PDF page at the screen's real pixel density
+  (up to 3×), so contract text and fine print no longer look soft on phones and Retina
+  displays. When the signer pinch-zooms or uses browser zoom, the pages in view are redrawn
+  at the zoomed resolution, and they return to normal resolution when zoom is reset. Per-page
+  and whole-document pixel limits keep memory safe on mobile browsers. Signature, initial and
+  field positions are unchanged, and only the on-screen viewer is affected: the signed PDF
+  itself is the same as before.
+- **Signing works in Korean and other non-Latin languages (#513).** Signing failed with an
+  encoding error when the signer's browser was set to Korean — or any language whose names
+  and dates fall outside the Latin alphabet — because the date stamp could not be written
+  into the PDF. The signing page now embeds a font that covers those characters, so the
+  signer's name, the signing date and the Certificate of Completion all render correctly.
+  Only the characters actually used are embedded, so the signed file stays small.
+- **Number formats with optional decimal places now honor them (#484).** A custom number
+  format using `#` after the decimal point — such as `{Amount:#,##0.##}` — always padded the
+  value out to a fixed number of decimals, so `100` printed as `100.00`. Optional places are
+  now dropped when they are not needed and kept when they are: `100` prints as `100`, `100.1`
+  as `100.1`, and places written as `0` are still always shown. This applies everywhere a
+  number format is used, including grand totals on very large templates.
+- **The signature template list only offers templates that fit the record (#446).** Sending
+  a document for signature from a record page listed every active template, including ones
+  built for a different object, so choosing the wrong one produced an error or an empty
+  document. The list now shows only templates whose base object matches the record you are
+  on, and deactivated templates are left out.
+- **Command Hub shows every navigation tab straight away (#531).** Reloading Portwood
+  briefly showed only part of the left-hand navigation — **Buttons** and **Send Email**
+  were missing until the page finished loading, then appeared on their own with no action
+  from you. The navigation now renders immediately, and the two tabs whose visibility
+  depends on your permissions show a short "Checking available actions…" note while that
+  is confirmed, instead of being absent. The Command Hub also no longer loads the whole
+  template list just to draw its navigation, so it opens faster.
+- **Reactivate a deactivated image asset from the Assets tab (#580).** Deactivating a
+  shared image asset was previously irreversible from the UI — the row menu offered no
+  Activate action and the list gave no sign of which assets were inactive, so the only
+  way back was editing the record by hand. The Assets list now shows an **Active /
+  Inactive** status column, the row menu offers **Activate** on an inactive asset (and
+  **Deactivate** on an active one), and reactivating restores the same latest image
+  version, so templates using `{%asset:key}` render it again.
+- **The migration command runs on Windows.** It failed in PowerShell, Command Prompt, and
+  Git Bash with "Salesforce CLI request failed", because Node cannot start the CLI's
+  `sf.cmd` launcher directly. It now launches `sf.cmd` through `cmd.exe` with arguments
+  escaped for both cmd.exe passes, so SOQL queries and aliases reach the CLI unchanged. The
+  error message now also includes the underlying reason.
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,

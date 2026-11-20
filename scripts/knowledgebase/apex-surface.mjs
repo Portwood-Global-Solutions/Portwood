@@ -15,8 +15,16 @@ export function apexSurface(root) {
             const text = fs
                 .readFileSync(path.join(root, file), 'utf8')
                 .replace(/\r\n?/g, '\n')
-                .replace(/\/\*[\s\S]*?\*\//g, '')
-                .replace(/\/\/[^\n]*/g, '');
+                // Strip comments in one string-aware pass: whichever starts first, a
+                // string literal or a comment, is consumed whole. Literals are kept —
+                // global constants document their values, e.g. TYPE_REQUEST =
+                // 'Signature_Request' — and comments are dropped. Stripping comments
+                // with separate regexes is not safe: the literal in
+                // @RestResource(urlMapping='/portwood/migration/v1/*') opens a block
+                // comment that never closes, so the next real `*/` anywhere in the file
+                // paired with it and deleted everything between, class declaration
+                // included, silently dropping the type from the inventory.
+                .replace(/'(?:[^'\\\n]|\\.)*'|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m) => (m[0] === "'" ? m : ''));
             if (!/^\s*global\s+(?:(?:with|without|inherited)\s+sharing\s+)?(?:class|interface)\s+/m.test(text))
                 continue;
             const declarations = [...text.matchAll(/^\s*global\s+([^;{}]+?)(?=[;{])/gm)].map(

@@ -1,0 +1,17 @@
+{
+    "name": "@portwood/configuration-migration",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=20"
+    },
+    "dependencies": {
+        "@oclif/core": "^4.0.0",
+        "@salesforce/core": "8.32.5"
+    },
+    "oclif": {
+        "commands": "./commands",
+        "topicSeparator": " "
+    }
+}

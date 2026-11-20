@@ -66,6 +66,7 @@ Make your first document, build a template, send it for signature, and keep your
     - [Save changes and return to an earlier version](#template-versions)
     - [Organize and limit template choices](#organize-templates)
     - [Move a template between orgs](#move-templates)
+    - [Migrate your Portwood setup between orgs](#migrate-configuration)
     - [Give people the right access](#manage-access)
     - [Upgrade without losing your way](#upgrade-portwood)
     - [File and format limits](#limits)
@@ -623,11 +624,35 @@ Edit labels or mappings under **Fillable Fields** and use **Save Mapping**. If y
 
 Portwood reads actual PDF form fields; it does not recognize a printed blank line as a field. Standard AcroForm PDFs are the intended format. XFA-only, encrypted, or unusual forms may need a different source file.
 
-Generated fields normally remain editable. Do not assume the result has been flattened into a permanent printed page.
+Generated fields remain editable unless you turn on flattening.
 
 Bulk generation supports these templates as **Individual Files**. Combined-PDF modes are not supported for fillable PDF templates.
 
-_Template builders · 5 min read · Reviewed for 3.60.0_
+#### Flatten the generated PDF
+
+By default, a generated PDF keeps its form fields, so anyone who downloads it can change the Salesforce values. Turn on flattening when the values must stay as Salesforce wrote them.
+
+1. For a new template, click **Bring an Existing Template**, set **Type** to **PDF**, and check **Flatten PDF on generation**.
+2. For an existing template, open **Edit**, go to **Settings** → **Output & Page Setup**, turn on **Flatten PDF on generation**, and click **Save as New Version**.
+3. Generate a sample and open the PDF.
+
+You are done when the values appear on the page and you cannot click into or change any field.
+
+Flattening applies everywhere the template generates: download, preview, save to record, bulk, Flow, and signature documents. The option appears only when **Type** is **PDF**. It is off by default, so existing templates are unchanged until you turn it on.
+
+#### What a flattened PDF looks like
+
+Portwood draws each filled value as plain text where its field was, then removes the form. The field's own border and background color are not drawn for fields Portwood fills. Anything drawn into the PDF's page design stays, including boxes or lines placed behind a field.
+
+If you want only the values with no boxes, draw the boxes as part of each form field — its border and background settings — rather than as shapes on the page. The boxes then show while the PDF is fillable and disappear when it is flattened.
+
+#### Fix flattening problems
+
+- **Generation stops with a message about compressed object streams.** The PDF stores its pages in a compressed form that Portwood cannot rewrite. Upload the same PDF again as a new version, then generate again. Or turn off **Flatten PDF on generation** for this template.
+- **The option is missing.** Check that **Type** is **PDF**. If it still does not appear, you lack edit access to the **Flatten PDF on Generation** field. The **DocGen_Admin** permission set includes it; an admin using a custom permission set must grant access to that field.
+- **A value is missing.** Check that the field is mapped under **Fillable Fields** and that the record has a value. Unmapped fields keep their original appearance.
+
+_Template builders · 7 min read · Reviewed for 3.60.0_
 
 **Next:** [Choose the information in a document](#choose-data) · [File and format limits](#limits)
 
@@ -1089,6 +1114,15 @@ Use the [image tag reference](https://github.com/Portwood-Global-Solutions/Portw
 #### Replace a shared logo
 
 Update the asset's image, then generate a document using it. Because templates refer to the key, you do not need to replace the tag in every template. Check headers, footers, and emails too if they use that asset.
+
+#### Deactivate or reactivate an image
+
+Each asset has an **Active / Inactive** status, shown in the asset list. Deactivating an asset stops it from rendering: a template that still uses its tag shows a missing-image placeholder instead of the picture. This is a safe, reversible alternative to deleting.
+
+- To deactivate, open the asset's row menu and choose **Deactivate**.
+- To bring it back, open the row menu again and choose **Activate**. The asset returns to its most recent image version, so any template using the tag renders it again.
+
+Deleting an asset, by contrast, cannot be undone. Prefer Deactivate when you might want the image back.
 
 Email images need publicly accessible links. Document images and email images have different access requirements; see [Brand the signing experience](#brands-and-emails) before putting a private Salesforce file URL in an email.
 
@@ -2430,6 +2464,31 @@ Store **Signature Request Id**, **Signer URLs**, **Email Status**, **Success**, 
 
 Follow the request's status. Once everyone signs, the signing workflow creates the completed PDF and certificate. Do not add a separate Generate Document action expecting it to supply the signed version; that can create an extra unsigned file.
 
+#### Sign inside the Flow screen
+
+Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. Guests are refused; send guests the emailed signing link instead.
+
+1. Add **Portwood: Create Signature Request** as described above. Set **Send Branded Emails** to `False` when the person signs right away in the Flow.
+2. Add a **Screen** element. From the **Custom** components, drag **Portwood: Sign in Flow** onto it.
+3. Set **Signer URLs (collection)** to the action's **Signer URLs** output. The component signs for the first link, so use this for a single-signer request. For several signers, loop over **Signer URLs** and set **Signer URL** to the current item instead.
+4. After the screen, add a **Decision** on the component's outputs.
+
+| Output               | Meaning                                             |
+| -------------------- | --------------------------------------------------- |
+| **Signed**           | True once this signer's signature is recorded       |
+| **Declined**         | True if the signer declined; the Flow continues     |
+| **Request complete** | True when every signer on the request has signed    |
+| **Signer status**    | The signer's status, such as `Signed` or `Declined` |
+| **Error message**    | Why signing could not proceed, if it could not      |
+
+The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
+
+For an Experience Cloud site, assign the **Portwood Portal Signer** permission set to the site's members.
+
+The signature is saved the same way as on the signing page, with the same audit record, document hash, Certificate of Completion, and completion emails. You are done when your test Flow reaches the screen after signing and the signed PDF appears on the related record.
+
+If the screen says the document can't be signed here, the request is a prepared uploaded PDF or the document is too large; use the returned signing link for those requests.
+
 #### In-session signing
 
 A screen Flow can direct a signer to their returned signing URL. This keeps signing inside Portwood's audited signing surface. On a sequential request, signer URLs are returned in signer order; capture the first URL with a loop/assignment if the first person signs immediately.
@@ -2440,7 +2499,7 @@ Legacy custom-signature actions do not accept modern v3 signer tokens. Use the r
 
 Use [Collect signer answers](#signer-inputs) for `{?key}` fields, optional certificate entries, and single-signer record writeback.
 
-_Flow builders · 8 min read · Reviewed for 3.60.0_
+_Flow builders · 10 min read · Reviewed for 3.60.0_
 
 **Next:** [Send a template for signature](#sign-template) · [Set up external signing](#setup-signatures) · [Developer and advanced references](#developer-reference)
 
@@ -2670,6 +2729,8 @@ _Template administrators · 5 min read · Reviewed for 3.60.0_
 
 Move a working template from a sandbox to production, or share it with another Portwood org.
 
+To copy your whole Portwood setup between sandboxes or scratch orgs in one step, see [Migrate your Portwood setup between orgs](#migrate-configuration).
+
 #### Export from the first org
 
 1. Open **My Templates → Your Templates**.
@@ -2703,7 +2764,134 @@ Set the template's **API Name** to a unique value such as `Account_Brief`. Use i
 
 _Template administrators · 6 min read · Reviewed for 3.60.0_
 
-**Next:** [Save changes and return to an earlier version](#template-versions) · [Upgrade without losing your way](#upgrade-portwood)
+**Next:** [Save changes and return to an earlier version](#template-versions) · [Migrate your Portwood setup between orgs](#migrate-configuration) · [Upgrade without losing your way](#upgrade-portwood)
+
+---
+
+<a id="migrate-configuration"></a>
+
+### Migrate your Portwood setup between orgs
+
+Copy your Portwood setup — templates, brands, fonts, snippets, shared images, email templates, and signing settings — from one org to another with a single command. Use it to rebuild a sandbox or scratch org, or to keep two non-production orgs in step. To move one template by hand instead, see [Move a template between orgs](#move-templates).
+
+This is a draft tool. It writes only between sandboxes and scratch orgs; it refuses a production org.
+
+#### Before you start
+
+You need:
+
+- **Node.js 20 or later** and the **Salesforce CLI** (`sf`) on your computer. Windows PowerShell, Command Prompt, Git Bash, macOS, and Linux are supported.
+- A checkout of the Portwood repository. The command lives in `scripts/migration`.
+- The same Portwood version in both orgs.
+- Both orgs logged in to the CLI under an alias, for example `source-org` and `target-org`.
+- **Portwood Admin** and **Portwood Configuration Migration** assigned to your user in both orgs. Font imports also need **Manage Portwood Fonts**, which Portwood Admin includes.
+
+```sh
+sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org source-org
+sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org target-org
+```
+
+#### Install the command
+
+Run these once, from the repository root (the folder that contains `sfdx-project.json`):
+
+```sh
+npm ci --prefix scripts/migration
+sf plugins link scripts/migration
+```
+
+Check it worked with `sf portwood migrate --help`. If `sf plugins link` reports **plugin is invalid**, you are in the wrong folder — move to the repository root and try again.
+
+#### Preview the move with a dry run
+
+```sh
+sf portwood migrate --source-org source-org --target-org target-org --dry-run
+```
+
+A dry run reads both orgs and writes nothing. It prints a report with one line per item and a **status**:
+
+| Status                        | What it means                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `create`                      | The item is new and will be copied.                                          |
+| `conflict`                    | The destination already has an item with the same key but different content. |
+| `missing-key`                 | The item has no API name or key, so it cannot be matched. Give it one first. |
+| `ambiguous-key`               | More than one item shares the key. Rename one so each key is unique.         |
+| `manual-mapping`              | A setting refers to something specific to the org. Map it before applying.   |
+| `target-resource-unavailable` | The destination's Portwood version does not have this kind of item.          |
+
+Each item also lists warnings, such as record IDs that need mapping.
+
+#### Map values that belong to one org
+
+Record IDs, sender addresses, and site URLs differ between orgs. Put the destination's values in a JSON file, keyed by the item's key from the dry run (keep its case):
+
+```json
+{
+    "templates": {
+        "Account_Quote": {
+            "testRecordId": null,
+            "specificRecordIds": "001000000000001AAA",
+            "requiredPermissionSets": "Portwood_Quote_User",
+            "recordFilter": "Type = 'Customer'"
+        }
+    },
+    "brands": {
+        "Retail": { "owaId": "0D2000000000001CAA", "logoUrl": null }
+    },
+    "fonts": {
+        "quote-sans-regular": { "hostingRightsConfirmed": true }
+    },
+    "settings": {
+        "replace": true,
+        "signingSiteUrl": "https://example.my.salesforce-sites.com",
+        "owaId": "0D2000000000001CAA",
+        "logoUrl": null
+    }
+}
+```
+
+The values above are examples. Use IDs and URLs from the destination org. Keep mapping files and reports private; they contain Salesforce IDs.
+
+#### Apply the move
+
+```sh
+sf portwood migrate --source-org source-org --target-org target-org --mappings mappings.json
+```
+
+1. The command checks every source item before writing anything.
+2. It copies shared images, fonts, snippets, brands, email templates, templates, and signing settings, in that order, and points each template at the matching destination brand.
+3. Each item is written in its own transaction. If one fails, the command stops and reports what it already copied.
+4. Fix the reported problem and run the same command again. Items that already match are reused, not duplicated.
+
+Useful options:
+
+- `--only templates` copies one kind of item. Repeat it for several kinds (`templates`, `snippets`, `assets`, `brands`, `emailTemplates`, `settings`, `fonts`). Copy or map what a template depends on first.
+- `--conflict skip` leaves a differing destination item in place instead of stopping. The default, `stop`, halts at the first conflict.
+
+#### Approve migrated fonts
+
+New fonts arrive in the destination as **Staged**, with their original file and license details. Open **Portwood Assets** in the destination, review and approve each font, then run the command again. Templates that use a font wait until it is approved.
+
+#### What is not copied
+
+- Version history, generated documents, past signature requests, and audit evidence stay in the source org.
+- Salesforce site setup, sender verification, permission-set assignments, custom provider code, and per-user settings.
+- A new AI provider or prompt. Set `settings.leaveAiUnchanged` to keep the destination's AI setup.
+
+Files over 10,000,000 bytes (fonts over 9,000,000 bytes) are not copied. HTML and Canvas templates travel in a bundle limited to about 1.5 MB.
+
+#### If something goes wrong
+
+- **Salesforce CLI request failed** — run `sf org list` and confirm both aliases are connected. The message now includes the underlying reason.
+- **The command takes several minutes** — the dry run starts the Salesforce CLI once per object it reads, so allow a few minutes per org, especially on Windows.
+- **It refuses to write** — one of the orgs is production. Use a sandbox or scratch org.
+- **A font job is still running or a temporary file was left behind** — the report lists its job or File ID. Keep the report and check that item before running again.
+
+**You are done when:** The dry run shows no unexpected conflicts, the apply finishes without errors, and a migrated template generates correctly from a record in the destination org.
+
+_Salesforce administrators · 9 min read · Reviewed for 3.63.0_
+
+**Next:** [Move a template between orgs](#move-templates) · [Use custom PDF fonts](#custom-fonts) · [Brand the signing experience](#brands-and-emails) · [Give people the right access](#manage-access)
 
 ---
 
@@ -4991,6 +5179,17 @@ global Boolean isGiantQuery
 global String errorMessage
 global Boolean success
 global static List<Response> generateDocument(List<Request> requests)
+```
+
+#### DocGenMigrationRest
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenMigrationRest.cls)
+
+```apex
+global with sharing class DocGenMigrationRest
+global static void readConfiguration()
+global static void createConfiguration()
+global static void discardStage()
 ```
 
 #### DocGenPdfMergeFlowAction

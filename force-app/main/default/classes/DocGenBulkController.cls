@@ -91,8 +91,61 @@ public with sharing class DocGenBulkController {
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
         }
-        // CxSAST: SOQL injection mitigated by Schema allowlist validation on object + WHERE field names verified against Schema.describeSObjects() field map + keyword blocklist + USER_MODE
-        return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object allowlist-validated against Schema.getGlobalDescribe(); condition fields allowlist-validated against Schema field map; USER_MODE enforced
+        try {
+            // CxSAST: SOQL injection mitigated by Schema allowlist validation on object + WHERE field names verified against Schema.describeSObjects() field map + keyword blocklist + USER_MODE
+            return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object allowlist-validated against Schema.getGlobalDescribe(); condition fields allowlist-validated against Schema field map; USER_MODE enforced
+        } catch (QueryException e) {
+            // #535: a malformed value (e.g. RecordTypeId = '012XXXXXXXXXXXX') passes the field
+            // allowlist but fails in SOQL. Surface the platform's reason instead of a generic error.
+            throw DocGenService.ahe(e, 'The filter condition could not be run');
+        }
+    }
+
+    /**
+     * Returns true when a WHERE-clause token names a field on the object described by
+     * fieldMap, either directly (Name, RecordTypeId) or as a relationship path whose first
+     * hop is a lookup on that object:
+     *   - custom relationships:   My_Lookup__r.Name  → My_Lookup__c
+     *   - standard relationships: RecordType.DeveloperName → RecordTypeId,
+     *                             Owner.Name → OwnerId, Account.Name → AccountId (#535)
+     * Shared by the bulk filter validator and DocGenController's WHERE validator so the
+     * two allowlists stay identical. Mirrors the standard-relationship rule the ORDER BY
+     * validators already apply.
+     */
+    public static Boolean isAllowedFieldPath(String token, Map<String, Schema.SObjectField> fieldMap) {
+        if (String.isBlank(token) || fieldMap == null) {
+            return false;
+        }
+        Boolean isPath = token.contains('.');
+        String baseField = (isPath ? token.substringBefore('.') : token).toLowerCase();
+        if (fieldMap.containsKey(baseField)) {
+            return true;
+        }
+        // Custom relationship traversal: My_Lookup__r → My_Lookup__c
+        if (baseField.endsWith('__r') && fieldMap.containsKey(baseField.removeEnd('__r') + '__c')) {
+            return true;
+        }
+        // Standard relationship traversal: RecordType → RecordTypeId. Only for dotted paths,
+        // and only when the matching ...Id field really is a lookup.
+        if (isPath) {
+            Schema.SObjectField idField = fieldMap.get(baseField + 'id');
+            if (idField != null && idField.getDescribe().getType() == Schema.DisplayType.REFERENCE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Error text for a filter token that failed isAllowedFieldPath. Adds a hint when the
+     * token targets Record Types on an object that has none (no RecordTypeId field).
+     */
+    public static String invalidFieldMessage(String prefix, String token, Map<String, Schema.SObjectField> fieldMap) {
+        String msg = prefix + token;
+        if (token != null && token.toLowerCase().startsWith('recordtype') && !fieldMap.containsKey('recordtypeid')) {
+            msg += '. This object has no Record Types, so it cannot be filtered by Record Type.';
+        }
+        return msg;
     }
 
     /**
@@ -104,8 +157,9 @@ public with sharing class DocGenBulkController {
     private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
         // Strip quoted string literals so they don't confuse the tokenizer
         String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
-        // Tokenize on whitespace and parentheses
-        List<String> tokens = stripped.split('[\\s(),]+');
+        // Tokenize on whitespace, parentheses, commas and comparison operators — so
+        // RecordTypeId='012…' (no spaces round the operator) yields the field token on its own
+        List<String> tokens = stripped.split('[\\s(),=<>!]+');
         // SOQL operators and keywords to skip
         Set<String> skipTokens = new Set<String>{
             '=',
@@ -171,15 +225,8 @@ public with sharing class DocGenBulkController {
                 continue;
             }
             // This looks like a field name — allowlist validate against Schema
-            String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
-            if (!fieldMap.containsKey(baseField)) {
-                // Try __r -> __c for custom relationship traversals
-                String asLookup = baseField.endsWith('__r')
-                    ? baseField.substring(0, baseField.length() - 3) + '__c'
-                    : baseField;
-                if (!fieldMap.containsKey(asLookup)) {
-                    throw DocGenService.ahe('Invalid field in filter condition: ' + t);
-                }
+            if (!isAllowedFieldPath(t, fieldMap)) {
+                throw DocGenService.ahe(invalidFieldMessage('Invalid field in filter condition: ', t, fieldMap));
             }
         }
     }

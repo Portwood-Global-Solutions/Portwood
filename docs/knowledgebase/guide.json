@@ -298,9 +298,13 @@
             "title": "Fill an existing PDF form",
             "group": "design",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Map actual PDF form fields to Salesforce values.",
-            "sources": ["force-app/main/default/lwc/docGenAdmin", "force-app/main/default/classes/DocGenService.cls"],
+            "minutes": 7,
+            "summary": "Map actual PDF form fields to Salesforce values, and optionally flatten the result.",
+            "sources": [
+                "force-app/main/default/lwc/docGenAdmin",
+                "force-app/main/default/classes/DocGenService.cls",
+                "force-app/main/default/classes/DocGenAcroFormService.cls"
+            ],
             "related": ["choose-data", "limits"],
             "aliases": [],
             "review": {
@@ -886,11 +890,14 @@
             "title": "Create signing requests with Flow",
             "group": "automate",
             "audience": "Flow builders",
-            "minutes": 8,
-            "summary": "Build signers, create the request, and use its signing links.",
+            "minutes": 10,
+            "summary": "Build signers, create the request, and sign in the Flow or with its signing links.",
             "sources": [
                 "force-app/main/default/classes/DocGenSignatureFlowAction.cls",
-                "force-app/main/default/classes/DocGenSigner.cls"
+                "force-app/main/default/classes/DocGenSigner.cls",
+                "force-app/main/default/lwc/docGenFlowSigner",
+                "force-app/main/default/classes/DocGenFlowSigningController.cls",
+                "force-app/main/default/permissionsets/DocGen_Portal_Signer.permissionset-meta.xml"
             ],
             "related": ["sign-template", "setup-signatures", "developer-reference"],
             "aliases": [
@@ -990,7 +997,7 @@
                 "force-app/main/default/lwc/docGenAdmin",
                 "force-app/main/default/classes/DocGenController.cls"
             ],
-            "related": ["template-versions", "upgrade-portwood"],
+            "related": ["template-versions", "migrate-configuration", "upgrade-portwood"],
             "aliases": [
                 "511-api-name-a-stable-key-for-automation-v328",
                 "511-api-name--a-stable-key-for-automation-v328",
@@ -1000,6 +1007,25 @@
             "review": {
                 "version": "3.60.0",
                 "date": "2026-10-24",
+                "method": "source"
+            }
+        },
+        {
+            "slug": "migrate-configuration",
+            "title": "Migrate your Portwood setup between orgs",
+            "group": "manage",
+            "audience": "Salesforce administrators",
+            "minutes": 9,
+            "summary": "Copy templates, brands, fonts, snippets, and signing settings to another org with one command.",
+            "sources": [
+                "scripts/migration",
+                "force-app/main/default/classes/DocGenMigrationRest.cls",
+                "force-app/main/default/permissionsets/DocGen_Migration.permissionset-meta.xml"
+            ],
+            "related": ["move-templates", "custom-fonts", "brands-and-emails", "manage-access"],
+            "review": {
+                "version": "3.63.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },

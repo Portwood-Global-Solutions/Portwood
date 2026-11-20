@@ -22,6 +22,13 @@ when versions change, and disclose it in AppExchange security materials.
   ships in the package (verified by `sf code-analyzer` retire-js: 0 High).
 - The v4 build is ESM-only; the files are stored with a `.js` extension so Salesforce
   serves them with a JavaScript MIME type, and the viewer dynamic-imports the module.
+- **PDF.js also ships as a derived classic-script copy** (`pdfjs4classic`) for Lightning
+  web components, which cannot load the ES-module build: an LWC cannot `import()` a
+  runtime-computed URL, and `loadScript` cannot load an ES module. It is generated from
+  `pdfjs4` by `scripts/build-pdfjs-classic.mjs` and differs from upstream only
+  mechanically: each file is wrapped in a function scope and its trailing `export{...}`
+  becomes a global assignment. The Apache-2.0 header is preserved. Re-run the script
+  (and `--check` it) whenever `pdfjs4` is upgraded.
 - These libraries make **no network requests** and have **no external runtime
   dependency** — they operate only on PDF bytes already in the browser.
 
@@ -31,3 +38,9 @@ when versions change, and disclose it in AppExchange security materials.
 - **MIT License** (pdf-lib): https://opensource.org/licenses/MIT
 
 Full upstream license text is retained in each project's repository linked above.
+
+### Korean signing PDF assets
+
+The `DocGenKoreanSigningFont` static resource contains Nanum Gothic Regular
+under the SIL Open Font License and the `@pdf-lib/fontkit` 1.1.1 UMD bundle
+under the MIT license. The resource includes both license texts.

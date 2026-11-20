@@ -1,4 +1,4 @@
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { createRecord, updateRecord } from 'lightning/uiRecordApi';
 // #236 — Type__c is a RESTRICTED picklist and the wizard defaults to 'HTML', a value
 // added in v1.61.0. Orgs installed before that and later upgraded may not have it, in
@@ -142,6 +142,8 @@ import PREFILL_SIGNER_EMAIL_FIELD from '@salesforce/schema/DocGen_Template__c.Pr
 // #367
 import HIDE_SIGNER_DECLINE_FIELD from '@salesforce/schema/DocGen_Template__c.Hide_Signer_Decline__c';
 import SIGNATURE_TYPE_ONLY_FIELD from '@salesforce/schema/DocGen_Template__c.Signature_Type_Only__c';
+// #534 — flatten fillable PDF output so merged values can't be edited after download
+import FLATTEN_PDF_FIELD from '@salesforce/schema/DocGen_Template__c.Flatten_PDF__c';
 import getSettingsFresh from '@salesforce/apex/DocGenSetupController.getSettingsFresh';
 import testRecordFilter from '@salesforce/apex/DocGenController.testRecordFilter';
 // 1.61 — HTML zip sidesteps File Upload Security via client-side unzip + per-part upload
@@ -279,6 +281,7 @@ const F = {
     PrefillSignerEmail: PREFILL_SIGNER_EMAIL_FIELD.fieldApiName,
     HideSignerDecline: HIDE_SIGNER_DECLINE_FIELD.fieldApiName,
     SignatureTypeOnly: SIGNATURE_TYPE_ONLY_FIELD.fieldApiName,
+    FlattenPdf: FLATTEN_PDF_FIELD.fieldApiName,
     // PHD-9 — stable developer key for Flow lookups; namespace resolved from an
     // already-imported field (same pattern as FormFieldsConfig).
     ApiName:
@@ -432,6 +435,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track versions = [];
 
     // Form/Wizard State
+    @api initialTab = 'new_template';
     @track activeMainTab = 'new_template';
     @track currentWizardStep = '1';
 
@@ -448,6 +452,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     @track newTemplatePageSize = null;
     @track newTemplatePageMargins = 'Default';
     @track newTemplateCustomMargins = '';
+    // #534 — only offered (and only saved) when Type = PDF (fillable AcroForm)
+    @track newTemplateFlattenPdf = false;
     newTemplateObject = 'Account';
     newTemplateDesc = '';
     newTemplateQuery = '';
@@ -517,6 +523,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // #367 — "Hide Decline Button" for this template; unchecked by default (Decline shown).
     @track editTemplateHideDecline = false;
     @track editTemplateTypeOnly = false;
+    // #534 — flatten fillable PDF output; offered only while Type = PDF
+    @track editTemplateFlattenPdf = false;
     // #367 — org-wide "Hide Decline Button", fetched once on mount so this template
     // toggle can hide itself when the org has already hidden Decline everywhere.
     @track orgHideDecline = false;
@@ -1357,6 +1365,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     @track isInstallingSamples = false;
     _samplesChecked = false;
+    templateListLoading = true;
+    templateListFailed = false;
 
     // LIST light, LOAD heavy on demand. getTemplateList returns only what the
     // grid, the search and the pickers read — no long-text bodies, no attached
@@ -1366,6 +1376,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     wiredTemplates(result) {
         this.wiredTemplatesResult = result;
         if (result.data) {
+            this.templateListLoading = false;
+            this.templateListFailed = false;
             this.templates = result.data.map((t) => {
                 // F.IsActive may be undefined on rows created before the field
                 // shipped — treat null/undefined as Active to match the server
@@ -1391,6 +1403,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             });
             this._samplesChecked = true;
         } else if (result.error) {
+            this.templateListLoading = false;
+            this.templateListFailed = true;
             this.showToast('Error', 'Error loading templates', 'error');
         }
     }
@@ -1531,19 +1545,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     // --- Wizard Logic ---
 
     connectedCallback() {
-        // Both the wizard's AI step and the designer toolbar key off this, so
-        // resolve it once on mount rather than per-surface. Never awaited and
-        // never throws — an org without Einstein simply keeps the copy-paste
-        // path as the only visible option.
-        this._refreshAgentforceAvailability();
-        // #369 — load the Sending Brand options for the template editor + email tab.
+        this.activeMainTab = this.initialTab;
+    }
+
+    handleTemplateSettingsActive() {
         this.loadBrandOptions();
-        // #367 — the per-template Decline toggle is moot (and hidden) once the org
-        // has hidden Decline everywhere. Never awaited and never throws — worst case
-        // the template toggle stays visible until the next load, it never blocks the
-        // editor.
         this._refreshOrgHideDecline();
-        this._loadDesignerFonts();
     }
 
     // #367
@@ -2350,6 +2357,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     handleWizardTabActive() {
+        this._refreshAgentforceAvailability();
         this.activeMainTab = 'new_template';
         this.resetForm();
         // Existing shared assets feed the logo picker and the AI prompt.
@@ -2392,6 +2400,34 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         if (event.detail.value === 'HTML' || event.detail.value === 'PDF') {
             this.newTemplateOutputFormat = 'PDF';
         }
+        // #534 — flatten only applies to fillable PDF templates; drop it when the type moves away.
+        if (event.detail.value !== 'PDF') {
+            this.newTemplateFlattenPdf = false;
+        }
+    }
+
+    /** #534 — "Flatten PDF on generation" is offered only for Type = PDF on the file path. */
+    get showNewFlattenPdfOption() {
+        return this.isAuthoringFile && this.newTemplateType === 'PDF' && this.canEditFlattenPdf;
+    }
+
+    /**
+     * #534 — Flatten_PDF__c arrived in a package upgrade. Users whose access comes from a
+     * custom permission set may not have it yet; hide the option rather than let
+     * createRecord fail on a field they cannot write.
+     */
+    get canEditFlattenPdf() {
+        const info = this.templateObjectInfo && this.templateObjectInfo.data;
+        const field = info && info.fields ? info.fields[F.FlattenPdf] : null;
+        return Boolean(field && field.updateable);
+    }
+
+    get showEditFlattenPdfOption() {
+        return this.isEditTypePdf && this.canEditFlattenPdf;
+    }
+
+    handleNewFlattenPdfChange(event) {
+        this.newTemplateFlattenPdf = event.target.checked;
     }
 
     // --- HTML-first authoring path ---
@@ -4579,6 +4615,10 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.editTemplateHideDecline = event.target.checked;
     }
 
+    handleEditFlattenPdfChange(event) {
+        this.editTemplateFlattenPdf = event.target.checked;
+    }
+
     get isBuilderDisabled() {
         return this.isManualQuery;
     }
@@ -4921,6 +4961,12 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 fields[CUSTOM_MARGINS_FIELD.fieldApiName] = this.newTemplateCustomMargins;
             }
         }
+        // #534 — written only for fillable PDF templates; the field defaults to false otherwise.
+        const flattenPdf =
+            this.newTemplateType === 'PDF' && this.newTemplateFlattenPdf === true && this.canEditFlattenPdf;
+        if (flattenPdf) {
+            fields[FLATTEN_PDF_FIELD.fieldApiName] = true;
+        }
         fields[BASE_OBJECT_FIELD.fieldApiName] = this.newTemplateObject;
         fields[QUERY_CONFIG_FIELD.fieldApiName] = this._sanitizeQueryConfig(this.newTemplateQuery);
         fields[DESC_FIELD.fieldApiName] = this.newTemplateDesc;
@@ -4977,6 +5023,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 [F.PageSize]: newTemplatePageSize,
                 [F.PageMargins]: this.newTemplatePageMargins,
                 [F.CustomMargins]: this.newTemplateCustomMargins,
+                [F.FlattenPdf]: flattenPdf,
                 [F.BaseObject]: this.newTemplateObject,
                 [F.Desc]: this.newTemplateDesc,
                 // Must carry the API name into the edit modal — resetForm() clears the
@@ -5400,6 +5447,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplatePrefillSignerEmail = row[F.PrefillSignerEmail] || 'Inherit';
             this.editTemplateHideDecline = row[F.HideSignerDecline] === true;
             this.editTemplateTypeOnly = row[F.SignatureTypeOnly] === true;
+            this.editTemplateFlattenPdf = row[F.FlattenPdf] === true;
             this.editTemplateApiName = row[F.ApiName] || '';
             this.editTemplateDefaultEmailMessage = row[F.DefaultEmailMessage] || '';
             this.editTemplateSpecificRecordIds = row[F.SpecificRecordIds];
@@ -5529,6 +5577,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplatePrefillSignerEmail,
             this.editTemplateHideDecline,
             this.editTemplateTypeOnly,
+            this.editTemplateFlattenPdf,
             this.editTemplateApiName,
             this.editTemplateDefaultEmailMessage
         ]);
@@ -6124,6 +6173,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
             Hide_Signer_Decline__c: this.editTemplateHideDecline,
             Signature_Type_Only__c: this.editTemplateTypeOnly,
+            // #534 — only a PDF (fillable) template can be flattened
+            Flatten_PDF__c: this.editTemplateType === 'PDF' && this.editTemplateFlattenPdf === true,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
@@ -6222,6 +6273,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Prefill_Signer_Email__c: this.editTemplatePrefillSignerEmail,
             Hide_Signer_Decline__c: this.editTemplateHideDecline,
             Signature_Type_Only__c: this.editTemplateTypeOnly,
+            // #534 — only a PDF (fillable) template can be flattened
+            Flatten_PDF__c: this.editTemplateType === 'PDF' && this.editTemplateFlattenPdf === true,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage
         };
@@ -11890,6 +11943,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     _enterVisualMode(html) {
+        this._loadDesignerFonts();
         // Regions: the source the author edits is ONE document, header and footer
         // included. The canvas only ever renders the body, and the bands render the
         // chrome, so peel them apart on the way in. A legacy template carries no
@@ -16206,6 +16260,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplatePageSize = null;
         this.newTemplatePageMargins = 'Default';
         this.newTemplateCustomMargins = '';
+        this.newTemplateFlattenPdf = false;
         this.newTemplateObject = 'Account';
         this.createdTemplateId = null;
         this.isCreating = true;

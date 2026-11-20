@@ -583,6 +583,51 @@ private class DocGenSignatureTests {
         System.assertNotEquals(null, templates);
     }
 
+    @IsTest
+    static void testSignatureTemplatePickerFiltersInactiveAndWrongObject() {
+        Account account = [SELECT Id FROM Account LIMIT 1];
+        DocGen_Template__c activeAccount = new DocGen_Template__c(
+            Name = 'Active Account for Sender',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Is_Active__c = true
+        );
+        DocGen_Template__c inactiveAccount = new DocGen_Template__c(
+            Name = 'Inactive Account for Sender',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Base_Object_API__c = 'Account',
+            Is_Active__c = false
+        );
+        DocGen_Template__c activeContact = new DocGen_Template__c(
+            Name = 'Active Contact for Sender',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF',
+            Base_Object_API__c = 'Contact',
+            Is_Active__c = true
+        );
+        insert new List<DocGen_Template__c>{ activeAccount, inactiveAccount, activeContact };
+
+        Test.startTest();
+        Set<Id> recordTemplateIds = new Map<Id, DocGen_Template__c>(
+                DocGenSignatureSenderController.getDocGenTemplatesForRecord(account.Id)
+            )
+            .keySet();
+        Set<Id> globalTemplateIds = new Map<Id, DocGen_Template__c>(
+                DocGenSignatureSenderController.getDocGenTemplates()
+            )
+            .keySet();
+        Test.stopTest();
+
+        Assert.isTrue(recordTemplateIds.contains(activeAccount.Id));
+        Assert.isFalse(recordTemplateIds.contains(inactiveAccount.Id));
+        Assert.isFalse(recordTemplateIds.contains(activeContact.Id));
+        Assert.isTrue(globalTemplateIds.contains(activeAccount.Id));
+        Assert.isTrue(globalTemplateIds.contains(activeContact.Id));
+        Assert.isFalse(globalTemplateIds.contains(inactiveAccount.Id));
+    }
+
     // =========================================================================
     // Setup Controller — Signature Settings
     // =========================================================================

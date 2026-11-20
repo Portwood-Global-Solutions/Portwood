@@ -379,6 +379,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private static Integer HEAP_CHECK_EVERY_N_ITERS = 50;
     @TestVisible
     private static Decimal HEAP_PRESSURE_RATIO = 0.60;
+    // Compacted worksheets leave headroom for the current sheet, archive and file save.
+    private static final Integer EXPANDED_ASYNC_HEAP_BYTES = 25000000;
+    private static final Decimal ASYNC_EXCEL_MEMORY_RATIO = 0.80;
+    private static Boolean compactingExcelSheets = false;
     // @TestVisible hook — tests set this to force checkHeapPressure into the pressure branch
     @TestVisible
     private static Boolean forceHeapPressureForTest = false;
@@ -654,6 +658,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     private class MergeResult { // NOPMD TooManyFields — data transfer object requires all fields
         String documentXml; // Processed word/document.xml
         Map<String, String> processedXmlEntries; // All processed XML entries (name → xml)
+        Map<String, Blob> compactedExcelSheets;
         Map<String, Blob> passthroughEntries; // Non-XML ZIP entries passed through as-is
         String contentTypesXml; // [Content_Types].xml
         String relsXml; // word/_rels/document.xml.rels
@@ -695,6 +700,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Id recordId,
         Map<String, String> resolvedImages,
         String outputFormatOverride
+    ) {
+        return mergeTemplate(templateId, recordId, resolvedImages, outputFormatOverride, false);
+    }
+
+    private static MergeResult mergeTemplate(
+        Id templateId,
+        Id recordId,
+        Map<String, String> resolvedImages,
+        String outputFormatOverride,
+        Boolean compactAsyncExcel
     ) {
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
@@ -912,16 +927,36 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         // Excel second pass: inline shared strings into worksheets, then merge tags
         if (templateType == 'Excel' && !pendingExcelSheets.isEmpty()) {
             currentTemplateType = 'Excel';
+            if (compactAsyncExcel) {
+                mr.compactedExcelSheets = new Map<String, Blob>();
+            }
             List<String> sharedStrings = parseSharedStrings(excelSharedStringsXml);
             for (String sheetName : pendingExcelSheets.keySet()) {
                 String xml = pendingExcelSheets.get(sheetName);
                 xml = inlineSharedStrings(xml, sharedStrings);
                 currentEntryName = sheetName;
-                xml = processXml(xml, recordDataMap);
+                Boolean previousCompaction = compactingExcelSheets;
+                compactingExcelSheets = compactAsyncExcel;
+                try {
+                    xml = processXml(xml, recordDataMap);
+                } finally {
+                    compactingExcelSheets = previousCompaction;
+                }
                 // Loop expansion clones <row> elements with duplicate indices/refs;
                 // reassign them so Excel doesn't flag the sheet as corrupt.
                 xml = renumberExcelRows(xml);
-                mr.processedXmlEntries.put(sheetName, xml);
+                if (compactAsyncExcel) {
+                    checkAsyncExcelMemory();
+                    // Keep only the compressed worksheet between merge passes. The
+                    // final writer still materializes each sheet, after the merge data
+                    // and expanded worksheet strings have gone out of scope.
+                    Compression.ZipWriter sheetArchive = new Compression.ZipWriter();
+                    sheetArchive.addEntry(sheetName, Blob.valueOf(xml));
+                    mr.compactedExcelSheets.put(sheetName, sheetArchive.getArchive());
+                    xml = null;
+                } else {
+                    mr.processedXmlEntries.put(sheetName, xml);
+                }
             }
             // Cells are now inline, but workbook.xml.rels and [Content_Types].xml
             // still reference the sharedStrings part — removing it outright leaves a
@@ -1201,9 +1236,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Add processed XML entries in deterministic path order.
         List<String> processedNames = new List<String>(mr.processedXmlEntries.keySet());
+        if (mr.compactedExcelSheets != null) {
+            processedNames.addAll(mr.compactedExcelSheets.keySet());
+        }
         processedNames.sort();
         for (String name : processedNames) {
-            writer.addEntry(name, Blob.valueOf(mr.processedXmlEntries.get(name)));
+            if (mr.compactedExcelSheets != null && mr.compactedExcelSheets.containsKey(name)) {
+                checkAsyncExcelMemory();
+                Compression.ZipReader sheetArchive = new Compression.ZipReader(mr.compactedExcelSheets.remove(name));
+                writer.addEntry(name, sheetArchive.extract(name));
+            } else {
+                writer.addEntry(name, Blob.valueOf(mr.processedXmlEntries.get(name)));
+            }
         }
 
         // Add passthrough entries in deterministic path order, skipping entries
@@ -1230,6 +1274,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             writer.addEntry(mr.relsPath, Blob.valueOf(mr.relsXml));
         }
 
+        if (mr.compactedExcelSheets != null) {
+            checkAsyncExcelMemory();
+        }
         return writer.getArchive();
     }
 
@@ -3082,7 +3129,11 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Id attachmentRecordId
     ) {
         validateOutputFormatOverride(templateId, outputFormatOverride);
-        MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride);
+        // Only saved native workbooks need the final server-side archive. Keep the
+        // XML-parts API and legacy-heap orgs on the same merge path as before.
+        Boolean compactAsyncExcel =
+            (System.isBatch() || System.isQueueable()) && Limits.getLimitHeapSize() >= EXPANDED_ASYNC_HEAP_BYTES;
+        MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride, compactAsyncExcel);
         if (String.isNotBlank(documentTitle)) {
             mr.docTitle = documentTitle;
         }
@@ -3098,6 +3149,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         // Native DOCX/PPTX path
         Blob resultBlob = assembleZip(mr);
+        if (mr.compactedExcelSheets != null) {
+            checkAsyncExcelMemory();
+        }
         return saveFile(
             resultBlob,
             mr.docTitle,
@@ -6335,13 +6389,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         } else if (baseFormat == 'number') {
             return formatPlainNumber(num, segments);
         } else {
-            // Custom pattern: #,##0 or #,##0.00 — unchanged behavior, always US separators
-            Integer decimals = 0;
-            String lower = fmt.toLowerCase().trim();
-            if (lower.contains('.')) {
-                decimals = lower.substringAfter('.').length();
+            // Custom patterns always use US separators.
+            String fraction = fmt.contains('.') ? fmt.trim().substringAfter('.') : '';
+            Decimal rounded = num.setScale(fraction.length(), RoundingMode.HALF_UP);
+            if (Pattern.matches('0*#+', fraction)) {
+                // Round first, then trim optional zeros without losing required places.
+                Integer requiredPlaces = fraction.indexOf('#');
+                rounded = rounded.stripTrailingZeros();
+                if (rounded.scale() < requiredPlaces) {
+                    rounded = rounded.setScale(requiredPlaces);
+                }
             }
-            return formatNumberLocale(num.setScale(decimals, RoundingMode.HALF_UP), ',', '.');
+            return formatNumberLocale(rounded, ',', '.');
         }
     }
 
@@ -6549,6 +6608,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      */
     @TestVisible
     private static void checkHeapPressure(String relationshipName) {
+        if (compactingExcelSheets && currentTemplateType == 'Excel' && !forceHeapPressureForTest) {
+            checkAsyncExcelMemory();
+            return;
+        }
         Integer heap = Limits.getHeapSize();
         Integer heapLimit = Limits.getLimitHeapSize();
         Boolean overThreshold =
@@ -6565,6 +6628,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             );
             e.relationshipName = relationshipName;
             throw e;
+        }
+    }
+
+    private static void checkAsyncExcelMemory() {
+        Integer heapLimit = Limits.getLimitHeapSize();
+        if (Limits.getHeapSize() >= (Integer) (heapLimit * ASYNC_EXCEL_MEMORY_RATIO)) {
+            throw new DocGenException(
+                'This workbook exceeds the asynchronous Excel memory budget. Reduce the rows or columns in the workbook and retry.'
+            );
         }
     }
 
@@ -8032,11 +8104,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * The DOCX path (convertRichTextToDocxXml) emits DrawingML which Flying
      * Saucer can't parse, so HTML templates referencing a rich-text field
      * previously lost both text formatting and images entirely. Here the
-     * rich-text HTML is already valid HTML — pass it through verbatim,
-     * rewriting only `<img src="...rtaImage?...&refid=<id>">` URLs to the
-     * relative `/sfc/servlet.shepherd/version/download/<cvId>` form that
-     * Blob.toPdf can fetch. Data-URI images are dropped (Blob.toPdf rejects
-     * them).
+     * rich-text HTML is already valid HTML. Normalize same-org File URLs and
+     * resolvable rtaImage references to relative File paths that Blob.toPdf
+     * can fetch. Data-URI images are dropped because Blob.toPdf rejects them.
      */
     @TestVisible
     private static String convertRichTextToHtml(String html) {
@@ -8071,8 +8141,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     /**
      * Returns the <img> tag with src rewritten for HTML-template output, or
      * empty string when the image can't be rendered (data URI, unresolvable).
-     * Already-relative /sfc/ URLs and arbitrary http(s) URLs pass through
-     * unchanged.
+     * Same-org Salesforce File URLs are normalized for the PDF renderer.
+     * Other rich-text image URLs keep their existing handling.
      */
     private static String rewriteRichTextImgForHtml(String imgTag) {
         Integer srcIdx = imgTag.indexOfIgnoreCase('src=');
@@ -8103,6 +8173,19 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (src.toLowerCase().startsWith('/sfc/')) {
             return imgTag;
         }
+        Matcher fileUrl = Pattern.compile('(?i)^(https?)://([^/?#]+)(/sfc/servlet\\.shepherd/.*)$').matcher(src);
+        if (fileUrl.matches()) {
+            String host = fileUrl.group(2).toLowerCase();
+            String relativeSrc = fileUrl.group(3);
+            if (
+                !'https'.equalsIgnoreCase(fileUrl.group(1)) ||
+                !isOrgFileHost(host) ||
+                !isLocalFileImagePath(relativeSrc)
+            ) {
+                return '';
+            }
+            return imgTag.substring(0, valStart) + relativeSrc.escapeHtml4() + imgTag.substring(valEnd);
+        }
         if (src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
             Integer refStart = src.toLowerCase().indexOf('refid=') + 6;
             Integer refEnd = src.indexOf('&', refStart);
@@ -8122,6 +8205,35 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             // hosts from authenticated/Automated-Process context.
         }
         return imgTag;
+    }
+
+    private static Boolean isOrgFileHost(String host) {
+        return host == URL.getOrgDomainUrl().getHost().toLowerCase() ||
+            host.equalsIgnoreCase(DomainCreator.getContentHostname()) ||
+            host.equalsIgnoreCase(DomainCreator.getLightningHostname());
+    }
+
+    private static Boolean isLocalFileImagePath(String relativeSrc) {
+        Integer queryStart = relativeSrc.indexOf('?');
+        String path = queryStart < 0 ? relativeSrc : relativeSrc.substring(0, queryStart);
+        if (!Pattern.matches('(?i)/sfc/servlet\\.shepherd/[a-z0-9_./-]+', path) || path.contains('..')) {
+            return false;
+        }
+        String decoded = relativeSrc;
+        try {
+            for (Integer i = 0; i < 3; i++) {
+                String next = EncodingUtil.urlDecode(decoded, 'UTF-8');
+                if (next == decoded) {
+                    break;
+                }
+                decoded = next;
+            }
+        } catch (Exception invalidUrl) {
+            return false;
+        }
+        return !Pattern.compile('(?i)[?&](returl|starturl|redirect_uri|redirect|destination|target|url)=')
+            .matcher(decoded)
+            .find();
     }
 
     /**

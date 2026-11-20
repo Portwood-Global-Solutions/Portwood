@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StaticResource xmlns="http://soap.sforce.com/2006/04/metadata">
+    <cacheControl>Public</cacheControl>
+    <contentType>application/zip</contentType>
+    <description>PDF.js 4.7.76 as classic scripts for Lightning web components (generated from pdfjs4 by scripts/build-pdfjs-classic.mjs: function-scoped, trailing export made a global). No callout. See THIRD-PARTY-NOTICES.md.</description>
+</StaticResource>
