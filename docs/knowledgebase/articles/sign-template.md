@@ -16,6 +16,8 @@ Date signed
 
 The role **Customer** must match the signer's role in the request. Keep each signature on its own line or in its own table cell with room around it.
 
+If the agreement uses a shared clause, place the snippet tag in the template, then add each signing field directly below or beside it in the template body. Check the field count when you select the template in Signature Sender. [Copy a clause with initials and a signature](#shared-content)
+
 Use `Initials` for initials and `DatePick` for a date the signer chooses. Use `:inline` as a final suffix when you intentionally want a compact mark instead of the default signature card.
 
 #### Send a request

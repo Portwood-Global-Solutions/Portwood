@@ -114,7 +114,7 @@ Where an entry point supplies a prepared chart PNG, HTML-to-PDF can also display
 
 ## Signature lines
 
-Signature placement tags only work in a signature-enabled template and need a matching signer role. Put each requested field in the intended location in the document.
+Paste this table directly into the HTML template and assign the signer the **Customer** role when creating the request. You can put a shared clause immediately above the table with its snippet tag. Portwood discovers the signing fields in the main template before it expands the clause. [Example with shared wording](../../UserGuide.md#shared-content)
 
 ```html
 <table style="width: 100%; margin-top: 24pt;">

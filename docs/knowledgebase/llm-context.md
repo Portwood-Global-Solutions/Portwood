@@ -119,7 +119,7 @@ Where an entry point supplies a prepared chart PNG, HTML-to-PDF can also display
 
 ## Signature lines
 
-Signature placement tags only work in a signature-enabled template and need a matching signer role. Put each requested field in the intended location in the document.
+Paste this table directly into the HTML template and assign the signer the **Customer** role when creating the request. You can put a shared clause immediately above the table with its snippet tag. Portwood discovers the signing fields in the main template before it expands the clause. [Example with shared wording](../../UserGuide.md#shared-content)
 
 ```html
 <table style="width: 100%; margin-top: 24pt;">
@@ -369,7 +369,8 @@ DOCGEN MERGE TAGS — use these as plain text:
 - Shared image:       {%asset:company-logo:144x} (copy the real key from Portwood Assets)
 - Approved font:      {%font:poppins-bold} (copy the stable font API name from Assets)
 - QR / barcode:       {*Website:qr}, {*ProductCode:code128:300x80}
-- Signature fields:   {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
+- Signature fields (main template body only, next to any shared wording):
+                      {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
                       {@Signature_Customer:3:Date}, {@Signature_Customer:4:DatePick}
 - Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
 - Charts for HTML→PDF: {Chart:Line_Items__r:Product2.Family} (default CSS bar),
@@ -1391,6 +1392,22 @@ The snippet editor’s **Preview** shows the HTML formatting. You’ll still see
 
 **Using a snippet in a list?** Suppose your snippet contains `<p>Hello, {Name}.</p>`. Put its tag inside `{#Contacts}…{/Contacts}` on an Account template and select **Contacts → Name** in the template data. Each greeting uses that Contact’s name. Place the same tag outside the loop to use the Account’s name.
 
+#### Add a signature below a shared clause
+
+Keep the reusable wording and fields like `{Name}` in the snippet. Put the signing fields directly in the **main template**. For example, paste this into the template body where the customer should initial and sign the clause above:
+
+```html
+<div>{%snippet:guide-service-handoff}</div>
+<p>Customer initials</p>
+<p>{@Signature_Customer:1:Initials}</p>
+<p>Customer signature</p>
+<p>{@Signature_Customer:1:Full}</p>
+```
+
+Choose **Customer** as the signer’s role. In a practice request, check that **INITIAL HERE** and **SIGN HERE** both appear under the clause.
+
+Portwood counts signing fields before it inserts the snippet. If the only signing tags are inside the snippet, a default signature and signed date can still appear. Initials and date-picker tags can show up as plain text. If you are moving signing tags into the template, remove the originals from the snippet so the signing field lands in the intended place. [Send a template for signature](#sign-template)
+
 #### Try the clause as a teammate
 
 Generate a practice document as someone who normally uses the template. Check that the clause appears with that record’s details. If another editor will maintain the wording, have them open the same clause and save a practice revision in your sandbox. If Salesforce reports insufficient access to the asset, ask your administrator to check the teammate’s Portwood permission set and access to that asset. [Set up access](#manage-access)
@@ -1999,6 +2016,8 @@ Date signed
 ```
 
 The role **Customer** must match the signer's role in the request. Keep each signature on its own line or in its own table cell with room around it.
+
+If the agreement uses a shared clause, place the snippet tag in the template, then add each signing field directly below or beside it in the template body. Check the field count when you select the template in Signature Sender. [Copy a clause with initials and a signature](#shared-content)
 
 Use `Initials` for initials and `DatePick` for a date the signer chooses. Use `:inline` as a final suffix when you intentionally want a compact mark instead of the default signature card.
 
@@ -3958,6 +3977,8 @@ For page furniture, use [CSS page-counter spans](#running-headers-footers) rathe
 
 Signature tags reserve places for named signing roles. A role in the template must match the role supplied when you create the signing request.
 
+Write signing tags directly in the template body. Portwood finds these positions before it expands shared snippets. Place the reusable wording beside the signing tags as shown in [Reuse terms and HTML snippets](#shared-content).
+
 **Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
 
 #### Signatures
@@ -4011,7 +4032,7 @@ Per-row fields available inside the block:
 
 Notes:
 
-- **Backwards-compatible and additive.** Role tags (`{@Signature_Role}`) are unchanged and continue to work exactly as before — use them when you want signatures in fixed, scattered positions. A template **without** a `{#Signatures}` block renders identically to previous releases. You can even combine both in one template.
+- For a variable number of signers, put the `{#Signatures}` block in the main template body and leave out fixed-role tags. If the template includes both, the sender uses the fixed positions and the loop can stay empty.
 - **Where it applies.** The loop is populated by the snapshot/PDF-viewer signing flow (the flow that re-renders the document from a send-time data snapshot and attaches the completed PDF + certificate to the record). Before signing, the block previews the invited signers with a `Pending` status; on completion it shows each signer's typed signature and signed date.
 - The `{#Signatures}` directory loop exposes the signer's typed name and signing details as text; it does not insert a drawn-signature image into that list. Drawn signatures remain supported through the template's guided signature placement fields.
 

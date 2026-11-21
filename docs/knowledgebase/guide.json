@@ -491,12 +491,13 @@
             "title": "Reuse terms and HTML snippets",
             "group": "data",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Create, format, version, and insert reusable document sections.",
+            "minutes": 6,
+            "summary": "Reuse a clause, fill in record fields, and place a signature beside it.",
             "sources": [
                 "force-app/main/default/lwc/docGenSnippetAssets",
                 "force-app/main/default/classes/DocGenSnippetController.cls",
-                "force-app/main/default/classes/DocGenSnippetService.cls"
+                "force-app/main/default/classes/DocGenSnippetService.cls",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls"
             ],
             "related": ["images-and-assets", "custom-fonts", "template-versions"],
             "aliases": [],
@@ -771,7 +772,8 @@
             "summary": "Match signature roles and send one document or a packet.",
             "sources": [
                 "force-app/main/default/lwc/docGenSignatureSender",
-                "force-app/main/default/lwc/docGenTemplateSignatureSender"
+                "force-app/main/default/lwc/docGenTemplateSignatureSender",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls"
             ],
             "related": ["signer-experience", "manage-signatures", "flow-signatures"],
             "aliases": [
@@ -786,7 +788,7 @@
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {
@@ -1450,13 +1452,17 @@
             "audience": "Template builders",
             "minutes": 8,
             "summary": "Place signatures and initials, match roles, and repeat signer sections.",
-            "sources": ["force-app/main/default/classes/DocGenService.cls", "docs/reference/merge-tags.md"],
+            "sources": [
+                "force-app/main/default/classes/DocGenService.cls",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls",
+                "docs/reference/merge-tags.md"
+            ],
             "related": ["merge-tags", "choose-data", "fix-document"],
             "aliases": ["79-signatures"],
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {

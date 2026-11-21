@@ -196,7 +196,8 @@ DOCGEN MERGE TAGS — use these as plain text:
 - Shared image:       {%asset:company-logo:144x} (copy the real key from Portwood Assets)
 - Approved font:      {%font:poppins-bold} (copy the stable font API name from Assets)
 - QR / barcode:       {*Website:qr}, {*ProductCode:code128:300x80}
-- Signature fields:   {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
+- Signature fields (main template body only, next to any shared wording):
+                      {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
                       {@Signature_Customer:3:Date}, {@Signature_Customer:4:DatePick}
 - Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
 - Charts for HTML→PDF: {Chart:Line_Items__r:Product2.Family} (default CSS bar),

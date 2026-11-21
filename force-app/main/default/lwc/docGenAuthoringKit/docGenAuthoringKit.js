@@ -572,6 +572,9 @@ export function buildAiPrompt(shape, options) {
     lines.push(
         '- E-signature placeholders (only if asked for a signable document): {@Signature_RoleName:1:Full}, {@Signature_RoleName:1:Initials}, {@Signature_RoleName:1:Date}, {@Signature_RoleName:1:DatePick}. Role is any string (underscores become spaces), then the signing order, then the type. Add :inline as a final suffix for a compact in-place mark instead of a stamp card. When the number of signers varies, use the {#Signatures} ... {/Signatures} loop instead of fixed role tags.'
     );
+    lines.push(
+        '- Put each signature placement directly in the main template body. Portwood discovers signing fields before expanding shared snippets. Use the snippet for shared wording and record data, then put signature, initials and date tags alongside it in the template. Remove duplicate placement tags from the shared fragment.'
+    );
     lines.push('');
     lines.push(
         '- Reusable wording: {!$Label.Payment_Terms} resolves a Salesforce Custom Label in the running user’s language, including in document titles. Use {!$Label.namespace.Name} for a namespaced label. Missing labels render empty. In a giant-query parent shell the literal label tag can remain.'

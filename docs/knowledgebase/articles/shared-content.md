@@ -34,6 +34,22 @@ The snippet editor’s **Preview** shows the HTML formatting. You’ll still see
 
 **Using a snippet in a list?** Suppose your snippet contains `<p>Hello, {Name}.</p>`. Put its tag inside `{#Contacts}…{/Contacts}` on an Account template and select **Contacts → Name** in the template data. Each greeting uses that Contact’s name. Place the same tag outside the loop to use the Account’s name.
 
+#### Add a signature below a shared clause
+
+Keep the reusable wording and fields like `{Name}` in the snippet. Put the signing fields directly in the **main template**. For example, paste this into the template body where the customer should initial and sign the clause above:
+
+```html
+<div>{%snippet:guide-service-handoff}</div>
+<p>Customer initials</p>
+<p>{@Signature_Customer:1:Initials}</p>
+<p>Customer signature</p>
+<p>{@Signature_Customer:1:Full}</p>
+```
+
+Choose **Customer** as the signer’s role. In a practice request, check that **INITIAL HERE** and **SIGN HERE** both appear under the clause.
+
+Portwood counts signing fields before it inserts the snippet. If the only signing tags are inside the snippet, a default signature and signed date can still appear. Initials and date-picker tags can show up as plain text. If you are moving signing tags into the template, remove the originals from the snippet so the signing field lands in the intended place. [Send a template for signature](#sign-template)
+
 #### Try the clause as a teammate
 
 Generate a practice document as someone who normally uses the template. Check that the clause appears with that record’s details. If another editor will maintain the wording, have them open the same clause and save a practice revision in your sandbox. If Salesforce reports insufficient access to the asset, ask your administrator to check the teammate’s Portwood permission set and access to that asset. [Set up access](#manage-access)

@@ -850,6 +850,8 @@ QR codes are generated natively in Salesforce with Level Q error correction and 
 
 ### 7.9 Signatures
 
+Put fixed signature placements directly in the template body. A snippet can provide reusable wording and record fields beside them. The sender discovers signing placements before expanding the snippet. [Copy the shared clause example](../../UserGuide.md#shared-content)
+
 See [§10](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#10-e-signatures-v3) for the full signature feature. Tag syntax:
 
 ```
@@ -899,7 +901,7 @@ Per-row fields available inside the block:
 
 Notes:
 
-- **Backwards-compatible and additive.** Role tags (`{@Signature_Role}`) are unchanged and continue to work exactly as before — use them when you want signatures in fixed, scattered positions. A template **without** a `{#Signatures}` block renders identically to previous releases. You can even combine both in one template.
+- For a variable number of signers, put the `{#Signatures}` block in the main template body and leave out fixed-role tags. If the template includes both, the sender uses the fixed positions and the loop can stay empty.
 - **Where it applies.** The loop is populated by the snapshot/PDF-viewer signing flow (the flow that re-renders the document from a send-time data snapshot and attaches the completed PDF + certificate to the record). Before signing, the block previews the invited signers with a `Pending` status; on completion it shows each signer's typed signature and signed date.
 - **Typed-name signatures** today (drawn-signature images are a planned future enhancement; the loop already supports per-row image fields for when that lands).
 
