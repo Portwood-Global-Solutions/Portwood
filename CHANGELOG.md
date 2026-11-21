@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### 3.65.0 hotfix candidate
+
+The PDF now opens when a customer signs inside a Screen Flow in the Salesforce iPhone app. The embedded viewer could stall while preparing the first page because of how WebKit handled its asynchronous code under Lightning Web Security. The classic PDF.js library and worker now compile those operations for the Flow runtime. [Issue #589](https://github.com/Portwood-Global-Solutions/Portwood/issues/589) · [PR #590](https://github.com/Portwood-Global-Solutions/Portwood/pull/590)
+
 ## v3.64.0 — Sign inside a Screen Flow, flatten fillable PDFs, configuration migration, and signing in Korean
 
 Released 2026-11-20 · `04tVx000001FBU1IAO` (build 3.64.0-1) · ancestor 3.63.0 · 2,357 tests,
