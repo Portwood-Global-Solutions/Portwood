@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From account to acceptance — Portwood user guide</title>
+<style>
+:root{color-scheme:light;font:17px/1.55 system-ui,sans-serif;color:#173e40;background:#f7f4ed}*{box-sizing:border-box}
+body{margin:0}main{max-width:1120px;margin:0 auto;padding:2rem clamp(1rem,4vw,3rem) 4rem}
+header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #b5c2ba;padding-bottom:1rem}header strong{letter-spacing:.08em}
+a{color:#175656;text-underline-offset:.2em}h1{font:normal clamp(2.7rem,7vw,5rem)/1.02 Georgia,serif;margin:2.2rem 0 .65rem}
+p{max-width:68ch}video{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#173e40;border-radius:5px;margin:1.5rem 0 1rem}
+nav{display:flex;align-items:center;gap:.75rem 1.2rem;flex-wrap:wrap}select{font:inherit;color:inherit;max-width:100%;padding:.35rem}
+:focus-visible{outline:3px solid #b36f31;outline-offset:3px}small{display:block;margin-top:1.75rem;color:#496060}a,select{touch-action:manipulation}
+</style></head><body><main><header><strong>PORTWOOD</strong><a href="/guide">User guide</a></header>
+<h1>From account to acceptance</h1><p>Make a client document from Salesforce, give it a printable layout, and follow it through delivery and signing. Choose a chapter to see the part you’re setting up.</p>
+<video id="walkthrough" controls playsinline preload="metadata" aria-label="From account to acceptance product walkthrough" poster="portwood-demo-poster.jpg">
+<source src="portwood-3.64-demo.mp4" type="video/mp4"><track kind="captions" src="portwood-3.64.en.vtt" srclang="en" label="English"><a href="portwood-3.64-demo.mp4">Open the video file</a></video>
+<nav aria-label="Video resources"><label for="chapter">Jump to a chapter</label><select id="chapter"><option value="0.0">0:00 · The finished packet</option>
+<option value="22.958">0:22 · Start with one field</option>
+<option value="43.708">0:43 · Choose a starting point</option>
+<option value="66.875">1:06 · Design and bind</option>
+<option value="89.708">1:29 · Build the schedule</option>
+<option value="113.208">1:53 · Print across pages</option>
+<option value="137.333">2:17 · Use richer layouts</option>
+<option value="164.0">2:44 · Manage shared language</option>
+<option value="187.083">3:07 · Keep a brand portable</option>
+<option value="211.625">3:31 · Give AI the actual schema</option>
+<option value="236.833">3:56 · Fill and flatten</option>
+<option value="261.25">4:21 · Deliver one file</option>
+<option value="284.292">4:44 · Run a batch</option>
+<option value="307.667">5:07 · Combine existing Files</option>
+<option value="331.083">5:31 · Prepare a signature request</option>
+<option value="356.333">5:56 · Sign in the interview</option>
+<option value="380.417">6:20 · Navigate to the signing site</option>
+<option value="404.75">6:44 · React to an approval</option>
+<option value="431.583">7:11 · Know when to act</option>
+<option value="456.958">7:36 · Follow the signer journey</option>
+<option value="485.125">8:05 · Manage invitations</option>
+<option value="511.375">8:31 · Move between releases</option>
+<option value="541.875">9:01 · Keep Office files editable</option>
+<option value="568.375">9:28 · When a control is missing</option>
+<option value="594.708">9:54 · Close the loop</option></select><a href="portwood-3.64-demo-script.md">Read the script</a><a href="portwood-3.64-demo.mp4" download>Download video</a></nav>
+<small>Filmed with fictional examples. The walkthrough uses sandbox recordings, generated documents, earlier guide captures and a synthesized voiceover.</small>
+<script>
+const video = document.getElementById('walkthrough');
+const chapter = document.getElementById('chapter');
+chapter.addEventListener('change', () => { video.currentTime = Number(chapter.value); video.play().catch(() => {}); });
+video.addEventListener('timeupdate', () => {
+  if (document.activeElement === chapter) return;
+  let active = 0;
+  for (const option of chapter.options) if (Number(option.value) <= video.currentTime + 0.05) active = option.index;
+  chapter.selectedIndex = active;
+});
+</script></main></body></html>

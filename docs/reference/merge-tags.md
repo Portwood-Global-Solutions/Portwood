@@ -799,7 +799,7 @@ A size token must contain an `x` (the width × height separator); a bare number 
 
 **Permissions:** administrators (Portwood Admin) create and manage assets; standard Portwood users get read-only access, which is all that is needed to generate documents that reference them.
 
-> **v1 scope:** shared assets are **images** only. Text/HTML snippet assets and pinning a template to a specific asset version are planned follow-ups.
+Image keys use `{%asset:key}`. A reusable HTML clause uses `{%snippet:key}` and resolves to the active content. Approved fonts can use a portable `{%font:api-name}` declaration.
 
 #### 7.7.2 Sizing images in HTML → PDF
 
@@ -895,7 +895,7 @@ Per-row fields available inside the block:
 | `{SignedDate}`     | The date they signed (blank before signing)                                                     |
 | `{Status}`         | `Pending` before signing, `Signed` after                                                        |
 
-**Styling is yours.** The block is plain template content, so style `{Name}` however you like — a cursive web font for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
+**Styling is yours.** The block is plain template content, so style `{Name}` however you like — an approved custom PDF face for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
 
 Notes:
 

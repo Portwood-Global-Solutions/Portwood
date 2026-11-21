@@ -48,3 +48,5 @@ In a test org, verify the signer sees the correct values and only their own sign
 A normal **Generate** action produces an unsigned document. Completing a signing request is what produces the signed document and signing audit history.
 
 Use [Signer Inputs](#signer-inputs) when the signer must supply values in addition to their signature.
+
+The record-page picker filters on active templates for the current base object. If a template is missing, check its base object and active status before editing the signer roles.

@@ -1,4 +1,8 @@
-Start with what you can see. Make one change, then try the same record again.
+#### First, check which version you have
+
+Ask your Salesforce administrator to open **Setup → Installed Packages** and find **Portwood**. The current release is **{{version}}**. If yours is older, [upgrade in a sandbox](#upgrade-portwood) and try the same record again. If you already upgraded, tell support which version you installed and whether the problem started before or after the upgrade.
+
+#### Pick the symptom you see
 
 | What happened?                                          | Start here                                                 |
 | ------------------------------------------------------- | ---------------------------------------------------------- |

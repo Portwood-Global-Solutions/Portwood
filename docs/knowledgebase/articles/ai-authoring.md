@@ -25,3 +25,9 @@ For extension installation, permissions, provider setup, and troubleshooting, se
 #### Check what AI made
 
 Check field names, opening and closing tags, page size, images, long text, and page breaks. A clean browser preview is only the first check; the generated PDF is the one your reader receives.
+
+#### Give your assistant the right fields and examples
+
+Download the [Portwood authoring and automation context](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/llm-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
+
+Try this request: “Build a two-page service review. Use the Account and Opportunities fields in my query. Keep the totals together, use our approved handoff snippet, and give me the body and footer separately. Then show how to pass the single signer's returned URL to a Screen Flow.” Check the PDF with zero rows and again with enough rows to cross a page. Test the Flow separately with an authorized practice signer.

@@ -1,6 +1,6 @@
 # HTML and Word layout reference
 
-This advanced reference accompanies the [task-based knowledgebase](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md). Retained from the existing guide and reviewed against the 3.60.0 source. Use the task articles for current installation and user workflows.
+This advanced reference accompanies the [task-based knowledgebase](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md). The renderer observations below retain their original probe and release context; the prompt and examples now include 3.62–3.64 capabilities such as Custom Labels, reusable snippets, portable font tags, and optional number decimals. Use the task articles for installation and user workflows. For copy-ready patterns, see [Portwood HTML template recipes](html-recipes.md).
 
 #### 5.7.3 CSS rules — what works, what doesn't, and an LLM prompt
 
@@ -123,7 +123,7 @@ font.
 
 ##### Paste-ready LLM prompt
 
-Copy this verbatim into ChatGPT / Claude / Gemini. Replace the bracketed sections with what you want:
+Copy this verbatim into ChatGPT, Claude, or Gemini. Replace the bracketed sections with what you want. The prompt explains current tag families, but you still need to provide the real object/field API names and check the result in a generated PDF:
 
 ```
 Generate a single self-contained HTML file for Portwood.
@@ -182,9 +182,25 @@ Do NOT include @media queries — Flying Saucer ignores them.
 
 DOCGEN MERGE TAGS — use these as plain text:
 - Field merge:        {FieldApiName}              e.g. {Name}, {Account.Name}, {Amount}
+- Custom Label:       {!$Label.Label_API_Name}    e.g. {!$Label.Payment_Terms}
 - Built-ins:          {Today}, {Now}, {RunningUser.Name}, {RunningUser.Email}
-- Format suffixes:    {Amount:currency}, {CloseDate:MM/dd/yyyy}, {Quantity:#,##0}
+- Format suffixes:    {Amount:currency}, {CloseDate:MM/dd/yyyy}, {Quantity:#,##0.00}
+                      Optional decimal places use #, as in {Amount:#,##0.##}; fixed
+                      decimal places use 0, as in {Amount:#,##0.00}.
 - Loop:               {#RelationshipName} ... {/RelationshipName}
+- Row counter:        {RowNumber} inside a loop; it restarts for each nested loop/group.
+- Grouped loop:       {#GroupBy RelationshipName by FieldName} ... {/GroupBy}
+- Conditions:         {#Field} ... {:else} ... {/Field}; {^Field} ... {/Field};
+                      {#IF Field op Value} ... {:else} ... {/IF}
+- Shared section:     {%snippet:terms-and-conditions} (a saved Terms & Snippets asset)
+- Shared image:       {%asset:company-logo:144x} (copy the real key from Portwood Assets)
+- Approved font:      {%font:poppins-bold} (copy the stable font API name from Assets)
+- QR / barcode:       {*Website:qr}, {*ProductCode:code128:300x80}
+- Signature fields:   {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
+                      {@Signature_Customer:3:Date}, {@Signature_Customer:4:DatePick}
+- Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
+- Charts for HTML→PDF: {Chart:Line_Items__r:Product2.Family} (default CSS bar),
+                      {Chart:Line_Items__r:Product2.Family:pivot:groupBy=Region__c} (CSS table)
 - Loop IN A TABLE:    put the tags INSIDE the cells — open in the first cell of the
                       repeating row, close in the last. The engine expands the whole <tr>.
                         <tr><th>First Name</th><th>Last Name</th><th>Title</th></tr>
@@ -196,6 +212,20 @@ DOCGEN MERGE TAGS — use these as plain text:
 - Conditional:        {#IF Field = "Value"} ... {:else} ... {/IF}
                       Use double quotes around string literals; numeric needs no quotes.
 - Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
+
+DATA AND TAG RULES:
+- Treat every tag above as literal Portwood syntax. Do not rename, escape, or invent field names.
+- Ask for the object's API name and exact field/relationship API names when they are not supplied.
+- Keep each selected field in the template query; do not assume a tag alone adds the field to the query.
+- Use `{!$Label...}` for translated, organization-owned wording. Use `{%snippet:key}` for a saved,
+  versioned reusable section. Do not paste an entire reusable clause when the user requested the asset tag.
+- Use stable custom-font API names only when the user confirms the font exists and is approved in Portwood.
+- HTML templates should use the default CSS-bar chart styles. Do not use `htmlRender=svg` for PDF output;
+  Flying Saucer drops inline SVG. A supported path with a prepared PNG can render additional chart shapes in HTML-to-PDF; test the actual entry point.
+- For large/giant-query tables, keep the outer document shell simple. Do not invent conditional, nested-loop,
+  barcode, or signature tags outside the giant-query loop; check the Giant Query reference for its tag limits.
+- Put a copied approved font tag in a quoted inline style as a complete declaration. Keep other tags out of CSS selectors, JavaScript and external URLs. Keep tags in visible HTML content,
+  table cells, and the supported header/footer fields.
 
 OUTPUT: a single .html file. No external CSS, no <script>, no web fonts, no <link rel="stylesheet">.
 Inline everything. The file uploads as one piece.

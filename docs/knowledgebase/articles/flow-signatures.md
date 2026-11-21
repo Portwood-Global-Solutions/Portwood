@@ -56,7 +56,7 @@ Use the **Portwood: Sign in Flow** screen component when the signer is already s
 
 The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
 
-For an Experience Cloud site, assign the **Portwood Portal Signer** permission set to the site's members.
+Assign **Portwood Portal Signer** to the intended Experience Cloud members. For a non-admin internal signer using the packaged Portwood User permission set, also assign **Portwood Portal Signer** to grant access to the Flow signing controller. Check the screen as the actual signer profile.
 
 The signature is saved the same way as on the signing page, with the same audit record, document hash, Certificate of Completion, and completion emails. You are done when your test Flow reaches the screen after signing and the signed PDF appears on the related record.
 
@@ -71,3 +71,5 @@ The **Send Branded Emails = False** input suppresses the initial invitations. On
 Legacy custom-signature actions do not accept modern v3 signer tokens. Use the returned Portwood signing link for current requests; see the [automation reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/automation.md) for compatibility and advanced options.
 
 Use [Collect signer answers](#signer-inputs) for `{?key}` fields, optional certificate entries, and single-signer record writeback.
+
+For a signing-site link that keeps the interview open, follow [Open the signing site from a Screen Flow](#signing-site-handoff). To start a request from approval or act on completion, see [Platform event recipes](#signing-events).

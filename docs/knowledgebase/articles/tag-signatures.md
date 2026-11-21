@@ -49,10 +49,10 @@ Per-row fields available inside the block:
 | `{SignedDate}`     | The date they signed (blank before signing)                                                     |
 | `{Status}`         | `Pending` before signing, `Signed` after                                                        |
 
-**Styling is yours.** The block is plain template content, so style `{Name}` however you like — a cursive web font for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
+**Styling is yours.** The block is plain template content, so style `{Name}` however you like — an approved custom PDF face for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
 
 Notes:
 
 - **Backwards-compatible and additive.** Role tags (`{@Signature_Role}`) are unchanged and continue to work exactly as before — use them when you want signatures in fixed, scattered positions. A template **without** a `{#Signatures}` block renders identically to previous releases. You can even combine both in one template.
 - **Where it applies.** The loop is populated by the snapshot/PDF-viewer signing flow (the flow that re-renders the document from a send-time data snapshot and attaches the completed PDF + certificate to the record). Before signing, the block previews the invited signers with a `Pending` status; on completion it shows each signer's typed signature and signed date.
-- **Typed-name signatures** today (drawn-signature images are a planned future enhancement; the loop already supports per-row image fields for when that lands).
+- The `{#Signatures}` directory loop exposes the signer's typed name and signing details as text; it does not insert a drawn-signature image into that list. Drawn signatures remain supported through the template's guided signature placement fields.

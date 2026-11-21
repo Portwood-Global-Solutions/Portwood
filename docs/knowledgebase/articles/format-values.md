@@ -13,12 +13,15 @@ Keep dates, amounts, labels, and numbers easy to read.
 | Euros                             | `{Amount:currency:EUR}`    |
 | Number with separators            | `{Quantity:number}`        |
 | Two decimal places                | `{Quantity:#,##0.00}`      |
+| Up to two decimal places           | `{Quantity:#,##0.##}`      |
 | Picklist label seen in Salesforce | `{StageName:label}`        |
 | Checkbox as `[X]` or `[ ]`        | `{IsClosed:checkbox}`      |
 | Today's date                      | `{Today:MMMM d, yyyy}`     |
 | Name of the person generating     | `{RunningUser.Name}`       |
 
 These examples assume the fields exist on the relevant record or loop row. Add ordinary fields to the template's selected data. `Today`, `Now`, and the allowed `RunningUser` fields are built in.
+
+For custom number patterns, `0` always prints a digit while `#` prints a digit only when needed. For example, `{Amount:#,##0.##}` prints `100`, `100.1`, or `100.25`; `{Amount:#,##0.00}` always prints two decimal places. Earlier releases padded optional `#` places, so change a pattern ending in `.##` to `.00` if you require fixed decimals.
 
 #### Match the reader's country
 

@@ -39,3 +39,5 @@ Deleting an asset, by contrast, cannot be undone. Prefer Deactivate when you mig
 Email images need publicly accessible links. Document images and email images have different access requirements; see [Brand the signing experience](#brands-and-emails) before putting a private Salesforce file URL in an email.
 
 **You are done when:** The image appears in a real generated PDF at the intended size. An image visible only in the browser preview is not enough.
+
+For images embedded in a Salesforce rich-text value, download and save-to-record both handle full Salesforce File URLs belonging to the generating org. An image pointing to another domain’s Salesforce File download path is omitted. Test the actual File as a reader who can access it.

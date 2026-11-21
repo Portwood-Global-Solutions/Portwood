@@ -21,7 +21,7 @@ Values in HTML bodies are HTML-escaped. Shared assets use the separate `{%asset:
 
 #### Upgraded from an earlier version? Add the Signature Request Revoked type
 
-The **Signature Request Revoked** email goes to signers who had not signed when a request is revoked. Salesforce does not add new values to an existing packaged picklist when a package is upgraded, so an org that **upgraded** to 3.62 or later, rather than installing fresh, does not list this email type and does not get its default template record. The revoke email still sends, using Portwood's built-in text. A fresh install already has the type and the record.
+The **Signature Request Revoked** email goes to signers who had not signed when a request is revoked. If this email type is missing from the editor after an upgrade, the built-in notice still sends. An administrator can [add the missing email type](#upgrade-portwood) to customize the wording.
 
 To customize the revoke email in an upgraded org:
 

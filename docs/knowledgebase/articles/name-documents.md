@@ -30,3 +30,5 @@ Title fields are resolved separately, so they do not need to be selected only to
 A title explicitly passed by a Flow action or button configuration takes precedence over the template's default. Check those settings if changing the template does not change an automation's filename.
 
 Saved versions can also retain their rendering settings. Save and test the intended active version after changing a title format.
+
+A title format can include a Salesforce Custom Label such as `{!$Label.Quote_Title}`. Supply the label API name and check the result as a user with its translation.

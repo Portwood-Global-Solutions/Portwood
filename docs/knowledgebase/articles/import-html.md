@@ -37,3 +37,5 @@ If the designer has unsaved changes, Portwood opens an **Unsaved changes** confi
 Salesforce's PDF renderer supports a smaller set of layout features than a web browser. Plain paragraphs, tables, fixed widths, and common fonts are reliable starting points. Modern web layouts using flexbox or grid can change or disappear.
 
 Always check a generated PDF before sending it. For advanced styling and a reusable authoring prompt, see the [HTML and Word layout reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md).
+
+For a complete body, a separate footer, and the PDF they produce together, open the [print CSS lab](#css-print-lab).

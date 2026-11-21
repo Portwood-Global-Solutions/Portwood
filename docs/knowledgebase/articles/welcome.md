@@ -27,8 +27,10 @@ Think of a template as a reusable form. You design it once. Portwood fills in a 
 
 **Merge tag:** a marker such as `{Name}`. In the finished document, Portwood replaces it with the record's name.
 
-**Version:** a saved copy of a template. You can return to an earlier copy if a change goes wrong.
+**Template version:** a saved copy of a template. You can return to an earlier copy if a change goes wrong.
 
-You can make documents without writing code. Some advanced tasks need a Salesforce administrator or developer; those articles say so before you start.
+You can make documents without writing code. The setup lessons show where you’ll need help from a Salesforce administrator.
 
-The screenshots use a fresh installation and fictional businesses. Your Salesforce colors, navigation, permissions, and available fields may look different.
+The examples use fictional businesses. Your Salesforce colors, navigation, permissions, and available fields may look different.
+
+Want to see the whole process before you set it up? [Watch the service agreement walkthrough](#watch-walkthrough), or [start with a one-field letter](#recipe-library).

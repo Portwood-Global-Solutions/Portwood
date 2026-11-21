@@ -28,3 +28,5 @@ Check access to the source record, related records, and selected fields. Templat
 #### You added your own fields to Portwood objects
 
 Manage field access through an appropriate subscriber permission set. Decide which administrators, internal users, and guest paths need each field. Test each affected role. Managed permission sets are package-owned; add your own grants rather than assuming a new subscriber field is automatically covered.
+
+**Portwood User** can send signing requests from a record or Flow. For the embedded Flow signing screen, an internal non-admin using the packaged permissions also needs **Portwood Portal Signer** for controller access. See [Flow signing setup](#flow-signatures).

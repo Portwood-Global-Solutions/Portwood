@@ -8,6 +8,10 @@ docs/knowledgebase/guide.json ────┼─ npm run guide:build ─┬─ U
 sfdx-project.json package alias ─┘                      └─ docs/knowledgebase/catalog.json
 ```
 
+The same build generates [the downloadable assistant context](llm-context.md) from the authoring articles, reference chapters and complete example templates. The shared prompt for **Copy AI Prompt** and **Generate with Agentforce** lives in `docGenAuthoringKit.js`. Package changes to that prompt reach installed users in a subsequent package release.
+
+The [guide verification record](VERIFICATION-3.64.md) lists the sandbox outcomes, browser checks and outstanding permission-test failures for this edition. The walkthrough source files are in `docs/demos/`. For the public site, copy those same files into the website checkout’s `static-site/demos/` alongside the reader update.
+
 ## Where to make a change
 
 | Change                                                      | Edit                                                                                |

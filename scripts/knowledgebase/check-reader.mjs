@@ -32,10 +32,14 @@ try {
     page.setDefaultTimeout(8000);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await check('homepage loads the local catalog and correct release', async () => {
+    await check('homepage opens setup and the support version check', async () => {
         await page.goto(url);
         await page.getByRole('heading', { name: 'What would you like to do?', exact: true }).waitFor();
-        assert.equal(await page.locator('#pg-release').innerText(), `Portwood ${catalog.product.version}`);
+        await page.locator('.pg-task[href="#install-portwood"]').waitFor();
+        await page.getByRole('link', { name: 'Check my installed version' }).click();
+        assert.ok((await page.locator('#pg-prose').innerText()).includes(catalog.product.version));
+        await page.goto(url);
+        await page.getByRole('heading', { name: 'What would you like to do?' }).waitFor();
         assert.equal(await page.locator('.pg-task').count(), 6);
     });
     await check('all task articles render, keep merge tags, and have no missing screenshot files', async () => {
@@ -134,7 +138,9 @@ try {
     await check('raw Markdown compatibility and return navigation work', async () => {
         await page.goto(`${url}?raw=1`);
         await page.locator('#pg-raw-text').filter({ hasText: '# Portwood Knowledgebase' }).waitFor();
-        assert.ok((await page.locator('#pg-raw-text').innerText()).includes(catalog.product.packageId));
+        const markdown = await page.locator('#pg-raw-text').innerText();
+        assert.ok(markdown.includes('[Check your installed version](#troubleshooting)'));
+        assert.ok(markdown.includes(`The current release is **${catalog.product.version}**`));
         await page.locator('[data-article="first-document"]').click();
         await page.getByRole('heading', { name: 'Make your first document', exact: true }).waitFor();
     });

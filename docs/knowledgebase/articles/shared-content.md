@@ -1,4 +1,4 @@
-Shared content lets you author a frequently reused section once and insert it into HTML or Canvas templates with a stable merge tag.
+Write a clause once and reuse it in several documents. A snippet can hold both fixed wording and Salesforce merge tags. The same clause can address each customer by name.
 
 #### Create shared content
 
@@ -13,6 +13,30 @@ The copied tag looks like this:
     {%snippet:terms-and-conditions}
 
 Insert the tag where the complete section should appear. In HTML or Canvas authoring, use the shared-content insertion control when available. Keep the tag on its own line when the surrounding layout needs a separate paragraph.
+
+#### Put a customer’s name inside a snippet
+
+1. In **Terms & snippets**, create a snippet with the key `guide-service-handoff`. In **HTML source**, paste this paragraph and save it with **Active for document generation** selected.
+
+   ```html
+   <p>After acceptance, our service coordinator will arrange a handoff with <strong>{Name}</strong>.</p>
+   ```
+
+2. In your Account template, include **Account Name** in the selected fields. Paste the snippet’s copied tag where you want the paragraph to appear.
+
+   ```html
+   {%snippet:guide-service-handoff}
+   ```
+
+3. Select a sample Account in the designer and generate its PDF. For **Alder Works**, the last words are **“a handoff with Alder Works.”** You can see them under **Handoff and acceptance** on page four of the [finished service review](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf).
+
+The snippet editor’s **Preview** shows the HTML formatting. You’ll still see `{Name}` there because the snippet editor has no record selected. The template’s sample record supplies the value when you generate.
+
+**Using a snippet in a list?** Suppose your snippet contains `<p>Hello, {Name}.</p>`. Put its tag inside `{#Contacts}…{/Contacts}` on an Account template and select **Contacts → Name** in the template data. Each greeting uses that Contact’s name. Place the same tag outside the loop to use the Account’s name.
+
+#### Try the clause as a teammate
+
+Generate a practice document as someone who normally uses the template. Check that the clause appears with that record’s details. If another editor will maintain the wording, have them open the same clause and save a practice revision in your sandbox. If Salesforce reports insufficient access to the asset, ask your administrator to check the teammate’s Portwood permission set and access to that asset. [Set up access](#manage-access)
 
 #### Revisions and activation
 
@@ -38,4 +62,8 @@ PowerPoint templates produce native PPTX files. PDF is not an available output c
 
 Snippets are body fragments, not full HTML documents. Scripts, event handlers, external stylesheets, executable CSS, data-URI images, and unsafe URLs are rejected. Add document-wide styles and page settings to the template.
 
-Record fields and loops inside a snippet use the current merge context. Include every referenced field and relationship in the template query; creating a snippet does not add fields to a template query automatically.
+Select every field and relationship the snippet uses in each template where you reuse it.
+
+A snippet can contain another snippet. Portwood detects cycles and stops on a missing or inactive key. The expansion allows up to eight nested levels, 100 distinct keys and 1,000,000 characters after expansion. A saved fragment is limited to 250,000 characters. Use **Revision history → Restore as new revision** to recover the last working text.
+
+![A saved service handoff clause in HTML source mode with its permanent snippet tag](docs/images/userguide/v3.64/shared-clause.png)

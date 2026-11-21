@@ -74,7 +74,7 @@ A size token must contain an `x` (the width × height separator); a bare number 
 
 **Permissions:** administrators (Portwood Admin) create and manage assets; standard Portwood users get read-only access, which is all that is needed to generate documents that reference them.
 
-> **v1 scope:** shared assets are **images** only. Text/HTML snippet assets and pinning a template to a specific asset version are planned follow-ups.
+This article covers shared **image** assets. Shared fonts and reusable HTML sections have their own workflows: [Upload and approve a custom font](#custom-fonts) and [Reuse terms and HTML snippets](#shared-content). A snippet is a versioned body fragment, not an image asset.
 
 #### Sizing images in HTML → PDF
 

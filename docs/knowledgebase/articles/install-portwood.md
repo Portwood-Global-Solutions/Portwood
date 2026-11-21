@@ -4,12 +4,9 @@ Install Portwood once, then give each person the access they need.
 
 #### 1. Install the package
 
-Open the link for your environment:
+Open the [Portwood listing on Salesforce AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3) for the managed package. Choose the production org or sandbox where you want to install it.
 
-- [Install Portwood {{version}} in production](https://login.salesforce.com/packaging/installPackage.apexp?p0={{packageId}})
-- [Install Portwood {{version}} in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0={{packageId}})
-
-Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. Wait for installation to finish before continuing.
+Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. When installation finishes, open **Setup → Installed Packages** and find **Portwood**. The current release is **{{version}}**.
 
 #### 2. Give yourself Portwood Admin
 

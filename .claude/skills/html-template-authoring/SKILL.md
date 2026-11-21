@@ -82,29 +82,9 @@ and `Custom_Margins__c` fields. If your source HTML also declares `@page`, the e
 
 ## Charts
 
-Charts are **not** HTML-only — Word, PowerPoint and Excel get a rasterized PNG from
-`DocGenChartRasterizer`, and in fact support _more_ chart shapes than HTML→PDF does.
-What varies is which **style** survives which output.
+The HTML chart expander uses a prepared PNG when the caller supplies one. Without PNG preparation, use bar, stacked, clustered or pivot for PDF. Cross-tabs need a second field in `groupBy=`. Inline SVG is browser-only. Word and PowerPoint can embed prepared PNGs. Excel does not embed chart-tag images.
 
-| Style                                    | Word / PPTX / XLSX |  HTML → PDF  |    HTML in a browser     |
-| ---------------------------------------- | :----------------: | :----------: | :----------------------: |
-| `bar`                                    |       ✅ PNG       |  ✅ CSS-bar  |            ✅            |
-| `pivot`                                  |         ❌         | ✅ CSS table |            ✅            |
-| `clustered`, `stacked`                   |       ✅ PNG       | ✅ CSS table |            ✅            |
-| `column`, `pie`, `donut`, `line`, `area` |       ✅ PNG       |      ❌      | ✅ with `htmlRender=svg` |
-
-### The two rules behind that table
-
-**Flying Saucer drops inline `<svg>` from `Blob.toPdf`.** The `htmlRender=svg` modifier
-routes through `DocGenSvgChartSerializer` and looks perfect in a browser, then vanishes
-in the PDF. If your HTML template is destined for PDF, stay on the default CSS-bar
-styles: `bar`, `pivot`, `clustered`, `stacked`.
-
-**`pivot` never rasterizes.** It isn't in the rasterizer's `KNOWN_STYLES` because a
-cross-tab is a table, not a chart shape. Cross-tab belongs in HTML.
-
-So: rich chart shapes in a PDF → author the template in **Word** and let the PNG
-pipeline handle it. Cross-tab pivots → **HTML**.
+Use the [3.64 authoring context](../../../docs/knowledgebase/llm-context.md) for the complete tag and workflow reference. A shared HTML clause uses `{%snippet:key}`. Fields inside the clause merge against the record where the tag appears. Inside a selected child loop, `{Name}` reads that child’s name. The snippet editor previews formatting; generate a PDF with the template’s sample record to verify the values. A translated Salesforce Custom Label uses `{!$Label.Name}`. Use an approved face’s copied `{%font:api-name}` declaration inside an inline style and include the real asset key and query fields in the authoring brief.
 
 ### The pivot layout gotcha
 

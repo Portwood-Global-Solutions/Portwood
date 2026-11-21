@@ -21,6 +21,8 @@ Make one document per record without opening every record yourself.
 
 The condition is the filter only. Do not include `SELECT` or the word `WHERE` in that field.
 
+Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
+
 ![The bulk runner has validated the three fictional Accounts and is set to Individual Files](docs/images/userguide/v3.60/bulk-ready.png)
 
 #### Choose the right output
