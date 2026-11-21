@@ -1,5 +1,7 @@
 Use this recipe when an approval happens in one process and someone signs later, possibly in another session. Imagine a sales manager approves a service agreement. The customer should receive one request, and the service team should start work only after the signed file is ready.
 
+[Try the complete Screen Flow, subscriber and private receipt.](#event-signing-journey)
+
 #### Set up the handoff
 
 | When this happens | Have Salesforce do this | What you can check |

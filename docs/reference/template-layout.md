@@ -659,3 +659,7 @@ For tables to align across the document, the `<w:tblGrid>` blocks of those table
 - **Image compression.** A 20MB Word template with uncompressed images will fail upload (10MB cap). Right-click any image → Compress Pictures → Email (96 ppi) or Web (150 ppi). A 20MB template typically drops to 1–2 MB with no visible quality loss.
 
 ---
+
+## Link the sections of a long proposal
+
+Pair stable fragment links with destination IDs. A contents link can print the destination page with `content: leader('.') target-counter(attr(href), page)`. A fixed element gated by `{#IsDraft}` can repeat a draft mark on every page. [Copy the tested CSS and HTML](../knowledgebase/articles/print-navigation.md).

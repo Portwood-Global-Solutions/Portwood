@@ -1,5 +1,7 @@
 Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
 
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio)
+
 | Start with | Build this | Check your result |
 | --- | --- | --- |
 | One Account | [A one-field welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.html) | The PDF heading contains the Account name. |

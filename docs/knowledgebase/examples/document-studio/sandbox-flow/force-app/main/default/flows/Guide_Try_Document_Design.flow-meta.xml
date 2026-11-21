@@ -1,0 +1,588 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <actionCalls>
+        <name>Generate</name>
+        <label>Generate the selected design</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <actionName>portwoodglobal__DocGenFlowAction</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Generated</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Fault</targetReference>
+        </faultConnector>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>templateApiName</name>
+            <value>
+                <elementReference>TemplateKey</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>jsonData</name>
+            <value>
+                <elementReference>Payload</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>saveToRecord</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>outputFormatOverride</name>
+            <value>
+                <stringValue>PDF</stringValue>
+            </value>
+        </inputParameters>
+        <outputParameters>
+            <assignToReference>Succeeded</assignToReference>
+            <name>success</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>FileId</assignToReference>
+            <name>contentDocumentId</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>ErrorText</assignToReference>
+            <name>errorMessage</name>
+        </outputParameters>
+        <storeOutputAutomatically>false</storeOutputAutomatically>
+    </actionCalls>
+    <apiVersion>68.0</apiVersion>
+    <areMetricsLoggedToDataCloud>false</areMetricsLoggedToDataCloud>
+    <assignments>
+        <name>LoadQuote</name>
+        <label>Use commercial proposal</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <assignmentItems>
+            <assignToReference>TemplateKey</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>Guide364_Studio_field_quote</stringValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Payload</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>QuoteJSON</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Generate</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
+        <name>LoadRenewal</name>
+        <label>Use renewal decision brief</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <assignmentItems>
+            <assignToReference>TemplateKey</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>Guide364_Studio_renewal_brief</stringValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Payload</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>RenewalJSON</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Generate</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
+        <name>LoadWorkOrder</name>
+        <label>Use field service sheet</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <assignmentItems>
+            <assignToReference>TemplateKey</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>Guide364_Studio_service_sheet</stringValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Payload</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>WorkOrderJSON</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Generate</targetReference>
+        </connector>
+    </assignments>
+    <choices>
+        <name>QuoteChoice</name>
+        <choiceText>Commercial proposal</choiceText>
+        <dataType>String</dataType>
+        <value>
+            <stringValue>Quote</stringValue>
+        </value>
+    </choices>
+    <choices>
+        <name>RenewalChoice</name>
+        <choiceText>Renewal decision brief</choiceText>
+        <dataType>String</dataType>
+        <value>
+            <stringValue>Renewal</stringValue>
+        </value>
+    </choices>
+    <choices>
+        <name>WorkOrderChoice</name>
+        <choiceText>Field service sheet</choiceText>
+        <dataType>String</dataType>
+        <value>
+            <stringValue>WorkOrder</stringValue>
+        </value>
+    </choices>
+    <decisions>
+        <name>WhichDesign</name>
+        <label>Which design did you select?</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <defaultConnector>
+            <targetReference>LoadQuote</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Commercial proposal</defaultConnectorLabel>
+        <rules>
+            <name>UseRenewal</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Design</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Renewal</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>LoadRenewal</targetReference>
+            </connector>
+            <label>Renewal decision brief</label>
+        </rules>
+        <rules>
+            <name>UseWorkOrder</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Design</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>WorkOrder</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>LoadWorkOrder</targetReference>
+            </connector>
+            <label>Field service sheet</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Generated</name>
+        <label>Did the file generate?</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <defaultConnector>
+            <targetReference>Failure</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Check the template</defaultConnectorLabel>
+        <rules>
+            <name>HasFile</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Succeeded</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>FileReady</targetReference>
+            </connector>
+            <label>Ready</label>
+        </rules>
+    </decisions>
+    <description>Generate a standalone studio PDF from the included fictional pricing, renewal or maintenance data.</description>
+    <environments>Default</environments>
+    <interviewLabel>Try a design {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Try a document design</label>
+    <processType>Flow</processType>
+    <screens>
+        <name>Choose</name>
+        <label>Choose a design</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>WhichDesign</targetReference>
+        </connector>
+        <fields>
+            <name>Instructions</name>
+            <fieldText>&lt;p&gt;Choose a fictional example. The result will be saved in Salesforce Files.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <fields>
+            <name>Design</name>
+            <choiceReferences>QuoteChoice</choiceReferences>
+            <choiceReferences>RenewalChoice</choiceReferences>
+            <choiceReferences>WorkOrderChoice</choiceReferences>
+            <dataType>String</dataType>
+            <defaultValue>
+                <stringValue>Quote</stringValue>
+            </defaultValue>
+            <fieldText>Document design</fieldText>
+            <fieldType>RadioButtons</fieldType>
+            <isRequired>true</isRequired>
+        </fields>
+        <nextOrFinishButtonLabel>Generate PDF</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>FileReady</name>
+        <label>Your PDF is ready</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>OpenFile</name>
+            <fieldText>&lt;p&gt;&lt;a href="/lightning/r/ContentDocument/{!FileId}/view" target="_blank"&gt;Open your generated PDF in Salesforce Files&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Content Document ID: {!FileId}&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Finish</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Failure</name>
+        <label>Check the template</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Problem</name>
+            <fieldText>&lt;p&gt;Check that the HTML template is active and its API name matches this sample.&lt;/p&gt;&lt;p&gt;{!ErrorText}&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Finish</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Fault</name>
+        <label>Generation problem</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>FaultText</name>
+            <fieldText>&lt;p&gt;Check the active template and your permission to generate a document.&lt;/p&gt;&lt;p&gt;{!$Flow.FaultMessage}&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Finish</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <start>
+        <locationX>48</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Choose</targetReference>
+        </connector>
+    </start>
+    <status>Draft</status>
+    <textTemplates>
+        <name>QuoteJSON</name>
+        <isViewedAsPlainText>true</isViewedAsPlainText>
+        <text>{
+  "Client": "Alder Works",
+  "QuoteNumber": "Q-2048",
+  "Subject": "Field station renewal",
+  "Issued": "20 November 2026",
+  "ValidUntil": "20 December 2026",
+  "IsDraft": true,
+  "Currency": "USD",
+  "Sponsor": "Facilities Operations",
+  "Bundles": {
+    "totalSize": 2,
+    "records": [
+      {
+        "Key": "atlas",
+        "Name": "Atlas station",
+        "Use": "At each receiving bay, capture the equipment reading before dispatch.",
+        "Components": {
+          "totalSize": 3,
+          "records": [
+            {
+              "Sku": "AT-210",
+              "Description": "Field station with sealed enclosure",
+              "Qty": 2,
+              "ListPrice": 3125,
+              "Discount": 12,
+              "Net": 5500.0
+            },
+            {
+              "Sku": "AT-041",
+              "Description": "Mount and cable harness",
+              "Qty": 2,
+              "ListPrice": 95,
+              "Discount": 0,
+              "Net": 190.0
+            },
+            {
+              "Sku": "SV-106",
+              "Description": "Commissioning and operator training",
+              "Qty": 1,
+              "ListPrice": 850,
+              "Discount": 0,
+              "Net": 850.0
+            }
+          ]
+        },
+        "AddOns": {
+          "totalSize": 0,
+          "records": []
+        },
+        "OneTimeNet": 6540.0,
+        "Monthly": 60
+      },
+      {
+        "Key": "harbor",
+        "Name": "Harbor reserve",
+        "Use": "Keep one station online while the site supply is being serviced.",
+        "Components": {
+          "totalSize": 2,
+          "records": [
+            {
+              "Sku": "HB-310",
+              "Description": "Power cabinet with changeover relay",
+              "Qty": 1,
+              "ListPrice": 3750,
+              "Discount": 8,
+              "Net": 3450.0
+            },
+            {
+              "Sku": "HB-014",
+              "Description": "Reserve battery module",
+              "Qty": 2,
+              "ListPrice": 340,
+              "Discount": 0,
+              "Net": 680.0
+            }
+          ]
+        },
+        "AddOns": {
+          "totalSize": 1,
+          "records": [
+            {
+              "Sku": "SV-208",
+              "Description": "Annual on-site readiness inspection",
+              "Qty": 1,
+              "ListPrice": 450,
+              "Discount": 0,
+              "Net": 450.0
+            }
+          ]
+        },
+        "OneTimeNet": 4130.0,
+        "Monthly": 60
+      }
+    ]
+  },
+  "OneTime": 10670.0,
+  "Monthly": 120,
+  "AddOnNet": 450,
+  "Milestones": {
+    "totalSize": 3,
+    "records": [
+      {
+        "Phase": "Site survey",
+        "Owner": "Facilities lead",
+        "Window": "Week 1",
+        "Check": "Site access, power and mounting positions confirmed."
+      },
+      {
+        "Phase": "Installation",
+        "Owner": "Field engineering",
+        "Window": "Weeks 2–3",
+        "Check": "Each station commissioned against the equipment list."
+      },
+      {
+        "Phase": "Acceptance",
+        "Owner": "Operations sponsor",
+        "Window": "Week 4",
+        "Check": "Training and handoff checklist acknowledged."
+      }
+    ]
+  },
+  "Payments": {
+    "totalSize": 3,
+    "records": [
+      {
+        "Due": "At order",
+        "Share": 30,
+        "Amount": 3201
+      },
+      {
+        "Due": "After commissioning",
+        "Share": 40,
+        "Amount": 4268
+      },
+      {
+        "Due": "On acceptance",
+        "Share": 30,
+        "Amount": 3201
+      }
+    ]
+  }
+}</text>
+    </textTemplates>
+    <textTemplates>
+        <name>RenewalJSON</name>
+        <isViewedAsPlainText>true</isViewedAsPlainText>
+        <text>{
+  "Client": "Sable Harbor Cooperative",
+  "ReviewPeriod": "October 2026",
+  "RenewalDate": "31 January 2027",
+  "AnnualNet": 86400,
+  "DaysOpen": 18,
+  "Threshold": 80,
+  "HasUsage": true,
+  "Adoption": 72,
+  "PriorAdoption": 61,
+  "OpenCases": 2,
+  "PlanName": "Operations Plus",
+  "Teams": {
+    "totalSize": 3,
+    "records": [
+      {
+        "Name": "Dispatch",
+        "Active": 33,
+        "Licensed": 40,
+        "Percent": 83
+      },
+      {
+        "Name": "Field service",
+        "Active": 24,
+        "Licensed": 40,
+        "Percent": 60
+      },
+      {
+        "Name": "Finance",
+        "Active": 15,
+        "Licensed": 20,
+        "Percent": 75
+      }
+    ]
+  },
+  "AtTarget": false
+}</text>
+    </textTemplates>
+    <textTemplates>
+        <name>WorkOrderJSON</name>
+        <isViewedAsPlainText>true</isViewedAsPlainText>
+        <text>{
+  "Site": "North pier workshop",
+  "WorkOrder": "WO-1842",
+  "Visit": "24 November 2026",
+  "Technician": "Morgan Lee",
+  "Handoff": "Return the signed paper checklist to the maintenance desk.",
+  "Equipment": {
+    "totalSize": 2,
+    "records": [
+      {
+        "Code": "AW-P17-201",
+        "Name": "Circulation pump",
+        "Location": "Bay 2 · supply manifold",
+        "Checks": {
+          "totalSize": 3,
+          "records": [
+            {
+              "Task": "Check motor guard and isolation label"
+            },
+            {
+              "Task": "Record cold-start pressure"
+            },
+            {
+              "Task": "Inspect the coupling for movement"
+            }
+          ]
+        }
+      },
+      {
+        "Code": "AW-S08-414",
+        "Name": "Flow sensor",
+        "Location": "Bay 2 · return line",
+        "Checks": {
+          "totalSize": 3,
+          "records": [
+            {
+              "Task": "Match the serial number to the register"
+            },
+            {
+              "Task": "Record instrument reading at idle"
+            },
+            {
+              "Task": "Return the enclosure cover"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}</text>
+    </textTemplates>
+    <variables>
+        <name>TemplateKey</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Payload</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Succeeded</name>
+        <dataType>Boolean</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>FileId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>ErrorText</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>

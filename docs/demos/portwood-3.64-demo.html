@@ -13,36 +13,57 @@ nav{display:flex;align-items:center;gap:.75rem 1.2rem;flex-wrap:wrap}select{font
 <h1>From account to acceptance</h1><p>Make a client document from Salesforce, give it a printable layout, and follow it through delivery and signing. Choose a chapter to see the part you’re setting up.</p>
 <video id="walkthrough" controls playsinline preload="metadata" aria-label="From account to acceptance product walkthrough" poster="portwood-demo-poster.jpg">
 <source src="portwood-3.64-demo.mp4" type="video/mp4"><track kind="captions" src="portwood-3.64.en.vtt" srclang="en" label="English"><a href="portwood-3.64-demo.mp4">Open the video file</a></video>
-<nav aria-label="Video resources"><label for="chapter">Jump to a chapter</label><select id="chapter"><option value="0.0">0:00 · The finished packet</option>
-<option value="22.958">0:22 · Start with one field</option>
-<option value="43.708">0:43 · Choose a starting point</option>
-<option value="66.875">1:06 · Design and bind</option>
-<option value="89.708">1:29 · Build the schedule</option>
-<option value="113.208">1:53 · Print across pages</option>
-<option value="137.333">2:17 · Use richer layouts</option>
-<option value="164.0">2:44 · Manage shared language</option>
-<option value="187.083">3:07 · Keep a brand portable</option>
-<option value="211.625">3:31 · Give AI the actual schema</option>
-<option value="236.833">3:56 · Fill and flatten</option>
-<option value="261.25">4:21 · Deliver one file</option>
-<option value="284.292">4:44 · Run a batch</option>
-<option value="307.667">5:07 · Combine existing Files</option>
-<option value="331.083">5:31 · Prepare a signature request</option>
-<option value="356.333">5:56 · Sign in the interview</option>
-<option value="380.417">6:20 · Navigate to the signing site</option>
-<option value="404.75">6:44 · React to an approval</option>
-<option value="431.583">7:11 · Know when to act</option>
-<option value="456.958">7:36 · Follow the signer journey</option>
-<option value="485.125">8:05 · Manage invitations</option>
-<option value="511.375">8:31 · Move between releases</option>
-<option value="541.875">9:01 · Keep Office files editable</option>
-<option value="568.375">9:28 · When a control is missing</option>
-<option value="594.708">9:54 · Close the loop</option></select><a href="portwood-3.64-demo-script.md">Read the script</a><a href="portwood-3.64-demo.mp4" download>Download video</a></nav>
+<nav aria-label="Video resources"><label for="chapter">Jump to a chapter</label><select id="chapter"><option value="0.0" data-chapter="the-finished-packet">0:00 · The finished packet</option>
+<option value="22.958" data-chapter="start-with-one-field">0:22 · Start with one field</option>
+<option value="43.708" data-chapter="choose-a-starting-point">0:43 · Choose a starting point</option>
+<option value="66.875" data-chapter="design-and-bind">1:06 · Design and bind</option>
+<option value="89.708" data-chapter="build-the-schedule">1:29 · Build the schedule</option>
+<option value="113.208" data-chapter="print-across-pages">1:53 · Print across pages</option>
+<option value="137.333" data-chapter="use-richer-layouts">2:17 · Use richer layouts</option>
+<option value="164.0" data-chapter="manage-shared-language">2:44 · Manage shared language</option>
+<option value="187.083" data-chapter="keep-a-brand-portable">3:07 · Keep a brand portable</option>
+<option value="211.625" data-chapter="give-ai-the-actual-schema">3:31 · Give AI the actual schema</option>
+<option value="236.833" data-chapter="fill-and-flatten">3:56 · Fill and flatten</option>
+<option value="261.25" data-chapter="deliver-one-file">4:21 · Deliver one file</option>
+<option value="284.292" data-chapter="run-a-batch">4:44 · Run a batch</option>
+<option value="307.667" data-chapter="combine-existing-files">5:07 · Combine existing Files</option>
+<option value="331.083" data-chapter="prepare-a-signature-request">5:31 · Prepare a signature request</option>
+<option value="356.333" data-chapter="sign-in-the-interview">5:56 · Sign in the interview</option>
+<option value="380.417" data-chapter="navigate-to-the-signing-site">6:20 · Navigate to the signing site</option>
+<option value="404.75" data-chapter="react-to-an-approval">6:44 · React to an approval</option>
+<option value="431.583" data-chapter="know-when-to-act">7:11 · Know when to act</option>
+<option value="456.958" data-chapter="follow-the-signer-journey">7:36 · Follow the signer journey</option>
+<option value="485.125" data-chapter="manage-invitations">8:05 · Manage invitations</option>
+<option value="511.375" data-chapter="move-between-releases">8:31 · Move between releases</option>
+<option value="541.875" data-chapter="keep-office-files-editable">9:01 · Keep Office files editable</option>
+<option value="568.375" data-chapter="when-a-control-is-missing">9:28 · When a control is missing</option>
+<option value="594.708" data-chapter="give-the-buyer-a-contents-page">9:54 · Give the buyer a contents page</option>
+<option value="618.917" data-chapter="price-the-bundle-once">10:18 · Price the bundle once</option>
+<option value="644.75" data-chapter="let-the-data-change-the-brief">10:44 · Let the data change the brief</option>
+<option value="674.833" data-chapter="put-the-work-order-in-the-field">11:14 · Put the work order in the field</option>
+<option value="698.583" data-chapter="follow-the-event-into-signing">11:38 · Follow the event into signing</option>
+<option value="725.417" data-chapter="close-the-loop">12:05 · Close the loop</option></select><a href="portwood-3.64-demo-script.md">Read the script</a><a href="portwood-3.64-demo.mp4" download>Download video</a></nav>
 <small>Filmed with fictional examples. The walkthrough uses sandbox recordings, generated documents, earlier guide captures and a synthesized voiceover.</small>
 <script>
 const video = document.getElementById('walkthrough');
 const chapter = document.getElementById('chapter');
-chapter.addEventListener('change', () => { video.currentTime = Number(chapter.value); video.play().catch(() => {}); });
+const requested = new URLSearchParams(location.search).get('chapter');
+const chosen = Array.from(chapter.options).find(option => option.dataset.chapter === requested);
+if (chosen) {
+  chapter.value = chosen.value;
+  const seek = () => { video.currentTime = Number(chosen.value); };
+  if (video.readyState >= 1) seek();
+  else video.addEventListener('loadedmetadata', seek, { once: true });
+}
+chapter.addEventListener('change', () => {
+  video.currentTime = Number(chapter.value);
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    const address = new URL(location.href);
+    address.searchParams.set('chapter', chapter.selectedOptions[0].dataset.chapter);
+    history.replaceState(null, '', address);
+  }
+  video.play().catch(() => {});
+});
 video.addEventListener('timeupdate', () => {
   if (document.activeElement === chapter) return;
   let active = 0;

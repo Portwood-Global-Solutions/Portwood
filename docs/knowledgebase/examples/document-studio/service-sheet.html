@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/><title>Field service sheet</title>
+    <style>
+        @page { size: Letter; margin: .65in; @bottom-left { content: "MAINTENANCE COPY"; font: bold 8pt Helvetica; color: #454c3c; } @bottom-right { content: counter(page) " / " counter(pages); font: 8pt Helvetica; } }
+        body { margin: 0; font: 10.5pt/1.3 Helvetica, sans-serif; color: #232b25; }
+        .mast { background: #334838; color: white; padding: 14pt 16pt; border-top: 4pt solid #c4a646; }
+        .mast p { margin: 0 0 4pt; font-size: 9pt; }
+        h1 { margin: 0; font: normal 27pt Times, serif; }
+        h2 { margin: 0 0 3pt; font: normal 18pt Times, serif; }
+        .info, .tag { width: 100%; border-collapse: collapse; }
+        .info td { width: 33.33%; padding: 7pt 5pt; border-bottom: .6pt solid #b4bba9; }
+        .asset { page-break-inside: avoid; border: 1pt solid #aeb7a3; margin-top: 11pt; padding: 8pt; }
+        .tag td { vertical-align: top; }
+        .identity { width: 73%; }
+        .scan { width: 27%; text-align: center; }
+        .code { font-family: Courier, monospace; font-weight: bold; font-size: 10pt; }
+        .checklist { margin: 5pt 0; border-collapse: collapse; }
+        .checklist td { padding: 2.5pt 0; }
+        .box { display: inline-block; width: 8pt; height: 8pt; border: .9pt solid #52624c; margin-right: 7pt; }
+        .tear { border-top: 1.1pt dashed #697561; margin-top: 14pt; padding-top: 7pt; }
+        .tear p { margin: 5pt 0; }
+        .line { display: inline-block; width: 1.5in; border-bottom: .8pt solid #404c3e; }
+    </style>
+</head>
+<body>
+    <div class="mast"><p>FIELD SERVICES · WORK ORDER {WorkOrder}</p><h1>{Site}</h1></div>
+    <table class="info"><tr><td><strong>Visit</strong><br/>{Visit}</td><td><strong>Technician</strong><br/>{Technician}</td><td><strong>Equipment</strong><br/>{COUNT:Equipment} units</td></tr></table>
+    {#Equipment}<div class="asset"><table class="tag"><tr><td class="identity">
+        <h2>{Name}</h2><p>{Location}</p>
+        <table class="checklist"><tbody><tr><td>{#Checks}<span class="box"></span></td><td>{Task}{/Checks}</td></tr></tbody></table>
+    <p>As-found reading <span class="line"></span></p>
+    </td><td class="scan">{*Code:qr:105}<br/><span class="code">{Code}</span></td></tr></table></div>{/Equipment}
+    <div class="tear"><strong>Desk receipt · {WorkOrder}</strong>
+        <p>{Handoff}</p><p>Technician initials <span class="line"></span> &nbsp; Date <span class="line"></span></p></div>
+</body>
+</html>

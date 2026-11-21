@@ -537,20 +537,149 @@ Those details give support a much better starting point than a screenshot of an
 00:09:53.595 --> 00:09:54.238
 empty list.
 
-00:09:54.858 --> 00:09:59.356
+00:09:54.858 --> 00:09:56.430
+Imagine you are the buyer.
+
+00:09:56.430 --> 00:10:00.832
+You have four pages in front of you and one question about the Harbor
+
+00:10:00.832 --> 00:10:01.146
+configuration.
+
+00:10:01.146 --> 00:10:04.919
+Click Harbor on the cover and you land on the right bundle.
+
+00:10:04.919 --> 00:10:06.805
+Back to contents takes you home.
+
+00:10:06.805 --> 00:10:09.006
+Now add forty-two lines to the quote.
+
+00:10:09.006 --> 00:10:13.407
+The commercial terms move from page four to page seven, and the contents number
+
+00:10:13.407 --> 00:10:14.351
+moves with them.
+
+00:10:14.351 --> 00:10:18.438
+The draft stamp follows every page until the quote is ready to issue.
+
+00:10:19.067 --> 00:10:21.902
+Here are two field stations on the same order.
+
+00:10:21.902 --> 00:10:26.312
+Read down the Atlas table: the enclosure and accessories add up to six thousand
+
+00:10:26.312 --> 00:10:27.572
+five hundred forty dollars.
+
+00:10:27.572 --> 00:10:29.147
+Harbor has its own components.
+
+00:10:29.147 --> 00:10:31.667
+Its optional inspection stays outside the committed amount.
+
+00:10:31.667 --> 00:10:36.077
+Up front, the buyer sees ten thousand six hundred seventy dollars once and one
+
+00:10:36.077 --> 00:10:37.337
+hundred twenty a month.
+
+00:10:37.337 --> 00:10:40.172
+That is the same deal the sales team priced.
+
+00:10:40.172 --> 00:10:44.267
+The document gives each number a place where the buyer can check it.
+
+00:10:44.900 --> 00:10:49.632
+Would you walk into this renewal meeting ready to ask for a signature?
+
+00:10:49.632 --> 00:10:53.636
+At seventy-two percent adoption, the brief recommends booking an adoption review.
+
+00:10:53.636 --> 00:10:57.639
+The team bars make it easy to see where to start.
+
+00:10:57.639 --> 00:11:02.007
+Give the same design eighty-four percent adoption and the headline changes to
+
+00:11:02.007 --> 00:11:03.099
+preparing renewal terms.
+
+00:11:03.099 --> 00:11:06.739
+Take the reading away and it asks for usage data.
+
+00:11:06.739 --> 00:11:10.743
+When you brief an AI assistant, spell out that third case.
+
+00:11:10.743 --> 00:11:14.383
+An unknown reading and a zero call for different conversations.
+
+00:11:14.983 --> 00:11:19.540
+At the equipment cabinet, a technician needs the right unit, the right checks, and
+
+00:11:19.540 --> 00:11:20.517
+somewhere to write.
+
+00:11:20.517 --> 00:11:23.772
+Each card has its own checklist and a QR label.
+
+00:11:23.772 --> 00:11:27.678
+Scan the pump label and you get the pump’s identifier, even offline.
+
+00:11:27.678 --> 00:11:31.583
+The identifier is printed underneath for a person who cannot scan it.
+
+00:11:31.583 --> 00:11:34.187
+The tear-off receipt goes back to the office.
+
+00:11:34.187 --> 00:11:38.093
+Try the sheet on the printer your team takes into the field.
+
+00:11:38.733 --> 00:11:40.945
+Back in Salesforce, I choose Prepare agreement.
+
+00:11:40.945 --> 00:11:43.789
+The screen publishes the event and keeps my receipt.
+
+00:11:43.789 --> 00:11:45.684
+The background Flow creates the request.
+
+00:11:45.684 --> 00:11:48.528
+If it is still working, I can check again.
+
+00:11:48.528 --> 00:11:53.583
+When my link is ready, the standard Open a Page action takes me straight to the
+
+00:11:53.583 --> 00:11:54.215
+signing site.
+
+00:11:54.215 --> 00:11:56.743
+This sandbox asks me to verify my email.
+
+00:11:56.743 --> 00:12:01.482
+I can return to the interview without signing, and it still says the signed file
+
+00:12:01.482 --> 00:12:02.114
+is pending.
+
+00:12:02.114 --> 00:12:04.958
+Opening a tab never counts as accepting the agreement.
+
+00:12:05.567 --> 00:12:10.064
 We started with one field and finished with something a service team can use.
 
-00:09:59.356 --> 00:10:04.175
+00:12:10.064 --> 00:12:14.883
 The schedule adds up, the form keeps the account name, and the workflow has a
 
-00:10:04.175 --> 00:10:06.424
+00:12:14.883 --> 00:12:17.132
 place to check for the signed agreement.
 
-00:10:06.424 --> 00:10:10.922
+00:12:17.132 --> 00:12:21.630
 The guide includes the HTML, footer, example Flow, and the PDFs you’ve seen here.
 
-00:10:10.922 --> 00:10:15.098
+00:12:21.630 --> 00:12:25.807
 Bring one of your own documents, one ordinary record and one difficult record.
 
-00:10:15.098 --> 00:10:17.990
+00:12:25.807 --> 00:12:28.698
 Those three things make a very good next demo.

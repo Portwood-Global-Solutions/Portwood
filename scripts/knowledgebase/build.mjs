@@ -76,6 +76,16 @@ const articles = config.articles.map((article) => {
             );
             assert(fs.existsSync(path.join(root, relative)), `${article.slug}: missing repository target ${relative}`);
         }
+        if (href.startsWith('https://portwood.dev/demos/')) {
+            const download = new URL(href).pathname.slice('/demos/'.length);
+            let source = 'docs/demos/' + download;
+            if (download.startsWith('studio/')) {
+                const file = download.slice('studio/'.length);
+                if (file === 'portwood-authoring-context.md') continue; // Generated below.
+                source = 'docs/knowledgebase/examples/' + (file.endsWith('.zip') ? file : 'document-studio/' + file);
+            }
+            assert(fs.existsSync(path.join(root, source)), `${article.slug}: missing public download source ${source}`);
+        }
         if (href.startsWith('#'))
             assert(allAnchors.has(href.slice(1)), `${article.slug}: unknown article link ${href}`);
         else if (!/^(https?:|mailto:)/.test(href)) {
@@ -111,6 +121,10 @@ assert(
 const captions = JSON.parse(read('docs/knowledgebase/screenshots.json'));
 assert(config.home?.image && config.home?.imageAlt, 'The homepage needs an image and alt text in guide.json.');
 if (config.home?.image) files.push(config.home.image);
+for (const card of config.home?.showcase || []) {
+    assert(slugs.has(card.slug) && card.title && card.alt && card.image, `Incomplete design studio card: ${card.slug}`);
+    files.push(card.image);
+}
 for (const file of new Set(files))
     assert(
         captions.some((s) => s.file === file),
@@ -206,6 +220,34 @@ for (const file of [
         ['## ' + file, '', '```html', read('docs/knowledgebase/examples/acceptance/' + file).trim(), '```'].join('\n')
     );
 }
+for (const design of ['field-quote', 'renewal-brief', 'service-sheet']) {
+    for (const extension of ['html', 'json']) {
+        const file = `${design}.${extension}`;
+        context.push(
+            [
+                `## ${file}`,
+                '',
+                '```' + extension,
+                read('docs/knowledgebase/examples/document-studio/' + file).trim(),
+                '```'
+            ].join('\n')
+        );
+    }
+}
+context.push(read('docs/knowledgebase/examples/event-signing/README.md'));
+for (const file of ['Guide_Open_Agreement', 'Guide_Prepare_Agreement', 'Guide_Clear_Handoff_Link']) {
+    const filename = `${file}.flow-meta.xml`;
+    context.push(
+        [
+            `## ${filename}`,
+            '',
+            '```xml',
+            read('docs/knowledgebase/examples/event-signing/force-app/main/default/flows/' + filename).trim(),
+            '```'
+        ].join('\n')
+    );
+}
+
 const outputs = new Map([
     ['docs/knowledgebase/llm-context.md', context.join('\n\n') + '\n'],
     ['UserGuide.md', output.join('\n\n') + '\n'],

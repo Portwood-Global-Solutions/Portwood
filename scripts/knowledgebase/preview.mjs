@@ -19,6 +19,7 @@ const mime = {
     '.ico': 'image/x-icon',
     '.woff2': 'font/woff2',
     '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
     '.mp4': 'video/mp4',
     '.vtt': 'text/vtt',
     '.xml': 'text/plain',

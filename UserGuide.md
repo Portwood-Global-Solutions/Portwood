@@ -65,6 +65,7 @@ Choose a task to get started. You can make your first document, set up Portwood 
     - [Follow asynchronous jobs from Flow or Apex](#async-jobs)
     - [Merge Salesforce Files in Flow](#merge-pdfs-flow)
     - [Open the signing site from a Screen Flow](#signing-site-handoff)
+    - [Request an agreement and open the signing site from one Flow](#event-signing-journey)
     - [Coordinate signature requests with platform events](#signing-events)
 
 - **Keep your team organized**
@@ -84,11 +85,16 @@ Choose a task to get started. You can make your first document, set up Portwood 
     - [Plain-language glossary](#glossary)
     - [Developer and advanced references](#developer-reference)
 
-- **Design long and detailed documents**
+- **Design studio and print layouts**
     - [Repeat table headers across PDF pages](#repeat-table-headers)
     - [Build rich headers and two-line page footers](#running-headers-footers)
     - [Build grouped reports without broken table markup](#grouped-reports)
     - [Tune a demanding document](#engine-tuning)
+    - [Start with a finished design](#document-studio)
+    - [Build a linked contents page and a draft watermark](#print-navigation)
+    - [Build a quote with nested bundle pricing](#cpq-quote)
+    - [Design a renewal brief that recommends a next step](#renewal-decision)
+    - [Print a scannable field-service work order](#service-sheet)
     - [Design an advanced document with print CSS](#css-print-lab)
 
 - **Merge tag reference**
@@ -170,16 +176,19 @@ Follow one fictional account from a welcome letter to a service schedule, a PDF 
 
 [Watch From account to acceptance](https://portwood.dev/demos/portwood-3.64-demo.html) · [Read the transcript](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/demos/portwood-3.64-demo-script.md)
 
-| If you are here to…                    | Jump to this chapter in the player                            |
-| -------------------------------------- | ------------------------------------------------------------- |
-| Set up your first template             | **Start with one field**                                      |
-| Make long tables and branded documents | **Print across pages** or **Use richer layouts**              |
-| Generate documents from Salesforce     | **Deliver one file** or **Run a batch**                       |
-| Collect a signature                    | **Prepare a signature request**                               |
-| Build the experience in Flow           | **Sign in the interview** or **Navigate to the signing site** |
-| Troubleshoot a missing feature         | **When a control is missing**                                 |
+| If you are here to…                                    | Jump to this chapter in the player                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Set up your first template                             | **Start with one field**                                                 |
+| Make long tables and branded documents                 | **Print across pages** or **Use richer layouts**                         |
+| Generate documents from Salesforce                     | **Deliver one file** or **Run a batch**                                  |
+| Collect a signature                                    | **Prepare a signature request**                                          |
+| Build the experience in Flow                           | **Sign in the interview** or **Navigate to the signing site**            |
+| Build a linked proposal and price its bundles          | **Give the buyer a contents page** and **Price the bundle once**         |
+| Make a data-driven renewal brief or field work order   | **Let the data change the brief** or **Put the work order in the field** |
+| Follow a working platform event into the signer’s site | **Follow the event into signing**                                        |
+| Troubleshoot a missing feature                         | **When a control is missing**                                            |
 
-To follow along, open the [recipe library](#recipe-library). It includes the HTML and sample output so you can compare the file you generate with the one in the film.
+To follow along, open the [recipe library](#recipe-library). It includes the service packet. The [design studio](#document-studio) has the proposal, renewal brief, work order and their data.
 
 _Everyone · 11 min read_
 
@@ -423,6 +432,8 @@ _Template builders · 4 min read_
 ### Recipes from a first letter to a signed packet
 
 Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
+
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio)
 
 | Start with                                      | Build this                                                                                                                                               | Check your result                                                                           |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -796,6 +807,8 @@ _Template builders · 6 min read_
 
 Use AI to help draft or revise an HTML template, then check the result in Portwood.
 
+The downloadable reference includes three complete HTML designs, their sample data, and the working Screen Flow and event subscriber. Start by giving your assistant one design and the change you want to see in its PDF. [Open the design studio](#document-studio)
+
 The current creation wizard offers an existing file or a blank Canvas. AI help is available in the HTML designer; it is not a separate starter-gallery path.
 
 #### Use an external assistant
@@ -824,7 +837,7 @@ Check field names, opening and closing tags, page size, images, long text, and p
 
 #### Give your assistant the right fields and examples
 
-Download the [Portwood authoring and automation context](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/llm-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
+Download the [Portwood authoring and automation context](https://portwood.dev/demos/studio/portwood-authoring-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
 
 Try this request: “Build a two-page service review. Use the Account and Opportunities fields in my query. Keep the totals together, use our approved handoff snippet, and give me the body and footer separately. Then show how to pass the single signer's returned URL to a Screen Flow.” Check the PDF with zero rows and again with enough rows to cross a page. Test the Flow separately with an authorized practice signer.
 
@@ -1269,6 +1282,8 @@ _Template builders · 5 min read_
 ### Set paper, headers, and page backgrounds
 
 Set the paper, margins, repeated page content, and page background.
+
+[Give a long document clickable destinations and live page numbers.](#print-navigation)
 
 #### Choose paper and margins
 
@@ -2811,6 +2826,8 @@ _Salesforce administrators · 5 min read_
 
 Give the person in a Screen Flow a **Review and sign** link to the configured Salesforce Site or Experience Cloud signing page. Keep the interview available so the person can return and check progress. For a signed-in user who should stay on the same screen throughout, use [Sign inside the Flow](#flow-signatures).
 
+[Download the complete event-to-signing Screen Flow.](#event-signing-journey)
+
 #### Create the request in the interview
 
 1. Start with an authenticated user authorized to act for the selected record and signer. Resolve the signer from that verified relationship. Keep one signer's URL in this interview.
@@ -2850,11 +2867,52 @@ _Salesforce administrators · 8 min read_
 
 ---
 
+<a id="event-signing-journey"></a>
+
+### Request an agreement and open the signing site from one Flow
+
+A signed-in person is completing a Screen Flow. They choose **Prepare agreement**, Salesforce prepares the request in the background, and **Open signing page** takes them to their own Portwood signing page. Back in the interview, they can check whether the signed File is ready.
+
+[Download the working Flow project](https://portwood.dev/demos/studio/event-signing.zip) · [Read the setup and field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/README.md)
+
+#### Follow one request across the two Flows
+
+| Where                    | What happens                                                                                                                                 | What to look for                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| The person’s Screen Flow | **Create Records** publishes **Guide Sign Requested** with the interview’s receipt key. The next Screen ends that transaction.               | The person sees **Preparing your agreement**. The event carries the key only.                                                   |
+| The event-triggered Flow | The subscriber claims a private receipt with that unique key, resolves the publishing user and calls **Portwood: Create Signature Request**. | One receipt holds the Portwood request ID and the intended signer’s returned link. A replay reuses the existing work.           |
+| The original interview   | **Get Records** reads the receipt by interview key and signed-in owner. A ready receipt takes the **Open a Page** action.                    | The browser opens the signing page. If the event is still being processed, **Check again** reads the same receipt.              |
+| After the handoff        | The interview re-reads the saved Portwood request.                                                                                           | **Signed** and a populated protected File ID lead to **Signed file ready**. Closing the browser tab leaves the request pending. |
+
+#### Choose the page you want to open
+
+In the Screen Flow, choose **Action → Open a Page**. For the **signer**, choose **External Web Page**, set **URL** to the single signer URL from the receipt, and choose **New Browser Tab**. Keep the **Review and sign** link on the following screen for a person whose browser blocks the tab. The downloaded sample uses `flowruntime:openAPage`. Salesforce offers this action in Flow API 67 and later. [Salesforce Open a Page](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
+
+For an **internal coordinator** who needs the Salesforce record, select **Salesforce Record Page** in the same action. Set **Record ID** to the saved signature request ID, **Object Name** to `portwoodglobal__DocGen_Signature_Request__c`, and **View Mode** to **View**. That destination shows the request to someone with record access. To collect a signature, use the signer’s own web page.
+
+#### Set up your own signing journey
+
+The sample is for a single signed-in person signing their own agreement. It includes a small record-backed template, a private receipt, a **Publish After Commit** event and a cleanup Flow for the temporary signer link. The subscriber uses the publishing Salesforce user’s identity. The event contains no name, email or signing credential. The **Signing Order** is **Single**, and **Send Branded Emails** is off because the interview handles delivery. The template and org’s signer verification policy still applies.
+
+For an approval on an Opportunity, resolve the authorized signer from the approved record and use an approval-and-document-version key to recognize repeat business submissions. The example’s interview key protects retries of one interview. A newly started interview is a new submission. [Start from an approval event](#signing-events)
+
+For several signers, give each person only their own link. If the person wants to sign directly on the Flow screen, use [Portwood: Sign in Flow](#flow-signatures).
+
+In our sandbox the standard action opened the site’s **Verify your email** screen. Returning without signing left the request pending. Replaying the same event produced one receipt and one request. If the site fails to open, check the signer’s **Guide Signing Handoff** permission set and use **Review and sign** on the handoff screen. [Watch the event-to-signing chapter](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
+
+_Salesforce administrators · 9 min read_
+
+**Next:** [Open the signing site from a Screen Flow](#signing-site-handoff) · [Coordinate signature requests with platform events](#signing-events) · [Track, resend, or stop a request](#manage-signatures)
+
+---
+
 <a id="signing-events"></a>
 
 ### Coordinate signature requests with platform events
 
 Use this recipe when an approval happens in one process and someone signs later, possibly in another session. Imagine a sales manager approves a service agreement. The customer should receive one request, and the service team should start work only after the signed file is ready.
+
+[Try the complete Screen Flow, subscriber and private receipt.](#event-signing-journey)
 
 #### Set up the handoff
 
@@ -3659,9 +3717,9 @@ _Developers and advanced administrators · 4 min read_
 
 ---
 
-## Design long and detailed documents
+## Design studio and print layouts
 
-Keep the table, footer and totals readable on every page.
+Build proposals, account briefs and work orders with print CSS, real data and finished examples.
 
 <a id="repeat-table-headers"></a>
 
@@ -3831,6 +3889,8 @@ _Advanced template builders · 7 min read_
 
 Use one dataset and `{#GroupBy}` when the categories can change. Use deliberately filtered query aliases when each section has a different data-selection rule.
 
+[Build nested bundle tables from a priced quote.](#cpq-quote)
+
 #### One table per stage
 
 Select Opportunities with `Name`, `StageName`, and `Amount`. Sort by `StageName` if you want groups in stage order. This HTML wraps a complete table in the group and keeps the row loop inside its cells:
@@ -3933,11 +3993,323 @@ _Advanced template builders · 9 min read_
 
 ---
 
+<a id="document-studio"></a>
+
+### Start with a finished design
+
+Start with a file someone actually needs. Open one of these finished PDFs, try its links or scan its equipment labels, then take the HTML and data into your own org.
+
+| Build this                                                                    | Try this in the finished file                                                                    | Make it your own                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Commercial proposal](https://portwood.dev/demos/studio/field-quote.pdf)      | Click **Harbor reserve** on the cover. Find the battery options, then jump back to the contents. | [Nested pricing tables](#cpq-quote) · [Contents, links and watermarks](#print-navigation) |
+| [Renewal decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) | Read the recommendation, then find the team whose adoption is bringing the account below target. | [Design a brief that changes with the data](#renewal-decision)                            |
+| [Field-service sheet](https://portwood.dev/demos/studio/service-sheet.pdf)    | Scan either equipment card. Its QR code contains the asset identifier printed directly below it. | [Make a scannable service sheet](#service-sheet)                                          |
+
+A signer can also move from a Salesforce Screen Flow to a document prepared in the background. [Build the event-driven signing handoff](#event-signing-journey).
+
+[Watch the studio chapters](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=give-the-buyer-a-contents-page) to follow a buyer into the quote, a technician to the work order, and a signer through the Flow.
+
+#### Generate your first studio sample
+
+[Download the design studio files](https://portwood.dev/demos/studio/document-studio.zip) and unzip the folder. Each finished PDF comes with a matching HTML template and JSON sample. For your first run, choose the three files with the same name.
+
+**Use the included practice Flow.** From the unzipped `document-studio/sandbox-flow` directory, an administrator can deploy the draft with `sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX`. In Portwood, choose **New Template → Bring an Existing Template → JSON Data (from Flow) → HTML**, upload the design you want, and activate it. Use the API name in the table. You can start with just one design.
+
+| Upload this template | Give it this API name           |
+| -------------------- | ------------------------------- |
+| `field-quote.html`   | `Guide364_Studio_field_quote`   |
+| `renewal-brief.html` | `Guide364_Studio_renewal_brief` |
+| `service-sheet.html` | `Guide364_Studio_service_sheet` |
+
+In Flow Builder, open **Guide · Try a document design**, then **Debug**, with rollback off. Choose your design, select **Generate PDF**, and open the resulting Salesforce File. The Flow already has the fictional sample data. To try different figures, edit the corresponding plain-text JSON resource in a copy of the Flow.
+
+#### Use a practice Flow you already have
+
+1. Upload and activate the HTML as above. Copy its template **API Name**.
+2. Open a practice Screen Flow in Salesforce **Flow Builder**. Add a **Text** variable named `sampleJson`. For a one-off test, give it the contents of the JSON sample as its default value. A **Long Text Area** on a screen is another way to paste the sample at run time.
+3. Add **Portwood: Generate Document**. Set **Template API Name** to your template, **JSON Data** to the text resource, **Output Format Override** to **PDF** and **Save to Record** to **False**. Run **Debug** with rollback mode off so Salesforce keeps the new File.
+4. Check **Success**. When it is true, copy the returned **Content Document ID** and open the File in Salesforce Files. In Lightning Experience you can open `/lightning/r/ContentDocument/<Content Document ID>/view` on your org’s domain. When it is false, inspect **Error Message** before retrying. [Generate documents from Flow](#flow-generate)
+
+For real orders, build the same data shape from the records the current user can read, or use an Apex data provider. The sample keys are a contract between the data and the HTML. They are not fields you need to add to Salesforce. [Choose a data source](#custom-data)
+
+#### Brief your AI like a designer
+
+Give the assistant your data shape, the sample HTML, and a change you can recognize in the finished document. For the proposal, try this request.
+
+> Adapt the proposal for a purchasing manager. Keep the quoted net prices, currency and section IDs. Give optional services their own panel, keep one-time charges separate from monthly charges, and make the contents links follow their sections even when pricing spills onto another page. Return one HTML file and tell me which three things to check in the PDF.
+
+For a renewal brief, describe what should happen when usage is missing. For a work order, specify the actual identifier a technician should scan. Open the generated file and try that task before you save the new template version. [Download the AI authoring reference](https://portwood.dev/demos/studio/portwood-authoring-context.md)
+
+#### Give readers a text edition
+
+Each sample also has an HTML reading copy with a document language, headings, labeled prices or usage figures, and the equipment identifiers in text. These are filled examples you can open in a browser or use with a screen reader. [Read the proposal](https://portwood.dev/demos/studio/field-quote-reading.html) · [Read the renewal brief](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Read the work order](https://portwood.dev/demos/studio/service-sheet-reading.html)
+
+The three generated PDFs contain selectable text and lack PDF structure tags and document-language metadata. If your customer requires a tagged PDF, check the exported file’s tags, language, reading order, link names and table headers with your accessibility tools, and test the file with their assistive technology. Share the text edition alongside the visual copy.
+
+_Template builders · 5 min read_
+
+**Next:** [Build a quote with nested bundle pricing](#cpq-quote) · [Design a renewal brief that recommends a next step](#renewal-decision) · [Print a scannable field-service work order](#service-sheet) · [Request an agreement and open the signing site from one Flow](#event-signing-journey)
+
+---
+
+<a id="print-navigation"></a>
+
+### Build a linked contents page and a draft watermark
+
+Give the reader shortcuts through a long PDF. In the finished proposal, every entry on the cover links to the named section. The dotted leaders end in the current page number. The draft copy also carries its quote number on every page.
+
+[Open the finished proposal](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The actual proposal cover with a linked table of contents, dot leaders, quoted amounts and a draft mark](docs/images/userguide/v3.64/quote-contents.png)
+
+#### Create an entry and its destination
+
+Put this link on the contents page. Give the section heading the matching ID. Keep the ID unique across the document.
+
+```html
+<div class="contents"><a href="#pricing">Configured pricing</a></div>
+<h2 id="pricing">Configured pricing</h2>
+<a href="#contents">Return to contents</a>
+```
+
+Give your contents heading `id="contents"` for the return trip. For repeated sections, use a short permanent key for each item. The sample uses `href="#bundle-{Key}"` in the contents and `id="bundle-{Key}"` on the matching bundle. Two products can have the same display name and still need different keys. Gate an optional entry and its destination with the same condition.
+
+#### Let the renderer calculate the page
+
+```css
+.contents a {
+    display: block;
+    text-decoration: none;
+}
+.contents a:after {
+    content: leader('.') target-counter(attr(href), page);
+}
+.section {
+    page-break-before: always;
+}
+```
+
+The link supplies the destination. The CSS adds the dotted line and the page where that destination actually landed. In the supplied PDF, **Commercial terms** is on page 4. We added 42 component lines and generated again. The terms moved to page 7 and the contents entry and link moved with them. This is a contents page inside the PDF. Open the downloaded file in a PDF reader to test a jump in each direction.
+
+#### Print a watermark from HTML
+
+For review copies, put a fixed element near the start of the body. Bind the optional block to a Boolean and print a record-specific value in the mark.
+
+```html
+{#IsDraft}
+<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
+{/IsDraft}
+```
+
+```css
+.stamp {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    font: bold 9pt Helvetica;
+    letter-spacing: 1pt;
+    color: #674329;
+    border: 1pt solid #c19a72;
+    padding: 3pt 7pt;
+    background: #fff8ea;
+}
+```
+
+The proposal puts the stamp at the bottom of the printable area and its folio in the bottom page margin. `IsDraft: true` printed the stamp on all four pages. With `false`, the longer release copy had no draft stamp. Reserve that corner so the mark has room when a table grows. For diagonal artwork or a full-bleed letterhead, upload a pre-sized image under **Watermark / Background**. [Use page artwork](#page-layout)
+
+#### Add running folios
+
+```css
+@page {
+    size: Letter;
+    margin: 0.65in 0.72in 0.85in;
+    @bottom-right {
+        content: counter(page) ' / ' counter(pages);
+    }
+}
+```
+
+The sample supplies its own page CSS and leaves Portwood’s separate Header HTML and Footer HTML empty. If your existing template already has a branded footer, use its [running footer recipe](#running-headers-footers) and choose one place to draw the page number.
+
+To try this with your own data, start with [Generate a studio sample](#document-studio).
+
+_Template builders · 7 min read_
+
+**Next:** [Build a quote with nested bundle pricing](#cpq-quote) · [Build rich headers and two-line page footers](#running-headers-footers) · [Design an advanced document with print CSS](#css-print-lab)
+
+---
+
+<a id="cpq-quote"></a>
+
+### Build a quote with nested bundle pricing
+
+A buyer needs to see which options belong to each configured product and what they cost. This quote gives each bundle an outer table, then prints the components in a smaller table inside it. A separately priced inspection stays beside the Harbor bundle and out of the order total.
+
+[Open the example quote](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The generated pricing schedule with two bundles, nested component tables, separate subtotals and an optional service](docs/images/userguide/v3.64/quote-pricing.png)
+
+#### Bring the quote into the right shape
+
+Use your quoting system’s approved, already-priced values. For each bundle, supply its key and display name. Put included lines under its `Components.records` and unselected optional offers under `AddOns.records`. Include `totalSize` so an empty options list suppresses its panel. The [sample data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json) shows each collection in full.
+
+| The buyer sees     | What your Flow or provider supplies                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration      | One bundle per parent line, in selling order, with a stable key for the contents link.                                                          |
+| Included items     | Each child of that parent, with SKU, description, quantity, list unit price, discount and the net line total.                                   |
+| Options            | Separately quoted extras. A selected option that is already included in the bundle price should have one place in your total.                   |
+| Commercial summary | Currency, approved one-time net, recurring price per billing period and payment installments. Keep internal cost and margin out of the payload. |
+
+For Salesforce CPQ, save the priced quote first. Start with its lines and inspect the **Required By** relationship to identify an option’s parent. A quote line group is a presentation grouping and can contain several independent bundles. Confirm how your org prices bundled options, prorates subscriptions and rounds line totals. The sample works without installing CPQ. Map your org’s prices into the sample shape. [Salesforce’s Required By field](https://help.salesforce.com/s/articleView?id=000382714&language=en_US&type=1) · [Generate from prepared data](#custom-data)
+
+#### Nest the component table
+
+Paste the full example to keep the styling. The short version below shows where to open and close both loops.
+
+```html
+{#Bundles}
+<table class="bundle">
+    <tr>
+        <td><h3 id="bundle-{Key}">{Name}</h3></td>
+    </tr>
+    <tr>
+        <td>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Components}{Description}</td>
+                        <td>{Net:#,##0.00}{/Components}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+        </td>
+    </tr>
+</table>
+{/Bundles}
+```
+
+The outer loop wraps the entire bundle table. The inner loop opens and closes in the component row, so that row repeats inside its own bundle. Put the subtotal outside the component row while the bundle is still in scope. Keep short component rows together and let long bundles flow over the page. For large schedules, inspect the continuation page and its header. [Repeating table headings](#repeat-table-headers)
+
+#### Reconcile the order before sharing
+
+In the sample, Atlas totals **6,540.00** and Harbor totals **4,130.00**. The cover shows **USD 10,670.00 one time** and **USD 120.00 per month**. The **450.00** optional inspection is separate. On the last page, the three one-time installments add back to **10,670.00**. If your CPQ parent already carries the price of its children, print the parent net as the bundle subtotal. Summing the parent and those same included children would charge twice.
+
+Try a bundle with no options, a second bundle with its own components, and one bundle big enough to cross a page. Then follow the cover links to both configurations. [Try the sample in Salesforce](#document-studio)
+
+#### Send this exact quote for signature
+
+1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In **Portwood: Generate Document**, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
+2. On that quote, open **Files** and check the PDF and amount. In **Portwood Signature Sender**, choose **New signature request → Salesforce file**, then select that exact revision. Assign a signature field to each recipient, review the pages and send. [Prepare a finished PDF for signature](#sign-uploaded-pdf)
+3. Open the request to check its status and retrieve the signed PDF and certificate. The event-driven Screen Flow prepares its own receipt-backed agreement. Use the Salesforce File route above when the buyer must sign the exact approved pricing PDF. [Find the signed file](#manage-signatures) · [Build the event-driven handoff](#event-signing-journey)
+
+_Template builders · 8 min read_
+
+**Next:** [Build a linked contents page and a draft watermark](#print-navigation) · [Send an uploaded PDF for signature](#sign-uploaded-pdf) · [Start with a finished design](#document-studio)
+
+---
+
+<a id="renewal-decision"></a>
+
+### Design a renewal brief that recommends a next step
+
+An account owner wants to know what to do before a renewal meeting. This one-page PDF starts with a recommendation, backs it with the account’s contract and usage figures, and shows which team needs attention.
+
+[Open the decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) · [Read the text edition](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.json)
+
+![Renewal decision brief showing the account recommendation, contract value, service cases and team adoption bars](docs/images/userguide/v3.64/renewal-decision.png)
+
+#### Make the decision before you write the headline
+
+The sample’s teams have **72 active seats out of 100 licensed**. The account target is **80%**, so the recommendation is **Book an adoption review**. Calculate the overall rate from the total seats. An unweighted average of the team percentages gives a different answer.
+
+Have the Flow or provider supply `HasUsage`, `AtTarget`, `Adoption` and `Threshold` together. Set `HasUsage` to false for a missing reporting period or a zero denominator. Set `AtTarget` from the data source’s comparison of the measured rate and the account’s agreed threshold. Keep that logic where the business rule lives.
+
+| Input state                         | What the reader sees                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Usage is available and below target | **Book an adoption review**, with the agreed threshold and the team breakdown. |
+| Usage meets or exceeds target       | **Prepare renewal terms**, with the same underlying measurements.              |
+| No usable measurement               | **Request usage data** and an **Unknown** metric. The team chart is omitted.   |
+
+#### Print a bar the reader can check
+
+The bar is ordinary HTML. The data supplies a numeric percentage between 0 and 100. Give the track a fixed height and print the value alongside it so the document still makes sense in grayscale.
+
+```html
+<tr>
+    <td>{#Teams}{Name}</td>
+    <td>{Active} / {Licensed}</td>
+    <td>
+        {Percent}%
+        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
+        {/Teams}
+    </td>
+</tr>
+```
+
+The sample uses the same printed width for every track. Test 0, 50 and 100 before adding more teams. If your metric can exceed 100%, decide how you want to label it and bound the display width in the data.
+
+#### Adapt the story
+
+Try the supplied **72%**, then change the data to **84%**, `AtTarget` to true and the team counts to match. Finally set `HasUsage` to false. Generate all three files. The headline, metric band and chart should agree. The same pattern works for a project health report, a grant milestone or an account statement. [Run the example](#document-studio)
+
+_Template builders · 6 min read_
+
+**Next:** [Conditions and alternative content](#tag-conditions) · [Start with a finished design](#document-studio)
+
+---
+
+<a id="service-sheet"></a>
+
+### Print a scannable field-service work order
+
+A technician needs to find the right machine, see the checks for that unit and bring a short receipt back to the office. This printable work order gives each asset a QR code, a readable identifier, a checklist and room for the as-found reading.
+
+[Open the service sheet](https://portwood.dev/demos/studio/service-sheet.pdf) · [Read the text edition](https://portwood.dev/demos/studio/service-sheet-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.json)
+
+![Printable work order with two separate equipment cards, scannable asset codes and a detachable desk receipt](docs/images/userguide/v3.64/work-order.png)
+
+#### Put the identifier in two places
+
+Inside the `Equipment` loop, the sample prints `{*Code:qr:105}` and the plain value `{Code}` below it. The first code decodes to **AW-P17-201** for the circulation pump. The second is **AW-S08-414** for the flow sensor. Someone with a damaged label can type the printed value. These codes carry text and work offline. To open an asset page, supply an authorized HTTPS destination as the code value and test it as the intended user. [QR codes, images and barcodes](#charts-and-codes)
+
+#### Keep each machine with its checks
+
+The outer `{#Equipment}` block repeats the whole card. Inside the card a smaller `{#Checks}` loop repeats one task at a time. A short card uses `page-break-inside: avoid` so its code, title and checks travel together. If one machine has enough checks to fill a page, allow the checklist to continue and repeat a small identification band on the following sheet.
+
+The printed squares and ruled lines are for handwriting. For a form that someone fills electronically, use the [fillable PDF workflow](#fillable-pdf). The lower desk receipt has its own work-order number, so the office can match it to the job after it is detached.
+
+#### Check one physical copy
+
+Print at actual size on the paper the crew will carry. Scan each code and compare the result with the printed identifier. Leave white space around it, and confirm there is room to write the reading and initials. For a new customer, update the work-order JSON and generate the same HTML again. [Run the sample](#document-studio)
+
+_Template builders · 5 min read_
+
+**Next:** [Images, assets, codes, rich text, and backgrounds](#tag-media) · [Start with a finished design](#document-studio)
+
+---
+
 <a id="css-print-lab"></a>
 
 ### Design an advanced document with print CSS
 
 Build a service schedule that can grow from two rows to several pages and still leave a clean acceptance page. This lab uses Account as the parent and Opportunities as the child relationship. All estimates in the example use a single currency.
+
+[Add a working contents page and a conditional draft watermark.](#print-navigation)
 
 #### Assemble the example
 
@@ -5155,11 +5527,12 @@ So `:3inx` → `:288x`, `:x25mm` → `:x95`.
 {*OrderNumber}                  Code 128 barcode (default)
 {*TrackingId:code128}           Explicit type
 {*SKU:code128:300x80}           300×80 px
+{*ProductCode:code39:300x80}    Code 39 barcode
 {*ProductCode:qr}               QR code
 {*URL:qr:200}                   200px QR code
 ```
 
-Barcodes render in Word **and** HTML templates (HTML support added in v3.15) across PDF and DOCX output. Types supported: `code128`, `qr` — **only** those two. A typo'd or unsupported type (e.g. `{*SKU:code39}`) renders nothing, silently; leaving the type off defaults to Code 128.
+Print Code 128 (the default), Code 39 (`code39`), or a QR code (`qr`). Use Code 39 for uppercase inventory labels compatible with that scanner format. We generated `KIT-123` in both one-dimensional formats and decoded both from the finished PDF. Print the identifier beneath the code as a fallback. [Try a scannable work order](#service-sheet)
 
 QR codes are generated natively in Salesforce with Level Q error correction and support values up to 600 characters. For printed or mailed documents, short URLs or tokens under 120 characters are recommended for 1 inch square QR codes.
 

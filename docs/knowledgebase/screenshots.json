@@ -194,5 +194,33 @@
         "capturedOn": "2026-11-20",
         "environment": "Subscriber sandbox running the released package with a fictional service handoff clause",
         "description": "Terms and Snippets editor in HTML source mode with a reusable tag and Account Name binding."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/quote-contents.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Installed managed package in subscriber sandbox, fictional sample data",
+        "description": "Proposal cover with clickable contents, live destination page numbers and a conditional draft mark."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/quote-pricing.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Installed managed package in subscriber sandbox, fictional sample data",
+        "description": "CPQ-style component tables nested within two parent bundles in the generated quote."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/renewal-decision.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Installed managed package in subscriber sandbox, fictional sample data",
+        "description": "Decision brief recommending an adoption review from fictional usage figures."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/work-order.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Installed managed package in subscriber sandbox, fictional sample data",
+        "description": "Printable work order showing two readable equipment IDs, QR codes and checklists."
     }
 ]

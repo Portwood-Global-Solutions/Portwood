@@ -840,11 +840,12 @@ So `:3inx` → `:288x`, `:x25mm` → `:x95`.
 {*OrderNumber}                  Code 128 barcode (default)
 {*TrackingId:code128}           Explicit type
 {*SKU:code128:300x80}           300×80 px
+{*ProductCode:code39:300x80}    Code 39 barcode
 {*ProductCode:qr}               QR code
 {*URL:qr:200}                   200px QR code
 ```
 
-Barcodes render in Word **and** HTML templates (HTML support added in v3.15) across PDF and DOCX output. Types supported: `code128`, `qr` — **only** those two. A typo'd or unsupported type (e.g. `{*SKU:code39}`) renders nothing, silently; leaving the type off defaults to Code 128.
+Choose Code 128 (the default), Code 39 (`code39`) or a QR code (`qr`). The managed HTML-to-PDF renderer produced scannable Code 128 and Code 39 labels for `KIT-123`. Pair a printed identifier with the code for manual lookup. [Build a scannable work order](../knowledgebase/articles/service-sheet.md).
 
 QR codes are generated natively in Salesforce with Level Q error correction and support values up to 600 characters. For printed or mailed documents, short URLs or tokens under 120 characters are recommended for 1 inch square QR codes.
 

@@ -46,8 +46,8 @@
         },
         {
             "id": "advanced",
-            "title": "Design long and detailed documents",
-            "description": "Keep the table, footer and totals readable on every page."
+            "title": "Design studio and print layouts",
+            "description": "Build proposals, account briefs and work orders with print CSS, real data and finished examples."
         },
         {
             "id": "tags",
@@ -87,9 +87,9 @@
         },
         {
             "id": "advanced-report",
-            "title": "Make a polished report",
-            "description": "Group rows, repeat column headings, and keep page numbers in the footer.",
-            "articles": ["tag-loops", "repeat-table-headers", "running-headers-footers", "engine-tuning"]
+            "title": "Build a buyer-ready proposal",
+            "description": "Use a finished quote to design bundle pricing, a clickable contents page and a draft watermark.",
+            "articles": ["document-studio", "cpq-quote", "print-navigation", "css-print-lab"]
         },
         {
             "id": "service-acceptance",
@@ -1442,7 +1442,7 @@
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {
@@ -1838,6 +1838,101 @@
             }
         },
         {
+            "slug": "document-studio",
+            "title": "Start with a finished design",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 5,
+            "summary": "Open a finished proposal, renewal brief or field work order. Download the design and data to make it yours.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["cpq-quote", "renewal-decision", "service-sheet", "event-signing-journey"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "print-navigation",
+            "title": "Build a linked contents page and a draft watermark",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 7,
+            "summary": "Give readers clickable destinations, live page numbers and a draft mark that follows the quote.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["cpq-quote", "running-headers-footers", "css-print-lab"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "cpq-quote",
+            "title": "Build a quote with nested bundle pricing",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 8,
+            "summary": "Group components by bundle, reconcile one-time and monthly prices, then send this exact quote for signature.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["print-navigation", "sign-uploaded-pdf", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "renewal-decision",
+            "title": "Design a renewal brief that recommends a next step",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 6,
+            "summary": "Turn usage into an account decision, a readable adoption chart and a useful response to missing data.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["tag-conditions", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "service-sheet",
+            "title": "Print a scannable field-service work order",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 5,
+            "summary": "Give each machine an offline QR label, job-specific checks and space to record the visit.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["tag-media", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
             "slug": "css-print-lab",
             "title": "Design an advanced document with print CSS",
             "group": "advanced",
@@ -1897,6 +1992,25 @@
             }
         },
         {
+            "slug": "event-signing-journey",
+            "title": "Request an agreement and open the signing site from one Flow",
+            "group": "automate",
+            "audience": "Salesforce administrators",
+            "minutes": 9,
+            "summary": "Publish the event, pick up the private result and send the signed-in person to their own signing page.",
+            "sources": [
+                "docs/knowledgebase/examples/event-signing",
+                "force-app/main/default/classes/DocGenSignatureFlowAction.cls"
+            ],
+            "related": ["signing-site-handoff", "signing-events", "manage-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
             "slug": "signing-events",
             "title": "Coordinate signature requests with platform events",
             "group": "automate",
@@ -1919,6 +2033,26 @@
     ],
     "home": {
         "image": "docs/images/userguide/v3.60/first-document-result.png",
-        "imageAlt": "A finished Account brief shows Northstar Bikes and its phone number."
+        "imageAlt": "A finished Account brief shows Northstar Bikes and its phone number.",
+        "showcase": [
+            {
+                "slug": "cpq-quote",
+                "title": "A quote buyers can navigate",
+                "image": "docs/images/userguide/v3.64/quote-pricing.png",
+                "alt": "Proposal showing an Atlas bundle with its component prices and a separate Harbor bundle."
+            },
+            {
+                "slug": "renewal-decision",
+                "title": "A brief that recommends a next step",
+                "image": "docs/images/userguide/v3.64/renewal-decision.png",
+                "alt": "Renewal brief with an adoption recommendation and three labeled usage bars."
+            },
+            {
+                "slug": "service-sheet",
+                "title": "A work order technicians can scan",
+                "image": "docs/images/userguide/v3.64/work-order.png",
+                "alt": "Field work order with two equipment QR labels and printable inspection checks."
+            }
+        ]
     }
 }

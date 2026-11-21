@@ -144,6 +144,10 @@ Set the template's header or footer HTML and place page counters there. They are
 
 When the child query exceeds the giant-query threshold, keep the outer shell limited to supported parent-level tags and put the long list in the giant-query table. Do not rely on nested child loops, conditions, barcode tags, form fields, or signature tags in the outer shell. For large table rendering, review [repeat table headers](../knowledgebase/articles/repeat-table-headers.md) and [engine tuning](../knowledgebase/articles/engine-tuning.md).
 
+## Adapt a finished design
+
+The [design studio](../knowledgebase/articles/document-studio.md) includes complete HTML, JSON, generated PDFs and text editions. Use the [quote](../knowledgebase/articles/cpq-quote.md) for two levels of pricing, the [contents and watermark](../knowledgebase/articles/print-navigation.md) for long proposals, the [renewal brief](../knowledgebase/articles/renewal-decision.md) for missing-data decisions, and the [field work order](../knowledgebase/articles/service-sheet.md) for offline labels. The [event-driven signing example](../knowledgebase/articles/event-signing-journey.md) shows how a Screen Flow opens the signer’s page and checks for the finished File.
+
 # Build the event subscriber for a signing workflow
 
 Use a business event to start an agreement, then let the rest of the process continue when the signed file exists. A platform-event-triggered Flow runs in its own transaction and has no screen. Keep the customer's navigation in the [Screen Flow handoff](../../UserGuide.md#signing-site-handoff).
@@ -833,6 +837,10 @@ For tables to align across the document, the `<w:tblGrid>` blocks of those table
 
 ---
 
+## Link the sections of a long proposal
+
+Pair stable fragment links with destination IDs. A contents link can print the destination page with `content: leader('.') target-counter(attr(href), page)`. A fixed element gated by `{#IsDraft}` can repeat a draft mark on every page. [Copy the tested CSS and HTML](../knowledgebase/articles/print-navigation.md).
+
 <a id="canvas-design"></a>
 
 ## Design with Canvas
@@ -1088,6 +1096,8 @@ Excel templates produce Excel files; PowerPoint templates produce PowerPoint fil
 
 Use AI to help draft or revise an HTML template, then check the result in Portwood.
 
+The downloadable reference includes three complete HTML designs, their sample data, and the working Screen Flow and event subscriber. Start by giving your assistant one design and the change you want to see in its PDF. [Open the design studio](#document-studio)
+
 The current creation wizard offers an existing file or a blank Canvas. AI help is available in the HTML designer; it is not a separate starter-gallery path.
 
 #### Use an external assistant
@@ -1116,7 +1126,7 @@ Check field names, opening and closing tags, page size, images, long text, and p
 
 #### Give your assistant the right fields and examples
 
-Download the [Portwood authoring and automation context](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/llm-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
+Download the [Portwood authoring and automation context](https://portwood.dev/demos/studio/portwood-authoring-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
 
 Try this request: “Build a two-page service review. Use the Account and Opportunities fields in my query. Keep the totals together, use our approved handoff snippet, and give me the body and footer separately. Then show how to pass the single signer's returned URL to a Screen Flow.” Check the PDF with zero rows and again with enough rows to cross a page. Test the Flow separately with an authorized practice signer.
 
@@ -1495,6 +1505,8 @@ For images embedded in a Salesforce rich-text value, download and save-to-record
 ## Set paper, headers, and page backgrounds
 
 Set the paper, margins, repeated page content, and page background.
+
+[Give a long document clickable destinations and live page numbers.](#print-navigation)
 
 #### Choose paper and margins
 
@@ -3902,11 +3914,12 @@ So `:3inx` → `:288x`, `:x25mm` → `:x95`.
 {*OrderNumber}                  Code 128 barcode (default)
 {*TrackingId:code128}           Explicit type
 {*SKU:code128:300x80}           300×80 px
+{*ProductCode:code39:300x80}    Code 39 barcode
 {*ProductCode:qr}               QR code
 {*URL:qr:200}                   200px QR code
 ```
 
-Barcodes render in Word **and** HTML templates (HTML support added in v3.15) across PDF and DOCX output. Types supported: `code128`, `qr` — **only** those two. A typo'd or unsupported type (e.g. `{*SKU:code39}`) renders nothing, silently; leaving the type off defaults to Code 128.
+Print Code 128 (the default), Code 39 (`code39`), or a QR code (`qr`). Use Code 39 for uppercase inventory labels compatible with that scanner format. We generated `KIT-123` in both one-dimensional formats and decoded both from the finished PDF. Print the identifier beneath the code as a fallback. [Try a scannable work order](#service-sheet)
 
 QR codes are generated natively in Salesforce with Level Q error correction and support values up to 600 characters. For printed or mailed documents, short URLs or tokens under 120 characters are recommended for 1 inch square QR codes.
 
@@ -4239,6 +4252,8 @@ This recipe adapts Dave's [two-line footer answer in Portwood Community](https:/
 ## Build grouped reports without broken table markup
 
 Use one dataset and `{#GroupBy}` when the categories can change. Use deliberately filtered query aliases when each section has a different data-selection rule.
+
+[Build nested bundle tables from a priced quote.](#cpq-quote)
 
 #### One table per stage
 
@@ -5514,6 +5529,8 @@ Behind the scenes the template stores `Base_Object_API__c = 'FlowJsonData'` (a s
 
 Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
 
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio)
+
 | Start with                                      | Build this                                                                                                                                               | Check your result                                                                           |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | One Account                                     | [A one-field welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.html) | The PDF heading contains the Account name.                                                  |
@@ -5537,11 +5554,293 @@ For smaller pieces to copy into your own design, including barcodes, headers, to
 
 Compare your result with the [finished welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.pdf). To practice merging, pair it with the [flattened service acceptance PDF](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flattened-acceptance.pdf).
 
+<a id="document-studio"></a>
+
+## Start with a finished design
+
+Start with a file someone actually needs. Open one of these finished PDFs, try its links or scan its equipment labels, then take the HTML and data into your own org.
+
+| Build this                                                                    | Try this in the finished file                                                                    | Make it your own                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Commercial proposal](https://portwood.dev/demos/studio/field-quote.pdf)      | Click **Harbor reserve** on the cover. Find the battery options, then jump back to the contents. | [Nested pricing tables](#cpq-quote) · [Contents, links and watermarks](#print-navigation) |
+| [Renewal decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) | Read the recommendation, then find the team whose adoption is bringing the account below target. | [Design a brief that changes with the data](#renewal-decision)                            |
+| [Field-service sheet](https://portwood.dev/demos/studio/service-sheet.pdf)    | Scan either equipment card. Its QR code contains the asset identifier printed directly below it. | [Make a scannable service sheet](#service-sheet)                                          |
+
+A signer can also move from a Salesforce Screen Flow to a document prepared in the background. [Build the event-driven signing handoff](#event-signing-journey).
+
+[Watch the studio chapters](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=give-the-buyer-a-contents-page) to follow a buyer into the quote, a technician to the work order, and a signer through the Flow.
+
+#### Generate your first studio sample
+
+[Download the design studio files](https://portwood.dev/demos/studio/document-studio.zip) and unzip the folder. Each finished PDF comes with a matching HTML template and JSON sample. For your first run, choose the three files with the same name.
+
+**Use the included practice Flow.** From the unzipped `document-studio/sandbox-flow` directory, an administrator can deploy the draft with `sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX`. In Portwood, choose **New Template → Bring an Existing Template → JSON Data (from Flow) → HTML**, upload the design you want, and activate it. Use the API name in the table. You can start with just one design.
+
+| Upload this template | Give it this API name           |
+| -------------------- | ------------------------------- |
+| `field-quote.html`   | `Guide364_Studio_field_quote`   |
+| `renewal-brief.html` | `Guide364_Studio_renewal_brief` |
+| `service-sheet.html` | `Guide364_Studio_service_sheet` |
+
+In Flow Builder, open **Guide · Try a document design**, then **Debug**, with rollback off. Choose your design, select **Generate PDF**, and open the resulting Salesforce File. The Flow already has the fictional sample data. To try different figures, edit the corresponding plain-text JSON resource in a copy of the Flow.
+
+#### Use a practice Flow you already have
+
+1. Upload and activate the HTML as above. Copy its template **API Name**.
+2. Open a practice Screen Flow in Salesforce **Flow Builder**. Add a **Text** variable named `sampleJson`. For a one-off test, give it the contents of the JSON sample as its default value. A **Long Text Area** on a screen is another way to paste the sample at run time.
+3. Add **Portwood: Generate Document**. Set **Template API Name** to your template, **JSON Data** to the text resource, **Output Format Override** to **PDF** and **Save to Record** to **False**. Run **Debug** with rollback mode off so Salesforce keeps the new File.
+4. Check **Success**. When it is true, copy the returned **Content Document ID** and open the File in Salesforce Files. In Lightning Experience you can open `/lightning/r/ContentDocument/<Content Document ID>/view` on your org’s domain. When it is false, inspect **Error Message** before retrying. [Generate documents from Flow](#flow-generate)
+
+For real orders, build the same data shape from the records the current user can read, or use an Apex data provider. The sample keys are a contract between the data and the HTML. They are not fields you need to add to Salesforce. [Choose a data source](#custom-data)
+
+#### Brief your AI like a designer
+
+Give the assistant your data shape, the sample HTML, and a change you can recognize in the finished document. For the proposal, try this request.
+
+> Adapt the proposal for a purchasing manager. Keep the quoted net prices, currency and section IDs. Give optional services their own panel, keep one-time charges separate from monthly charges, and make the contents links follow their sections even when pricing spills onto another page. Return one HTML file and tell me which three things to check in the PDF.
+
+For a renewal brief, describe what should happen when usage is missing. For a work order, specify the actual identifier a technician should scan. Open the generated file and try that task before you save the new template version. [Download the AI authoring reference](https://portwood.dev/demos/studio/portwood-authoring-context.md)
+
+#### Give readers a text edition
+
+Each sample also has an HTML reading copy with a document language, headings, labeled prices or usage figures, and the equipment identifiers in text. These are filled examples you can open in a browser or use with a screen reader. [Read the proposal](https://portwood.dev/demos/studio/field-quote-reading.html) · [Read the renewal brief](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Read the work order](https://portwood.dev/demos/studio/service-sheet-reading.html)
+
+The three generated PDFs contain selectable text and lack PDF structure tags and document-language metadata. If your customer requires a tagged PDF, check the exported file’s tags, language, reading order, link names and table headers with your accessibility tools, and test the file with their assistive technology. Share the text edition alongside the visual copy.
+
+<a id="print-navigation"></a>
+
+## Build a linked contents page and a draft watermark
+
+Give the reader shortcuts through a long PDF. In the finished proposal, every entry on the cover links to the named section. The dotted leaders end in the current page number. The draft copy also carries its quote number on every page.
+
+[Open the finished proposal](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The actual proposal cover with a linked table of contents, dot leaders, quoted amounts and a draft mark](docs/images/userguide/v3.64/quote-contents.png)
+
+#### Create an entry and its destination
+
+Put this link on the contents page. Give the section heading the matching ID. Keep the ID unique across the document.
+
+```html
+<div class="contents"><a href="#pricing">Configured pricing</a></div>
+<h2 id="pricing">Configured pricing</h2>
+<a href="#contents">Return to contents</a>
+```
+
+Give your contents heading `id="contents"` for the return trip. For repeated sections, use a short permanent key for each item. The sample uses `href="#bundle-{Key}"` in the contents and `id="bundle-{Key}"` on the matching bundle. Two products can have the same display name and still need different keys. Gate an optional entry and its destination with the same condition.
+
+#### Let the renderer calculate the page
+
+```css
+.contents a {
+    display: block;
+    text-decoration: none;
+}
+.contents a:after {
+    content: leader('.') target-counter(attr(href), page);
+}
+.section {
+    page-break-before: always;
+}
+```
+
+The link supplies the destination. The CSS adds the dotted line and the page where that destination actually landed. In the supplied PDF, **Commercial terms** is on page 4. We added 42 component lines and generated again. The terms moved to page 7 and the contents entry and link moved with them. This is a contents page inside the PDF. Open the downloaded file in a PDF reader to test a jump in each direction.
+
+#### Print a watermark from HTML
+
+For review copies, put a fixed element near the start of the body. Bind the optional block to a Boolean and print a record-specific value in the mark.
+
+```html
+{#IsDraft}
+<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
+{/IsDraft}
+```
+
+```css
+.stamp {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    font: bold 9pt Helvetica;
+    letter-spacing: 1pt;
+    color: #674329;
+    border: 1pt solid #c19a72;
+    padding: 3pt 7pt;
+    background: #fff8ea;
+}
+```
+
+The proposal puts the stamp at the bottom of the printable area and its folio in the bottom page margin. `IsDraft: true` printed the stamp on all four pages. With `false`, the longer release copy had no draft stamp. Reserve that corner so the mark has room when a table grows. For diagonal artwork or a full-bleed letterhead, upload a pre-sized image under **Watermark / Background**. [Use page artwork](#page-layout)
+
+#### Add running folios
+
+```css
+@page {
+    size: Letter;
+    margin: 0.65in 0.72in 0.85in;
+    @bottom-right {
+        content: counter(page) ' / ' counter(pages);
+    }
+}
+```
+
+The sample supplies its own page CSS and leaves Portwood’s separate Header HTML and Footer HTML empty. If your existing template already has a branded footer, use its [running footer recipe](#running-headers-footers) and choose one place to draw the page number.
+
+To try this with your own data, start with [Generate a studio sample](#document-studio).
+
+<a id="cpq-quote"></a>
+
+## Build a quote with nested bundle pricing
+
+A buyer needs to see which options belong to each configured product and what they cost. This quote gives each bundle an outer table, then prints the components in a smaller table inside it. A separately priced inspection stays beside the Harbor bundle and out of the order total.
+
+[Open the example quote](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The generated pricing schedule with two bundles, nested component tables, separate subtotals and an optional service](docs/images/userguide/v3.64/quote-pricing.png)
+
+#### Bring the quote into the right shape
+
+Use your quoting system’s approved, already-priced values. For each bundle, supply its key and display name. Put included lines under its `Components.records` and unselected optional offers under `AddOns.records`. Include `totalSize` so an empty options list suppresses its panel. The [sample data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json) shows each collection in full.
+
+| The buyer sees     | What your Flow or provider supplies                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration      | One bundle per parent line, in selling order, with a stable key for the contents link.                                                          |
+| Included items     | Each child of that parent, with SKU, description, quantity, list unit price, discount and the net line total.                                   |
+| Options            | Separately quoted extras. A selected option that is already included in the bundle price should have one place in your total.                   |
+| Commercial summary | Currency, approved one-time net, recurring price per billing period and payment installments. Keep internal cost and margin out of the payload. |
+
+For Salesforce CPQ, save the priced quote first. Start with its lines and inspect the **Required By** relationship to identify an option’s parent. A quote line group is a presentation grouping and can contain several independent bundles. Confirm how your org prices bundled options, prorates subscriptions and rounds line totals. The sample works without installing CPQ. Map your org’s prices into the sample shape. [Salesforce’s Required By field](https://help.salesforce.com/s/articleView?id=000382714&language=en_US&type=1) · [Generate from prepared data](#custom-data)
+
+#### Nest the component table
+
+Paste the full example to keep the styling. The short version below shows where to open and close both loops.
+
+```html
+{#Bundles}
+<table class="bundle">
+    <tr>
+        <td><h3 id="bundle-{Key}">{Name}</h3></td>
+    </tr>
+    <tr>
+        <td>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Components}{Description}</td>
+                        <td>{Net:#,##0.00}{/Components}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+        </td>
+    </tr>
+</table>
+{/Bundles}
+```
+
+The outer loop wraps the entire bundle table. The inner loop opens and closes in the component row, so that row repeats inside its own bundle. Put the subtotal outside the component row while the bundle is still in scope. Keep short component rows together and let long bundles flow over the page. For large schedules, inspect the continuation page and its header. [Repeating table headings](#repeat-table-headers)
+
+#### Reconcile the order before sharing
+
+In the sample, Atlas totals **6,540.00** and Harbor totals **4,130.00**. The cover shows **USD 10,670.00 one time** and **USD 120.00 per month**. The **450.00** optional inspection is separate. On the last page, the three one-time installments add back to **10,670.00**. If your CPQ parent already carries the price of its children, print the parent net as the bundle subtotal. Summing the parent and those same included children would charge twice.
+
+Try a bundle with no options, a second bundle with its own components, and one bundle big enough to cross a page. Then follow the cover links to both configurations. [Try the sample in Salesforce](#document-studio)
+
+#### Send this exact quote for signature
+
+1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In **Portwood: Generate Document**, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
+2. On that quote, open **Files** and check the PDF and amount. In **Portwood Signature Sender**, choose **New signature request → Salesforce file**, then select that exact revision. Assign a signature field to each recipient, review the pages and send. [Prepare a finished PDF for signature](#sign-uploaded-pdf)
+3. Open the request to check its status and retrieve the signed PDF and certificate. The event-driven Screen Flow prepares its own receipt-backed agreement. Use the Salesforce File route above when the buyer must sign the exact approved pricing PDF. [Find the signed file](#manage-signatures) · [Build the event-driven handoff](#event-signing-journey)
+
+<a id="renewal-decision"></a>
+
+## Design a renewal brief that recommends a next step
+
+An account owner wants to know what to do before a renewal meeting. This one-page PDF starts with a recommendation, backs it with the account’s contract and usage figures, and shows which team needs attention.
+
+[Open the decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) · [Read the text edition](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.json)
+
+![Renewal decision brief showing the account recommendation, contract value, service cases and team adoption bars](docs/images/userguide/v3.64/renewal-decision.png)
+
+#### Make the decision before you write the headline
+
+The sample’s teams have **72 active seats out of 100 licensed**. The account target is **80%**, so the recommendation is **Book an adoption review**. Calculate the overall rate from the total seats. An unweighted average of the team percentages gives a different answer.
+
+Have the Flow or provider supply `HasUsage`, `AtTarget`, `Adoption` and `Threshold` together. Set `HasUsage` to false for a missing reporting period or a zero denominator. Set `AtTarget` from the data source’s comparison of the measured rate and the account’s agreed threshold. Keep that logic where the business rule lives.
+
+| Input state                         | What the reader sees                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Usage is available and below target | **Book an adoption review**, with the agreed threshold and the team breakdown. |
+| Usage meets or exceeds target       | **Prepare renewal terms**, with the same underlying measurements.              |
+| No usable measurement               | **Request usage data** and an **Unknown** metric. The team chart is omitted.   |
+
+#### Print a bar the reader can check
+
+The bar is ordinary HTML. The data supplies a numeric percentage between 0 and 100. Give the track a fixed height and print the value alongside it so the document still makes sense in grayscale.
+
+```html
+<tr>
+    <td>{#Teams}{Name}</td>
+    <td>{Active} / {Licensed}</td>
+    <td>
+        {Percent}%
+        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
+        {/Teams}
+    </td>
+</tr>
+```
+
+The sample uses the same printed width for every track. Test 0, 50 and 100 before adding more teams. If your metric can exceed 100%, decide how you want to label it and bound the display width in the data.
+
+#### Adapt the story
+
+Try the supplied **72%**, then change the data to **84%**, `AtTarget` to true and the team counts to match. Finally set `HasUsage` to false. Generate all three files. The headline, metric band and chart should agree. The same pattern works for a project health report, a grant milestone or an account statement. [Run the example](#document-studio)
+
+<a id="service-sheet"></a>
+
+## Print a scannable field-service work order
+
+A technician needs to find the right machine, see the checks for that unit and bring a short receipt back to the office. This printable work order gives each asset a QR code, a readable identifier, a checklist and room for the as-found reading.
+
+[Open the service sheet](https://portwood.dev/demos/studio/service-sheet.pdf) · [Read the text edition](https://portwood.dev/demos/studio/service-sheet-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.json)
+
+![Printable work order with two separate equipment cards, scannable asset codes and a detachable desk receipt](docs/images/userguide/v3.64/work-order.png)
+
+#### Put the identifier in two places
+
+Inside the `Equipment` loop, the sample prints `{*Code:qr:105}` and the plain value `{Code}` below it. The first code decodes to **AW-P17-201** for the circulation pump. The second is **AW-S08-414** for the flow sensor. Someone with a damaged label can type the printed value. These codes carry text and work offline. To open an asset page, supply an authorized HTTPS destination as the code value and test it as the intended user. [QR codes, images and barcodes](#charts-and-codes)
+
+#### Keep each machine with its checks
+
+The outer `{#Equipment}` block repeats the whole card. Inside the card a smaller `{#Checks}` loop repeats one task at a time. A short card uses `page-break-inside: avoid` so its code, title and checks travel together. If one machine has enough checks to fill a page, allow the checklist to continue and repeat a small identification band on the following sheet.
+
+The printed squares and ruled lines are for handwriting. For a form that someone fills electronically, use the [fillable PDF workflow](#fillable-pdf). The lower desk receipt has its own work-order number, so the office can match it to the job after it is detached.
+
+#### Check one physical copy
+
+Print at actual size on the paper the crew will carry. Scan each code and compare the result with the printed identifier. Leave white space around it, and confirm there is room to write the reading and initials. For a new customer, update the work-order JSON and generate the same HTML again. [Run the sample](#document-studio)
+
 <a id="css-print-lab"></a>
 
 ## Design an advanced document with print CSS
 
 Build a service schedule that can grow from two rows to several pages and still leave a clean acceptance page. This lab uses Account as the parent and Opportunities as the child relationship. All estimates in the example use a single currency.
+
+[Add a working contents page and a conditional draft watermark.](#print-navigation)
 
 #### Assemble the example
 
@@ -5647,6 +5946,8 @@ For a familiar first run, use the downloaded sample letter and acceptance form f
 
 Give the person in a Screen Flow a **Review and sign** link to the configured Salesforce Site or Experience Cloud signing page. Keep the interview available so the person can return and check progress. For a signed-in user who should stay on the same screen throughout, use [Sign inside the Flow](#flow-signatures).
 
+[Download the complete event-to-signing Screen Flow.](#event-signing-journey)
+
 #### Create the request in the interview
 
 1. Start with an authenticated user authorized to act for the selected record and signer. Resolve the signer from that verified relationship. Keep one signer's URL in this interview.
@@ -5680,11 +5981,46 @@ When an event subscriber prepares the request for the screen, the publisher and 
 
 The [downloadable Screen Flow](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flows/Guide364_Service_Acceptance.flow-meta.xml) is a subscriber example for API 68. Deploy it as a draft in a sandbox with Portwood 3.64, then debug with input Text variables `recordId` and `templateApiName`. Use an authorized test record and a signable template with a **Customer** role. It uses the logged-in user's name and email and suppresses the initial invitation. Leave the site checkbox clear for embedded signing or select it to exercise **Open a Page**. Before exposing a copy to other users, have its launcher resolve the allowed record and template and enforce your signer eligibility rule.
 
+<a id="event-signing-journey"></a>
+
+## Request an agreement and open the signing site from one Flow
+
+A signed-in person is completing a Screen Flow. They choose **Prepare agreement**, Salesforce prepares the request in the background, and **Open signing page** takes them to their own Portwood signing page. Back in the interview, they can check whether the signed File is ready.
+
+[Download the working Flow project](https://portwood.dev/demos/studio/event-signing.zip) · [Read the setup and field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/README.md)
+
+#### Follow one request across the two Flows
+
+| Where                    | What happens                                                                                                                                 | What to look for                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| The person’s Screen Flow | **Create Records** publishes **Guide Sign Requested** with the interview’s receipt key. The next Screen ends that transaction.               | The person sees **Preparing your agreement**. The event carries the key only.                                                   |
+| The event-triggered Flow | The subscriber claims a private receipt with that unique key, resolves the publishing user and calls **Portwood: Create Signature Request**. | One receipt holds the Portwood request ID and the intended signer’s returned link. A replay reuses the existing work.           |
+| The original interview   | **Get Records** reads the receipt by interview key and signed-in owner. A ready receipt takes the **Open a Page** action.                    | The browser opens the signing page. If the event is still being processed, **Check again** reads the same receipt.              |
+| After the handoff        | The interview re-reads the saved Portwood request.                                                                                           | **Signed** and a populated protected File ID lead to **Signed file ready**. Closing the browser tab leaves the request pending. |
+
+#### Choose the page you want to open
+
+In the Screen Flow, choose **Action → Open a Page**. For the **signer**, choose **External Web Page**, set **URL** to the single signer URL from the receipt, and choose **New Browser Tab**. Keep the **Review and sign** link on the following screen for a person whose browser blocks the tab. The downloaded sample uses `flowruntime:openAPage`. Salesforce offers this action in Flow API 67 and later. [Salesforce Open a Page](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
+
+For an **internal coordinator** who needs the Salesforce record, select **Salesforce Record Page** in the same action. Set **Record ID** to the saved signature request ID, **Object Name** to `portwoodglobal__DocGen_Signature_Request__c`, and **View Mode** to **View**. That destination shows the request to someone with record access. To collect a signature, use the signer’s own web page.
+
+#### Set up your own signing journey
+
+The sample is for a single signed-in person signing their own agreement. It includes a small record-backed template, a private receipt, a **Publish After Commit** event and a cleanup Flow for the temporary signer link. The subscriber uses the publishing Salesforce user’s identity. The event contains no name, email or signing credential. The **Signing Order** is **Single**, and **Send Branded Emails** is off because the interview handles delivery. The template and org’s signer verification policy still applies.
+
+For an approval on an Opportunity, resolve the authorized signer from the approved record and use an approval-and-document-version key to recognize repeat business submissions. The example’s interview key protects retries of one interview. A newly started interview is a new submission. [Start from an approval event](#signing-events)
+
+For several signers, give each person only their own link. If the person wants to sign directly on the Flow screen, use [Portwood: Sign in Flow](#flow-signatures).
+
+In our sandbox the standard action opened the site’s **Verify your email** screen. Returning without signing left the request pending. Replaying the same event produced one receipt and one request. If the site fails to open, check the signer’s **Guide Signing Handoff** permission set and use **Review and sign** on the handoff screen. [Watch the event-to-signing chapter](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
+
 <a id="signing-events"></a>
 
 ## Coordinate signature requests with platform events
 
 Use this recipe when an approval happens in one process and someone signs later, possibly in another session. Imagine a sales manager approves a service agreement. The customer should receive one request, and the service team should start work only after the signed file is ready.
+
+[Try the complete Screen Flow, subscriber and private receipt.](#event-signing-journey)
 
 #### Set up the handoff
 
@@ -6006,4 +6342,1879 @@ The [Flow Builder worksheet](https://github.com/Portwood-Global-Solutions/Portwo
         </div>
     </body>
 </html>
+```
+
+## field-quote.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Field station renewal</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.65in 0.72in 0.85in;
+                @bottom-left {
+                    content: 'Morrow Field Systems   /   Commercial proposal';
+                    font: 8pt Helvetica;
+                    color: #516069;
+                }
+                @bottom-right {
+                    content: counter(page) '  /  ' counter(pages);
+                    font: 9pt Helvetica;
+                    color: #193c43;
+                }
+            }
+            body {
+                margin: 0;
+                color: #1a3036;
+                font:
+                    10.5pt/1.4 Helvetica,
+                    sans-serif;
+            }
+            h1,
+            h2 {
+                font-family: Times, serif;
+                font-weight: normal;
+            }
+            h1 {
+                font-size: 42pt;
+                line-height: 1.02;
+                margin: 14pt 0 8pt;
+            }
+            h2 {
+                font-size: 29pt;
+                margin: 6pt 0 14pt;
+                page-break-after: avoid;
+            }
+            h3 {
+                font-size: 13pt;
+                margin: 3pt 0;
+            }
+            a {
+                color: #14555b;
+            }
+            .mast {
+                width: 100%;
+                border-collapse: collapse;
+                border-bottom: 2.5pt solid #db915c;
+            }
+            .mast td {
+                padding: 4pt 0 8pt;
+                color: #17454a;
+                font-weight: bold;
+            }
+            .right {
+                text-align: right;
+            }
+            .edition {
+                font-size: 8pt;
+                letter-spacing: 1pt;
+                color: #3a6468;
+                font-weight: bold;
+            }
+            .hero {
+                padding: 27pt 24pt;
+                background: #193e44;
+                color: #ffffff;
+                margin: 17pt 0;
+            }
+            .hero p {
+                margin: 8pt 0 0;
+            }
+            .hero .edition {
+                color: #f3bb8e;
+            }
+            .summary,
+            .bundle,
+            .lines {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .summary td {
+                width: 50%;
+                padding: 13pt 10pt;
+                border-top: 1pt solid #537673;
+                background: #e8efea;
+                vertical-align: top;
+            }
+            .metric {
+                display: block;
+                font:
+                    21pt Times,
+                    serif;
+            }
+            .contents {
+                width: 95%;
+                margin: 18pt 0;
+            }
+            .contents a {
+                display: block;
+                text-decoration: none;
+                line-height: 1.6;
+            }
+            .contents a:after {
+                content: leader('.') target-counter(attr(href), page);
+            }
+            .contents .child {
+                padding-left: 17pt;
+                font-size: 9pt;
+            }
+            .section {
+                page-break-before: always;
+            }
+            .stamp {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                font: bold 9pt Helvetica;
+                letter-spacing: 1pt;
+                color: #674329;
+                border: 1pt solid #c19a72;
+                padding: 3pt 7pt;
+                background: #fff8ea;
+            }
+            .jump {
+                font-size: 8pt;
+                margin: 6pt 0 14pt;
+            }
+            .bundle {
+                margin: 10pt 0 13pt;
+            }
+            .bundle-head {
+                background: #24545a;
+                color: white;
+                padding: 8pt;
+            }
+            .bundle-head h3 {
+                margin: 0;
+            }
+            .bundle-body {
+                border: 1pt solid #b8c6be;
+                padding: 7pt;
+            }
+            .lines {
+                font-size: 8.5pt;
+                table-layout: fixed;
+                -fs-table-paginate: paginate;
+            }
+            .lines th,
+            .lines td {
+                padding: 4pt 3pt;
+                border-bottom: 0.5pt solid #c7d0cb;
+            }
+            .lines th {
+                text-align: left;
+                color: #315956;
+                background: #eff3ef;
+            }
+            .lines .num {
+                text-align: right;
+            }
+            .lines tr {
+                page-break-inside: avoid;
+            }
+            .sub {
+                text-align: right;
+                font-weight: bold;
+                margin: 6pt 0 0;
+            }
+            .note {
+                padding: 8pt 11pt;
+                border-left: 3pt solid #cd8950;
+                background: #fcf3e6;
+            }
+            .term {
+                border-top: 1pt solid #c4ccc7;
+                padding-top: 8pt;
+            }
+        </style>
+    </head>
+    <body>
+        {#IsDraft}
+        <div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
+        {/IsDraft}
+        <table class="mast">
+            <tr>
+                <td>Morrow Field Systems</td>
+                <td class="right">{QuoteNumber}</td>
+            </tr>
+        </table>
+        <div class="hero">
+            <div class="edition">COMMERCIAL PROPOSAL</div>
+            <h1>{Subject}</h1>
+            <p>Prepared for <strong>{Client}</strong> · {Sponsor}</p>
+        </div>
+        <table class="summary">
+            <tr>
+                <td>One-time investment<span class="metric">{Currency} {OneTime:#,##0.00}</span></td>
+                <td>Monthly support<span class="metric">{Currency} {Monthly:#,##0.00}</span></td>
+            </tr>
+        </table>
+        <h2 id="contents" style="margin-top:20pt;">Inside this proposal</h2>
+        <div class="contents">
+            <a href="#scope">Scope of work</a>
+            <a href="#pricing">Configured pricing</a>
+            {#Bundles}<a class="child" href="#bundle-{Key}">{Name}</a>{/Bundles}
+            <a href="#terms">Commercial terms</a>
+        </div>
+        <p>Issued {Issued} · Valid through {ValidUntil}</p>
+        <div class="section">
+            <p class="edition">DELIVERY</p>
+            <h2 id="scope">Scope of work</h2>
+            <p>Review what each configuration delivers, then follow its link to inspect quantities and prices.</p>
+            {#Bundles}
+            <div class="term">
+                <h3>{Name}</h3>
+                <p>{Use}</p>
+                <p><a href="#bundle-{Key}">See this configuration and its price</a></p>
+            </div>
+            {/Bundles}
+            <h3>Delivery checkpoints</h3>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th style="width:27%;">When / who</th>
+                        <th>Milestone and acceptance check</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Milestones}<b>{Window}</b><br />{Owner}</td>
+                        <td><b>{Phase}</b><br />{Check}{/Milestones}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="jump"><a href="#contents">Return to contents</a></p>
+        </div>
+        <div class="section">
+            <p class="edition">CONFIGURATION SCHEDULE</p>
+            <h2 id="pricing">Configured pricing</h2>
+            <p>
+                All prices in {Currency}. The net column includes the listed discount. Optional services are priced
+                separately.
+            </p>
+            {#IF Bundles.totalSize = 0}
+            <p class="note">
+                No configured bundles are included in this draft. Ask the account team for the priced configuration.
+            </p>
+            {/IF} {#Bundles}
+            <table class="bundle">
+                <tr>
+                    <td class="bundle-head"><h3 id="bundle-{Key}">{Name}</h3></td>
+                </tr>
+                <tr>
+                    <td class="bundle-body">
+                        <table class="lines">
+                            <thead>
+                                <tr>
+                                    <th style="width:45%;">Component / SKU</th>
+                                    <th class="num" style="width:8%;">Qty</th>
+                                    <th class="num" style="width:18%;">List each</th>
+                                    <th class="num" style="width:11%;">Disc.</th>
+                                    <th class="num" style="width:18%;">Net</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>{#Components}<b>{Sku}</b><br />{Description}</td>
+                                    <td class="num">{Qty}</td>
+                                    <td class="num">{ListPrice:#,##0.00}</td>
+                                    <td class="num">{Discount}%</td>
+                                    <td class="num">{Net:#,##0.00}{/Components}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="sub">Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+                        <p class="sub">Monthly support · {Monthly:#,##0.00}</p>
+                    </td>
+                </tr>
+            </table>
+            {#IF AddOns.totalSize > 0}
+            <div class="note">
+                <b>Optional service for {Name}</b>{#AddOns}
+                <p>{Description} · {Net:#,##0.00}</p>
+                {/AddOns}
+            </div>
+            {/IF} {/Bundles}
+            <p class="jump"><a href="#contents">Return to contents</a></p>
+        </div>
+        <div class="section">
+            <p class="edition">PURCHASE REVIEW</p>
+            <h2 id="terms">Commercial terms</h2>
+            <div class="term">
+                <h3>Order value</h3>
+                <p>
+                    The one-time configuration totals {Currency} {OneTime:#,##0.00}. Monthly support is {Currency}
+                    {Monthly:#,##0.00}. Optional services require separate approval.
+                </p>
+            </div>
+            <div class="term">
+                <h3>Payment schedule</h3>
+                <p>Installments apply to the one-time investment.</p>
+                <table class="lines">
+                    <thead>
+                        <tr>
+                            <th>Milestone</th>
+                            <th class="num">Share</th>
+                            <th class="num">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{#Payments}{Due}</td>
+                            <td class="num">{Share}%</td>
+                            <td class="num">{Amount:#,##0.00}{/Payments}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="term">
+                <h3>Offer window</h3>
+                <p>Reference {QuoteNumber} when approving this proposal through {ValidUntil}.</p>
+            </div>
+            <div class="term">
+                <h3>Handoff</h3>
+                <p>Confirm access to the work areas with the service coordinator before scheduling installation.</p>
+            </div>
+            <p class="jump">
+                <a href="#pricing">Review itemized pricing</a> · <a href="#contents">Return to contents</a>
+            </p>
+        </div>
+    </body>
+</html>
+```
+
+## field-quote.json
+
+```json
+{
+    "Client": "Alder Works",
+    "QuoteNumber": "Q-2048",
+    "Subject": "Field station renewal",
+    "Issued": "20 November 2026",
+    "ValidUntil": "20 December 2026",
+    "IsDraft": true,
+    "Currency": "USD",
+    "Sponsor": "Facilities Operations",
+    "Bundles": {
+        "totalSize": 2,
+        "records": [
+            {
+                "Key": "atlas",
+                "Name": "Atlas station",
+                "Use": "At each receiving bay, capture the equipment reading before dispatch.",
+                "Components": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Sku": "AT-210",
+                            "Description": "Field station with sealed enclosure",
+                            "Qty": 2,
+                            "ListPrice": 3125,
+                            "Discount": 12,
+                            "Net": 5500.0
+                        },
+                        {
+                            "Sku": "AT-041",
+                            "Description": "Mount and cable harness",
+                            "Qty": 2,
+                            "ListPrice": 95,
+                            "Discount": 0,
+                            "Net": 190.0
+                        },
+                        {
+                            "Sku": "SV-106",
+                            "Description": "Commissioning and operator training",
+                            "Qty": 1,
+                            "ListPrice": 850,
+                            "Discount": 0,
+                            "Net": 850.0
+                        }
+                    ]
+                },
+                "AddOns": {
+                    "totalSize": 0,
+                    "records": []
+                },
+                "OneTimeNet": 6540.0,
+                "Monthly": 60
+            },
+            {
+                "Key": "harbor",
+                "Name": "Harbor reserve",
+                "Use": "Keep one station online while the site supply is being serviced.",
+                "Components": {
+                    "totalSize": 2,
+                    "records": [
+                        {
+                            "Sku": "HB-310",
+                            "Description": "Power cabinet with changeover relay",
+                            "Qty": 1,
+                            "ListPrice": 3750,
+                            "Discount": 8,
+                            "Net": 3450.0
+                        },
+                        {
+                            "Sku": "HB-014",
+                            "Description": "Reserve battery module",
+                            "Qty": 2,
+                            "ListPrice": 340,
+                            "Discount": 0,
+                            "Net": 680.0
+                        }
+                    ]
+                },
+                "AddOns": {
+                    "totalSize": 1,
+                    "records": [
+                        {
+                            "Sku": "SV-208",
+                            "Description": "Annual on-site readiness inspection",
+                            "Qty": 1,
+                            "ListPrice": 450,
+                            "Discount": 0,
+                            "Net": 450.0
+                        }
+                    ]
+                },
+                "OneTimeNet": 4130.0,
+                "Monthly": 60
+            }
+        ]
+    },
+    "OneTime": 10670.0,
+    "Monthly": 120,
+    "AddOnNet": 450,
+    "Milestones": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Phase": "Site survey",
+                "Owner": "Facilities lead",
+                "Window": "Week 1",
+                "Check": "Site access, power and mounting positions confirmed."
+            },
+            {
+                "Phase": "Installation",
+                "Owner": "Field engineering",
+                "Window": "Weeks 2–3",
+                "Check": "Each station commissioned against the equipment list."
+            },
+            {
+                "Phase": "Acceptance",
+                "Owner": "Operations sponsor",
+                "Window": "Week 4",
+                "Check": "Training and handoff checklist acknowledged."
+            }
+        ]
+    },
+    "Payments": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Due": "At order",
+                "Share": 30,
+                "Amount": 3201
+            },
+            {
+                "Due": "After commissioning",
+                "Share": 40,
+                "Amount": 4268
+            },
+            {
+                "Due": "On acceptance",
+                "Share": 30,
+                "Amount": 3201
+            }
+        ]
+    }
+}
+```
+
+## renewal-brief.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Renewal review</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.75in;
+                @bottom-right {
+                    content: 'ACCOUNT REVIEW   /   ' counter(page);
+                    font: 8pt Helvetica;
+                    color: #46586c;
+                }
+            }
+            body {
+                margin: 0;
+                font:
+                    10.5pt/1.4 Helvetica,
+                    sans-serif;
+                color: #242c46;
+            }
+            h1,
+            h2 {
+                font:
+                    normal 36pt/1.05 Times,
+                    serif;
+                margin: 9pt 0;
+            }
+            h2 {
+                font-size: 20pt;
+                margin: 16pt 0 7pt;
+            }
+            .mast {
+                width: 100%;
+                border-bottom: 2pt solid #a38768;
+            }
+            .mast td {
+                padding: 0 0 6pt;
+                font-weight: bold;
+                font-size: 9pt;
+            }
+            .right {
+                text-align: right;
+            }
+            .kicker {
+                color: #5c6175;
+                font-size: 8pt;
+                letter-spacing: 1.1pt;
+                font-weight: bold;
+                margin: 22pt 0 4pt;
+            }
+            .decision {
+                padding: 11pt 14pt;
+                border-left: 4pt solid #996a48;
+                background: #f6eee4;
+                margin: 14pt 0;
+            }
+            .ontrack {
+                border-left-color: #476f65;
+                background: #eaf0ea;
+            }
+            .decision b {
+                display: block;
+                font-size: 14pt;
+            }
+            .metrics,
+            .teams {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .metrics td {
+                width: 33.33%;
+                padding: 8pt;
+                vertical-align: top;
+                background: #343855;
+                color: #fff;
+                border-right: 1pt solid white;
+            }
+            .value {
+                display: block;
+                font:
+                    19pt Times,
+                    serif;
+                padding-top: 3pt;
+            }
+            .teams th,
+            .teams td {
+                padding: 6pt 3pt;
+                border-bottom: 0.6pt solid #c9cbd5;
+                text-align: left;
+            }
+            .scale {
+                display: block;
+                background: #e5e7ee;
+                height: 6pt;
+                margin: 3pt 0;
+            }
+            .fill {
+                display: block;
+                height: 6pt;
+                background: #6a7094;
+            }
+            .footnote {
+                font-size: 9pt;
+                color: #575f73;
+            }
+        </style>
+    </head>
+    <body>
+        <table class="mast">
+            <tr>
+                <td>Client services</td>
+                <td class="right">{ReviewPeriod}</td>
+            </tr>
+        </table>
+        <p class="kicker">RENEWAL DECISION</p>
+        <h1>{Client}</h1>
+        <p>{PlanName} · Renewal on {RenewalDate}</p>
+        {#IF HasUsage = true} {#AtTarget}
+        <div class="decision ontrack">
+            <b>Prepare renewal terms</b>Active usage meets the agreed {Threshold}% threshold. Confirm scope with the
+            sponsor before sending the renewal.
+        </div>
+        {:else}
+        <div class="decision">
+            <b>Book an adoption review</b>Active usage is below the agreed {Threshold}% threshold. Ask the sponsor which
+            team needs help before proposing renewal terms.
+        </div>
+        {/AtTarget} {:else}
+        <div class="decision">
+            <b>Request usage data</b>Usage is unavailable for this period. Check the measurement window before making a
+            renewal recommendation.
+        </div>
+        {/IF}
+        <table class="metrics">
+            <tr>
+                <td>Annual contract<span class="value">USD {AnnualNet:#,##0}</span></td>
+                <td>Active usage<span class="value">{#IF HasUsage = true}{Adoption}%{:else}Unknown{/IF}</span></td>
+                <td>Open service cases<span class="value">{OpenCases}</span></td>
+            </tr>
+        </table>
+        {#IF HasUsage = true}
+        <h2>Where adoption differs</h2>
+        <p>Active seats as a share of licensed seats, by team. The percentage is printed beside every bar.</p>
+        <table class="teams">
+            <thead>
+                <tr>
+                    <th>Team</th>
+                    <th>Active / licensed</th>
+                    <th style="width:42%;">Adoption</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Teams}{Name}</td>
+                    <td>{Active} / {Licensed}</td>
+                    <td>
+                        {Percent}%
+                        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
+                        {/Teams}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="footnote">
+            Account adoption uses total active seats divided by total licensed seats. Last period: {PriorAdoption}%.
+        </p>
+        {/IF}
+        <h2>For the account owner</h2>
+        {#IF OpenCases > 0}
+        <p>
+            Review the {OpenCases} open service cases with the support lead. The oldest has been open for {DaysOpen}
+            days.
+        </p>
+        {:else}
+        <p>The service queue is clear. Confirm the renewal scope and decision date with the sponsor.</p>
+        {/IF}
+    </body>
+</html>
+```
+
+## renewal-brief.json
+
+```json
+{
+    "Client": "Sable Harbor Cooperative",
+    "ReviewPeriod": "October 2026",
+    "RenewalDate": "31 January 2027",
+    "AnnualNet": 86400,
+    "DaysOpen": 18,
+    "Threshold": 80,
+    "HasUsage": true,
+    "Adoption": 72,
+    "PriorAdoption": 61,
+    "OpenCases": 2,
+    "PlanName": "Operations Plus",
+    "Teams": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Name": "Dispatch",
+                "Active": 33,
+                "Licensed": 40,
+                "Percent": 83
+            },
+            {
+                "Name": "Field service",
+                "Active": 24,
+                "Licensed": 40,
+                "Percent": 60
+            },
+            {
+                "Name": "Finance",
+                "Active": 15,
+                "Licensed": 20,
+                "Percent": 75
+            }
+        ]
+    },
+    "AtTarget": false
+}
+```
+
+## service-sheet.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Field service sheet</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.65in;
+                @bottom-left {
+                    content: 'MAINTENANCE COPY';
+                    font: bold 8pt Helvetica;
+                    color: #454c3c;
+                }
+                @bottom-right {
+                    content: counter(page) ' / ' counter(pages);
+                    font: 8pt Helvetica;
+                }
+            }
+            body {
+                margin: 0;
+                font:
+                    10.5pt/1.3 Helvetica,
+                    sans-serif;
+                color: #232b25;
+            }
+            .mast {
+                background: #334838;
+                color: white;
+                padding: 14pt 16pt;
+                border-top: 4pt solid #c4a646;
+            }
+            .mast p {
+                margin: 0 0 4pt;
+                font-size: 9pt;
+            }
+            h1 {
+                margin: 0;
+                font:
+                    normal 27pt Times,
+                    serif;
+            }
+            h2 {
+                margin: 0 0 3pt;
+                font:
+                    normal 18pt Times,
+                    serif;
+            }
+            .info,
+            .tag {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .info td {
+                width: 33.33%;
+                padding: 7pt 5pt;
+                border-bottom: 0.6pt solid #b4bba9;
+            }
+            .asset {
+                page-break-inside: avoid;
+                border: 1pt solid #aeb7a3;
+                margin-top: 11pt;
+                padding: 8pt;
+            }
+            .tag td {
+                vertical-align: top;
+            }
+            .identity {
+                width: 73%;
+            }
+            .scan {
+                width: 27%;
+                text-align: center;
+            }
+            .code {
+                font-family: Courier, monospace;
+                font-weight: bold;
+                font-size: 10pt;
+            }
+            .checklist {
+                margin: 5pt 0;
+                border-collapse: collapse;
+            }
+            .checklist td {
+                padding: 2.5pt 0;
+            }
+            .box {
+                display: inline-block;
+                width: 8pt;
+                height: 8pt;
+                border: 0.9pt solid #52624c;
+                margin-right: 7pt;
+            }
+            .tear {
+                border-top: 1.1pt dashed #697561;
+                margin-top: 14pt;
+                padding-top: 7pt;
+            }
+            .tear p {
+                margin: 5pt 0;
+            }
+            .line {
+                display: inline-block;
+                width: 1.5in;
+                border-bottom: 0.8pt solid #404c3e;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="mast">
+            <p>FIELD SERVICES · WORK ORDER {WorkOrder}</p>
+            <h1>{Site}</h1>
+        </div>
+        <table class="info">
+            <tr>
+                <td><strong>Visit</strong><br />{Visit}</td>
+                <td><strong>Technician</strong><br />{Technician}</td>
+                <td><strong>Equipment</strong><br />{COUNT:Equipment} units</td>
+            </tr>
+        </table>
+        {#Equipment}
+        <div class="asset">
+            <table class="tag">
+                <tr>
+                    <td class="identity">
+                        <h2>{Name}</h2>
+                        <p>{Location}</p>
+                        <table class="checklist">
+                            <tbody>
+                                <tr>
+                                    <td>{#Checks}<span class="box"></span></td>
+                                    <td>{Task}{/Checks}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>As-found reading <span class="line"></span></p>
+                    </td>
+                    <td class="scan">{*Code:qr:105}<br /><span class="code">{Code}</span></td>
+                </tr>
+            </table>
+        </div>
+        {/Equipment}
+        <div class="tear">
+            <strong>Desk receipt · {WorkOrder}</strong>
+            <p>{Handoff}</p>
+            <p>Technician initials <span class="line"></span> &nbsp; Date <span class="line"></span></p>
+        </div>
+    </body>
+</html>
+```
+
+## service-sheet.json
+
+```json
+{
+    "Site": "North pier workshop",
+    "WorkOrder": "WO-1842",
+    "Visit": "24 November 2026",
+    "Technician": "Morgan Lee",
+    "Handoff": "Return the signed paper checklist to the maintenance desk.",
+    "Equipment": {
+        "totalSize": 2,
+        "records": [
+            {
+                "Code": "AW-P17-201",
+                "Name": "Circulation pump",
+                "Location": "Bay 2 · supply manifold",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Check motor guard and isolation label"
+                        },
+                        {
+                            "Task": "Record cold-start pressure"
+                        },
+                        {
+                            "Task": "Inspect the coupling for movement"
+                        }
+                    ]
+                }
+            },
+            {
+                "Code": "AW-S08-414",
+                "Name": "Flow sensor",
+                "Location": "Bay 2 · return line",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Match the serial number to the register"
+                        },
+                        {
+                            "Task": "Record instrument reading at idle"
+                        },
+                        {
+                            "Task": "Return the enclosure cover"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
+```
+
+# Request an agreement and open it from a Screen Flow
+
+This subscriber project lets one signed-in person prepare and open a practice agreement. The screen publishes a platform event. A second Flow creates the Portwood request and writes the result to a private receipt. The same screen interview reads that receipt and uses Salesforce’s standard **Open a Page** action to open the signer’s URL. A third Flow clears that URL after the handoff window.
+
+## Set up the sample in a sandbox
+
+1. Use a sandbox with Portwood installed and a configured Salesforce Site or Experience Cloud signing page. The signer and Flow execution users need the Portwood permissions and record access appropriate to their roles. The source uses Salesforce Flow API 68 and the managed `portwoodglobal` namespace.
+2. From this project’s directory, deploy the sample objects, permission set and three **Draft** Flows. Substitute your sandbox alias in the command.
+    ```bash
+    sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX
+    ```
+3. In Portwood, create an **HTML** template using **Salesforce Record (SOQL)**. Choose **Guide Signing Receipt** as the base object and select its **Name** field (the receipt number). Upload `acceptance.html`, give the template the exact API name `Guide_Event_Acceptance`, and save and activate it. The template puts the **Customer** signing tags directly in the body. This sample signs the receipt-backed agreement. To sign an already-generated quote PDF, use Portwood’s uploaded-PDF preparation route.
+4. Assign **Guide Signing Handoff** to your test signer. Grant **Run Flows** and access to **Guide · Request and open an agreement** if your org restricts flow access. Keep the receipt object private. Limit users with administrative, hierarchy or sharing-rule access to its signer-link field. The included permission set gives users read access to receipts and permission to publish this event. The background Flow writes receipts.
+5. In Flow Builder, activate **Guide · Clear expired signing link**, **Guide · Prepare the agreement**, then **Guide · Request and open an agreement**. Use a supported Lightning host, for example the standard Flow component on a Lightning app page. Test with the person who will actually use the interview. Configure the org’s **Default Workflow User** if Salesforce prompts for one when you activate the scheduled cleanup.
+6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. The finished path requires both the signed status and the protected signed File ID.
+
+## Follow the fields
+
+| Element             | Mapping                                                                                                                                                                                                                                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Publish             | Create `Guide_Sign_Requested__e` with `Receipt_Key__c = $Flow.InterviewGuid`. The event uses **Publish After Commit**. The next Screen commits the publication.                                                                                                                                                                                    |
+| Claim               | Create a private `Guide_Sign_Receipt__c` with unique `Receipt_Key__c`, `Stage__c = Preparing` and `OwnerId = $Record.CreatedById`. Existing keys exit the subscriber. The database’s unique constraint also prevents a concurrent duplicate from creating a second request. A concurrent duplicate-key fault can appear in failed Flow interviews. |
+| Identify the signer | Read the publishing User’s name and email. Set the **DocGenSigner** role to **Customer**. Pass that one signer to **Portwood: Create Signature Request** with **Single** signing order, **Send Branded Emails = False** and one day of validity. The verification policy comes from the template and org.                                          |
+| Store the outcome   | On success store `Request_Id__c`, the single returned URL, its handoff expiry and **Ready**. Mark a failed or unsuccessful request **Failed** so the interview can show a recoverable explanation. Investigate that receipt before initiating another submission.                                                                                  |
+| Read the result     | Filter by the interview key **and** signed-in owner. **Open a Page** receives `pageType = WebPage` and `webPageUrl = Receipt.Signer_URL__c`. The handoff screen also has a link. Rechecking reads the existing receipt.                                                                                                                            |
+| Clear the link      | A scheduled path clears `Signer_URL__c` approximately one day after the receipt becomes ready. The interview separately checks `Link_Expires_At__c` before opening it. Keep platform-event payloads, analytics, recordings and logs free of signing URLs.                                                                                          |
+| Confirm completion  | Read `portwoodglobal__DocGen_Signature_Request__c` using the stored request ID. Read the protected File through Salesforce’s normal access rules.                                                                                                                                                                                                  |
+
+The retry key covers one interview. For repeat approvals across interviews, use a unique business key tied to the approved proposal and version. A business process with multiple signers also needs per-signer authorization for each handoff. The separate approval-event recipe in the guide covers those changes.
+
+[Open a Page action](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5) · [Platform-event-triggered Flows](https://developer.salesforce.com/docs/platform/platform-events/guide/platform-events-subscribe-flow.html)
+
+## Guide_Open_Agreement.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <actionCalls>
+        <name>Open_Signing_Page</name>
+        <label>Open the signing page</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <actionName>flowruntime:openAPage</actionName>
+        <actionType>lwcComponent</actionType>
+        <connector>
+            <targetReference>Handoff</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Handoff</targetReference>
+        </faultConnector>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>pageType</name>
+            <value>
+                <stringValue>WebPage</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>webPageUrl</name>
+            <value>
+                <elementReference>Receipt.Signer_URL__c</elementReference>
+            </value>
+        </inputParameters>
+        <nameSegment>flowruntime:openAPage</nameSegment>
+    </actionCalls>
+    <decisions>
+        <name>Ready</name>
+        <label>Is the agreement ready?</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <defaultConnector>
+            <targetReference>Waiting</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Prepared_Receipt</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Ready</stringValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Receipt.Signer_URL__c</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Receipt.Link_Expires_At__c</leftValueReference>
+                <operator>GreaterThan</operator>
+                <rightValue>
+                    <elementReference>$Flow.CurrentDateTime</elementReference>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Open_Signing_Page</targetReference>
+            </connector>
+            <label>Ready for this signer</label>
+        </rules>
+        <rules>
+            <name>Error</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Failed</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Preparation failed</label>
+        </rules>
+        <rules>
+            <name>Expired</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Ready</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Handoff expired</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Outcome</name>
+        <label>Check the signed document</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <defaultConnector>
+            <targetReference>Pending</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Done</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Signed</stringValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Protected_Signed_Content_Document_Id__c</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Complete</targetReference>
+            </connector>
+            <label>Signed file available</label>
+        </rules>
+        <rules>
+            <name>Declined</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Declined</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Declined</label>
+        </rules>
+        <rules>
+            <name>Revoked</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Cancelled</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Cancelled</label>
+        </rules>
+        <rules>
+            <name>Timed_Out</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Expired</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Expired</label>
+        </rules>
+    </decisions>
+    <interviewLabel>Guide · Request and open an agreement {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Request and open an agreement</label>
+    <processType>Flow</processType>
+    <recordCreates>
+        <name>Publish</name>
+        <label>Publish the preparation event</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <connector>
+            <targetReference>Preparing</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <inputAssignments>
+            <field>Receipt_Key__c</field>
+            <value>
+                <elementReference>$Flow.InterviewGuid</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Requested__e</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordCreates>
+    <recordLookups>
+        <name>Receipt</name>
+        <label>Read my receipt</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Ready</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Receipt_Key__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Flow.InterviewGuid</elementReference>
+            </value>
+        </filters>
+        <filters>
+            <field>OwnerId</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$User.Id</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordLookups>
+        <name>Request</name>
+        <label>Check the request</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Outcome</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Receipt.Request_Id__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>portwoodglobal__DocGen_Signature_Request__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <screens>
+        <name>Confirm</name>
+        <label>Prepare an agreement</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Publish</targetReference>
+        </connector>
+        <fields>
+            <name>Confirm_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Prepare an acceptance agreement for yourself using your signed-in identity.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Prepare agreement</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Preparing</name>
+        <label>Preparing your agreement</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Receipt</targetReference>
+        </connector>
+        <fields>
+            <name>Preparing_Instructions</name>
+            <fieldText
+            >&lt;p&gt;The request is being prepared. Continue to look for your signing page.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Open signing page</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Waiting</name>
+        <label>Waiting for the agreement</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Receipt</targetReference>
+        </connector>
+        <fields>
+            <name>Waiting_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Preparation is still running. Check the same request again in a moment.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Handoff</name>
+        <label>Review and sign</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Request</targetReference>
+        </connector>
+        <fields>
+            <name>Handoff_Instructions</name>
+            <fieldText
+            >&lt;p&gt;If the signing page did not open, &lt;a href="{!Receipt.Signer_URL__c}" target="_blank"&gt;review and sign your agreement&lt;/a&gt;. Return here to check its status.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check signing status</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Pending</name>
+        <label>Waiting for the signed file</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Request</targetReference>
+        </connector>
+        <fields>
+            <name>Pending_Instructions</name>
+            <fieldText
+            >&lt;p&gt;The signed file is not ready yet. Use the same invitation to finish signing.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Problem</name>
+        <label>Agreement unavailable</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Problem_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Ask your administrator to check the receipt, the template and your access.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Complete</name>
+        <label>Signed file ready</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Complete_Instructions</name>
+            <fieldText>&lt;p&gt;The request is signed and the protected File is ready.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Stopped</name>
+        <label>Signing has stopped</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Stopped_Instructions</name>
+            <fieldText
+            >&lt;p&gt;This request is no longer available for signing. Contact the sender.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <start>
+        <locationX>60</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Confirm</targetReference>
+        </connector>
+    </start>
+    <status>Draft</status>
+</Flow>
+```
+
+## Guide_Prepare_Agreement.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <actionCalls>
+        <name>Prepare</name>
+        <label>Create signature request</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <actionName>portwoodglobal__DocGenSignatureFlowAction</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Prepared</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </faultConnector>
+        <inputParameters>
+            <name>templateApiName</name>
+            <value>
+                <stringValue>Guide_Event_Acceptance</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>relatedRecordId</name>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>signerRecords</name>
+            <value>
+                <elementReference>People</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>signingOrder</name>
+            <value>
+                <stringValue>Single</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>sendEmails</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>prefillSignerEmail</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>expirationDays</name>
+            <value>
+                <numberValue>1</numberValue>
+            </value>
+        </inputParameters>
+        <outputParameters>
+            <assignToReference>RequestId</assignToReference>
+            <name>signatureRequestId</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>Links</assignToReference>
+            <name>signerUrls</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>PreparedOk</assignToReference>
+            <name>success</name>
+        </outputParameters>
+        <storeOutputAutomatically>false</storeOutputAutomatically>
+    </actionCalls>
+    <assignments>
+        <name>Identify</name>
+        <label>Use the publishing user</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignmentItems>
+            <assignToReference>Person.name</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Publisher.Name</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Person.email</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Publisher.Email</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Person.role</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>Customer</stringValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>People</assignToReference>
+            <operator>Add</operator>
+            <value>
+                <elementReference>Person</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Prepare</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
+        <name>Capture_Link</name>
+        <label>Store the single signer link</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignmentItems>
+            <assignToReference>SignerLink</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Each_Link</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Each_Link</targetReference>
+        </connector>
+    </assignments>
+    <decisions>
+        <name>New_Receipt</name>
+        <label>Check for a replay</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <defaultConnector>
+            <targetReference>Claim</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Seen</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Prior.Id</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <label>Already prepared or preparing</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Prepared</name>
+        <label>Did Portwood create the request?</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <defaultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Have_Request</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>PreparedOk</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>RequestId</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Each_Link</targetReference>
+            </connector>
+            <label>Request created</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Has_Link</name>
+        <label>Check the result link</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <defaultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Link_Ready</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>SignerLink</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Set_Ready</targetReference>
+            </connector>
+            <label>Link returned</label>
+        </rules>
+    </decisions>
+    <formulas>
+        <name>Expires</name>
+        <dataType>DateTime</dataType>
+        <expression>NOW() + 1</expression>
+    </formulas>
+    <interviewLabel>Guide · Prepare the agreement {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Prepare the agreement</label>
+    <processType>AutoLaunchedFlow</processType>
+    <loops>
+        <name>Each_Link</name>
+        <label>Read the signer URL</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <collectionReference>Links</collectionReference>
+        <iterationOrder>Asc</iterationOrder>
+        <nextValueConnector>
+            <targetReference>Capture_Link</targetReference>
+        </nextValueConnector>
+        <noMoreValuesConnector>
+            <targetReference>Has_Link</targetReference>
+        </noMoreValuesConnector>
+    </loops>
+    <recordCreates>
+        <name>Claim</name>
+        <label>Claim this interview once</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <connector>
+            <targetReference>Publisher</targetReference>
+        </connector>
+        <inputAssignments>
+            <field>OwnerId</field>
+            <value>
+                <elementReference>$Record.CreatedById</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Receipt_Key__c</field>
+            <value>
+                <elementReference>$Record.Receipt_Key__c</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Preparing</stringValue>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordCreates>
+    <recordLookups>
+        <name>Prior</name>
+        <label>Find an existing receipt</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>New_Receipt</targetReference>
+        </connector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Receipt_Key__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.Receipt_Key__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordLookups>
+        <name>Publisher</name>
+        <label>Find the person who started the interview</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Identify</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.CreatedById</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>User</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordUpdates>
+        <name>Set_Ready</name>
+        <label>Make the link available</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Ready</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Request_Id__c</field>
+            <value>
+                <elementReference>RequestId</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Signer_URL__c</field>
+            <value>
+                <elementReference>SignerLink</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Link_Expires_At__c</field>
+            <value>
+                <elementReference>Expires</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <recordUpdates>
+        <name>Set_Failed</name>
+        <label>Record the preparation problem</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Failed</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Request_Id__c</field>
+            <value>
+                <elementReference>RequestId</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <start>
+        <locationX>60</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Prior</targetReference>
+        </connector>
+        <object>Guide_Sign_Requested__e</object>
+        <triggerType>PlatformEvent</triggerType>
+    </start>
+    <status>Draft</status>
+    <variables>
+        <name>Person</name>
+        <apexClass>portwoodglobal__DocGenSigner</apexClass>
+        <dataType>Apex</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>People</name>
+        <apexClass>portwoodglobal__DocGenSigner</apexClass>
+        <dataType>Apex</dataType>
+        <isCollection>true</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>RequestId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Links</name>
+        <dataType>String</dataType>
+        <isCollection>true</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>SignerLink</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>PreparedOk</name>
+        <dataType>Boolean</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
+```
+
+## Guide_Clear_Handoff_Link.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <interviewLabel>Guide · Clear expired signing link {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Clear expired signing link</label>
+    <processType>AutoLaunchedFlow</processType>
+    <recordUpdates>
+        <name>Clear_Link</name>
+        <label>Clear the expired private URL</label>
+        <locationX>180</locationX>
+        <locationY>120</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.Id</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Signer_URL__c</field>
+            <value>
+                <elementReference>ClearedURL</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <start>
+        <locationX>60</locationX>
+        <locationY>0</locationY>
+        <doesRequireRecordChangedToMeetCriteria>true</doesRequireRecordChangedToMeetCriteria>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Stage__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <stringValue>Ready</stringValue>
+            </value>
+        </filters>
+        <object>Guide_Sign_Receipt__c</object>
+        <recordTriggerType>CreateAndUpdate</recordTriggerType>
+        <scheduledPaths>
+            <name>Expired</name>
+            <connector>
+                <targetReference>Clear_Link</targetReference>
+            </connector>
+            <label>Handoff expired</label>
+            <offsetNumber>1</offsetNumber>
+            <offsetUnit>Days</offsetUnit>
+            <timeSource>RecordTriggerEvent</timeSource>
+        </scheduledPaths>
+        <triggerType>RecordAfterSave</triggerType>
+    </start>
+    <status>Draft</status>
+    <variables>
+        <name>ClearedURL</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
 ```

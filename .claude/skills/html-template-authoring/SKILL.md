@@ -129,3 +129,11 @@ count on a full render before relying on it.
 - Confirm every `<img src>` is relative
 - If it has symbols, confirm the font is `'Arial Unicode MS'` and you haven't relied on bold
 - Render it and count the pages
+
+## Design studio patterns verified in the PDF renderer
+
+- Pair a unique `id="bundle-{Key}"` on each heading with `href="#bundle-{Key}"` in the contents. Use `content: leader('.') target-counter(attr(href), page)` on link `:after` to print the current destination page. Include a return link. Test again with a long list.
+- A fixed HTML stamp inside `{#IsDraft}…{/IsDraft}` repeats on each output page. Reserve its corner and test with both flag values. Put page numbers in `@page` margin boxes with `counter(page)` and `counter(pages)`.
+- For a CPQ-style packet, loop around the outer bundle table. Inside it, open and close the component loop in the row that repeats. Summarize approved net amounts by currency and billing period. Keep proposed options visibly separate.
+- For an executive brief, compute threshold and data-availability flags before merging. Label every bar with the numeric value and provide an explicit missing-data recommendation. A machine label can use `{*Code:qr:120}` with its human-readable identifier alongside it. Code 39 and Code 128 are available for linear scanners.
+- Supply any AI assistant with the matching [complete design and JSON](../../../docs/knowledgebase/examples/document-studio). The [signing handoff](../../../docs/knowledgebase/examples/event-signing) covers event publication, a private receipt, the standard page navigation action and status checks. Keep runtime signer links out of prompts.

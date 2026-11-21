@@ -42,6 +42,22 @@ try {
         await page.getByRole('heading', { name: 'What would you like to do?' }).waitFor();
         assert.equal(await page.locator('.pg-task').count(), 6);
     });
+    await check('design studio cards open their recipes and section links move keyboard focus', async () => {
+        await page.goto(url);
+        await page.locator('.pg-studio a').first().waitFor();
+        for (const card of catalog.home.showcase) {
+            assert.equal(await page.locator(`.pg-studio a[href="#${card.slug}"] img`).getAttribute('alt'), card.alt);
+        }
+        await page.locator('.pg-studio a[href="#cpq-quote"]').click();
+        await page.getByText('In this lesson', { exact: true }).click();
+        const jump = page.getByRole('link', { name: 'Send this exact quote for signature', exact: true });
+        await jump.focus();
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => document.activeElement?.textContent === 'Send this exact quote for signature');
+        assert.equal(await page.locator(':focus').evaluate((node) => node.tagName), 'H2');
+        await page.keyboard.press('Tab');
+        assert.match(await page.locator(':focus').getAttribute('href'), /#sign-uploaded-pdf$/);
+    });
     await check('all task articles render, keep merge tags, and have no missing screenshot files', async () => {
         for (const article of catalog.articles) {
             await page.goto(`${url}#${article.slug}`);

@@ -43,7 +43,7 @@ Here’s where a short preview can fool you. On page two, the column headings ne
 
 For a denser executive report, set widths on the columns and give each cell its own padding. Use solid fills for section bands and put full-page artwork in the background setting. A browser can draw a gradient, rounded corners, or an inline vector graphic that disappears in the final PDF. For a branded shape, use a sized image asset. For charts, use a prepared image on a supported path, or a CSS bar or pivot table.
 
-## 2:44  Manage shared language
+## 2:43  Manage shared language
 
 **On screen**  Snippet editor → Snippet preview → expanded shared clause
 
@@ -145,7 +145,37 @@ Finance asked for a workbook, and the account team asked for a slide. These came
 
 If a button you saw here is missing, start with two questions. Which version of Portwood is installed, and has the org been upgraded? Your Salesforce administrator can find the answer in Setup, under Installed Packages. If you are current, try the same record as the person who needs the button. Check their permission set, the record page, and whether the template is active. Those details give support a much better starting point than a screenshot of an empty list.
 
-## 9:54  Close the loop
+## 9:54  Give the buyer a contents page
+
+**On screen**  Generated quote · buyer’s contents page → Destination · Harbor configuration and return link → Expanded quote · terms now begin on page seven
+
+Imagine you are the buyer. You have four pages in front of you and one question about the Harbor configuration. Click Harbor on the cover and you land on the right bundle. Back to contents takes you home. Now add forty-two lines to the quote. The commercial terms move from page four to page seven, and the contents number moves with them. The draft stamp follows every page until the quote is ready to issue.
+
+## 10:18  Price the bundle once
+
+**On screen**  Generated quote · Atlas component schedule → Generated quote · Harbor options → Generated quote · commercial terms
+
+Here are two field stations on the same order. Read down the Atlas table: the enclosure and accessories add up to six thousand five hundred forty dollars. Harbor has its own components. Its optional inspection stays outside the committed amount. Up front, the buyer sees ten thousand six hundred seventy dollars once and one hundred twenty a month. That is the same deal the sales team priced. The document gives each number a place where the buyer can check it.
+
+## 10:44  Let the data change the brief
+
+**On screen**  Generated brief · adoption review → Higher adoption · same template → Missing usage · same template
+
+Would you walk into this renewal meeting ready to ask for a signature? At seventy-two percent adoption, the brief recommends booking an adoption review. The team bars make it easy to see where to start. Give the same design eighty-four percent adoption and the headline changes to preparing renewal terms. Take the reading away and it asks for usage data. When you brief an AI assistant, spell out that third case. An unknown reading and a zero call for different conversations.
+
+## 11:14  Put the work order in the field
+
+**On screen**  Generated work order · equipment checklist → Generated work order · second unit and receipt
+
+At the equipment cabinet, a technician needs the right unit, the right checks, and somewhere to write. Each card has its own checklist and a QR label. Scan the pump label and you get the pump’s identifier, even offline. The identifier is printed underneath for a person who cannot scan it. The tear-off receipt goes back to the office. Try the sheet on the printer your team takes into the field.
+
+## 11:38  Follow the event into signing
+
+**On screen**  Sandbox interview · request submitted → Across the transaction → Sandbox signing site · verification prompt → Sandbox interview · unsigned request
+
+Back in Salesforce, I choose Prepare agreement. The screen publishes the event and keeps my receipt. The background Flow creates the request. If it is still working, I can check again. When my link is ready, the standard Open a Page action takes me straight to the signing site. This sandbox asks me to verify my email. I can return to the interview without signing, and it still says the signed file is pending. Opening a tab never counts as accepting the agreement.
+
+## 12:05  Close the loop
 
 **On screen**  Generated in the Portfolio 1 → Generated in the Review 4 → Try it with your own document
 

@@ -1,5 +1,7 @@
 Build a service schedule that can grow from two rows to several pages and still leave a clean acceptance page. This lab uses Account as the parent and Opportunities as the child relationship. All estimates in the example use a single currency.
 
+[Add a working contents page and a conditional draft watermark.](#print-navigation)
+
 #### Assemble the example
 
 1. In **Assets → Terms & Snippets**, create an active snippet with the key `guide-service-handoff`. Paste the [handoff fragment](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/handoff-fragment.html) in **HTML source** and save it.

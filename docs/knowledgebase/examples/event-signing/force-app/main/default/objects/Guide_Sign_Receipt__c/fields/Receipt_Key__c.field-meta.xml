@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Receipt_Key__c</fullName>
+    <caseSensitive>false</caseSensitive>
+    <label>Receipt key</label>
+    <length>100</length>
+    <type>Text</type>
+    <unique>true</unique>
+</CustomField>

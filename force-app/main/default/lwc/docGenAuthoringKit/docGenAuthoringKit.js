@@ -521,6 +521,23 @@ export function buildAiPrompt(shape, options) {
         '- In document text, use braces for merge tags. Use &#123; and &#125; for literal braces in the wording. Write normal CSS declaration blocks inside <style>.'
     );
     lines.push('');
+    lines.push('DESIGNING A FINISHED DOCUMENT:');
+    lines.push(
+        '- For a linked contents page, pair href="#bundle-{Key}" with a unique matching id. Use .contents a:after { content: leader(".") target-counter(attr(href), page); } for the live destination page and include a return link. Put optional entries and destinations behind the same condition.'
+    );
+    lines.push(
+        '- For a repeated HTML draft mark, wrap a fixed element in {#IsDraft} ... {/IsDraft}. Reserve margin space for the mark. Use @page margin boxes with counter(page) and counter(pages) for folios. Check the issue-ready copy and a copy long enough to change pagination.'
+    );
+    lines.push(
+        '- For nested quote pricing, request the already-priced parent and component collections, stable IDs, billing frequency, currency, inclusion rules and rounded totals. Keep options outside accepted totals and reconcile installments to the one-time price.'
+    );
+    lines.push(
+        '- For a decision brief, pass HasUsage and a precomputed AtTarget Boolean from the data source. Provide a missing-data branch. For a field work order, print an offline QR payload alongside its readable identifier and leave room to write. Ask for the actual paper size.'
+    );
+    lines.push(
+        '- A Screen Flow can publish a custom event after commit. Its subscriber creates one request and returns the signer URL on a private receipt. The original interview checks the receipt, uses Open a Page, then verifies signed status and the protected File. To sign an existing approved PDF, choose that exact Salesforce File in Signature Sender.'
+    );
+    lines.push('');
     lines.push('PORTWOOD MERGE TAG SYNTAX:');
     lines.push(
         '- Field: {FieldName} — e.g. {Name}, {Status__c}. Parent lookups dot through: {Account.Name}, {Owner.Profile.Name}. Null renders as empty string.'
@@ -552,7 +569,7 @@ export function buildAiPrompt(shape, options) {
         '- Built-ins: {Today:MMMM d, yyyy}, {Now:yyyy-MM-dd HH:mm}, and running-user tags {RunningUser.Name}, {RunningUser.Email}, {RunningUser.Title}.'
     );
     lines.push(
-        '- Barcodes & QR codes (rendered server-side — no fonts, no external services, no <img> of your own): {*FieldName} = Code 128 barcode of the field value; {*FieldName:code128:300x80} = Code 128 sized 300x80px; {*FieldName:qr} = QR code; {*FieldName:qr:200} = QR at 200px. ONLY code128 and qr are supported — any other type renders nothing, silently. QR handles URLs and long text and survives low print quality best; Code 128 suits short IDs and serials. Place the tag alone in its own cell/block with white space around it — do not shrink below the default or scanners will struggle. Any queried field works, e.g. {*Id}, {*Name}, {*Tracking_Number__c}.'
+        '- Barcodes & QR codes (rendered server-side — no fonts, no external services, no <img> of your own): {*FieldName} = Code 128 barcode of the field value; {*FieldName:code128:300x80} = Code 128 sized 300x80px; {*FieldName:qr} = QR code; {*FieldName:qr:200} = QR at 200px. {*FieldName:code39:300x80} prints a Code 39 label. QR handles URLs and long text and survives low print quality best; Code 128 suits short IDs and serials. Place the tag alone in its own cell/block with white space around it — do not shrink below the default or scanners will struggle. Any queried field works, e.g. {*Id}, {*Name}, {*Tracking_Number__c}.'
     );
     lines.push(
         '- Charts — ONE-LINE TAG, this is the path to use: {Chart:RelationshipName:FieldToGroupBy:style:opt=value&opt=value}, on its own line as a block-level element. Portwood aggregates the child records server-side and renders it as a real image, when the entry point prepares a PNG. Without a prepared PNG, HTML-to-PDF supports CSS bar, stacked, clustered and pivot. Inline SVG is browser-only. Excel does not embed chart tags. Styles: bar (horizontal, best for long labels), column (vertical), pie, donut, line, area, and the cross-tab styles stacked, clustered, pivot (these three require both groupBy= and colSort=). Default style is bar. Modifiers, joined with &: title=Text (header drawn above the chart), width=420, height=240, colors=#1e40af,#b91c1c (6-char hex, cycles), groupBy=SecondField__c (second dimension), colSort=A,B,C (column order), where=SOQL fragment, split=; (multi-select field). Examples: {Chart:Survey_Responses__r:Answer__c:bar:title=Responses by Answer} and {Chart:Survey_Responses__r:Answer__c:stacked:groupBy=Location__c&title=Answer by Location}. Inside a {#Rel} loop the chart’s relationship resolves against the record being iterated, giving one chart per row.'
@@ -631,7 +648,7 @@ export function buildAiPrompt(shape, options) {
             '- Loop tags for a repeating table go INLINE, INSIDE the row that repeats: the opening {#Rel} in the FIRST cell of the data <tr>, and the closing {/Rel} in the LAST cell of that same <tr>.'
         );
         lines.push(
-            '- Do NOT put {#Rel} on its own line above <table> and {/Rel} below it. That repeats the ENTIRE TABLE — headers and all — once per child record, which is never what is wanted.'
+            '- For one growing line-item table, keep its header outside the child loop. For a CPQ configuration, wrap the whole bundle table in the parent loop and place a child component loop inside its own data row. This gives each bundle its own header and prices.'
         );
         lines.push('- Column headers belong in a real <thead>, OUTSIDE the loop, so they render once.');
         if (shape.children && shape.children.length) {
@@ -1476,7 +1493,7 @@ export function buildTagPalette(shape) {
         ]
     });
 
-    // Barcodes & QR — {*Field:qr} / {*Field:code128}, the only two types.
+    // Shared label types supported by the document renderer.
     const codeishFields = [...(shape.baseFields || [])].filter(
         (f) => /(number|code|sku|url|website)$/i.test(f) || /^name$/i.test(f)
     );

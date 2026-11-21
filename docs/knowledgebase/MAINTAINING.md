@@ -183,3 +183,7 @@ The article slugs are the current public links. The imported legacy anchors pres
 Publish the content changes, including `catalog.json` and images, before switching the live website to the new reader. The new reader fetches the catalog from the content repository's main branch. Keep its schema compatible, or coordinate a reader update when changing the schema.
 
 The root `UserGuide.md` remains readable on GitHub and usable by the previous Markdown renderer during the transition. Old anchors in the generated Markdown are explicit HTML anchors.
+
+## Design studio downloads
+
+The files in `examples/document-studio` and `examples/event-signing` are the sources for the sample projects. After editing a sample, run `python3 scripts/knowledgebase/package-designs.py` and verify the archives with `--check`. When changing sample data, regenerate the example PDF in the managed sandbox, then update the matching text edition, screenshot and expected figures. Copy the three finished PDFs, three text editions and two ZIPs into the website repository’s `static-site/demos/studio/`. The website’s dry-run publisher compares all hosted downloads with the product checkout before staging them.

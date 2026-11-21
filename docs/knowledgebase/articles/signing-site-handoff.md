@@ -1,5 +1,7 @@
 Give the person in a Screen Flow a **Review and sign** link to the configured Salesforce Site or Experience Cloud signing page. Keep the interview available so the person can return and check progress. For a signed-in user who should stay on the same screen throughout, use [Sign inside the Flow](#flow-signatures).
 
+[Download the complete event-to-signing Screen Flow.](#event-signing-journey)
+
 #### Create the request in the interview
 
 1. Start with an authenticated user authorized to act for the selected record and signer. Resolve the signer from that verified relationship. Keep one signer's URL in this interview.

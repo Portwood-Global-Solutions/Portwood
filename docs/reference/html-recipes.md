@@ -144,3 +144,7 @@ Set the template's header or footer HTML and place page counters there. They are
 ## Large related lists
 
 When the child query exceeds the giant-query threshold, keep the outer shell limited to supported parent-level tags and put the long list in the giant-query table. Do not rely on nested child loops, conditions, barcode tags, form fields, or signature tags in the outer shell. For large table rendering, review [repeat table headers](../knowledgebase/articles/repeat-table-headers.md) and [engine tuning](../knowledgebase/articles/engine-tuning.md).
+
+## Adapt a finished design
+
+The [design studio](../knowledgebase/articles/document-studio.md) includes complete HTML, JSON, generated PDFs and text editions. Use the [quote](../knowledgebase/articles/cpq-quote.md) for two levels of pricing, the [contents and watermark](../knowledgebase/articles/print-navigation.md) for long proposals, the [renewal brief](../knowledgebase/articles/renewal-decision.md) for missing-data decisions, and the [field work order](../knowledgebase/articles/service-sheet.md) for offline labels. The [event-driven signing example](../knowledgebase/articles/event-signing-journey.md) shows how a Screen Flow opens the signer’s page and checks for the finished File.
