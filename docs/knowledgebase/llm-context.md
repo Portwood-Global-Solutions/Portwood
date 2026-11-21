@@ -1,4 +1,4 @@
-# Portwood 3.64.0 authoring and workflow context
+# Portwood 3.65.0 authoring and workflow context
 
 Use this reference with the data shape from Copy AI Prompt. Ask for the template type, output format, generation entry point, selected fields and relationship aliases. For signing, ask for the roles, audience and delivery route. Use fictional values for examples. Preserve existing bindings on edits.
 

@@ -22,6 +22,7 @@
             <!-- pdf-lib — client-side composition of drawn/typed signatures onto the
                  final PDF at the located sign-spots (#163). Bundled static resource. -->
             <apex:includeScript value="{!URLFOR($Resource.pdflib, 'pdf-lib.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenKoreanSigningFont, 'fontkit.umd.min.js')}" />
 
             <style>
                 * {
@@ -1100,6 +1101,11 @@
                     </div>
                 </div>
             </div>
+
+            <template id="signed-text-chip"> <span class="tab">✓</span><span class="sig-value"></span> </template>
+            <template id="signed-image-chip">
+                <span class="tab">✓</span><img alt="" style="max-height: 26px; width: auto; display: block" />
+            </template>
 
             <!--
                 ============================================================================
@@ -2266,16 +2272,11 @@
                         chip.style.width = 'auto';
                         chip.style.minWidth = sentinelWidth + 'px';
                         chip.style.height = 'auto';
-                        while (chip.firstChild) chip.removeChild(chip.firstChild);
-                        var tab = document.createElement('span');
-                        tab.className = 'tab';
-                        tab.textContent = '✓'; // check mark
-                        chip.appendChild(tab);
-                        var val = document.createElement('span');
-                        var isDate = type === 'Date' || type === 'DatePick';
-                        val.className = 'sig-value' + (isDate ? ' plain' : '');
+                        var content = document.getElementById('signed-text-chip').content.cloneNode(true);
+                        var val = content.querySelector('.sig-value');
+                        if (type === 'Date' || type === 'DatePick') val.classList.add('plain');
                         val.textContent = value || '';
-                        chip.appendChild(val);
+                        chip.replaceChildren(content);
                     }
 
                     function signedCount() {
@@ -2492,15 +2493,9 @@
                         chip.classList.remove('current');
                         chip.classList.add('signed');
                         chip.style.height = 'auto';
-                        while (chip.firstChild) chip.removeChild(chip.firstChild);
-                        var tab = document.createElement('span');
-                        tab.className = 'tab';
-                        tab.textContent = '✓';
-                        chip.appendChild(tab);
-                        var img = document.createElement('img');
-                        img.src = dataUrl;
-                        img.style.cssText = 'max-height:26px;width:auto;display:block;';
-                        chip.appendChild(img);
+                        var content = document.getElementById('signed-image-chip').content.cloneNode(true);
+                        content.querySelector('img').src = dataUrl;
+                        chip.replaceChildren(content);
                     }
 
                     // Fetch the certificate roster (all signers + whether this signer
@@ -2818,41 +2813,29 @@
 
                     function loadKoreanSigningFont() {
                         if (!koreanSigningFontPromise) {
-                            var fontkitReady = new Promise(function (resolve, reject) {
-                                if (window.fontkit) {
-                                    resolve(window.fontkit);
-                                    return;
-                                }
-                                var script = document.createElement('script');
-                                script.src = "{!URLFOR($Resource.DocGenKoreanSigningFont, 'fontkit.umd.min.js')}";
-                                script.onload = function () {
-                                    if (window.fontkit) resolve(window.fontkit);
-                                    else reject(new Error('Korean signing font library did not load.'));
-                                };
-                                script.onerror = function () {
-                                    reject(new Error('Korean signing font library did not load.'));
-                                };
-                                document.head.appendChild(script);
-                            });
-                            var fontReady = fetch(
+                            if (!window.fontkit) {
+                                return Promise.reject(new Error('Korean signing font library did not load.'));
+                            }
+                            koreanSigningFontPromise = fetch(
                                 "{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}"
-                            ).then(function (response) {
-                                if (!response.ok) throw new Error('Korean signing font did not load.');
-                                return response.arrayBuffer();
-                            });
-                            koreanSigningFontPromise = Promise.all([fontkitReady, fontReady]).catch(function (error) {
-                                koreanSigningFontPromise = null;
-                                throw error;
-                            });
+                            )
+                                .then(function (response) {
+                                    if (!response.ok) throw new Error('Korean signing font did not load.');
+                                    return response.arrayBuffer();
+                                })
+                                .catch(function (error) {
+                                    koreanSigningFontPromise = null;
+                                    throw error;
+                                });
                         }
                         return koreanSigningFontPromise;
                     }
 
                     function signingPdfFonts(doc, useKoreanFont) {
                         if (useKoreanFont) {
-                            return loadKoreanSigningFont().then(function (resources) {
-                                doc.registerFontkit(resources[0]);
-                                return doc.embedFont(resources[1], { subset: true }).then(function (font) {
+                            return loadKoreanSigningFont().then(function (fontBytes) {
+                                doc.registerFontkit(window.fontkit);
+                                return doc.embedFont(fontBytes, { subset: true }).then(function (font) {
                                     return [font, font, font];
                                 });
                             });

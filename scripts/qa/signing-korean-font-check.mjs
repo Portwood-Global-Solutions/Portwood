@@ -9,17 +9,23 @@ const fontRoot = resources + '/DocGenKoreanSigningFont';
 const fontkit = require(fontRoot + '/fontkit.umd.min.js');
 const fontBytes = await readFile(new URL(fontRoot + '/NanumGothic-Regular.ttf', import.meta.url));
 const page = await readFile(new URL('../../force-app/main/default/pages/DocGenSignaturePdf.page', import.meta.url), 'utf8');
-const start = page.indexOf('                    function shortSigningDate(');
+assert.match(page, /<apex:includeScript\s+value="\{!URLFOR\(\$Resource\.DocGenKoreanSigningFont, 'fontkit\.umd\.min\.js'\)\}"\s*\/>/);
+const start = page.indexOf('var koreanSigningFontPromise;');
 const end = page.indexOf('                    // Composite ALL captured fields', start);
 assert.ok(start !== -1 && end > start);
+const browserWindow = {};
+let fontRequests = 0;
+let fontAvailable = false;
 const functions = new Function(
     'PDFLib',
-    'loadAssets',
-    page.slice(start, end).replace(
-        /function loadKoreanSigningFont\(\) \{[\s\S]*?(?=                    function signingPdfFonts)/,
-        'function loadKoreanSigningFont() { return loadAssets(); }\n'
-    ) + 'return { shortSigningDate, needsKoreanSigningFont, signingPdfFonts };'
-)(pdfLib, async () => [fontkit, fontBytes]);
+    'window',
+    'fetch',
+    page.slice(start, end) + 'return { shortSigningDate, needsKoreanSigningFont, signingPdfFonts };'
+)(pdfLib, browserWindow, async (url) => {
+    assert.equal(url, "{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}");
+    fontRequests++;
+    return { ok: fontAvailable, arrayBuffer: async () => fontBytes };
+});
 
 const date = new Date(2026, 9, 28, 12);
 const koreanDate = functions.shortSigningDate(date, 'ko-KR');
@@ -30,7 +36,15 @@ assert.equal(functions.needsKoreanSigningFont('홍길동'), true);
 assert.equal(functions.needsKoreanSigningFont('Oct 28, 2026'), false);
 
 const doc = await pdfLib.PDFDocument.create();
+await functions.signingPdfFonts(doc, false);
+await assert.rejects(functions.signingPdfFonts(doc, true), /font library did not load/);
+assert.equal(fontRequests, 0);
+browserWindow.fontkit = fontkit;
+await assert.rejects(functions.signingPdfFonts(doc, true), /font did not load/);
+fontAvailable = true;
 const [ink, regular, bold] = await functions.signingPdfFonts(doc, true);
+await functions.signingPdfFonts(await pdfLib.PDFDocument.create(), true);
+assert.equal(fontRequests, 2, 'Retry the failed font request once and reuse the successful download');
 const sheet = doc.addPage();
 sheet.drawText('홍길동', { font: ink, x: 50, y: 700 });
 sheet.drawText(koreanDate, { font: regular, x: 50, y: 670 });

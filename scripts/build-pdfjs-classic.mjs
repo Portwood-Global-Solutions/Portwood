@@ -12,10 +12,9 @@
  *   - `loadScript` loads a classic <script>, and a classic script containing `export`
  *     fails to parse yet still fires `load`, so the promise resolves with nothing defined.
  *
- * So the Flow signing component loads a classic-script copy. The ONLY change made to the
- * upstream code is mechanical: each file is wrapped in a function scope (two classic
- * scripts share one global lexical scope, and both files declare the same top-level
- * class names) and its trailing `export{a as X, ...}` becomes a global assignment:
+ * So the Flow signing component loads a classic-script copy. Each file is wrapped in a
+ * function scope because the two classic scripts share a global lexical scope and declare
+ * the same top-level class names. The trailing `export{a as X, ...}` becomes a global assignment:
  *
  *   pdf.classic.js         -> globalThis.__portwoodPdfjs       = { getDocument, ... }
  *   pdf.worker.classic.js  -> globalThis.pdfjsWorker           = { WorkerMessageHandler }
@@ -24,8 +23,9 @@
  * main thread; the component needs it because a real Web Worker and PDF.js's fake-worker
  * `import()` fallback are both blocked under Lightning Web Security.
  *
- * The upstream license header (Apache-2.0) is preserved because the file content is
- * unchanged apart from the wrapper and the export statement. Disclosure: see
+ * Compile async functions for Lightning Web Security on WebKit. A native async
+ * continuation in the PDF worker can stall before the first page is displayed.
+ * The upstream license header (Apache-2.0) is retained. Disclosure: see
  * THIRD-PARTY-NOTICES.md.
  *
  * USAGE
@@ -37,6 +37,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { transformSync } from 'esbuild';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RES = path.join(ROOT, 'force-app/main/default/staticresources');
@@ -75,7 +76,17 @@ export function toClassic(source, globalName) {
     // Guard the assumptions the wrapper relies on: a classic script cannot use these.
     const body = source.slice(0, idx);
     if (/\bimport\.meta\b/.test(body)) throw new Error('import.meta found; cannot be a classic script');
-    return '(function(){\n' + body + '\nglobalThis.' + globalName + '={' + pairs.join(',') + '};\n})();\n';
+    const classic = '(function(){\n' + body + '\nglobalThis.' + globalName + '={' + pairs.join(',') + '};\n})();\n';
+    // Mark PDF.js's @licstart notice as a legal comment so it survives minification.
+    const licensed = classic.replace('/**\n * @licstart', '/*!\n * @licstart');
+    return transformSync(licensed, {
+        format: 'iife',
+        target: 'esnext',
+        supported: { 'async-await': false, 'async-generator': false, 'for-await': false },
+        charset: 'utf8',
+        minify: true,
+        legalComments: 'inline'
+    }).code;
 }
 
 function build() {

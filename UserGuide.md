@@ -269,7 +269,7 @@ Use a Salesforce administrator who can install packages and assign permission se
 
 Open the [Portwood listing on Salesforce AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3) for the managed package. Choose the production org or sandbox where you want to install it.
 
-Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. When installation finishes, open **Setup → Installed Packages** and find **Portwood**. The current release is **3.64.0**.
+Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. When installation finishes, open **Setup → Installed Packages** and find **Portwood**. The current release is **3.65.0**.
 
 #### 2. License the people who will use Portwood
 
@@ -3703,7 +3703,7 @@ _Template builders · 7 min read_
 
 #### First, check which version you have
 
-Ask your Salesforce administrator to open **Setup → Installed Packages** and find **Portwood**. The current release is **3.64.0**. If yours is older, [upgrade in a sandbox](#upgrade-portwood) and try the same record again. If you already upgraded, tell support which version you installed and whether the problem started before or after the upgrade.
+Ask your Salesforce administrator to open **Setup → Installed Packages** and find **Portwood**. The current release is **3.65.0**. If yours is older, [upgrade in a sandbox](#upgrade-portwood) and try the same record again. If you already upgraded, tell support which version you installed and whether the problem started before or after the upgrade.
 
 #### Pick the symptom you see
 

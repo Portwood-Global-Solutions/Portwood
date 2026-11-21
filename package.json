@@ -26,6 +26,7 @@
     },
     "devDependencies": {
         "@prettier/plugin-xml": "3.4.2",
+        "esbuild": "0.28.2",
         "husky": "9.1.7",
         "jsdom": "^30.0.1",
         "lint-staged": "16.4.0",
