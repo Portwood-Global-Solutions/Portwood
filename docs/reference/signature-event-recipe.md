@@ -1,5 +1,7 @@
 # Build the event subscriber for a signing workflow
 
+For a signed-in employee or portal member signing an agreement, arrange a Portwood site license. Public signing links run under the signing site’s licensed guest user. [Choose signing licenses](https://portwood.dev/guide#user-licenses)
+
 Use a business event to start an agreement, then let the rest of the process continue when the signed file exists. A platform-event-triggered Flow runs in its own transaction and has no screen. Keep the customer's navigation in the [Screen Flow handoff](../../UserGuide.md#signing-site-handoff).
 
 #### Start a request from an approval event

@@ -41,7 +41,7 @@ Follow the request's status. Once everyone signs, the signing workflow creates t
 
 #### Sign inside the Flow screen
 
-Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. Guests are refused; send guests the emailed signing link instead.
+Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. **Signing as an authenticated user requires a Portwood site license**, including when employees sign inside Salesforce or customers sign inside a portal. For a public recipient, send the private signing link through the licensed site guest user. [Get a site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9)
 
 1. Add **Portwood: Create Signature Request** as described above. Set **Send Branded Emails** to `False` when the person signs right away in the Flow.
 2. Add a **Screen** element. From the **Custom** components, drag **Portwood: Sign in Flow** onto it.
@@ -60,7 +60,7 @@ Use the **Portwood: Sign in Flow** screen component when the signer is already s
 
 The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
 
-Assign **Portwood Portal Signer** to the intended Experience Cloud members. For a non-admin internal signer using the packaged Portwood User permission set, also assign **Portwood Portal Signer** to grant access to the Flow signing controller. Check the screen as the actual signer profile.
+For an Experience Cloud member, give access to the site page and to run this specific Screen Flow through their profile or permission set. Assign **Portwood Portal Signer** for the embedded signing component. An internal non-admin using **Portwood User** also needs **Portwood Portal Signer** for that component. Open the page as an intended signer and check that the Flow reaches the document. [Salesforce instructions for access to a specific Flow](https://help.salesforce.com/s/articleView?id=platform.flow_distribute_security.htm&language=en_US&type=5)
 
 The signature is saved the same way as on the signing page, with the same audit record, document hash, Certificate of Completion, and completion emails. You are done when your test Flow reaches the screen after signing and the signed PDF appears on the related record.
 

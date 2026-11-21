@@ -1,4 +1,4 @@
-A Salesforce Site gives external recipients a public doorway to the signing experience. They use their unique signing link; they do not need a Salesforce login.
+A Salesforce Site gives external recipients a public doorway to the signing experience. Each recipient opens their own signing link without a Salesforce login or an individual Portwood license. Your site’s guest user needs Portwood license coverage.
 
 **Before you start:** Install Portwood and use a Salesforce administrator account. This walkthrough uses **Salesforce Sites**. If your organization already uses Experience Cloud, follow [the Experience Cloud route](#site-experience-cloud) instead.
 
@@ -60,8 +60,8 @@ Each site has its own guest user. Assigning a permission set to yourself or a di
 1. Return to Site Details and click **Public Access Settings**.
 2. On the guest profile, click **View Users**.
 3. Open the user named for this site, such as **Portwood Signing Site Guest User**.
-4. In **Permission Set Assignments**, click **Edit Assignments**.
-5. Move **Portwood Guest Signature** to **Enabled Permission Sets** and save.
+4. With per-user licensing, find **Managed Packages** on this guest user. Assign an available **Portwood** license if it is missing. A Portwood site license already covers the guest. [See the license assignment screens](#user-licenses)
+5. In **Permission Set Assignments**, click **Edit Assignments**. Move **Portwood Guest Signature** to **Enabled Permission Sets** and save.
 
 ![Portwood Guest Signature is selected for this site's guest user](docs/images/userguide/v3.60/site-guest-permission.png)
 

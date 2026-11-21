@@ -1,5 +1,7 @@
 Give a signed-in person a button that opens their own Portwood signing page. They can return to the same Flow to check the signed file. This walkthrough uses the [background Flow that prepares the agreement](#signing-events). [See the screens as a signer](#event-signing-journey)
 
+For a members-only portal or employee signing experience, authenticated signing requires a **Portwood site license**. If the button opens a public signing page, configure that site’s guest user as well. [Plan signing access and request a quote](#user-licenses)
+
 #### 1. Put a Prepare agreement button on the screen
 
 In **Setup → Flows → New Flow**, select **Screen Flow**. Under **Start**, select **+ → Screen**. Drag **Display Text** onto it and enter a short explanation of the agreement. In the screen’s footer settings, give the **Next** button the label **Prepare agreement**.

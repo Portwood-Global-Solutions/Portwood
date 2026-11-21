@@ -2,6 +2,8 @@ Generate a document from Salesforce information and send it for signature.
 
 **Before you start:** The template is active, includes signature positions, and generates the expected PDF. External delivery needs the [signing-site and email setup](#setup-signatures).
 
+Your team’s licensed senders can send public invitations. Your admin licenses the public site’s guest user once for that site. If the recipient signs while logged in to a portal or Salesforce, your organization needs a site license. [Check who needs a license](#user-licenses)
+
 #### Prepare the template once
 
 In Canvas, add a **Signature** block and configure the role and type. In Word or HTML, reserve space and use a signature tag:

@@ -71,7 +71,13 @@
             "id": "team-setup",
             "title": "Set up Portwood for your team",
             "description": "Install the app, assign access, put it on a record, and try it as a teammate.",
-            "articles": ["install-portwood", "manage-access", "add-to-record-page", "generate-document"]
+            "articles": [
+                "user-licenses",
+                "install-portwood",
+                "manage-access",
+                "add-to-record-page",
+                "generate-document"
+            ]
         },
         {
             "id": "template-builder",
@@ -141,6 +147,34 @@
             }
         },
         {
+            "slug": "user-licenses",
+            "title": "Who needs a Portwood license?",
+            "group": "start",
+            "audience": "Salesforce administrators and team leads",
+            "minutes": 4,
+            "summary": "Count licenses for staff and the public signing guest user, assign them in Setup, and get a site-license quote for authenticated portal signing.",
+            "sources": [
+                "force-app/main/default/permissionsets",
+                "force-app/main/default/lwc/docGenRunner",
+                "force-app/main/default/lwc/docGenFlowSigner",
+                "docs/knowledgebase/articles/manage-access.md",
+                "docs/knowledgebase/articles/site-experience-cloud.md"
+            ],
+            "related": [
+                "install-portwood",
+                "manage-access",
+                "setup-signatures",
+                "site-experience-cloud",
+                "flow-signatures"
+            ],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
             "slug": "install-portwood",
             "title": "Install Portwood",
             "group": "start",
@@ -152,7 +186,7 @@
                 "force-app/main/default/permissionsets",
                 "force-app/main/default/lwc/docGenAdmin"
             ],
-            "related": ["first-document", "manage-access", "add-to-record-page"],
+            "related": ["user-licenses", "first-document", "manage-access", "add-to-record-page"],
             "aliases": [
                 "3-install--post-install-setup",
                 "3-install-post-install-setup",
@@ -161,8 +195,8 @@
                 "133-blobtopdf-release-update"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -760,8 +794,8 @@
             "related": ["signer-experience", "manage-signatures", "setup-signatures"],
             "aliases": ["1011-signing-a-customer-uploaded-pdf"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -811,7 +845,7 @@
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {
@@ -871,7 +905,7 @@
                 "force-app/main/default/lwc/docGenSignatureSettings",
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml"
             ],
-            "related": ["brands-and-emails", "sign-uploaded-pdf", "fix-signing"],
+            "related": ["user-licenses", "brands-and-emails", "sign-uploaded-pdf", "fix-signing"],
             "aliases": [
                 "105-pin-verification",
                 "making-verification-configurable-onoff-pre-fill",
@@ -880,8 +914,8 @@
                 "132-signature-settings"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -963,7 +997,7 @@
                 "force-app/main/default/classes/DocGenFlowSigningController.cls",
                 "force-app/main/default/permissionsets/DocGen_Portal_Signer.permissionset-meta.xml"
             ],
-            "related": ["sign-template", "setup-signatures", "developer-reference"],
+            "related": ["user-licenses", "sign-template", "setup-signatures", "developer-reference"],
             "aliases": [
                 "116-recipe--send-a-contract-for-signature-on-opportunity-approval",
                 "116-recipe-send-a-contract-for-signature-on-opportunity-approval",
@@ -975,7 +1009,7 @@
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {
@@ -1099,9 +1133,9 @@
             "group": "manage",
             "audience": "Salesforce administrators",
             "minutes": 5,
-            "summary": "Match permission sets to roles and troubleshoot access.",
+            "summary": "Give licensed users, signing guests and portal members the permissions their jobs require.",
             "sources": ["force-app/main/default/permissionsets", "force-app/main/default/classes/DocGenController.cls"],
-            "related": ["add-to-record-page", "organize-templates"],
+            "related": ["user-licenses", "add-to-record-page", "organize-templates"],
             "aliases": [
                 "4-permission-sets",
                 "assigning-a-permission-set",
@@ -1112,7 +1146,7 @@
             "review": {
                 "version": "3.64.0",
                 "date": "2026-11-20",
-                "method": "source"
+                "method": "org-and-source"
             }
         },
         {
@@ -1257,9 +1291,9 @@
                 "1510-signing-link-opens-to-invalid-page-on-an-experience-cloud-site"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1700,11 +1734,11 @@
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml",
                 "force-app/main/default/lwc/docGenSignatureSettings"
             ],
-            "related": ["site-email", "setup-signatures", "fix-signing"],
+            "related": ["user-licenses", "site-email", "setup-signatures", "fix-signing"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -1720,11 +1754,11 @@
                 "force-app/main/default/lwc/docGenSignatureSettings",
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml"
             ],
-            "related": ["site-salesforce", "site-email", "fix-signing"],
+            "related": ["user-licenses", "site-salesforce", "site-email", "fix-signing"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },

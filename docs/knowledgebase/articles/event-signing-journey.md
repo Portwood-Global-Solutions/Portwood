@@ -1,6 +1,6 @@
 If your team uses a Salesforce screen to collect an agreement, you can prepare it, open your signing page, and return to the same screen to check the result. This example follows one person signing their own service agreement.
 
-Setting this up for your team? [Build the signing experience in Salesforce](#signing-handoff-setup).
+Setting this up for your team? [Check licensing for signed-in signers](#user-licenses), then [build the signing experience in Salesforce](#signing-handoff-setup).
 
 #### 1. Prepare your agreement
 

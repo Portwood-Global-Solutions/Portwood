@@ -2,6 +2,8 @@ Keep templates and workflows working when you install a new release.
 
 **Before you start:** Read the [changelog](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/CHANGELOG.md), note your installed version in **Setup → Installed Packages**, and test in a sandbox.
 
+If you already hold a free production site license, your existing installed version can continue under that agreement. Moving to a paid release requires paid licensing. If you started on a free version in a sandbox, ask Portwood to confirm your production options. [Sandbox and production licensing](https://portwood.dev/pricing#sandbox-to-production)
+
 #### Before upgrading
 
 1. Export important templates and keep their authoring files.

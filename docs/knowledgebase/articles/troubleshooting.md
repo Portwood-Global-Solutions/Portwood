@@ -6,6 +6,7 @@ Ask your Salesforce administrator to open **Setup → Installed Packages** and f
 
 | What happened?                                          | Start here                                                 |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
+| Unsure who needs a license, or a portal member can’t sign | [Check the license for the person and signing route](#user-licenses) |
 | Portwood or the Generate tool is missing                | [Access and record-page setup](#manage-access)             |
 | A template is missing from the list                     | [Organize and limit template choices](#organize-templates) |
 | Blank values, visible tags, odd tables, or a broken PDF | [Fix a document](#fix-document)                            |

@@ -42,6 +42,27 @@ try {
         await page.getByRole('heading', { name: 'What would you like to do?' }).waitFor();
         assert.equal(await page.locator('.pg-task').count(), 6);
     });
+    await check('license guidance covers public guests, signed-in signers, and the enterprise quote', async () => {
+        await page.goto(url);
+        await page.getByRole('link', { name: 'Who needs a license?', exact: true }).click();
+        await page.getByRole('heading', { name: 'Who needs a Portwood license?', exact: true }).waitFor();
+        const article = page.locator('#pg-prose');
+        const guest = article.getByRole('row').filter({ hasText: 'A customer opens a public signing link' });
+        assert.match(await guest.innerText(), /one Portwood user license to that site’s guest user/);
+        assert.match(await guest.innerText(), /Each recipient gets their own private signing link/);
+        const signedIn = article.getByRole('row').filter({ hasText: 'signs using their login' });
+        assert.match(await signedIn.innerText(), /Portwood site license required/);
+        assert.match(await signedIn.innerText(), /specific Screen Flow/);
+        assert.match(await signedIn.innerText(), /Portwood Portal Signer/);
+        const quote = article.getByRole('link', { name: 'Request a site-license quote', exact: true });
+        assert.equal(await quote.getAttribute('href'), 'https://calendar.app.google/HJLhcSFRFDoqxXEM9');
+        assert.equal(await article.getByRole('img').count(), 3);
+        assert.match(await article.innerText(), /Setup → Company Information/);
+        await page.goto(`${url}#install-portwood`);
+        await page.getByRole('link', { name: 'See who needs a license, including guests and portal signers' }).click();
+        await page.getByRole('heading', { name: 'Who needs a Portwood license?', exact: true }).waitFor();
+        assert.equal(catalog.learningPaths.find((path) => path.id === 'team-setup').articles[0], 'user-licenses');
+    });
     await check('design studio cards open their recipes and section links move keyboard focus', async () => {
         await page.goto(url);
         await page.locator('.pg-studio a').first().waitFor();
@@ -185,6 +206,7 @@ try {
         await page.locator('#pg-raw-text').filter({ hasText: '# Portwood Knowledgebase' }).waitFor();
         const markdown = await page.locator('#pg-raw-text').innerText();
         assert.ok(markdown.includes('[Check your installed version](#troubleshooting)'));
+        assert.ok(markdown.includes('[Who needs a Portwood license?](#user-licenses)'));
         assert.ok(markdown.includes(`The current release is **${catalog.product.version}**`));
         await page.locator('[data-article="first-document"]').click();
         await page.getByRole('heading', { name: 'Make your first document', exact: true }).waitFor();
@@ -192,7 +214,7 @@ try {
     await check('phone and tablet layouts have no page overflow and a working topic menu', async () => {
         for (const width of [390, 768, 1024]) {
             await page.setViewportSize({ width, height: 900 });
-            for (const slug of ['sign-uploaded-pdf', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface', 'signing-site-handoff', 'document-studio']) {
+            for (const slug of ['sign-uploaded-pdf', 'user-licenses', 'site-experience-cloud', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface', 'signing-site-handoff', 'document-studio']) {
                 await page.goto(`${url}#${slug}`);
                 await page.locator('#pg-prose').waitFor();
                 assert.ok(

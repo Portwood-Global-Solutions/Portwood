@@ -4,6 +4,7 @@ Follow one fictional account from a welcome letter to a service schedule, a PDF 
 
 | If you are here to… | Jump to this chapter in the player |
 | --- | --- |
+| Plan licenses for staff, public signing and portals | [Who needs a license?](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license) |
 | Set up your first template | **Start with one field** |
 | Make long tables and branded documents | **Print across pages** or **Use richer layouts** |
 | Generate documents from Salesforce | **Deliver one file** or **Run a batch** |

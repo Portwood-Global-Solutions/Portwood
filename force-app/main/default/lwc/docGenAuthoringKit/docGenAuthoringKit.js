@@ -611,6 +611,9 @@ export function buildAiPrompt(shape, options) {
     lines.push(
         '- A document template cannot navigate a Flow or publish an event. For an automation request, use the separate Flow recipes: create the request using DocGenSigner, keep each signer URL private, and check the saved request and signed File before acting on completion.'
     );
+    lines.push(
+        '- Signing setup for a Flow or portal: public signing links require Portwood license coverage for the site guest user. Public recipients need no individual license. Signing as an authenticated Salesforce or portal user requires a Portwood site license. For an enterprise quote, use https://portwood.dev/pricing#site-license.'
+    );
     lines.push('');
     lines.push('DATA SHAPE — use ONLY these fields (any other tag renders empty):');
     if (opts.dataSourceMode === 'flow') {

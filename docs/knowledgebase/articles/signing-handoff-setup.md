@@ -1,5 +1,7 @@
 To let someone wait for a signing link in a Salesforce screen, give the screen and the background Flow a private place to meet. In this example a **Guide Signing Receipt** remembers which request belongs to the person. A **Guide Sign Requested** event tells the background Flow to start preparing it. Set these up once in a sandbox.
 
+This example starts with a signed-in person. For a portal or employee signing rollout, arrange a **Portwood site license**. It also covers the guest user if the Flow opens a public signing page. [Check signing licenses and request a quote](#user-licenses)
+
 #### 1. Make the receipt in Object Manager
 
 1. Open **Setup → Object Manager → Create → Custom Object**. Enter **Guide Signing Receipt** for the label and **Guide Signing Receipts** for the plural. Use `Guide_Sign_Receipt` for **Object Name** to match this example. For the record name, use **Receipt number**, choose **Auto Number** and enter `HANDOFF-{00000}` as the display format. Save.

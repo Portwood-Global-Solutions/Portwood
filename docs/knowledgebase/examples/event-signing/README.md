@@ -4,6 +4,8 @@ This subscriber project lets one signed-in person prepare and open a practice ag
 
 [See the signer’s screens](https://portwood.dev/guide#event-signing-journey) or [build it step by step in Salesforce Setup](https://portwood.dev/guide#signing-handoff-setup).
 
+This sample starts with a signed-in user. Authenticated signing for employees or portal members requires a Portwood site license. A public signing page also needs its guest user configured. [Plan licenses and request a quote](https://portwood.dev/guide#user-licenses).
+
 ## Install this optional project in a sandbox
 
 1. Use a sandbox with Portwood installed and a configured Salesforce Site or Experience Cloud signing page. The signer and Flow execution users need the Portwood permissions and record access appropriate to their roles. The source uses Salesforce Flow API 68 and the managed `portwoodglobal` namespace.

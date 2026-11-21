@@ -446,5 +446,26 @@
         "capturedOn": "2026-11-20",
         "environment": "Subscriber sandbox, Salesforce Lightning App Builder",
         "description": "The Flow property selects the active Guide · Request and open an agreement interview."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/installed-package-action.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox, Installed Packages or the signing site guest user record",
+        "description": "Manage Licenses appears on the Portwood row in Salesforce Installed Packages."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/package-license-counts.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox, Installed Packages or the signing site guest user record",
+        "description": "Package Details shows two allowed and two used licenses. Add Users is disabled when all seats are assigned."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/guest-managed-packages.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox, Installed Packages or the signing site guest user record",
+        "description": "The signing site’s guest user record has an Assign Licenses button in its Managed Packages related list."
     }
 ]

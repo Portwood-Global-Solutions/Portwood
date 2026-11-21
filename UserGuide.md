@@ -4,13 +4,14 @@
 
 Choose a task to get started. You can make your first document, set up Portwood for a team, or collect a signature.
 
-[Check your installed version](#troubleshooting) · [Managed package on AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3) · [Open the visual guide](https://portwood.dev/guide)
+[Who needs a Portwood license?](#user-licenses) · [Check your installed version](#troubleshooting) · [Managed package on AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3) · [Open the visual guide](https://portwood.dev/guide)
 
 ## Table of contents
 
 - **Start here**
     - [Welcome to Portwood](#welcome)
     - [Watch a document go from account to acceptance](#watch-walkthrough)
+    - [Who needs a Portwood license?](#user-licenses)
     - [Install Portwood](#install-portwood)
     - [Make your first document](#first-document)
     - [Find your way around](#find-your-way)
@@ -140,7 +141,7 @@ Think of a template as a reusable form. You design it once. Portwood fills in a 
 #### Start with the path that fits you
 
 - **I just need a document.** Go to [Generate a document](#generate-document).
-- **I am setting up Portwood.** Start with [Install and give people access](#install-portwood).
+- **I am setting up Portwood.** [Check who needs a license](#user-licenses), then [install Portwood and give people access](#install-portwood).
 - **I want to build something.** Follow [Make your first document](#first-document).
 - **I already have a PDF to sign.** Follow [Send an uploaded PDF for signature](#sign-uploaded-pdf).
 - **Something is wrong.** Open [Find and fix a problem](#troubleshooting).
@@ -177,23 +178,77 @@ Follow one fictional account from a welcome letter to a service schedule, a PDF 
 
 [Watch From account to acceptance](https://portwood.dev/demos/portwood-3.64-demo.html) · [Read the transcript](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/demos/portwood-3.64-demo-script.md)
 
-| If you are here to…                                    | Jump to this chapter in the player                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Set up your first template                             | **Start with one field**                                                 |
-| Make long tables and branded documents                 | **Print across pages** or **Use richer layouts**                         |
-| Generate documents from Salesforce                     | **Deliver one file** or **Run a batch**                                  |
-| Collect a signature                                    | **Prepare a signature request**                                          |
-| Build the experience in Flow                           | **Sign in the interview** or **Navigate to the signing site**            |
-| Build a linked proposal and price its bundles          | **Give the buyer a contents page** and **Price the bundle once**         |
-| Make a data-driven renewal brief or field work order   | **Let the data change the brief** or **Put the work order in the field** |
-| Follow a working platform event into the signer’s site | **Follow the event into signing**                                        |
-| Troubleshoot a missing feature                         | **When a control is missing**                                            |
+| If you are here to…                                    | Jump to this chapter in the player                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Plan licenses for staff, public signing and portals    | [Who needs a license?](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license) |
+| Set up your first template                             | **Start with one field**                                                                               |
+| Make long tables and branded documents                 | **Print across pages** or **Use richer layouts**                                                       |
+| Generate documents from Salesforce                     | **Deliver one file** or **Run a batch**                                                                |
+| Collect a signature                                    | **Prepare a signature request**                                                                        |
+| Build the experience in Flow                           | **Sign in the interview** or **Navigate to the signing site**                                          |
+| Build a linked proposal and price its bundles          | **Give the buyer a contents page** and **Price the bundle once**                                       |
+| Make a data-driven renewal brief or field work order   | **Let the data change the brief** or **Put the work order in the field**                               |
+| Follow a working platform event into the signer’s site | **Follow the event into signing**                                                                      |
+| Troubleshoot a missing feature                         | **When a control is missing**                                                                          |
 
 To follow along, open the [recipe library](#recipe-library). It includes the service packet. The [design studio](#document-studio) has the proposal, renewal brief, work order and their data.
 
 _Everyone · 11 min read_
 
 **Next:** [Make your first document](#first-document) · [Recipes from a first letter to a signed packet](#recipe-library) · [Set up external signing](#setup-signatures)
+
+---
+
+<a id="user-licenses"></a>
+
+### Who needs a Portwood license?
+
+If five employees send agreements and their customers sign through public links, count the five employees and one signing site guest user. The customers opening those links need no individual Portwood license. **If people sign as logged-in Salesforce users or as members of a community, customer portal or partner portal, your organization needs a Portwood site license.** [Request a site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9)
+
+#### Who needs what?
+
+| Who and what they do                                                                     | Portwood license                                                                                                                                                                         | What the admin sets up                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An admin builds templates or configures Portwood                                         | One user license under per-user licensing, or coverage under the org’s site license.                                                                                                     | Assign **Portwood Admin**. An admin who also generates or sends documents still counts once.                                                                                                                        |
+| An employee generates a document or sends a signature request                            | One user license per employee who uses Portwood, or coverage under the site license. Sending is included.                                                                                | Assign **Portwood User** and give access to the records and templates they use.                                                                                                                                     |
+| A signed-in portal member generates a document from a record                             | The member running Portwood needs a user license or coverage under the org’s site license.                                                                                               | Give the member access to the portal page with the generator, the template, and the records and fields it reads. Test **Generate** as that member.                                                                  |
+| A customer opens a public signing link                                                   | The **signing site’s Salesforce guest user** needs a Portwood license. All public recipients using that site share its guest access. Each recipient gets their own private signing link. | Under per-user licensing, assign one Portwood user license to that site’s guest user. The site license already covers the guest. Assign **Portwood Guest Signature** in either case.                                |
+| An employee or a signed-in customer, partner or community member signs using their login | **Portwood site license required.** This includes signing inside a Screen Flow.                                                                                                          | Give portal members access to the site, the page and the specific Screen Flow. For embedded signing, assign **Portwood Portal Signer** to members and to internal non-admin signers using the packaged permissions. |
+| Someone only receives the finished PDF or Office file                                    | The recipient needs no Portwood license to open a delivered file.                                                                                                                        | For a Salesforce File link, give the recipient access to the File, or deliver a copy through your usual channel.                                                                                                    |
+
+An email verification code on a **public signing link** verifies the recipient’s email. It still uses the site guest user. A community member who signs in a **members-only portal** uses authenticated signing. If the same portal offers both experiences, the site license covers the signed-in users and the guest. [Set up signing in Experience Cloud](#site-experience-cloud)
+
+#### Count licenses for a public signing site
+
+Standard pricing is **$13 USD per user per month**. One template builder and four colleagues who only generate or send documents use five licenses. Add one for their public signing site’s guest user and the total is **six licenses, $78 per month**, before tax or optional services. Another recipient signing through that same site adds no license. If you use several public signing sites, count each site’s own guest user. [Current Portwood pricing and estimator](https://portwood.dev/pricing#estimate) · [Watch the licensing example](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license)
+
+#### Assign a user license in Salesforce
+
+1. If your org pays per user, open **Setup → Installed Packages**. On the **Portwood** row, select **Manage Licenses**. Your administrator needs the **Manage Package Licenses** permission. The **Portwood Agentforce Extension** has its own row.
+
+![Select Manage Licenses next to the Portwood package in Salesforce Setup.](docs/images/userguide/v3.64/installed-package-action.png)
+
+2. Compare **Allowed Licenses** and **Used Licenses**. With a seat available, choose **Add Users**, select the user and then **Add**. If all seats are used, an admin can review assignments or contact Portwood for more. In this example both seats are in use.
+
+![The Package Details screen shows two allowed licenses, two used licenses, and a disabled Add Users button.](docs/images/userguide/v3.64/package-license-counts.png)
+
+3. For public signing, open the **guest user** attached to the site that serves your links. Under per-user licensing, look for **Portwood** in that user’s **Managed Packages**. If it is missing, select **Assign Licenses**, choose **Portwood**, select **Add**, then check that it shows as active. With either licensing model, assign **Portwood Guest Signature** under **Permission Set Assignments**. [Find the Salesforce Site guest user](#site-salesforce) · [Find the Experience Cloud guest user](#site-experience-cloud)
+
+![The signing guest user’s Managed Packages section has an Assign Licenses button.](docs/images/userguide/v3.64/guest-managed-packages.png)
+
+4. For staff, assign the permission set for their job and try the action as that user. An org-wide site license covers users automatically, so go straight to permission sets once you’ve confirmed that coverage. [Give people the right access](#manage-access) · [Salesforce package license instructions](https://help.salesforce.com/s/articleView?id=distribution_managing_licenses.htm&language=en_US&type=5)
+
+**Can’t see Manage Licenses?** Ask an administrator with **Manage Package Licenses** to check. To confirm site-wide coverage, check your accepted Portwood quote or order for this production org, or email Portwood with the **Salesforce.com Organization ID** from **Setup → Company Information**. [Ask Portwood to confirm coverage](mailto:hello@portwood.dev?subject=Confirm%20Portwood%20license%20coverage) · [Find your Salesforce org ID](https://help.salesforce.com/s/articleView?id=000006019&language=en_US&type=1)
+
+#### Get a quote for enterprise or authenticated signing
+
+Portwood’s **Founder’s Site License** is quoted for your Salesforce org. It covers the org’s users, including the public signing guest user. You need it when employees or portal members sign while authenticated. Enterprise teams can also request site-wide coverage for document generation and sending. If an integration or service account runs your documents, include it when you ask about coverage. [Portwood site-license pricing](https://portwood.dev/pricing#site-license)
+
+Tell Portwood which Salesforce org and portals you use, who will send, and whether people will sign through public links, while logged in, or both. Portwood can then quote the relevant coverage. [Book a site-license call](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Email hello@portwood.dev for a quote](mailto:hello@portwood.dev?subject=Portwood%20site%20license%20quote)
+
+_Salesforce administrators and team leads · 4 min read_
+
+**Next:** [Install Portwood](#install-portwood) · [Give people the right access](#manage-access) · [Set up external signing](#setup-signatures) · [Use an Experience Cloud signing site](#site-experience-cloud) · [Create signing requests with Flow](#flow-signatures)
 
 ---
 
@@ -208,7 +263,7 @@ _Everyone · 11 min read_
 
 Install Portwood once, then give each person the access they need.
 
-**Before you start:** You need a Salesforce administrator who can install packages and assign permission sets. Try a sandbox before changing a live org.
+Use a Salesforce administrator who can install packages and assign permission sets. Assigning per-user seats also requires **Manage Package Licenses**. Try a sandbox before changing a live org.
 
 #### 1. Install the package
 
@@ -216,7 +271,11 @@ Open the [Portwood listing on Salesforce AppExchange](https://appexchange.salesf
 
 Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. When installation finishes, open **Setup → Installed Packages** and find **Portwood**. The current release is **3.64.0**.
 
-#### 2. Give yourself Portwood Admin
+#### 2. License the people who will use Portwood
+
+In **Setup → Installed Packages**, open **Manage Licenses** on the **Portwood** row. With per-user licensing, assign a seat to each person who will build templates, generate documents or send signature requests. If your organization uses a site license, users are already covered. [See who needs a license, including guests and portal signers](#user-licenses)
+
+#### 3. Give people their permission sets
 
 1. Open Salesforce **Setup**.
 2. Enter **Permission Sets** in Quick Find and open it.
@@ -228,13 +287,13 @@ Give other people **Portwood User** when they need to generate documents or send
 
 Select the people who need the tool. Some Salesforce licenses cannot receive all of these permissions; assigning a set to an unsupported license can also prevent a later upgrade.
 
-#### 3. Check PDF rendering
+#### 4. Check PDF rendering
 
 In Setup, open **Release Updates**. If your org offers **Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations**, open it and follow Salesforce's steps to enable it.
 
 The update's availability and controls depend on your Salesforce release. A disabled **Enable Test Run** button is not proof that the update is active. If PDF output shows raw CSS or missing images, ask your Salesforce administrator to check the update and contact Salesforce Support if it cannot be enabled.
 
-#### 4. Open Portwood
+#### 5. Open Portwood
 
 Open the **App Launcher**, search for **Portwood**, and select the app. You should see the **Template Library** and the choices **Bring an Existing Template** and **Start from a Blank Canvas**.
 
@@ -253,7 +312,7 @@ Installing the package does not automatically add components to your record page
 
 _Salesforce administrators · 6 min read_
 
-**Next:** [Make your first document](#first-document) · [Give people the right access](#manage-access) · [Add Portwood to a record page](#add-to-record-page)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Make your first document](#first-document) · [Give people the right access](#manage-access) · [Add Portwood to a record page](#add-to-record-page)
 
 ---
 
@@ -1870,11 +1929,11 @@ Click **Review request**. Check the document, assigned people, positions, title,
 
 Choose delivery:
 
-| Delivery                          | What happens                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Preview signing in Salesforce** | Creates an actual practice request whose signing links require Salesforce login; invitation, reminder, and completion emails are suppressed |
-| **Create public signing links**   | Creates external signing links through your configured public site                                                                          |
-| **Email invitations**             | Sends invitations through your configured site and sender, in signing order                                                                 |
+| Delivery                          | What happens                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Preview signing in Salesforce** | Creates an actual practice request whose signing links require Salesforce login. Authenticated signing requires a Portwood site license. This route suppresses invitation, reminder and completion emails. [Signing license guide](#user-licenses) |
+| **Create public signing links**   | Creates external signing links through your configured public site                                                                                                                                                                                 |
+| **Email invitations**             | Sends invitations through your configured site and sender, in signing order                                                                                                                                                                        |
 
 The internal preview is useful for learning in a test org. Completing it still creates a signed file on the record.
 
@@ -1910,6 +1969,8 @@ _Document users · 8 min read_
 Generate a document from Salesforce information and send it for signature.
 
 **Before you start:** The template is active, includes signature positions, and generates the expected PDF. External delivery needs the [signing-site and email setup](#setup-signatures).
+
+Your team’s licensed senders can send public invitations. Your admin licenses the public site’s guest user once for that site. If the recipient signs while logged in to a portal or Salesforce, your organization needs a site license. [Check who needs a license](#user-licenses)
 
 #### Prepare the template once
 
@@ -1976,7 +2037,7 @@ _Template builders and senders · 6 min read_
 
 ### What a signer sees
 
-This is what to expect when someone opens a Portwood signing link.
+If a sender gives you a public Portwood signing link, you can review and sign without buying a license or creating a Salesforce account. Use the link addressed to you.
 
 Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
 
@@ -2029,7 +2090,7 @@ _Senders and signers · 4 min read_
 
 If your team uses a Salesforce screen to collect an agreement, you can prepare it, open your signing page, and return to the same screen to check the result. This example follows one person signing their own service agreement.
 
-Setting this up for your team? [Build the signing experience in Salesforce](#signing-handoff-setup).
+Setting this up for your team? [Check licensing for signed-in signers](#user-licenses), then [build the signing experience in Salesforce](#signing-handoff-setup).
 
 #### 1. Prepare your agreement
 
@@ -2158,6 +2219,8 @@ Set up the public signing page and email sender before inviting external recipie
 
 **Before you start:** You are a Salesforce administrator with authority to configure a Salesforce Site or Experience Cloud site and the organization's email settings.
 
+**Choose the signing route.** For public links under per-user licensing, cover the signing site’s guest user with a Portwood license. Each customer opens their own link and needs no individual seat. If customers, partners or employees sign while logged in, arrange a **Portwood site license**. It also covers the public guest user. [Compare signing licenses and request a quote](#user-licenses)
+
 #### 1. Open the checklist
 
 Go to **Portwood → Signatures**. The **Setup Status** checklist shows what is configured and what still needs attention.
@@ -2182,7 +2245,8 @@ For a classic Salesforce Site:
 1. Open **Setup → Sites → your site**.
 2. Click **Public Access Settings**.
 3. Open **View Users**, then the site's guest user.
-4. Under **Permission Set Assignments**, assign **Portwood Guest Signature**.
+4. Under per-user licensing, check **Managed Packages** for **Portwood** on the guest user. If needed, use **Assign Licenses** to assign an available license. With a site license the guest is already covered.
+5. Under **Permission Set Assignments**, assign **Portwood Guest Signature**.
 
 For Experience Cloud, find that site's guest user through its administration/profile controls and assign the same packaged set.
 
@@ -2212,7 +2276,7 @@ Create a test request for an inbox you control. Open the public link in a privat
 
 _Salesforce administrators · 9 min read_
 
-**Next:** [Brand the signing experience](#brands-and-emails) · [Send an uploaded PDF for signature](#sign-uploaded-pdf) · [Fix a signing problem](#fix-signing)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Brand the signing experience](#brands-and-emails) · [Send an uploaded PDF for signature](#sign-uploaded-pdf) · [Fix a signing problem](#fix-signing)
 
 ---
 
@@ -2283,7 +2347,7 @@ _Template administrators · 7 min read_
 
 ### Create the Salesforce signing site
 
-A Salesforce Site gives external recipients a public doorway to the signing experience. They use their unique signing link; they do not need a Salesforce login.
+A Salesforce Site gives external recipients a public doorway to the signing experience. Each recipient opens their own signing link without a Salesforce login or an individual Portwood license. Your site’s guest user needs Portwood license coverage.
 
 **Before you start:** Install Portwood and use a Salesforce administrator account. This walkthrough uses **Salesforce Sites**. If your organization already uses Experience Cloud, follow [the Experience Cloud route](#site-experience-cloud) instead.
 
@@ -2345,8 +2409,8 @@ Each site has its own guest user. Assigning a permission set to yourself or a di
 1. Return to Site Details and click **Public Access Settings**.
 2. On the guest profile, click **View Users**.
 3. Open the user named for this site, such as **Portwood Signing Site Guest User**.
-4. In **Permission Set Assignments**, click **Edit Assignments**.
-5. Move **Portwood Guest Signature** to **Enabled Permission Sets** and save.
+4. With per-user licensing, find **Managed Packages** on this guest user. Assign an available **Portwood** license if it is missing. A Portwood site license already covers the guest. [See the license assignment screens](#user-licenses)
+5. In **Permission Set Assignments**, click **Edit Assignments**. Move **Portwood Guest Signature** to **Enabled Permission Sets** and save.
 
 ![Portwood Guest Signature is selected for this site's guest user](docs/images/userguide/v3.60/site-guest-permission.png)
 
@@ -2371,7 +2435,7 @@ Create a practice request and open its generated signing link in a private brows
 
 _Salesforce administrators · 12 min read_
 
-**Next:** [Configure signing email and verification](#site-email) · [Set up external signing](#setup-signatures) · [Fix a signing problem](#fix-signing)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Configure signing email and verification](#site-email) · [Set up external signing](#setup-signatures) · [Fix a signing problem](#fix-signing)
 
 ---
 
@@ -2383,6 +2447,18 @@ Use this route when your organization wants signing served through an Experience
 
 **Before you start:** Your administrator owns an active Experience Cloud site, its domain, and its guest-access policy. Experience templates and administrative screens vary; follow Salesforce's [Create an Experience Cloud Site](https://help.salesforce.com/s/articleView?id=networks_creating.htm&language=en_US&type=5) for the site's initial creation and publication.
 
+#### Decide how customers will sign
+
+| What happens in your community or portal                                            | What you need                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A customer opens a private invitation link without logging in to the portal         | With per-user licensing, assign a Portwood license to this site’s Salesforce guest user. Public recipients need no individual seat. Assign **Portwood Guest Signature** to the guest user.                                     |
+| A customer or partner logs in and signs as a member, including inside a Screen Flow | **Authenticated signing requires a Portwood site license.** Give the member Salesforce access to this site, its signing page and the specific Screen Flow. For the embedded signing screen, assign **Portwood Portal Signer**. |
+| The portal offers both routes                                                       | The org’s site license covers the members and the guest user. Configure the guest and member permissions for their respective signing routes.                                                                                  |
+
+For a members-only experience, arrange the site license and test the Flow as a customer or partner. [Request an enterprise site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Add the signing screen to a Flow](#flow-signatures)
+
+The steps below configure **public signing links** on an Experience Cloud site.
+
 #### 1. Open the site's administration
 
 In **Setup → Digital Experiences → All Sites**, open the site's **Workspaces** and administration controls. Confirm that the site is active/published and that the external domain works while signed out.
@@ -2391,7 +2467,7 @@ In **Setup → Digital Experiences → All Sites**, open the site's **Workspaces
 
 Find this site's guest profile/public access settings. In its **Enabled Visualforce Page Access**, enable the packaged pages `DocGenSignature`, `DocGenSignaturePdf`, `DocGenVerify`, and `DocGenSign` in the `portwoodglobal` namespace.
 
-Open that guest profile's actual user and assign **Portwood Guest Signature** under Permission Set Assignments. Keep the assignment tied to the correct site's guest user. Do not use the logged-in member profile as a substitute for guest access.
+On the guest profile, open **Assigned Users** or **View Users**, then select the site’s guest user. For per-user licensing, confirm **Portwood** under **Managed Packages** on that record. Assign **Portwood Guest Signature** under **Permission Set Assignments**. [Find and license the right user](#user-licenses)
 
 #### 3. Allow the public document preview
 
@@ -2421,7 +2497,7 @@ This route was reviewed against the current signing URL logic and existing confi
 
 _Salesforce administrators · 8 min read_
 
-**Next:** [Create the Salesforce signing site](#site-salesforce) · [Configure signing email and verification](#site-email) · [Fix a signing problem](#fix-signing)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Create the Salesforce signing site](#site-salesforce) · [Configure signing email and verification](#site-email) · [Fix a signing problem](#fix-signing)
 
 ---
 
@@ -2711,7 +2787,7 @@ Follow the request's status. Once everyone signs, the signing workflow creates t
 
 #### Sign inside the Flow screen
 
-Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. Guests are refused; send guests the emailed signing link instead.
+Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. **Signing as an authenticated user requires a Portwood site license**, including when employees sign inside Salesforce or customers sign inside a portal. For a public recipient, send the private signing link through the licensed site guest user. [Get a site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9)
 
 1. Add **Portwood: Create Signature Request** as described above. Set **Send Branded Emails** to `False` when the person signs right away in the Flow.
 2. Add a **Screen** element. From the **Custom** components, drag **Portwood: Sign in Flow** onto it.
@@ -2730,7 +2806,7 @@ Use the **Portwood: Sign in Flow** screen component when the signer is already s
 
 The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
 
-Assign **Portwood Portal Signer** to the intended Experience Cloud members. For a non-admin internal signer using the packaged Portwood User permission set, also assign **Portwood Portal Signer** to grant access to the Flow signing controller. Check the screen as the actual signer profile.
+For an Experience Cloud member, give access to the site page and to run this specific Screen Flow through their profile or permission set. Assign **Portwood Portal Signer** for the embedded signing component. An internal non-admin using **Portwood User** also needs **Portwood Portal Signer** for that component. Open the page as an intended signer and check that the Flow reaches the document. [Salesforce instructions for access to a specific Flow](https://help.salesforce.com/s/articleView?id=platform.flow_distribute_security.htm&language=en_US&type=5)
 
 The signature is saved the same way as on the signing page, with the same audit record, document hash, Certificate of Completion, and completion emails. You are done when your test Flow reaches the screen after signing and the signed PDF appears on the related record.
 
@@ -2750,7 +2826,7 @@ For a signing-site link that keeps the interview open, follow [Open the signing 
 
 _Flow builders · 10 min read_
 
-**Next:** [Send a template for signature](#sign-template) · [Set up external signing](#setup-signatures) · [Developer and advanced references](#developer-reference)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Send a template for signature](#sign-template) · [Set up external signing](#setup-signatures) · [Developer and advanced references](#developer-reference)
 
 ---
 
@@ -2910,6 +2986,8 @@ _Salesforce administrators · 5 min read_
 
 Give a signed-in person a button that opens their own Portwood signing page. They can return to the same Flow to check the signed file. This walkthrough uses the [background Flow that prepares the agreement](#signing-events). [See the screens as a signer](#event-signing-journey)
 
+For a members-only portal or employee signing experience, authenticated signing requires a **Portwood site license**. If the button opens a public signing page, configure that site’s guest user as well. [Plan signing access and request a quote](#user-licenses)
+
 #### 1. Put a Prepare agreement button on the screen
 
 In **Setup → Flows → New Flow**, select **Screen Flow**. Under **Start**, select **+ → Screen**. Drag **Display Text** onto it and enter a short explanation of the agreement. In the screen’s footer settings, give the **Next** button the label **Prepare agreement**.
@@ -2978,6 +3056,8 @@ _Salesforce administrators · 10 min read_
 ### Set up a signing receipt and event
 
 To let someone wait for a signing link in a Salesforce screen, give the screen and the background Flow a private place to meet. In this example a **Guide Signing Receipt** remembers which request belongs to the person. A **Guide Sign Requested** event tells the background Flow to start preparing it. Set these up once in a sandbox.
+
+This example starts with a signed-in person. For a portal or employee signing rollout, arrange a **Portwood site license**. It also covers the guest user if the Flow opens a public signing page. [Check signing licenses and request a quote](#user-licenses)
 
 #### 1. Make the receipt in Object Manager
 
@@ -3383,22 +3463,22 @@ _Salesforce administrators · 9 min read_
 
 ### Give people the right access
 
-Give each person enough access for their job and test the experience as that person.
+Start with the person’s job. Confirm [who needs a Portwood license](#user-licenses), then give them the permissions for the work they do.
 
-| Person                                                     | Usually needs                                                     |
-| ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| Template builder / administrator                           | **Portwood Admin**                                                |
-| Internal user making documents or sending signing requests | **Portwood User**                                                 |
-| Signing site's guest user                                  | **Portwood Guest Signature**                                      |
-| Administrator configuring document/email buttons           | **Portwood Button Manager** plus the platform metadata permission |
+| What the person does                                 | Permission set to assign                                                                                             |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Builds templates or configures Portwood              | **Portwood Admin**                                                                                                   |
+| Generates documents or sends signature requests      | **Portwood User**                                                                                                    |
+| Serves public signing links as the site’s guest user | **Portwood Guest Signature**, on that site's licensed guest user                                                     |
+| Signs inside a Screen Flow using a portal login      | **Portwood Portal Signer**, with a Portwood site license and Salesforce access to the portal, page and specific Flow |
+| Signs inside a Screen Flow as an internal non-admin  | **Portwood User** plus **Portwood Portal Signer** for the embedded component, with a Portwood site license           |
+| Configures document and email buttons                | **Portwood Button Manager** plus the required Salesforce metadata permission                                         |
 
-You can find these sets in Salesforce **Setup → Permission Sets**. Open the set, choose **Manage Assignments → Add Assignments**, and select the intended users.
-
-Portwood Quick Action and Guest Runner are additional specialized sets. Do not assign every set to every user; use the set appropriate to the entry point and supported Salesforce license.
+In **Setup → Permission Sets**, open the set, choose **Manage Assignments → Add Assignments**, and select the intended users. Public guests can sign through their invitation. The old **Portwood Guest Runner (deprecated)** permission set grants no access. Document generation from a portal record requires a signed-in user with access to the generator. [Set up external signing](#setup-signatures)
 
 #### A user cannot open Portwood
 
-Check the permission assignment, user license, app visibility, and whether the page or action is available in the user's app/profile. Refresh the session after an access change.
+Check **Installed Packages → Portwood** for license coverage. On the user’s record, check their permission set, Salesforce user license and access to the app or page. Refresh the session after an access change.
 
 #### A user can open Portwood but sees no template
 
@@ -3414,11 +3494,9 @@ Check access to the source record, related records, and selected fields. Templat
 
 Manage field access through an appropriate subscriber permission set. Decide which administrators, internal users, and guest paths need each field. Test each affected role. Managed permission sets are package-owned; add your own grants rather than assuming a new subscriber field is automatically covered.
 
-**Portwood User** can send signing requests from a record or Flow. For the embedded Flow signing screen, an internal non-admin using the packaged permissions also needs **Portwood Portal Signer** for controller access. See [Flow signing setup](#flow-signatures).
-
 _Salesforce administrators · 5 min read_
 
-**Next:** [Add Portwood to a record page](#add-to-record-page) · [Organize and limit template choices](#organize-templates)
+**Next:** [Who needs a Portwood license?](#user-licenses) · [Add Portwood to a record page](#add-to-record-page) · [Organize and limit template choices](#organize-templates)
 
 ---
 
@@ -3430,6 +3508,8 @@ _Salesforce administrators · 5 min read_
 Keep templates and workflows working when you install a new release.
 
 **Before you start:** Read the [changelog](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/CHANGELOG.md), note your installed version in **Setup → Installed Packages**, and test in a sandbox.
+
+If you already hold a free production site license, your existing installed version can continue under that agreement. Moving to a paid release requires paid licensing. If you started on a free version in a sandbox, ask Portwood to confirm your production options. [Sandbox and production licensing](https://portwood.dev/pricing#sandbox-to-production)
 
 #### Before upgrading
 
@@ -3627,15 +3707,16 @@ Ask your Salesforce administrator to open **Setup → Installed Packages** and f
 
 #### Pick the symptom you see
 
-| What happened?                                          | Start here                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------- |
-| Portwood or the Generate tool is missing                | [Access and record-page setup](#manage-access)             |
-| A template is missing from the list                     | [Organize and limit template choices](#organize-templates) |
-| Blank values, visible tags, odd tables, or a broken PDF | [Fix a document](#fix-document)                            |
-| A signing link, PDF preview, or email does not work     | [Fix a signing problem](#fix-signing)                      |
-| A large job failed or stopped moving                    | [Read job status](#job-history)                            |
-| Canvas, HTML, or Excel is missing from Type             | [Upgrade checklist and picklist repair](#upgrade-portwood) |
-| A font looks wrong                                      | [Use custom PDF fonts](#custom-fonts)                      |
+| What happened?                                            | Start here                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| Unsure who needs a license, or a portal member can’t sign | [Check the license for the person and signing route](#user-licenses) |
+| Portwood or the Generate tool is missing                  | [Access and record-page setup](#manage-access)                       |
+| A template is missing from the list                       | [Organize and limit template choices](#organize-templates)           |
+| Blank values, visible tags, odd tables, or a broken PDF   | [Fix a document](#fix-document)                                      |
+| A signing link, PDF preview, or email does not work       | [Fix a signing problem](#fix-signing)                                |
+| A large job failed or stopped moving                      | [Read job status](#job-history)                                      |
+| Canvas, HTML, or Excel is missing from Type               | [Upgrade checklist and picklist repair](#upgrade-portwood)           |
+| A font looks wrong                                        | [Use custom PDF fonts](#custom-fonts)                                |
 
 #### Check these first
 
@@ -3743,7 +3824,7 @@ Changing DNS or email security policy requires your email administrator. Use the
 
 #### The public link says Invalid page
 
-Ask the administrator to check **Signature Site URL**. An Experience Cloud base URL should not end with `/s`. Confirm the signing Visualforce pages are enabled on the site currently serving the links, and that its own guest user has **Portwood Guest Signature**.
+Ask the administrator to check **Signature Site URL**. An Experience Cloud base URL should not end with `/s`. Confirm the signing Visualforce pages are enabled on the site currently serving the links, and that its own guest user has Portwood license coverage and **Portwood Guest Signature**. With per-user licensing, check **Managed Packages** on that guest user. [Check public and authenticated signing licenses](#user-licenses)
 
 After correcting setup, test a fresh request. Moving to another site does not transfer the old site's guest assignments automatically.
 

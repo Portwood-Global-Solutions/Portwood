@@ -12,7 +12,7 @@ Think of a template as a reusable form. You design it once. Portwood fills in a 
 #### Start with the path that fits you
 
 - **I just need a document.** Go to [Generate a document](#generate-document).
-- **I am setting up Portwood.** Start with [Install and give people access](#install-portwood).
+- **I am setting up Portwood.** [Check who needs a license](#user-licenses), then [install Portwood and give people access](#install-portwood).
 - **I want to build something.** Follow [Make your first document](#first-document).
 - **I already have a PDF to sign.** Follow [Send an uploaded PDF for signature](#sign-uploaded-pdf).
 - **Something is wrong.** Open [Find and fix a problem](#troubleshooting).

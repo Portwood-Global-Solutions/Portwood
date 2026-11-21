@@ -1,4 +1,4 @@
-This is what to expect when someone opens a Portwood signing link.
+If a sender gives you a public Portwood signing link, you can review and sign without buying a license or creating a Salesforce account. Use the link addressed to you.
 
 Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
 
