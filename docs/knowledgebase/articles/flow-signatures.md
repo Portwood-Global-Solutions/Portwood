@@ -6,7 +6,7 @@ Create a signing request automatically when a record is ready for approval or ac
 
 Create a single **Apex-Defined** variable using the packaged **DocGenSigner** class and a collection variable of the same type.
 
-Assign the single signer's fields:
+In **Manager → New Resource → Variable**, name the first variable `Person` and the collection `People`. On the canvas, select **+ → Assignment** and fill in the signer’s fields.
 
 | Field         | Example                                             |
 | ------------- | --------------------------------------------------- |
@@ -15,11 +15,13 @@ Assign the single signer's fields:
 | **role**      | `Customer`, matching `{@Signature_Customer:1:Full}` |
 | **contactId** | The Contact ID, when available                      |
 
-Add the populated signer to the collection. Repeat for additional people.
+In the final assignment row select **People → Add → Person**. Repeat for additional people. This example gets the signer from a User. For a Contact, choose that Contact’s name and email instead.
+
+![The final Assignment row adds the populated signer to the People collection.](docs/images/userguide/v3.64/assign-signer.png)
 
 #### 2. Create the request
 
-Add **Portwood: Create Signature Request** and set:
+Select **+**, search for **Create Signature Request**, and choose the Portwood action. Set its inputs.
 
 | Input                                    | What to supply                                     |
 | ---------------------------------------- | -------------------------------------------------- |
@@ -53,6 +55,8 @@ Use the **Portwood: Sign in Flow** screen component when the signer is already s
 | **Request complete** | True when every signer on the request has signed    |
 | **Signer status**    | The signer's status, such as `Signed` or `Declined` |
 | **Error message**    | Why signing could not proceed, if it could not      |
+
+![The signer selects SIGN HERE directly on the service acceptance document inside the Flow.](docs/images/userguide/v3.64/embedded-sign.png)
 
 The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
 

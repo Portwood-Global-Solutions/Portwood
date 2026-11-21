@@ -33,6 +33,8 @@ h2 { page-break-after: avoid; }
 
 Put real headings in a `thead`. Inside the data row, open `{#Opportunities}` in the first cell and close it in the last. Put `{RowNumber}` inside that row and the aggregate outside it. Use `page-break-inside: avoid` on individual rows or a short totals panel. Applying it to the entire table asks the renderer to keep many pages of content together. A single row taller than a page needs a different layout.
 
+![Page two of the generated schedule repeats the column headings and continues the original row numbering.](docs/images/userguide/v3.64/schedule-continuation.png)
+
 The appendix starts on a fresh page. Compare a zero-row account with a long schedule. If you want to omit an empty schedule, gate the heading and table together with `{#IF Opportunities.totalSize != 0}` and `{/IF}`.
 
 #### Choose how the footer is drawn

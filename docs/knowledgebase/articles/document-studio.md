@@ -10,28 +10,52 @@ A signer can also move from a Salesforce Screen Flow to a document prepared in t
 
 [Watch the studio chapters](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=give-the-buyer-a-contents-page) to follow a buyer into the quote, a technician to the work order, and a signer through the Flow.
 
-#### Generate your first studio sample
+#### Run a design someone has already set up
 
-[Download the design studio files](https://portwood.dev/demos/studio/document-studio.zip) and unzip the folder. Each finished PDF comes with a matching HTML template and JSON sample. For your first run, choose the three files with the same name.
+Open **Guide · Try a document design** from the page your admin provided. An admin can also open it from **Setup → Flows** and select **Debug**. Leave rollback mode off if you want to keep the generated file.
 
-**Use the included practice Flow.** From the unzipped `document-studio/sandbox-flow` directory, an administrator can deploy the draft with `sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX`. In Portwood, choose **New Template → Bring an Existing Template → JSON Data (from Flow) → HTML**, upload the design you want, and activate it. Use the API name in the table. You can start with just one design.
+Choose **Renewal decision brief**, then **Generate PDF**. The practice Flow includes fictional customer data. Try another design after you finish the first.
 
-| Upload this template | Give it this API name |
-| --- | --- |
-| `field-quote.html` | `Guide364_Studio_field_quote` |
-| `renewal-brief.html` | `Guide364_Studio_renewal_brief` |
-| `service-sheet.html` | `Guide364_Studio_service_sheet` |
+![Choose one of the three designs and select Generate PDF.](docs/images/userguide/v3.64/sample-select.png)
 
-In Flow Builder, open **Guide · Try a document design**, then **Debug**, with rollback off. Choose your design, select **Generate PDF**, and open the resulting Salesforce File. The Flow already has the fictional sample data. To try different figures, edit the corresponding plain-text JSON resource in a copy of the Flow.
+On the next screen select **Open your generated PDF in Salesforce Files**. In the renewal brief, look for the recommendation to **Book an adoption review**. If a design fails, check that its template is active and its API name matches the table below.
 
-#### Use a practice Flow you already have
+![After generation, the screen links directly to the new Salesforce File.](docs/images/userguide/v3.64/sample-file.png)
 
-1. Upload and activate the HTML as above. Copy its template **API Name**.
-2. Open a practice Screen Flow in Salesforce **Flow Builder**. Add a **Text** variable named `sampleJson`. For a one-off test, give it the contents of the JSON sample as its default value. A **Long Text Area** on a screen is another way to paste the sample at run time.
-3. Add **Portwood: Generate Document**. Set **Template API Name** to your template, **JSON Data** to the text resource, **Output Format Override** to **PDF** and **Save to Record** to **False**. Run **Debug** with rollback mode off so Salesforce keeps the new File.
-4. Check **Success**. When it is true, copy the returned **Content Document ID** and open the File in Salesforce Files. In Lightning Experience you can open `/lightning/r/ContentDocument/<Content Document ID>/view` on your org’s domain. When it is false, inspect **Error Message** before retrying. [Generate documents from Flow](#flow-generate)
+#### Put one design in your own sandbox
 
-For real orders, build the same data shape from the records the current user can read, or use an Apex data provider. The sample keys are a contract between the data and the HTML. They are not fields you need to add to Salesforce. [Choose a data source](#custom-data)
+You can build the same experience from the Salesforce screens. [Download the design files](https://portwood.dev/demos/studio/document-studio.zip), unzip them, and pick one matching HTML and JSON pair. The HTML is the layout. The JSON contains the sample customer and figures. Start with `renewal-brief.html` and `renewal-brief.json`. The file ending in `-reading.html` is the already-filled reading copy.
+
+1. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**. Enter a name people will recognize. In **API Name**, use the matching value below if you also want the included practice Flow to find it.
+2. Under **Data Source**, select **JSON Data (from Flow)**. Set **Type** to **HTML** and **Output Format** to **PDF**. Select **Next → Create Template**.
+
+![Select JSON Data (from Flow) when the Flow supplies the customer and figures.](docs/images/userguide/v3.64/choose-json.png)
+
+![With HTML as the template type and PDF as the output, the document’s print styling comes from the uploaded HTML.](docs/images/userguide/v3.64/html-output.png)
+
+| Design | HTML and JSON filenames start with | API name used by the practice Flow |
+| --- | --- | --- |
+| Commercial proposal | `field-quote` | `Guide364_Studio_field_quote` |
+| Renewal decision brief | `renewal-brief` | `Guide364_Studio_renewal_brief` |
+| Field-service sheet | `service-sheet` | `Guide364_Studio_service_sheet` |
+
+3. The template editor opens. Under **Upload New Version**, select **Choose File**, choose the template HTML and select **Save as New Version**. In **Your Templates**, check that the version is active. Keep its API name for the next step.
+
+![Choose File accepts a template HTML file or a Google Docs web-page ZIP.](docs/images/userguide/v3.64/upload-html.png)
+
+#### Build a button that generates your design
+
+1. In **Setup → Flows**, select **New Flow → Screen Flow**. Select **+ → Screen**, add **Display Text** with a short invitation to generate the design, and change the screen’s **Next** button label to **Generate PDF**.
+2. Open **Toolbox → Manager → New Resource**. Choose **Text Template**, give it the API name `SampleData`, and select **View as Plain Text**. Open the matching JSON file in a text editor, copy its entire contents into the body and select **Done**.
+3. Under the first screen, select **+**. Search **Generate Document**. Some orgs offer several actions with that name. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Its inputs include both **JSON Data** and **Template API Name**. Give the action a label such as **Make the renewal brief**.
+4. Paste the active template’s API name into **Template API Name**, select **SampleData** for **JSON Data**, enter **PDF** for **Output Format Override**, and set **Save to Record** to **False**. You can leave **Record ID** blank for this standalone sample. The working three-design example below calls its JSON resource **Payload**.
+
+![The Portwood action takes the JSON text resource, PDF output and the Save to Record choice.](docs/images/userguide/v3.64/generate-json.png)
+
+5. After the action add a **Decision**. For success, select the action’s **Success** output and compare it to **True**. On that branch add a **Screen** with **Display Text** telling the person to open **Files → Owned by Me** and look for the new PDF. On the default branch, display the action’s **Error Message**. Connect the action’s **fault** path to a screen that displays the **Fault Message**.
+6. **Save** the Flow and select **Debug**. Leave rollback mode off, select **Generate PDF**, then open the new File in Salesforce. Compare its recommendation and figures with the finished example. To attach a real document to a record, pass that record’s ID and turn **Save to Record** on. [Generate a document from a record-triggered Flow](#flow-generate)
+
+For real orders, supply the same data shape from your own records or an Apex data provider. The sample keys are names you and the HTML share. [Choose a data source](#custom-data)
 
 #### Brief your AI like a designer
 

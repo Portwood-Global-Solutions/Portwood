@@ -100,8 +100,10 @@
                 "css-print-lab",
                 "merge-pdfs-flow",
                 "flow-signatures",
-                "signing-site-handoff",
-                "signing-events"
+                "event-signing-journey",
+                "signing-handoff-setup",
+                "signing-events",
+                "signing-site-handoff"
             ]
         }
     ],
@@ -810,6 +812,25 @@
                 "version": "3.64.0",
                 "date": "2026-11-20",
                 "method": "source"
+            }
+        },
+        {
+            "slug": "event-signing-journey",
+            "title": "Open and sign an agreement from Salesforce",
+            "group": "sign",
+            "audience": "People signing an agreement",
+            "minutes": 4,
+            "summary": "Prepare your agreement, open your private signing page, and return to Salesforce to check the signed file.",
+            "sources": [
+                "docs/knowledgebase/examples/event-signing",
+                "force-app/main/default/classes/DocGenSignatureFlowAction.cls"
+            ],
+            "related": ["signer-experience", "signing-handoff-setup", "signing-site-handoff", "manage-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1842,8 +1863,8 @@
             "title": "Start with a finished design",
             "group": "advanced",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Open a finished proposal, renewal brief or field work order. Download the design and data to make it yours.",
+            "minutes": 8,
+            "summary": "Try a finished design, generate its PDF, then build your own Generate PDF button in Flow Builder.",
             "sources": [
                 "docs/knowledgebase/examples/document-studio",
                 "force-app/main/default/classes/DocGenFlowAction.cls"
@@ -1976,14 +1997,15 @@
             "title": "Open the signing site from a Screen Flow",
             "group": "automate",
             "audience": "Salesforce administrators",
-            "minutes": 8,
-            "summary": "Give the intended signer a site navigation action, then check the saved request.",
+            "minutes": 10,
+            "summary": "Build the screens and the Open a Page action that take a signer to their agreement and back to check the result.",
             "sources": [
                 "force-app/main/default/classes/DocGenSignatureFlowAction.cls",
                 "force-app/main/default/lwc/docGenFlowSigner",
-                "docs/knowledgebase/examples/acceptance"
+                "docs/knowledgebase/examples/acceptance",
+                "docs/knowledgebase/examples/event-signing"
             ],
-            "related": ["flow-signatures", "signing-events"],
+            "related": ["event-signing-journey", "signing-handoff-setup", "signing-events", "flow-signatures"],
             "aliases": [],
             "review": {
                 "version": "3.64.0",
@@ -1992,17 +2014,17 @@
             }
         },
         {
-            "slug": "event-signing-journey",
-            "title": "Request an agreement and open the signing site from one Flow",
+            "slug": "signing-handoff-setup",
+            "title": "Set up a signing receipt and event",
             "group": "automate",
             "audience": "Salesforce administrators",
-            "minutes": 9,
-            "summary": "Publish the event, pick up the private result and send the signed-in person to their own signing page.",
+            "minutes": 8,
+            "summary": "Create the private receipt, event and practice template that connect a signing screen to its background Flow.",
             "sources": [
                 "docs/knowledgebase/examples/event-signing",
                 "force-app/main/default/classes/DocGenSignatureFlowAction.cls"
             ],
-            "related": ["signing-site-handoff", "signing-events", "manage-signatures"],
+            "related": ["signing-events", "signing-site-handoff", "event-signing-journey", "setup-signatures"],
             "aliases": [],
             "review": {
                 "version": "3.64.0",
@@ -2012,17 +2034,18 @@
         },
         {
             "slug": "signing-events",
-            "title": "Coordinate signature requests with platform events",
+            "title": "Prepare a signature request when a platform event arrives",
             "group": "automate",
             "audience": "Salesforce administrators",
-            "minutes": 9,
-            "summary": "Turn an approval into one request, follow signer activity and act on the final File.",
+            "minutes": 10,
+            "summary": "Build the background Flow that finds the signer, prepares the agreement and saves a private link for their screen.",
             "sources": [
                 "force-app/main/default/objects/DocGen_Signature_PDF__e",
                 "force-app/main/default/triggers/DocGenSignaturePdfTrigger.trigger",
-                "force-app/main/default/classes/DocGenSignatureService.cls"
+                "force-app/main/default/classes/DocGenSignatureService.cls",
+                "docs/knowledgebase/examples/event-signing"
             ],
-            "related": ["signing-site-handoff", "manage-signatures"],
+            "related": ["signing-handoff-setup", "signing-site-handoff", "event-signing-journey"],
             "aliases": [],
             "review": {
                 "version": "3.64.0",

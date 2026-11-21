@@ -116,7 +116,36 @@ try {
             await page.getByRole('heading', { name: title, exact: true }).waitFor();
         }
     });
+    await check('signers and admins can follow illustrated steps without opening a project file', async () => {
+        const routes = [
+            ['event-signing-journey', 'sign-prepare', 'sign-return', 'sign-verify', 'signer-enter-signature', 'signer-consent', 'sign-pending'],
+            ['signing-handoff-setup', 'receipt-setup', 'event-definition'],
+            ['signing-events', 'trigger-event', 'assign-signer', 'signer-inputs', 'receipt-fields'],
+            ['signing-site-handoff', 'publish-event', 'read-receipt', 'find-navigation', 'open-signing-page', 'host-palette', 'host-selected'],
+            ['document-studio', 'sample-select', 'sample-file', 'choose-json', 'upload-html', 'generate-json']
+        ];
+        for (const [slug, ...steps] of routes) {
+            await page.goto(`${url}#${slug}`);
+            const prose = page.locator('#pg-prose');
+            await prose.locator('figure').first().waitFor();
+            const pictures = await prose.locator('figure img').evaluateAll((nodes) =>
+                nodes.map((img) => img.src.split('/').pop().replace(/\.png$/, ''))
+            );
+            let previous = -1;
+            for (const step of steps) {
+                assert.ok(pictures.indexOf(step) > previous, `${slug}: missing or misplaced illustration ${step}`);
+                previous = pictures.indexOf(step);
+            }
+            assert.equal(await prose.locator('a[href*=".flow-meta.xml"]').count(), 0);
+            assert.doesNotMatch(await prose.innerText(), /sf project deploy/);
+        }
+        await page.goto(`${url}#event-signing-journey`);
+        await page.locator('#pg-prose a[href="#signing-handoff-setup"]').first().click();
+        await page.getByRole('heading', { name: 'Set up a signing receipt and event', exact: true }).waitFor();
+    });
     await check('search matches article content and opens a result', async () => {
+        await page.goto(url);
+        await page.getByRole('heading', { name: 'What would you like to do?', exact: true }).waitFor();
         const search = page.getByRole('searchbox', { name: 'Search the Portwood guide', exact: true });
         await search.fill('email verification');
         await page.locator('.pg-result').first().waitFor();
@@ -163,7 +192,7 @@ try {
     await check('phone and tablet layouts have no page overflow and a working topic menu', async () => {
         for (const width of [390, 768, 1024]) {
             await page.setViewportSize({ width, height: 900 });
-            for (const slug of ['sign-uploaded-pdf', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface']) {
+            for (const slug of ['sign-uploaded-pdf', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface', 'signing-site-handoff', 'document-studio']) {
                 await page.goto(`${url}#${slug}`);
                 await page.locator('#pg-prose').waitFor();
                 assert.ok(
@@ -173,6 +202,22 @@ try {
             }
         }
         await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${url}#signing-site-handoff`);
+        const detail = page.getByRole('button', { name: /Enlarge screenshot: The three navigation settings/ });
+        await detail.click();
+        const actual = page.getByRole('button', { name: 'Actual size' });
+        await actual.click();
+        assert.equal(await actual.getAttribute('aria-pressed'), 'true');
+        await page.waitForFunction(() => {
+            const img = document.querySelector('#pg-zoom-image');
+            const view = document.querySelector('#pg-zoom-view');
+            return img.clientWidth === img.naturalWidth && view.scrollWidth > view.clientWidth;
+        });
+        await page.locator('#pg-zoom-view').evaluate((view) => view.scrollTo(75, 0));
+        assert.ok(await page.locator('#pg-zoom-view').evaluate((view) => view.scrollLeft > 0));
+        await page.keyboard.press('Escape');
+        assert.ok(await detail.evaluate((node) => node === document.activeElement));
+        await page.waitForFunction(() => document.querySelector('#pg-zoom-size').getAttribute('aria-pressed') === 'false');
         const menu = page.getByRole('button', { name: 'Browse topics', exact: true });
         await menu.click();
         assert.equal(await menu.getAttribute('aria-expanded'), 'true');

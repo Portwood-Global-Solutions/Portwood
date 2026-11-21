@@ -1,5 +1,7 @@
 This is what to expect when someone opens a Portwood signing link.
 
+Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
+
 #### Open the link
 
 The invitation identifies the document. Open your own link; each person has a link assigned to them.

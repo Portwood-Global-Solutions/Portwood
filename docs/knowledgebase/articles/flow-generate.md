@@ -2,13 +2,18 @@ Let a Salesforce Flow make a document when a business event happens.
 
 **Before you start:** You know Flow Builder and have a tested template. Give the template a stable **API Name**, such as `Opportunity_Summary`, and confirm the Flow's running context can access the required data.
 
-#### Example: make a summary when a deal is won
+If your data comes from a JSON file or another Flow, [build the illustrated Generate PDF button](#document-studio).
+
+#### Make a summary when a deal is won
 
 1. Create an after-save, record-triggered Flow on **Opportunity**.
 2. Set entry conditions so it runs when the record **first changes to Closed Won**, rather than on every later edit to a won deal.
 3. Put document work on an appropriate asynchronous path when required by the rendering method and your transaction design.
-4. Add an **Action** and search for **Generate Document** from Portwood.
-5. Set the inputs:
+4. Select **+** and search for **Generate Document**. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Give the action a label.
+
+![The Add to Flow search can return several Generate Document actions. Open the Portwood action for the supported document formats.](docs/images/userguide/v3.64/find-generate.png)
+
+5. For a record-triggered summary, set these inputs.
 
 | Input                      | Example                                                     |
 | -------------------------- | ----------------------------------------------------------- |

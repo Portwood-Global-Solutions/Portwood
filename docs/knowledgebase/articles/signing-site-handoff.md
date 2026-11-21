@@ -1,36 +1,58 @@
-Give the person in a Screen Flow a **Review and sign** link to the configured Salesforce Site or Experience Cloud signing page. Keep the interview available so the person can return and check progress. For a signed-in user who should stay on the same screen throughout, use [Sign inside the Flow](#flow-signatures).
+Give a signed-in person a button that opens their own Portwood signing page. They can return to the same Flow to check the signed file. This walkthrough uses the [background Flow that prepares the agreement](#signing-events). [See the screens as a signer](#event-signing-journey)
 
-[Download the complete event-to-signing Screen Flow.](#event-signing-journey)
+#### 1. Put a Prepare agreement button on the screen
 
-#### Create the request in the interview
+In **Setup → Flows → New Flow**, select **Screen Flow**. Under **Start**, select **+ → Screen**. Drag **Display Text** onto it and enter a short explanation of the agreement. In the screen’s footer settings, give the **Next** button the label **Prepare agreement**.
 
-1. Start with an authenticated user authorized to act for the selected record and signer. Resolve the signer from that verified relationship. Keep one signer's URL in this interview.
-2. Configure **Portwood: Create Signature Request** with the template API name, related record ID, a one-person **DocGenSigner** collection and **Signing Order = Single**. Set **Send Branded Emails = False** when this screen supplies the initial invitation. Let the template's verification policy apply.
-3. Store **Signature Request Id**, **Signer URLs**, **Success**, **Email Status** and **Error Message**. Connect the fault path and handle an unsuccessful result before showing a navigation control.
-4. Add a **Loop** over **Signer URLs**. Inside it, assign the current item to a Text variable called `signerUrl`. This example accepts exactly one signer. With several recipients, use the URL matching the authorized person's position in the original signer collection. Giving everyone the first URL gives them the first person's signing capability.
+Below that screen, add **Create Records**. Choose **Manually** for setting field values and select the **Guide Sign Requested** object. Add **Receipt key** and choose **Running Flow Interview → InterviewGuid** as its value. This identifies this interview if the person checks back several times.
 
-#### Build the handoff screen
+![Create Records publishes Guide Sign Requested with Receipt key set to the running Flow’s InterviewGuid.](docs/images/userguide/v3.64/publish-event.png)
 
-Add **Display Text** to a Screen. Enter **Review and sign**, select those words in the rich-text editor and set their link destination to the `signerUrl` resource. The underlying display text looks like this:
+Add a second **Screen** immediately after it. Enter **The request is being prepared** and label its Next button **Open signing page**. Reaching this screen commits the platform event so the background Flow can start. Label the Flow and save a draft. In **Auto-Layout**, your first few steps should read from top to bottom like this.
 
-```html
-<a href="{!signerUrl}" target="_blank">Review and sign</a>
-```
+![The screen, the event and the second screen are separate steps before Read my receipt.](docs/images/userguide/v3.64/screen-path.png)
 
-This is **Flow screen markup**. Portwood HTML templates use a different merge language. Use the complete URL returned by the action so the site path, namespace and signer credential travel together. Keep it out of record notes, events, analytics and screen recordings.
+#### 2. Find the right person’s link
 
-Label the screen's Next button **Check signing status**. After the screen, use **Get Records** on **Portwood Signature Request** using the saved request ID. A **Decision** routes **Signed** to confirmation, **Declined** or **Cancelled** to a stopped path, and **Sent** or **In Progress** to a status screen with a route back to Get Records. Returning to the tab or clicking the link does not establish completion. For a file-dependent next step, also wait for the verified output file. [Signing events](#signing-events)
+After the second screen add **Get Records** on **Guide Signing Receipt**. Set **Condition Requirements** to **All Conditions Are Met (AND)**. Match **Receipt key** to **Running Flow Interview → InterviewGuid** and **Owner ID** to **Running User → Id**. Store the first matching record. In the pictured example this element is labeled **Read my receipt**.
 
-#### Try both paths
+![Get Records looks for both the interview’s receipt key and the signed-in user’s owner ID.](docs/images/userguide/v3.64/read-receipt.png)
 
-Open the link, inspect the document, then close its tab without signing. **Check signing status** should keep the interview pending. Repeat with a controlled signer, complete consent, then check again. Test an expired or revoked link as well. Returning to the status screen should reuse the same request.
+Add a **Decision**. A receipt is ready when **Preparation status = Ready**, its **Private signing URL** has a value and **Handoff link expires** is in the future. For an empty result or a receipt still preparing, show a **Check again** screen and connect it back to **Get Records**. For a failed or expired receipt, show a message and a contact for help.
 
-For an invited guest, deliver that person's signing link through the configured invitation. A public-facing Flow must establish who may initiate a request and who may see each link before exposing any signer credential.
+#### 3. Open the signing site with Salesforce’s standard action
 
-#### Use the Open a Page navigation action
+On the ready branch select **+**. In **Search Elements** type **Open a Page** and choose the navigation action. You can also open the **Action** picker and search there.
 
-When your Screen Flow host supports Lightning local actions, place **Open a Page** after the screen where the intended signer chooses to continue. Set **Page Type** to **Web Page** and use the single returned URL as the web page URL. In Flow metadata the action is `flowruntime:openAPage` with inputs `pageType = WebPage` and `webPageUrl = {!signerUrl}`. Route a navigation fault to the link screen. Treat successful navigation as **opened**. Use the saved request and File for the signed outcome. Debug in the Lightning or Experience Cloud host where the Flow will run, since tab behavior depends on that container.
+![Searching the plus menu for Open a Page brings up the navigation action.](docs/images/userguide/v3.64/find-navigation.png)
 
-When an event subscriber prepares the request for the screen, the publisher and subscriber finish in separate transactions. Give the interview a receipt ID before publishing. On **Check again**, get that receipt with the signed-in person's access. Route pending preparation back to a screen, a preparation fault to a recoverable explanation, and a ready receipt to the navigation action. Keep the request ID on the receipt. If the two transactions must exchange a signer URL, restrict that value to its intended signer and the handoff process, clear it when its purpose ends, and keep it out of event payloads and debug transcripts. [Build the event subscriber](#signing-events)
+Give it the label **Open the signing page**. In **Page Type**, select **External Web Page**. For **URL**, use the resource picker to select **Guide Signing Receipt from Read my receipt → Private signing URL**. For **Where to Open the Page**, select **New Browser Tab**. Salesforce provides this action in Flow API 67 and later. [Salesforce Open a Page action](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
 
-The [downloadable Screen Flow](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flows/Guide364_Service_Acceptance.flow-meta.xml) is a subscriber example for API 68. Deploy it as a draft in a sandbox with Portwood 3.64, then debug with input Text variables `recordId` and `templateApiName`. Use an authorized test record and a signable template with a **Customer** role. It uses the logged-in user's name and email and suppresses the initial invitation. Leave the site checkbox clear for embedded signing or select it to exercise **Open a Page**. Before exposing a copy to other users, have its launcher resolve the allowed record and template and enforce your signer eligibility rule.
+![The three navigation settings show External Web Page, the receipt’s private signing URL, and New Browser Tab.](docs/images/userguide/v3.64/open-signing-page.png)
+
+If the URL picker says the field is unavailable, check the **Read** permission on **Private signing URL** for the person using Flow Builder, reopen the Flow and reselect the field.
+
+If this Screen Flow creates the request directly, pass its single **Signer URLs** item as the URL. Scope the link to the intended signer. For an internal coordinator who needs the staff view, choose **Salesforce Record Page**, the saved signature request ID, the Portwood Signature Request object and **View**. Signing takes place at the person’s private web link.
+
+#### 4. Let the person return and check the file
+
+After the action add a **Screen** with **Display Text**. Type **review and sign your agreement**, select those words, and use the link control to insert the same signer URL resource. Connect the action’s fault path to this screen as well. A person whose browser blocks the new tab can still choose the link. Set the Next button label to **Check signing status**.
+
+Then **Get Records** on **Portwood Signature Request** using the saved **Signature request ID**. On a **Decision**, show success when **Status = Signed** and **Protected Signed Content Document Id** is populated. Give **Signed** requests that are still saving their file a separate screen with **Check again**. For a declined or cancelled request, or one past its signing expiry, show a stopped screen. Send an unreadable request to your help screen.
+
+On the **still needs a signature** screen, add a **Checkbox** labeled **Reopen my signing page** and a **Check again** footer button. Add a Decision after that screen. When the box is checked, connect it back to **Read my receipt** so the Flow checks this person’s ownership, link and expiry before opening the same agreement. Otherwise connect it to the request-status lookup. Both paths reuse the initial request.
+
+#### 5. Give your team a place to open the Flow
+
+1. In **Flow Builder**, save the Screen Flow with a recognizable label such as **Guide · Request and open an agreement**. Activate the cleanup and background Flows first, then activate the Screen Flow. An active Screen Flow appears in the Lightning page’s Flow picker.
+2. For a dedicated page, open **Setup → Lightning App Builder → New → App Page**. Select **Next**, label the page **Service agreements**, choose **Next → One Region → Done**. To use an existing record page instead, open a record and choose the gear menu’s **Edit Page**.
+3. Under **Components**, search for **Flow**. Drag the standard **Flow** component into the page region. Select it on the canvas and use the **Flow** dropdown in the properties panel to pick your Screen Flow.
+
+![In Lightning App Builder, the Components pane is on the left, the Flow sits on the page in the middle, and its settings are on the right.](docs/images/userguide/v3.64/host-palette.png)
+
+![The Flow dropdown has Guide · Request and open an agreement selected.](docs/images/userguide/v3.64/host-selected.png)
+
+4. Select **Save → Activate**, or **Activation** on an already-saved page. For an app page, choose which users can see its tab and add it to your team’s Lightning app under **Lightning Experience**. For a record page, select the app, record type and profile assignment your signers use. [Salesforce app page activation](https://help.salesforce.com/s/articleView?id=platform.lightning_page_getting_into_salesforce1.htm&language=en_US&type=5)
+5. As a practice signer, open the assigned app, select **Service agreements**, and choose **Prepare agreement**. If you used a record page, open that record in the assigned app. Open the signing page, close that tab before signing, then check the status and try **Reopen my signing page**. You should get the same agreement. [See the signer’s screens](#event-signing-journey)
+
+If everyone should stay on the same page throughout, [place the signing component inside the Flow](#flow-signatures). Admins can also [download the optional working project](https://portwood.dev/demos/studio/event-signing.zip).

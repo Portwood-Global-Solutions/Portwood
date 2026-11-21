@@ -171,11 +171,11 @@ At the equipment cabinet, a technician needs the right unit, the right checks, a
 
 ## 11:38  Follow the event into signing
 
-**On screen**  Sandbox interview · request submitted → Across the transaction → Sandbox signing site · verification prompt → Sandbox interview · unsigned request
+**On screen**  Preparing the agreement → Flow Builder routes the private URL to a new tab → The signing site asks for email verification → A signer can reopen the same agreement from the status screen
 
-Back in Salesforce, I choose Prepare agreement. The screen publishes the event and keeps my receipt. The background Flow creates the request. If it is still working, I can check again. When my link is ready, the standard Open a Page action takes me straight to the signing site. This sandbox asks me to verify my email. I can return to the interview without signing, and it still says the signed file is pending. Opening a tab never counts as accepting the agreement.
+Back in Salesforce, I choose Prepare agreement. The screen sends the event, and the background Flow prepares my agreement. When I open the signing page, this sandbox asks me to verify the email on my Salesforce user. Let’s say I close that tab to look something up. Back in the Flow, I check the status. It still needs my signature. I select Reopen my signing page and Check again. There’s my agreement. I can pick up where I left off.
 
-## 12:05  Close the loop
+## 12:04  Close the loop
 
 **On screen**  Generated in the Portfolio 1 → Generated in the Review 4 → Try it with your own document
 

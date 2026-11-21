@@ -222,5 +222,229 @@
         "capturedOn": "2026-11-20",
         "environment": "Installed managed package in subscriber sandbox, fictional sample data",
         "description": "Printable work order showing two readable equipment IDs, QR codes and checklists."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/assign-signer.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The Assignment sets the signer’s name, email and Customer role, then adds Person to the People collection."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/choose-existing.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Portwood template or shared-content editor",
+        "description": "Bring an Existing Template is the starting point for importing a document into Portwood."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/choose-json.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Portwood template or shared-content editor",
+        "description": "Select JSON Data (from Flow) when the Flow supplies the customer and figures."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/embedded-sign.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "The signer selects SIGN HERE directly on the service acceptance document inside the Flow."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/event-definition.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The platform event definition shows Guide Sign Requested and Publish After Commit."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/find-generate.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The Add to Flow search can return several Generate Document actions. Open the Portwood action for the supported document formats."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/find-navigation.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "Searching the plus menu for Open a Page brings up the navigation action."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/flow-type-choice.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "Choose Platform Event—Triggered Flow for the background work. Screen Flow is the separate choice for the person’s interview."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/generate-json.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The Portwood action takes the JSON text resource, PDF output and the Save to Record choice."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/host-palette.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Subscriber sandbox, Salesforce Lightning App Builder",
+        "description": "A sandbox app page shows the standard Flow component on the canvas and its configurable properties."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/html-output.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Portwood template or shared-content editor",
+        "description": "With HTML as the template type and PDF as the output, the document’s print styling comes from the uploaded HTML."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/merge-duplex.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "In the PDF Merge Demo, enter a name for the new File and select Add blank pages for double-sided printing."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/open-signing-page.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The three navigation settings show External Web Page, the receipt’s private signing URL, and New Browser Tab."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/publish-event.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "Create Records publishes Guide Sign Requested with Receipt key set to the running Flow’s InterviewGuid."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/read-receipt.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "Get Records looks for both the interview’s receipt key and the signed-in user’s owner ID."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/receipt-fields.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The receipt update saves the expiry, Portwood request ID, private signer link and Ready status."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/receipt-setup.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "In Object Manager, the receipt fields include the private signing URL and a unique receipt key."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sample-file.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "After generation, the screen links directly to the new Salesforce File."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sample-select.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "Choose one of the three designs and select Generate PDF."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/schedule-continuation.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; generated PDF with fictional data",
+        "description": "Page two of the generated schedule repeats the column headings and continues the original row numbering."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/screen-path.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The screen, the event and the second screen are separate steps before Read my receipt."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sign-pending.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "The still-unsigned screen offers Reopen my signing page and Check again after the initial signing tab is closed."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sign-prepare.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "Choose Prepare agreement to request the document for the person who is signed in."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sign-preparing.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "The preparation screen has an Open signing page button in the footer."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sign-return.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "The original Flow offers a review-and-sign link and a Check signing status button."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/sign-verify.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; running practice screen with fictional agreement or document",
+        "description": "The signer enters their email address and selects Send Verification Code."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/signer-inputs.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "The signing action uses People, Single, and the API name of the active agreement template."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/snippet-record-preview.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Portwood template or shared-content editor",
+        "description": "Preview shows the shared clause with {Name} still visible. Selecting a record when generating the document fills in the name."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/trigger-event.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Salesforce Setup or Flow Builder",
+        "description": "Choose Platform Event is set to Guide Sign Requested."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/upload-html.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; Portwood template or shared-content editor",
+        "description": "In the HTML template editor, Choose File accepts a Google Docs ZIP, HTML or HTM."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/welcome-letter.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Salesforce subscriber sandbox running the managed package; generated PDF with fictional data",
+        "description": "The generated welcome letter shows the Account name where the template had {Name}."
+    },
+    {
+        "file": "docs/images/userguide/v3.64/host-selected.png",
+        "release": "3.64.0",
+        "capturedOn": "2026-11-20",
+        "environment": "Subscriber sandbox, Salesforce Lightning App Builder",
+        "description": "The Flow property selects the active Guide · Request and open an agreement interview."
     }
 ]

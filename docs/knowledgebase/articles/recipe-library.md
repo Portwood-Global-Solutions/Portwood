@@ -1,6 +1,6 @@
 Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
 
-[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio)
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio) For a signing example, [see the buttons the signer uses](#event-signing-journey) or [build the experience in Salesforce](#signing-handoff-setup).
 
 | Start with | Build this | Check your result |
 | --- | --- | --- |
@@ -18,6 +18,8 @@ Build a client service packet in stages. The first exercise needs one Account an
 1. Download the letter above using GitHub's **Download raw file**. In Portwood, choose **New Template → Bring an Existing Template**. Choose **Salesforce Record (SOQL)**, **Account**, and **HTML**.
 2. Select **Name** in the data picker and upload the HTML body. Save the template and select an Account you can read.
 3. Generate the PDF. A record named **Alder Works** should produce **Welcome, Alder Works**. Try a second account before moving on.
+
+![The generated welcome letter shows the Account name where the template had {Name}.](docs/images/userguide/v3.64/welcome-letter.png)
 
 The whole binding is `<h1>Welcome, {Name}</h1>`. HTML controls how the heading looks. The query supplies the value. Adding a field in just one of those places leaves part of the job unfinished.
 

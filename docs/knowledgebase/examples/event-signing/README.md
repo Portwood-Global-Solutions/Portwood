@@ -2,7 +2,9 @@
 
 This subscriber project lets one signed-in person prepare and open a practice agreement. The screen publishes a platform event. A second Flow creates the Portwood request and writes the result to a private receipt. The same screen interview reads that receipt and uses Salesforce’s standard **Open a Page** action to open the signer’s URL. A third Flow clears that URL after the handoff window.
 
-## Set up the sample in a sandbox
+[See the signer’s screens](https://portwood.dev/guide#event-signing-journey) or [build it step by step in Salesforce Setup](https://portwood.dev/guide#signing-handoff-setup).
+
+## Install this optional project in a sandbox
 
 1. Use a sandbox with Portwood installed and a configured Salesforce Site or Experience Cloud signing page. The signer and Flow execution users need the Portwood permissions and record access appropriate to their roles. The source uses Salesforce Flow API 68 and the managed `portwoodglobal` namespace.
 2. From this project’s directory, deploy the sample objects, permission set and three **Draft** Flows. Substitute your sandbox alias in the command.
@@ -12,7 +14,7 @@ This subscriber project lets one signed-in person prepare and open a practice ag
 3. In Portwood, create an **HTML** template using **Salesforce Record (SOQL)**. Choose **Guide Signing Receipt** as the base object and select its **Name** field (the receipt number). Upload `acceptance.html`, give the template the exact API name `Guide_Event_Acceptance`, and save and activate it. The template puts the **Customer** signing tags directly in the body. This sample signs the receipt-backed agreement. To sign an already-generated quote PDF, use Portwood’s uploaded-PDF preparation route.
 4. Assign **Guide Signing Handoff** to your test signer. Grant **Run Flows** and access to **Guide · Request and open an agreement** if your org restricts flow access. Keep the receipt object private. Limit users with administrative, hierarchy or sharing-rule access to its signer-link field. The included permission set gives users read access to receipts and permission to publish this event. The background Flow writes receipts.
 5. In Flow Builder, activate **Guide · Clear expired signing link**, **Guide · Prepare the agreement**, then **Guide · Request and open an agreement**. Use a supported Lightning host, for example the standard Flow component on a Lightning app page. Test with the person who will actually use the interview. Configure the org’s **Default Workflow User** if Salesforce prompts for one when you activate the scheduled cleanup.
-6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. The finished path requires both the signed status and the protected signed File ID.
+6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. If the signer closed the signing tab, **Reopen my signing page → Check again** rechecks the private receipt and opens the same request. After signing, the Flow can report that the final file is still being saved. The finished path requires both the signed status and the protected signed File ID.
 
 ## Follow the fields
 

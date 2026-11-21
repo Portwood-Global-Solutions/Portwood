@@ -1,28 +1,49 @@
-A signed-in person is completing a Screen Flow. They choose **Prepare agreement**, Salesforce prepares the request in the background, and **Open signing page** takes them to their own Portwood signing page. Back in the interview, they can check whether the signed File is ready.
+If your team uses a Salesforce screen to collect an agreement, you can prepare it, open your signing page, and return to the same screen to check the result. This example follows one person signing their own service agreement.
 
-[Download the working Flow project](https://portwood.dev/demos/studio/event-signing.zip) · [Read the setup and field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/README.md)
+Setting this up for your team? [Build the signing experience in Salesforce](#signing-handoff-setup).
 
-#### Follow one request across the two Flows
+#### 1. Prepare your agreement
 
-| Where | What happens | What to look for |
-| --- | --- | --- |
-| The person’s Screen Flow | **Create Records** publishes **Guide Sign Requested** with the interview’s receipt key. The next Screen ends that transaction. | The person sees **Preparing your agreement**. The event carries the key only. |
-| The event-triggered Flow | The subscriber claims a private receipt with that unique key, resolves the publishing user and calls **Portwood: Create Signature Request**. | One receipt holds the Portwood request ID and the intended signer’s returned link. A replay reuses the existing work. |
-| The original interview | **Get Records** reads the receipt by interview key and signed-in owner. A ready receipt takes the **Open a Page** action. | The browser opens the signing page. If the event is still being processed, **Check again** reads the same receipt. |
-| After the handoff | The interview re-reads the saved Portwood request. | **Signed** and a populated protected File ID lead to **Signed file ready**. Closing the browser tab leaves the request pending. |
+Open the signing Flow your team put on the record or app page. Check that you’re signed in as the person who should sign, then select **Prepare agreement**.
 
-#### Choose the page you want to open
+![Choose Prepare agreement to request the document for the person who is signed in.](docs/images/userguide/v3.64/sign-prepare.png)
 
-In the Screen Flow, choose **Action → Open a Page**. For the **signer**, choose **External Web Page**, set **URL** to the single signer URL from the receipt, and choose **New Browser Tab**. Keep the **Review and sign** link on the following screen for a person whose browser blocks the tab. The downloaded sample uses `flowruntime:openAPage`. Salesforce offers this action in Flow API 67 and later. [Salesforce Open a Page](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
+#### 2. Open the signing page
 
-For an **internal coordinator** who needs the Salesforce record, select **Salesforce Record Page** in the same action. Set **Record ID** to the saved signature request ID, **Object Name** to `portwoodglobal__DocGen_Signature_Request__c`, and **View Mode** to **View**. That destination shows the request to someone with record access. To collect a signature, use the signer’s own web page.
+Select **Open signing page**. Salesforce is preparing your document in the background. If the screen says preparation is still running, select **Check again**. Stay in this interview so it keeps checking the same request.
 
-#### Set up your own signing journey
+![The preparation screen has an Open signing page button in the footer.](docs/images/userguide/v3.64/sign-preparing.png)
 
-The sample is for a single signed-in person signing their own agreement. It includes a small record-backed template, a private receipt, a **Publish After Commit** event and a cleanup Flow for the temporary signer link. The subscriber uses the publishing Salesforce user’s identity. The event contains no name, email or signing credential. The **Signing Order** is **Single**, and **Send Branded Emails** is off because the interview handles delivery. The template and org’s signer verification policy still applies.
+When the agreement is ready, the signing site opens in a new tab. If your browser stays on the Flow, select **review and sign your agreement** to open it yourself. Keep the original tab open.
 
-For an approval on an Opportunity, resolve the authorized signer from the approved record and use an approval-and-document-version key to recognize repeat business submissions. The example’s interview key protects retries of one interview. A newly started interview is a new submission. [Start from an approval event](#signing-events)
+![The original Flow offers a review-and-sign link and a Check signing status button.](docs/images/userguide/v3.64/sign-return.png)
 
-For several signers, give each person only their own link. If the person wants to sign directly on the Flow screen, use [Portwood: Sign in Flow](#flow-signatures).
+#### 3. Verify your email and sign
 
-In our sandbox the standard action opened the site’s **Verify your email** screen. Returning without signing left the request pending. Replaying the same event produced one receipt and one request. If the site fails to open, check the signer’s **Guide Signing Handoff** permission set and use **Review and sign** on the handoff screen. [Watch the event-to-signing chapter](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
+If the site asks you to verify your email, enter the email address on your Salesforce user and select **Send Verification Code**. Enter the code from that inbox. In this example the Flow gives you your signing link directly. The verification code is the email to look for. Your team’s signing settings determine whether this step appears.
+
+![The signer enters their email address and selects Send Verification Code.](docs/images/userguide/v3.64/sign-verify.png)
+
+Read the agreement and select **SIGN HERE**. Type or draw your signature as the signing page allows. Choose **Save & Next** to move through the fields. When you have reviewed the completed agreement, read the consent statement and select **Finish & Submit** if you agree.
+
+![The signing dialog lets you review your mark and move to the next field.](docs/images/userguide/v3.60/signer-enter-signature.png)
+
+![The Complete Signing dialog asks for consent before Finish & Submit.](docs/images/userguide/v3.60/signer-consent.png)
+
+Your organization may also ask for initials or a date. [See how to sign a document](#signer-experience)
+
+#### 4. Check whether the signed file is ready
+
+Return to the original Salesforce tab and select **Check signing status**. If you left the signing page before submitting, the screen below is the expected result. Finish in the signing tab. If you closed it, select **Reopen my signing page**, then **Check again**. You return to the same agreement.
+
+If the Flow says the agreement is **signed** and the file is being saved, give it a moment and select **Check again**. Once Portwood saves the final file, the Flow confirms it is ready. [Find the signed PDF and certificate](#manage-signatures)
+
+![Reopen my signing page and Check again take the signer back to the same unsigned agreement.](docs/images/userguide/v3.64/sign-pending.png)
+
+#### Set this up for your team
+
+Start with the [signing receipt and event](#signing-handoff-setup). Then [build the Flow that prepares the request](#signing-events) and [add the navigation button to your screen](#signing-site-handoff). Each walkthrough shows the Salesforce controls to select.
+
+If your buyer must sign a particular approved quote PDF, open **Signature Sender → Salesforce file** on the quote and select that revision. This example creates a new agreement from a template. [Send the approved quote for signature](#cpq-quote)
+
+The practice version is available for admins who want to inspect the finished Flows in their own sandbox. [Download the optional sample](https://portwood.dev/demos/studio/event-signing.zip) · [Watch the signing handoff](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)

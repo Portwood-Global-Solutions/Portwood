@@ -636,50 +636,50 @@ The tear-off receipt goes back to the office.
 00:11:34.187 --> 00:11:38.093
 Try the sheet on the printer your team takes into the field.
 
-00:11:38.733 --> 00:11:40.945
+00:11:38.733 --> 00:11:40.929
 Back in Salesforce, I choose Prepare agreement.
 
-00:11:40.945 --> 00:11:43.789
-The screen publishes the event and keeps my receipt.
+00:11:40.929 --> 00:11:44.693
+The screen sends the event, and the background Flow prepares my agreement.
 
-00:11:43.789 --> 00:11:45.684
-The background Flow creates the request.
+00:11:44.693 --> 00:11:49.712
+When I open the signing page, this sandbox asks me to verify the email on my
 
-00:11:45.684 --> 00:11:48.528
-If it is still working, I can check again.
+00:11:49.712 --> 00:11:50.339
+Salesforce user.
 
-00:11:48.528 --> 00:11:53.583
-When my link is ready, the standard Open a Page action takes me straight to the
+00:11:50.339 --> 00:11:53.476
+Let’s say I close that tab to look something up.
 
-00:11:53.583 --> 00:11:54.215
-signing site.
+00:11:53.476 --> 00:11:55.985
+Back in the Flow, I check the status.
 
-00:11:54.215 --> 00:11:56.743
-This sandbox asks me to verify my email.
+00:11:55.985 --> 00:11:57.554
+It still needs my signature.
 
-00:11:56.743 --> 00:12:01.482
-I can return to the interview without signing, and it still says the signed file
+00:11:57.554 --> 00:12:00.377
+I select Reopen my signing page and Check again.
 
-00:12:01.482 --> 00:12:02.114
-is pending.
+00:12:00.377 --> 00:12:01.318
+There’s my agreement.
 
-00:12:02.114 --> 00:12:04.958
-Opening a tab never counts as accepting the agreement.
+00:12:01.318 --> 00:12:03.827
+I can pick up where I left off.
 
-00:12:05.567 --> 00:12:10.064
+00:12:04.442 --> 00:12:08.939
 We started with one field and finished with something a service team can use.
 
-00:12:10.064 --> 00:12:14.883
+00:12:08.939 --> 00:12:13.758
 The schedule adds up, the form keeps the account name, and the workflow has a
 
-00:12:14.883 --> 00:12:17.132
+00:12:13.758 --> 00:12:16.007
 place to check for the signed agreement.
 
-00:12:17.132 --> 00:12:21.630
+00:12:16.007 --> 00:12:20.505
 The guide includes the HTML, footer, example Flow, and the PDFs you’ve seen here.
 
-00:12:21.630 --> 00:12:25.807
+00:12:20.505 --> 00:12:24.682
 Bring one of your own documents, one ordinary record and one difficult record.
 
-00:12:25.807 --> 00:12:28.698
+00:12:24.682 --> 00:12:27.573
 Those three things make a very good next demo.

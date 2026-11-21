@@ -30,6 +30,8 @@ Insert the tag where the complete section should appear. In HTML or Canvas autho
 
 3. Select a sample Account in the designer and generate its PDF. For **Alder Works**, the last words are **“a handoff with Alder Works.”** You can see them under **Handoff and acceptance** on page four of the [finished service review](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf).
 
+![Preview shows the shared clause with {Name} still visible. Selecting a record when generating the document fills in the name.](docs/images/userguide/v3.64/snippet-record-preview.png)
+
 The snippet editor’s **Preview** shows the HTML formatting. You’ll still see `{Name}` there because the snippet editor has no record selected. The template’s sample record supplies the value when you generate.
 
 **Using a snippet in a list?** Suppose your snippet contains `<p>Hello, {Name}.</p>`. Put its tag inside `{#Contacts}…{/Contacts}` on an Account template and select **Contacts → Name** in the template data. Each greeting uses that Contact’s name. Place the same tag outside the loop to use the Account’s name.

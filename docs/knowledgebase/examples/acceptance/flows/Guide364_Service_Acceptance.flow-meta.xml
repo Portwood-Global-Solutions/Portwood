@@ -4,8 +4,8 @@
     <actionCalls>
         <name>Create_Request</name>
         <label>Create signature request</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
         <actionName>portwoodglobal__DocGenSignatureFlowAction</actionName>
         <actionType>apex</actionType>
         <connector>
@@ -61,8 +61,8 @@
     <actionCalls>
         <name>Open_Site</name>
         <label>Open the signing site</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>1079</locationY>
         <actionName>flowruntime:openAPage</actionName>
         <actionType>lwcComponent</actionType>
         <connector>
@@ -89,8 +89,8 @@
     <assignments>
         <name>Build_Signer</name>
         <label>Use the current signed-in signer</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
         <assignmentItems>
             <assignToReference>person.name</assignToReference>
             <operator>Assign</operator>
@@ -126,8 +126,8 @@
     <assignments>
         <name>Take_Link</name>
         <label>Keep the one signer link</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>1030</locationX>
+        <locationY>934</locationY>
         <assignmentItems>
             <assignToReference>signerUrl</assignToReference>
             <operator>Assign</operator>
@@ -142,8 +142,8 @@
     <decisions>
         <name>Choose_Route</name>
         <label>Choose the signing surface</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
         <defaultConnector>
             <targetReference>Problem</targetReference>
         </defaultConnector>
@@ -189,8 +189,8 @@
     <decisions>
         <name>Outcome</name>
         <label>Check the signing outcome</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
         <defaultConnector>
             <targetReference>Pending</targetReference>
         </defaultConnector>
@@ -251,8 +251,8 @@
     <loops>
         <name>Each_Link</name>
         <label>Read the one-person URL collection</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>789</locationY>
         <collectionReference>urls</collectionReference>
         <iterationOrder>Asc</iterationOrder>
         <nextValueConnector>
@@ -262,12 +262,24 @@
             <targetReference>Open_Site</targetReference>
         </noMoreValuesConnector>
     </loops>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>Flow</processType>
     <recordLookups>
         <name>Request_Status</name>
         <label>Read the saved request</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1369</locationY>
         <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Outcome</targetReference>
@@ -290,8 +302,8 @@
     <screens>
         <name>Begin</name>
         <label>Review service acceptance</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -320,8 +332,8 @@
     <screens>
         <name>Embedded</name>
         <label>Sign the agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>205</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -352,8 +364,8 @@
     <screens>
         <name>Handoff</name>
         <label>Open the signing site</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>1224</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -372,8 +384,8 @@
     <screens>
         <name>Pending</name>
         <label>Waiting for signatures</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>205</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -392,8 +404,8 @@
     <screens>
         <name>Complete</name>
         <label>Agreement signed</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1659</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -408,8 +420,8 @@
     <screens>
         <name>Stopped</name>
         <label>Signing stopped</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>1659</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -424,8 +436,8 @@
     <screens>
         <name>Problem</name>
         <label>Request unavailable</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>1305</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -438,8 +450,8 @@
         <showHeader>true</showHeader>
     </screens>
     <start>
-        <locationX>50</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <connector>
             <targetReference>Begin</targetReference>
         </connector>

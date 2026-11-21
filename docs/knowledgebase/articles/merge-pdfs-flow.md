@@ -6,6 +6,8 @@ Combine an approval letter and a schedule already stored in Salesforce Files. Th
 4. Turn on **Pad Odd Documents** for duplex printing. Every odd-length source gets a trailing blank, including the last source. Repeating an ID repeats that PDF.
 5. Branch on **Success**. Keep **Content Version ID** for that output revision and **Content Document ID** to open or link the File. Display **Error Message** on failure and connect a fault path.
 
+![In the PDF Merge Demo, enter a name for the new File and select Add blank pages for double-sided printing.](docs/images/userguide/v3.64/merge-duplex.png)
+
 One one-page letter followed by one two-page schedule produces three pages normally, or four with padding. Flip through the result and verify the first page of the schedule comes after the blank.
 
 The action accepts 2–100 source versions and checks their combined input size before reading them. The budget is at most 384 KiB synchronously and 768 KiB asynchronously. Available Apex heap can lower it. Each repeated input counts again. Encrypted or signed PDFs, XFA, and scripted/calculation forms are rejected. For a signed agreement, assemble its final contents before requesting signatures.
@@ -13,5 +15,7 @@ The action accepts 2–100 source versions and checks their combined input size 
 For an interactive desktop download, see [Document packets](#document-packets).
 
 The [sandbox-generated duplex packet](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/duplex-packet.pdf) uses two one-page sources. The welcome letter is on page 1, the flattened acceptance form is on page 3, and pages 2 and 4 are blank.
+
+If the input box in the bundled demo shows only a comma, its two sample Files are missing or unavailable to you. You can have your own Flow look up each **Content Version** with **Get Records**. Match **Content Document ID** to the File you selected and **Is Latest** to **True**, then use that version’s **Id** in your ordered list.
 
 For a familiar first run, use the downloaded sample letter and acceptance form from the [recipe library](#recipe-library). Upload the two PDFs to Files and use their version IDs in the sample Flow.

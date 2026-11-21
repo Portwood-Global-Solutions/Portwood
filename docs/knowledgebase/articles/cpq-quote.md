@@ -48,6 +48,6 @@ Try a bundle with no options, a second bundle with its own components, and one b
 
 #### Send this exact quote for signature
 
-1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In **Portwood: Generate Document**, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
+1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In the Portwood **Generate Document** action, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
 2. On that quote, open **Files** and check the PDF and amount. In **Portwood Signature Sender**, choose **New signature request → Salesforce file**, then select that exact revision. Assign a signature field to each recipient, review the pages and send. [Prepare a finished PDF for signature](#sign-uploaded-pdf)
 3. Open the request to check its status and retrieve the signed PDF and certificate. The event-driven Screen Flow prepares its own receipt-backed agreement. Use the Salesforce File route above when the buyer must sign the exact approved pricing PDF. [Find the signed file](#manage-signatures) · [Build the event-driven handoff](#event-signing-journey)

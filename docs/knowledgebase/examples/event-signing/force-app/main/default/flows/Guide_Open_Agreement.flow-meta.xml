@@ -4,8 +4,8 @@
     <actionCalls>
         <name>Open_Signing_Page</name>
         <label>Open the signing page</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
         <actionName>flowruntime:openAPage</actionName>
         <actionType>lwcComponent</actionType>
         <connector>
@@ -32,8 +32,8 @@
     <decisions>
         <name>Ready</name>
         <label>Is the agreement ready?</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
         <defaultConnector>
             <targetReference>Waiting</targetReference>
         </defaultConnector>
@@ -101,8 +101,8 @@
     <decisions>
         <name>Outcome</name>
         <label>Check the signed document</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1369</locationY>
         <defaultConnector>
             <targetReference>Pending</targetReference>
         </defaultConnector>
@@ -128,6 +128,21 @@
                 <targetReference>Complete</targetReference>
             </connector>
             <label>Signed file available</label>
+        </rules>
+        <rules>
+            <name>Making_File</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Signed</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Finalizing</targetReference>
+            </connector>
+            <label>Signed and saving the file</label>
         </rules>
         <rules>
             <name>Declined</name>
@@ -163,10 +178,10 @@
             <name>Timed_Out</name>
             <conditionLogic>and</conditionLogic>
             <conditions>
-                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
-                <operator>EqualTo</operator>
+                <leftValueReference>Request.portwoodglobal__Expires_At__c</leftValueReference>
+                <operator>LessThan</operator>
                 <rightValue>
-                    <stringValue>Expired</stringValue>
+                    <elementReference>$Flow.CurrentDateTime</elementReference>
                 </rightValue>
             </conditions>
             <connector>
@@ -174,15 +189,67 @@
             </connector>
             <label>Expired</label>
         </rules>
+        <rules>
+            <name>No_Visible_Request</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.Id</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Request unavailable</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Check_Again</name>
+        <label>Reopen the signing page?</label>
+        <locationX>205</locationX>
+        <locationY>1659</locationY>
+        <defaultConnector>
+            <targetReference>Request</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Check signing status</defaultConnectorLabel>
+        <rules>
+            <name>Reopen</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>ReopenPage</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Receipt</targetReference>
+            </connector>
+            <label>Recheck my receipt and open</label>
+        </rules>
     </decisions>
     <interviewLabel>Guide · Request and open an agreement {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Request and open an agreement</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>Flow</processType>
     <recordCreates>
         <name>Publish</name>
         <label>Publish the preparation event</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
         <connector>
             <targetReference>Preparing</targetReference>
         </connector>
@@ -201,9 +268,9 @@
     <recordLookups>
         <name>Receipt</name>
         <label>Read my receipt</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
-        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Ready</targetReference>
         </connector>
@@ -232,9 +299,9 @@
     <recordLookups>
         <name>Request</name>
         <label>Check the request</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
-        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <locationX>480</locationX>
+        <locationY>1224</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Outcome</targetReference>
         </connector>
@@ -256,8 +323,8 @@
     <screens>
         <name>Confirm</name>
         <label>Prepare an agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -276,8 +343,8 @@
     <screens>
         <name>Preparing</name>
         <label>Preparing your agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -296,8 +363,8 @@
     <screens>
         <name>Waiting</name>
         <label>Waiting for the agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>205</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -316,8 +383,8 @@
     <screens>
         <name>Handoff</name>
         <label>Review and sign</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1079</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -335,9 +402,39 @@
     </screens>
     <screens>
         <name>Pending</name>
-        <label>Waiting for the signed file</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <label>Agreement still needs a signature</label>
+        <locationX>205</locationX>
+        <locationY>1369</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Check_Again</targetReference>
+        </connector>
+        <fields>
+            <name>Pending_Instructions</name>
+            <fieldText>&lt;p&gt;Your agreement still needs a signature. Finish in the signing tab. If you closed it, select the box below and choose Check again.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <fields>
+            <name>ReopenPage</name>
+            <dataType>Boolean</dataType>
+            <defaultValue>
+                <booleanValue>false</booleanValue>
+            </defaultValue>
+            <fieldText>Reopen my signing page</fieldText>
+            <fieldType>InputField</fieldType>
+            <isRequired>true</isRequired>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Finalizing</name>
+        <label>Saving the signed file</label>
+        <locationX>1030</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -345,8 +442,8 @@
             <targetReference>Request</targetReference>
         </connector>
         <fields>
-            <name>Pending_Instructions</name>
-            <fieldText>&lt;p&gt;The signed file is not ready yet. Use the same invitation to finish signing.&lt;/p&gt;</fieldText>
+            <name>Finalizing_Instructions</name>
+            <fieldText>&lt;p&gt;Your agreement is signed. Portwood is saving the final file. Choose Check again in a moment.&lt;/p&gt;</fieldText>
             <fieldType>DisplayText</fieldType>
         </fields>
         <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
@@ -356,8 +453,8 @@
     <screens>
         <name>Problem</name>
         <label>Agreement unavailable</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>1030</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -372,8 +469,8 @@
     <screens>
         <name>Complete</name>
         <label>Signed file ready</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -388,8 +485,8 @@
     <screens>
         <name>Stopped</name>
         <label>Signing has stopped</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -402,8 +499,8 @@
         <showHeader>true</showHeader>
     </screens>
     <start>
-        <locationX>60</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <connector>
             <targetReference>Confirm</targetReference>
         </connector>

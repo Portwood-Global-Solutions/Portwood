@@ -3,12 +3,24 @@
     <apiVersion>68.0</apiVersion>
     <interviewLabel>Guide · Clear expired signing link {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Clear expired signing link</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>AutoLaunchedFlow</processType>
     <recordUpdates>
         <name>Clear_Link</name>
         <label>Clear the expired private URL</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <filterLogic>and</filterLogic>
         <filters>
             <field>Id</field>
@@ -26,8 +38,8 @@
         <object>Guide_Sign_Receipt__c</object>
     </recordUpdates>
     <start>
-        <locationX>60</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <doesRequireRecordChangedToMeetCriteria>true</doesRequireRecordChangedToMeetCriteria>
         <filterLogic>and</filterLogic>
         <filters>

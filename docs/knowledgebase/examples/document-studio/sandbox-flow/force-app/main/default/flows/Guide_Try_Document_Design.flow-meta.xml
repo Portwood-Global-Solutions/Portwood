@@ -3,8 +3,8 @@
     <actionCalls>
         <name>Generate</name>
         <label>Generate the selected design</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
         <actionName>portwoodglobal__DocGenFlowAction</actionName>
         <actionType>apex</actionType>
         <connector>
@@ -57,8 +57,8 @@
     <assignments>
         <name>LoadQuote</name>
         <label>Use commercial proposal</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>205</locationX>
+        <locationY>499</locationY>
         <assignmentItems>
             <assignToReference>TemplateKey</assignToReference>
             <operator>Assign</operator>
@@ -80,8 +80,8 @@
     <assignments>
         <name>LoadRenewal</name>
         <label>Use renewal decision brief</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
         <assignmentItems>
             <assignToReference>TemplateKey</assignToReference>
             <operator>Assign</operator>
@@ -103,8 +103,8 @@
     <assignments>
         <name>LoadWorkOrder</name>
         <label>Use field service sheet</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>755</locationX>
+        <locationY>499</locationY>
         <assignmentItems>
             <assignToReference>TemplateKey</assignToReference>
             <operator>Assign</operator>
@@ -150,8 +150,8 @@
     <decisions>
         <name>WhichDesign</name>
         <label>Which design did you select?</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
         <defaultConnector>
             <targetReference>LoadQuote</targetReference>
         </defaultConnector>
@@ -190,8 +190,8 @@
     <decisions>
         <name>Generated</name>
         <label>Did the file generate?</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
         <defaultConnector>
             <targetReference>Failure</targetReference>
         </defaultConnector>
@@ -216,12 +216,24 @@
     <environments>Default</environments>
     <interviewLabel>Try a design {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Try a document design</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>Flow</processType>
     <screens>
         <name>Choose</name>
         <label>Choose a design</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -253,8 +265,8 @@
     <screens>
         <name>FileReady</name>
         <label>Your PDF is ready</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -270,8 +282,8 @@
     <screens>
         <name>Failure</name>
         <label>Check the template</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>755</locationX>
+        <locationY>934</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -287,8 +299,8 @@
     <screens>
         <name>Fault</name>
         <label>Generation problem</label>
-        <locationX>176</locationX>
-        <locationY>134</locationY>
+        <locationX>1030</locationX>
+        <locationY>644</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -302,8 +314,8 @@
         <showHeader>true</showHeader>
     </screens>
     <start>
-        <locationX>48</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <connector>
             <targetReference>Choose</targetReference>
         </connector>

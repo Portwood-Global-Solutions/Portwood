@@ -948,17 +948,21 @@ For a full-page Word cover, set the section margins and header/footer distances 
 
 Use a Google Docs export or an HTML file as a PDF template.
 
+![Bring an Existing Template is the starting point for importing a document into Portwood.](docs/images/userguide/v3.64/choose-existing.png)
+
 #### From Google Docs
 
 1. Make a copy of your document.
 2. Replace example values with tags, such as `{Name}` and `{Phone}` for an Account template.
 3. Choose **File → Download → Web Page (.html, zipped)**.
-4. In Portwood, choose **Create New → Bring an Existing Template**.
+4. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**.
 5. Choose the base object, **Type = HTML**, and PDF output.
 6. Include the fields used in the document.
-7. Upload the ZIP, keeping the HTML and images together.
-8. Finish creation and click **Save as New Version** if prompted.
+7. Choose **Next → Create Template**. In the template editor under **Upload New Version**, select **Choose File** and upload the ZIP with the HTML and images together.
+8. Select **Save as New Version**.
 9. Generate a PDF with your sample record and check the whole document.
+
+![In the HTML template editor, Choose File accepts a Google Docs ZIP, HTML or HTM.](docs/images/userguide/v3.64/upload-html.png)
 
 Portwood extracts the HTML and images from the export. You do not need to upload each exported picture separately.
 
@@ -1397,6 +1401,8 @@ Insert the tag where the complete section should appear. In HTML or Canvas autho
     ```
 
 3. Select a sample Account in the designer and generate its PDF. For **Alder Works**, the last words are **“a handoff with Alder Works.”** You can see them under **Handoff and acceptance** on page four of the [finished service review](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf).
+
+![Preview shows the shared clause with {Name} still visible. Selecting a record when generating the document fills in the name.](docs/images/userguide/v3.64/snippet-record-preview.png)
 
 The snippet editor’s **Preview** shows the HTML formatting. You’ll still see `{Name}` there because the snippet editor has no record selected. The template’s sample record supplies the value when you generate.
 
@@ -2072,6 +2078,8 @@ The record-page picker filters on active templates for the current base object. 
 
 This is what to expect when someone opens a Portwood signing link.
 
+Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
+
 #### Open the link
 
 The invitation identifies the document. Open your own link; each person has a link assigned to them.
@@ -2108,6 +2116,60 @@ Some signing flows allow you to leave and resume through the same link while it 
 Ask the sender to check whether it expired, was revoked, was replaced by a resend, or has already been completed. Use the newest link after a resend. On a sequential request, your turn may not have started yet.
 
 The signing viewer redraws visible pages when you zoom. Korean and other non-Latin signer names and dates are supported in the signed PDF and certificate. The decline, waiting and final confirmation cards use a plain layout.
+
+<a id="event-signing-journey"></a>
+
+## Open and sign an agreement from Salesforce
+
+If your team uses a Salesforce screen to collect an agreement, you can prepare it, open your signing page, and return to the same screen to check the result. This example follows one person signing their own service agreement.
+
+Setting this up for your team? [Build the signing experience in Salesforce](#signing-handoff-setup).
+
+#### 1. Prepare your agreement
+
+Open the signing Flow your team put on the record or app page. Check that you’re signed in as the person who should sign, then select **Prepare agreement**.
+
+![Choose Prepare agreement to request the document for the person who is signed in.](docs/images/userguide/v3.64/sign-prepare.png)
+
+#### 2. Open the signing page
+
+Select **Open signing page**. Salesforce is preparing your document in the background. If the screen says preparation is still running, select **Check again**. Stay in this interview so it keeps checking the same request.
+
+![The preparation screen has an Open signing page button in the footer.](docs/images/userguide/v3.64/sign-preparing.png)
+
+When the agreement is ready, the signing site opens in a new tab. If your browser stays on the Flow, select **review and sign your agreement** to open it yourself. Keep the original tab open.
+
+![The original Flow offers a review-and-sign link and a Check signing status button.](docs/images/userguide/v3.64/sign-return.png)
+
+#### 3. Verify your email and sign
+
+If the site asks you to verify your email, enter the email address on your Salesforce user and select **Send Verification Code**. Enter the code from that inbox. In this example the Flow gives you your signing link directly. The verification code is the email to look for. Your team’s signing settings determine whether this step appears.
+
+![The signer enters their email address and selects Send Verification Code.](docs/images/userguide/v3.64/sign-verify.png)
+
+Read the agreement and select **SIGN HERE**. Type or draw your signature as the signing page allows. Choose **Save & Next** to move through the fields. When you have reviewed the completed agreement, read the consent statement and select **Finish & Submit** if you agree.
+
+![The signing dialog lets you review your mark and move to the next field.](docs/images/userguide/v3.60/signer-enter-signature.png)
+
+![The Complete Signing dialog asks for consent before Finish & Submit.](docs/images/userguide/v3.60/signer-consent.png)
+
+Your organization may also ask for initials or a date. [See how to sign a document](#signer-experience)
+
+#### 4. Check whether the signed file is ready
+
+Return to the original Salesforce tab and select **Check signing status**. If you left the signing page before submitting, the screen below is the expected result. Finish in the signing tab. If you closed it, select **Reopen my signing page**, then **Check again**. You return to the same agreement.
+
+If the Flow says the agreement is **signed** and the file is being saved, give it a moment and select **Check again**. Once Portwood saves the final file, the Flow confirms it is ready. [Find the signed PDF and certificate](#manage-signatures)
+
+![Reopen my signing page and Check again take the signer back to the same unsigned agreement.](docs/images/userguide/v3.64/sign-pending.png)
+
+#### Set this up for your team
+
+Start with the [signing receipt and event](#signing-handoff-setup). Then [build the Flow that prepares the request](#signing-events) and [add the navigation button to your screen](#signing-site-handoff). Each walkthrough shows the Salesforce controls to select.
+
+If your buyer must sign a particular approved quote PDF, open **Signature Sender → Salesforce file** on the quote and select that revision. This example creates a new agreement from a template. [Send the approved quote for signature](#cpq-quote)
+
+The practice version is available for admins who want to inspect the finished Flows in their own sandbox. [Download the optional sample](https://portwood.dev/demos/studio/event-signing.zip) · [Watch the signing handoff](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
 
 <a id="manage-signatures"></a>
 
@@ -2282,13 +2344,18 @@ Let a Salesforce Flow make a document when a business event happens.
 
 **Before you start:** You know Flow Builder and have a tested template. Give the template a stable **API Name**, such as `Opportunity_Summary`, and confirm the Flow's running context can access the required data.
 
-#### Example: make a summary when a deal is won
+If your data comes from a JSON file or another Flow, [build the illustrated Generate PDF button](#document-studio).
+
+#### Make a summary when a deal is won
 
 1. Create an after-save, record-triggered Flow on **Opportunity**.
 2. Set entry conditions so it runs when the record **first changes to Closed Won**, rather than on every later edit to a won deal.
 3. Put document work on an appropriate asynchronous path when required by the rendering method and your transaction design.
-4. Add an **Action** and search for **Generate Document** from Portwood.
-5. Set the inputs:
+4. Select **+** and search for **Generate Document**. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Give the action a label.
+
+![The Add to Flow search can return several Generate Document actions. Open the Portwood action for the supported document formats.](docs/images/userguide/v3.64/find-generate.png)
+
+5. For a record-triggered summary, set these inputs.
 
 | Input                      | Example                                                     |
 | -------------------------- | ----------------------------------------------------------- |
@@ -2371,7 +2438,7 @@ Create a signing request automatically when a record is ready for approval or ac
 
 Create a single **Apex-Defined** variable using the packaged **DocGenSigner** class and a collection variable of the same type.
 
-Assign the single signer's fields:
+In **Manager → New Resource → Variable**, name the first variable `Person` and the collection `People`. On the canvas, select **+ → Assignment** and fill in the signer’s fields.
 
 | Field         | Example                                             |
 | ------------- | --------------------------------------------------- |
@@ -2380,11 +2447,13 @@ Assign the single signer's fields:
 | **role**      | `Customer`, matching `{@Signature_Customer:1:Full}` |
 | **contactId** | The Contact ID, when available                      |
 
-Add the populated signer to the collection. Repeat for additional people.
+In the final assignment row select **People → Add → Person**. Repeat for additional people. This example gets the signer from a User. For a Contact, choose that Contact’s name and email instead.
+
+![The final Assignment row adds the populated signer to the People collection.](docs/images/userguide/v3.64/assign-signer.png)
 
 #### 2. Create the request
 
-Add **Portwood: Create Signature Request** and set:
+Select **+**, search for **Create Signature Request**, and choose the Portwood action. Set its inputs.
 
 | Input                                    | What to supply                                     |
 | ---------------------------------------- | -------------------------------------------------- |
@@ -2418,6 +2487,8 @@ Use the **Portwood: Sign in Flow** screen component when the signer is already s
 | **Request complete** | True when every signer on the request has signed    |
 | **Signer status**    | The signer's status, such as `Signed` or `Declined` |
 | **Error message**    | Why signing could not proceed, if it could not      |
+
+![The signer selects SIGN HERE directly on the service acceptance document inside the Flow.](docs/images/userguide/v3.64/embedded-sign.png)
 
 The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
 
@@ -5529,7 +5600,7 @@ Behind the scenes the template stores `Base_Object_API__c = 'FlowJsonData'` (a s
 
 Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
 
-[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio)
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio) For a signing example, [see the buttons the signer uses](#event-signing-journey) or [build the experience in Salesforce](#signing-handoff-setup).
 
 | Start with                                      | Build this                                                                                                                                               | Check your result                                                                           |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -5547,6 +5618,8 @@ Build a client service packet in stages. The first exercise needs one Account an
 1. Download the letter above using GitHub's **Download raw file**. In Portwood, choose **New Template → Bring an Existing Template**. Choose **Salesforce Record (SOQL)**, **Account**, and **HTML**.
 2. Select **Name** in the data picker and upload the HTML body. Save the template and select an Account you can read.
 3. Generate the PDF. A record named **Alder Works** should produce **Welcome, Alder Works**. Try a second account before moving on.
+
+![The generated welcome letter shows the Account name where the template had {Name}.](docs/images/userguide/v3.64/welcome-letter.png)
 
 The whole binding is `<h1>Welcome, {Name}</h1>`. HTML controls how the heading looks. The query supplies the value. Adding a field in just one of those places leaves part of the job unfinished.
 
@@ -5570,28 +5643,52 @@ A signer can also move from a Salesforce Screen Flow to a document prepared in t
 
 [Watch the studio chapters](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=give-the-buyer-a-contents-page) to follow a buyer into the quote, a technician to the work order, and a signer through the Flow.
 
-#### Generate your first studio sample
+#### Run a design someone has already set up
 
-[Download the design studio files](https://portwood.dev/demos/studio/document-studio.zip) and unzip the folder. Each finished PDF comes with a matching HTML template and JSON sample. For your first run, choose the three files with the same name.
+Open **Guide · Try a document design** from the page your admin provided. An admin can also open it from **Setup → Flows** and select **Debug**. Leave rollback mode off if you want to keep the generated file.
 
-**Use the included practice Flow.** From the unzipped `document-studio/sandbox-flow` directory, an administrator can deploy the draft with `sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX`. In Portwood, choose **New Template → Bring an Existing Template → JSON Data (from Flow) → HTML**, upload the design you want, and activate it. Use the API name in the table. You can start with just one design.
+Choose **Renewal decision brief**, then **Generate PDF**. The practice Flow includes fictional customer data. Try another design after you finish the first.
 
-| Upload this template | Give it this API name           |
-| -------------------- | ------------------------------- |
-| `field-quote.html`   | `Guide364_Studio_field_quote`   |
-| `renewal-brief.html` | `Guide364_Studio_renewal_brief` |
-| `service-sheet.html` | `Guide364_Studio_service_sheet` |
+![Choose one of the three designs and select Generate PDF.](docs/images/userguide/v3.64/sample-select.png)
 
-In Flow Builder, open **Guide · Try a document design**, then **Debug**, with rollback off. Choose your design, select **Generate PDF**, and open the resulting Salesforce File. The Flow already has the fictional sample data. To try different figures, edit the corresponding plain-text JSON resource in a copy of the Flow.
+On the next screen select **Open your generated PDF in Salesforce Files**. In the renewal brief, look for the recommendation to **Book an adoption review**. If a design fails, check that its template is active and its API name matches the table below.
 
-#### Use a practice Flow you already have
+![After generation, the screen links directly to the new Salesforce File.](docs/images/userguide/v3.64/sample-file.png)
 
-1. Upload and activate the HTML as above. Copy its template **API Name**.
-2. Open a practice Screen Flow in Salesforce **Flow Builder**. Add a **Text** variable named `sampleJson`. For a one-off test, give it the contents of the JSON sample as its default value. A **Long Text Area** on a screen is another way to paste the sample at run time.
-3. Add **Portwood: Generate Document**. Set **Template API Name** to your template, **JSON Data** to the text resource, **Output Format Override** to **PDF** and **Save to Record** to **False**. Run **Debug** with rollback mode off so Salesforce keeps the new File.
-4. Check **Success**. When it is true, copy the returned **Content Document ID** and open the File in Salesforce Files. In Lightning Experience you can open `/lightning/r/ContentDocument/<Content Document ID>/view` on your org’s domain. When it is false, inspect **Error Message** before retrying. [Generate documents from Flow](#flow-generate)
+#### Put one design in your own sandbox
 
-For real orders, build the same data shape from the records the current user can read, or use an Apex data provider. The sample keys are a contract between the data and the HTML. They are not fields you need to add to Salesforce. [Choose a data source](#custom-data)
+You can build the same experience from the Salesforce screens. [Download the design files](https://portwood.dev/demos/studio/document-studio.zip), unzip them, and pick one matching HTML and JSON pair. The HTML is the layout. The JSON contains the sample customer and figures. Start with `renewal-brief.html` and `renewal-brief.json`. The file ending in `-reading.html` is the already-filled reading copy.
+
+1. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**. Enter a name people will recognize. In **API Name**, use the matching value below if you also want the included practice Flow to find it.
+2. Under **Data Source**, select **JSON Data (from Flow)**. Set **Type** to **HTML** and **Output Format** to **PDF**. Select **Next → Create Template**.
+
+![Select JSON Data (from Flow) when the Flow supplies the customer and figures.](docs/images/userguide/v3.64/choose-json.png)
+
+![With HTML as the template type and PDF as the output, the document’s print styling comes from the uploaded HTML.](docs/images/userguide/v3.64/html-output.png)
+
+| Design                 | HTML and JSON filenames start with | API name used by the practice Flow |
+| ---------------------- | ---------------------------------- | ---------------------------------- |
+| Commercial proposal    | `field-quote`                      | `Guide364_Studio_field_quote`      |
+| Renewal decision brief | `renewal-brief`                    | `Guide364_Studio_renewal_brief`    |
+| Field-service sheet    | `service-sheet`                    | `Guide364_Studio_service_sheet`    |
+
+3. The template editor opens. Under **Upload New Version**, select **Choose File**, choose the template HTML and select **Save as New Version**. In **Your Templates**, check that the version is active. Keep its API name for the next step.
+
+![Choose File accepts a template HTML file or a Google Docs web-page ZIP.](docs/images/userguide/v3.64/upload-html.png)
+
+#### Build a button that generates your design
+
+1. In **Setup → Flows**, select **New Flow → Screen Flow**. Select **+ → Screen**, add **Display Text** with a short invitation to generate the design, and change the screen’s **Next** button label to **Generate PDF**.
+2. Open **Toolbox → Manager → New Resource**. Choose **Text Template**, give it the API name `SampleData`, and select **View as Plain Text**. Open the matching JSON file in a text editor, copy its entire contents into the body and select **Done**.
+3. Under the first screen, select **+**. Search **Generate Document**. Some orgs offer several actions with that name. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Its inputs include both **JSON Data** and **Template API Name**. Give the action a label such as **Make the renewal brief**.
+4. Paste the active template’s API name into **Template API Name**, select **SampleData** for **JSON Data**, enter **PDF** for **Output Format Override**, and set **Save to Record** to **False**. You can leave **Record ID** blank for this standalone sample. The working three-design example below calls its JSON resource **Payload**.
+
+![The Portwood action takes the JSON text resource, PDF output and the Save to Record choice.](docs/images/userguide/v3.64/generate-json.png)
+
+5. After the action add a **Decision**. For success, select the action’s **Success** output and compare it to **True**. On that branch add a **Screen** with **Display Text** telling the person to open **Files → Owned by Me** and look for the new PDF. On the default branch, display the action’s **Error Message**. Connect the action’s **fault** path to a screen that displays the **Fault Message**.
+6. **Save** the Flow and select **Debug**. Leave rollback mode off, select **Generate PDF**, then open the new File in Salesforce. Compare its recommendation and figures with the finished example. To attach a real document to a record, pass that record’s ID and turn **Save to Record** on. [Generate a document from a record-triggered Flow](#flow-generate)
+
+For real orders, supply the same data shape from your own records or an Apex data provider. The sample keys are names you and the HTML share. [Choose a data source](#custom-data)
 
 #### Brief your AI like a designer
 
@@ -5758,7 +5855,7 @@ Try a bundle with no options, a second bundle with its own components, and one b
 
 #### Send this exact quote for signature
 
-1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In **Portwood: Generate Document**, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
+1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In the Portwood **Generate Document** action, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
 2. On that quote, open **Files** and check the PDF and amount. In **Portwood Signature Sender**, choose **New signature request → Salesforce file**, then select that exact revision. Assign a signature field to each recipient, review the pages and send. [Prepare a finished PDF for signature](#sign-uploaded-pdf)
 3. Open the request to check its status and retrieve the signed PDF and certificate. The event-driven Screen Flow prepares its own receipt-backed agreement. Use the Salesforce File route above when the buyer must sign the exact approved pricing PDF. [Find the signed file](#manage-signatures) · [Build the event-driven handoff](#event-signing-journey)
 
@@ -5893,6 +5990,8 @@ h2 {
 
 Put real headings in a `thead`. Inside the data row, open `{#Opportunities}` in the first cell and close it in the last. Put `{RowNumber}` inside that row and the aggregate outside it. Use `page-break-inside: avoid` on individual rows or a short totals panel. Applying it to the entire table asks the renderer to keep many pages of content together. A single row taller than a page needs a different layout.
 
+![Page two of the generated schedule repeats the column headings and continues the original row numbering.](docs/images/userguide/v3.64/schedule-continuation.png)
+
 The appendix starts on a fresh page. Compare a zero-row account with a long schedule. If you want to omit an empty schedule, gate the heading and table together with `{#IF Opportunities.totalSize != 0}` and `{/IF}`.
 
 #### Choose how the footer is drawn
@@ -5930,6 +6029,8 @@ Combine an approval letter and a schedule already stored in Salesforce Files. Th
 4. Turn on **Pad Odd Documents** for duplex printing. Every odd-length source gets a trailing blank, including the last source. Repeating an ID repeats that PDF.
 5. Branch on **Success**. Keep **Content Version ID** for that output revision and **Content Document ID** to open or link the File. Display **Error Message** on failure and connect a fault path.
 
+![In the PDF Merge Demo, enter a name for the new File and select Add blank pages for double-sided printing.](docs/images/userguide/v3.64/merge-duplex.png)
+
 One one-page letter followed by one two-page schedule produces three pages normally, or four with padding. Flip through the result and verify the first page of the schedule comes after the blank.
 
 The action accepts 2–100 source versions and checks their combined input size before reading them. The budget is at most 384 KiB synchronously and 768 KiB asynchronously. Available Apex heap can lower it. Each repeated input counts again. Encrypted or signed PDFs, XFA, and scripted/calculation forms are rejected. For a signed agreement, assemble its final contents before requesting signatures.
@@ -5938,106 +6039,174 @@ For an interactive desktop download, see [Document packets](#document-packets).
 
 The [sandbox-generated duplex packet](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/duplex-packet.pdf) uses two one-page sources. The welcome letter is on page 1, the flattened acceptance form is on page 3, and pages 2 and 4 are blank.
 
+If the input box in the bundled demo shows only a comma, its two sample Files are missing or unavailable to you. You can have your own Flow look up each **Content Version** with **Get Records**. Match **Content Document ID** to the File you selected and **Is Latest** to **True**, then use that version’s **Id** in your ordered list.
+
 For a familiar first run, use the downloaded sample letter and acceptance form from the [recipe library](#recipe-library). Upload the two PDFs to Files and use their version IDs in the sample Flow.
 
 <a id="signing-site-handoff"></a>
 
 ## Open the signing site from a Screen Flow
 
-Give the person in a Screen Flow a **Review and sign** link to the configured Salesforce Site or Experience Cloud signing page. Keep the interview available so the person can return and check progress. For a signed-in user who should stay on the same screen throughout, use [Sign inside the Flow](#flow-signatures).
+Give a signed-in person a button that opens their own Portwood signing page. They can return to the same Flow to check the signed file. This walkthrough uses the [background Flow that prepares the agreement](#signing-events). [See the screens as a signer](#event-signing-journey)
 
-[Download the complete event-to-signing Screen Flow.](#event-signing-journey)
+#### 1. Put a Prepare agreement button on the screen
 
-#### Create the request in the interview
+In **Setup → Flows → New Flow**, select **Screen Flow**. Under **Start**, select **+ → Screen**. Drag **Display Text** onto it and enter a short explanation of the agreement. In the screen’s footer settings, give the **Next** button the label **Prepare agreement**.
 
-1. Start with an authenticated user authorized to act for the selected record and signer. Resolve the signer from that verified relationship. Keep one signer's URL in this interview.
-2. Configure **Portwood: Create Signature Request** with the template API name, related record ID, a one-person **DocGenSigner** collection and **Signing Order = Single**. Set **Send Branded Emails = False** when this screen supplies the initial invitation. Let the template's verification policy apply.
-3. Store **Signature Request Id**, **Signer URLs**, **Success**, **Email Status** and **Error Message**. Connect the fault path and handle an unsuccessful result before showing a navigation control.
-4. Add a **Loop** over **Signer URLs**. Inside it, assign the current item to a Text variable called `signerUrl`. This example accepts exactly one signer. With several recipients, use the URL matching the authorized person's position in the original signer collection. Giving everyone the first URL gives them the first person's signing capability.
+Below that screen, add **Create Records**. Choose **Manually** for setting field values and select the **Guide Sign Requested** object. Add **Receipt key** and choose **Running Flow Interview → InterviewGuid** as its value. This identifies this interview if the person checks back several times.
 
-#### Build the handoff screen
+![Create Records publishes Guide Sign Requested with Receipt key set to the running Flow’s InterviewGuid.](docs/images/userguide/v3.64/publish-event.png)
 
-Add **Display Text** to a Screen. Enter **Review and sign**, select those words in the rich-text editor and set their link destination to the `signerUrl` resource. The underlying display text looks like this:
+Add a second **Screen** immediately after it. Enter **The request is being prepared** and label its Next button **Open signing page**. Reaching this screen commits the platform event so the background Flow can start. Label the Flow and save a draft. In **Auto-Layout**, your first few steps should read from top to bottom like this.
 
-```html
-<a href="{!signerUrl}" target="_blank">Review and sign</a>
-```
+![The screen, the event and the second screen are separate steps before Read my receipt.](docs/images/userguide/v3.64/screen-path.png)
 
-This is **Flow screen markup**. Portwood HTML templates use a different merge language. Use the complete URL returned by the action so the site path, namespace and signer credential travel together. Keep it out of record notes, events, analytics and screen recordings.
+#### 2. Find the right person’s link
 
-Label the screen's Next button **Check signing status**. After the screen, use **Get Records** on **Portwood Signature Request** using the saved request ID. A **Decision** routes **Signed** to confirmation, **Declined** or **Cancelled** to a stopped path, and **Sent** or **In Progress** to a status screen with a route back to Get Records. Returning to the tab or clicking the link does not establish completion. For a file-dependent next step, also wait for the verified output file. [Signing events](#signing-events)
+After the second screen add **Get Records** on **Guide Signing Receipt**. Set **Condition Requirements** to **All Conditions Are Met (AND)**. Match **Receipt key** to **Running Flow Interview → InterviewGuid** and **Owner ID** to **Running User → Id**. Store the first matching record. In the pictured example this element is labeled **Read my receipt**.
 
-#### Try both paths
+![Get Records looks for both the interview’s receipt key and the signed-in user’s owner ID.](docs/images/userguide/v3.64/read-receipt.png)
 
-Open the link, inspect the document, then close its tab without signing. **Check signing status** should keep the interview pending. Repeat with a controlled signer, complete consent, then check again. Test an expired or revoked link as well. Returning to the status screen should reuse the same request.
+Add a **Decision**. A receipt is ready when **Preparation status = Ready**, its **Private signing URL** has a value and **Handoff link expires** is in the future. For an empty result or a receipt still preparing, show a **Check again** screen and connect it back to **Get Records**. For a failed or expired receipt, show a message and a contact for help.
 
-For an invited guest, deliver that person's signing link through the configured invitation. A public-facing Flow must establish who may initiate a request and who may see each link before exposing any signer credential.
+#### 3. Open the signing site with Salesforce’s standard action
 
-#### Use the Open a Page navigation action
+On the ready branch select **+**. In **Search Elements** type **Open a Page** and choose the navigation action. You can also open the **Action** picker and search there.
 
-When your Screen Flow host supports Lightning local actions, place **Open a Page** after the screen where the intended signer chooses to continue. Set **Page Type** to **Web Page** and use the single returned URL as the web page URL. In Flow metadata the action is `flowruntime:openAPage` with inputs `pageType = WebPage` and `webPageUrl = {!signerUrl}`. Route a navigation fault to the link screen. Treat successful navigation as **opened**. Use the saved request and File for the signed outcome. Debug in the Lightning or Experience Cloud host where the Flow will run, since tab behavior depends on that container.
+![Searching the plus menu for Open a Page brings up the navigation action.](docs/images/userguide/v3.64/find-navigation.png)
 
-When an event subscriber prepares the request for the screen, the publisher and subscriber finish in separate transactions. Give the interview a receipt ID before publishing. On **Check again**, get that receipt with the signed-in person's access. Route pending preparation back to a screen, a preparation fault to a recoverable explanation, and a ready receipt to the navigation action. Keep the request ID on the receipt. If the two transactions must exchange a signer URL, restrict that value to its intended signer and the handoff process, clear it when its purpose ends, and keep it out of event payloads and debug transcripts. [Build the event subscriber](#signing-events)
+Give it the label **Open the signing page**. In **Page Type**, select **External Web Page**. For **URL**, use the resource picker to select **Guide Signing Receipt from Read my receipt → Private signing URL**. For **Where to Open the Page**, select **New Browser Tab**. Salesforce provides this action in Flow API 67 and later. [Salesforce Open a Page action](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
 
-The [downloadable Screen Flow](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flows/Guide364_Service_Acceptance.flow-meta.xml) is a subscriber example for API 68. Deploy it as a draft in a sandbox with Portwood 3.64, then debug with input Text variables `recordId` and `templateApiName`. Use an authorized test record and a signable template with a **Customer** role. It uses the logged-in user's name and email and suppresses the initial invitation. Leave the site checkbox clear for embedded signing or select it to exercise **Open a Page**. Before exposing a copy to other users, have its launcher resolve the allowed record and template and enforce your signer eligibility rule.
+![The three navigation settings show External Web Page, the receipt’s private signing URL, and New Browser Tab.](docs/images/userguide/v3.64/open-signing-page.png)
 
-<a id="event-signing-journey"></a>
+If the URL picker says the field is unavailable, check the **Read** permission on **Private signing URL** for the person using Flow Builder, reopen the Flow and reselect the field.
 
-## Request an agreement and open the signing site from one Flow
+If this Screen Flow creates the request directly, pass its single **Signer URLs** item as the URL. Scope the link to the intended signer. For an internal coordinator who needs the staff view, choose **Salesforce Record Page**, the saved signature request ID, the Portwood Signature Request object and **View**. Signing takes place at the person’s private web link.
 
-A signed-in person is completing a Screen Flow. They choose **Prepare agreement**, Salesforce prepares the request in the background, and **Open signing page** takes them to their own Portwood signing page. Back in the interview, they can check whether the signed File is ready.
+#### 4. Let the person return and check the file
 
-[Download the working Flow project](https://portwood.dev/demos/studio/event-signing.zip) · [Read the setup and field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/README.md)
+After the action add a **Screen** with **Display Text**. Type **review and sign your agreement**, select those words, and use the link control to insert the same signer URL resource. Connect the action’s fault path to this screen as well. A person whose browser blocks the new tab can still choose the link. Set the Next button label to **Check signing status**.
 
-#### Follow one request across the two Flows
+Then **Get Records** on **Portwood Signature Request** using the saved **Signature request ID**. On a **Decision**, show success when **Status = Signed** and **Protected Signed Content Document Id** is populated. Give **Signed** requests that are still saving their file a separate screen with **Check again**. For a declined or cancelled request, or one past its signing expiry, show a stopped screen. Send an unreadable request to your help screen.
 
-| Where                    | What happens                                                                                                                                 | What to look for                                                                                                                |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| The person’s Screen Flow | **Create Records** publishes **Guide Sign Requested** with the interview’s receipt key. The next Screen ends that transaction.               | The person sees **Preparing your agreement**. The event carries the key only.                                                   |
-| The event-triggered Flow | The subscriber claims a private receipt with that unique key, resolves the publishing user and calls **Portwood: Create Signature Request**. | One receipt holds the Portwood request ID and the intended signer’s returned link. A replay reuses the existing work.           |
-| The original interview   | **Get Records** reads the receipt by interview key and signed-in owner. A ready receipt takes the **Open a Page** action.                    | The browser opens the signing page. If the event is still being processed, **Check again** reads the same receipt.              |
-| After the handoff        | The interview re-reads the saved Portwood request.                                                                                           | **Signed** and a populated protected File ID lead to **Signed file ready**. Closing the browser tab leaves the request pending. |
+On the **still needs a signature** screen, add a **Checkbox** labeled **Reopen my signing page** and a **Check again** footer button. Add a Decision after that screen. When the box is checked, connect it back to **Read my receipt** so the Flow checks this person’s ownership, link and expiry before opening the same agreement. Otherwise connect it to the request-status lookup. Both paths reuse the initial request.
 
-#### Choose the page you want to open
+#### 5. Give your team a place to open the Flow
 
-In the Screen Flow, choose **Action → Open a Page**. For the **signer**, choose **External Web Page**, set **URL** to the single signer URL from the receipt, and choose **New Browser Tab**. Keep the **Review and sign** link on the following screen for a person whose browser blocks the tab. The downloaded sample uses `flowruntime:openAPage`. Salesforce offers this action in Flow API 67 and later. [Salesforce Open a Page](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
+1. In **Flow Builder**, save the Screen Flow with a recognizable label such as **Guide · Request and open an agreement**. Activate the cleanup and background Flows first, then activate the Screen Flow. An active Screen Flow appears in the Lightning page’s Flow picker.
+2. For a dedicated page, open **Setup → Lightning App Builder → New → App Page**. Select **Next**, label the page **Service agreements**, choose **Next → One Region → Done**. To use an existing record page instead, open a record and choose the gear menu’s **Edit Page**.
+3. Under **Components**, search for **Flow**. Drag the standard **Flow** component into the page region. Select it on the canvas and use the **Flow** dropdown in the properties panel to pick your Screen Flow.
 
-For an **internal coordinator** who needs the Salesforce record, select **Salesforce Record Page** in the same action. Set **Record ID** to the saved signature request ID, **Object Name** to `portwoodglobal__DocGen_Signature_Request__c`, and **View Mode** to **View**. That destination shows the request to someone with record access. To collect a signature, use the signer’s own web page.
+![In Lightning App Builder, the Components pane is on the left, the Flow sits on the page in the middle, and its settings are on the right.](docs/images/userguide/v3.64/host-palette.png)
 
-#### Set up your own signing journey
+![The Flow dropdown has Guide · Request and open an agreement selected.](docs/images/userguide/v3.64/host-selected.png)
 
-The sample is for a single signed-in person signing their own agreement. It includes a small record-backed template, a private receipt, a **Publish After Commit** event and a cleanup Flow for the temporary signer link. The subscriber uses the publishing Salesforce user’s identity. The event contains no name, email or signing credential. The **Signing Order** is **Single**, and **Send Branded Emails** is off because the interview handles delivery. The template and org’s signer verification policy still applies.
+4. Select **Save → Activate**, or **Activation** on an already-saved page. For an app page, choose which users can see its tab and add it to your team’s Lightning app under **Lightning Experience**. For a record page, select the app, record type and profile assignment your signers use. [Salesforce app page activation](https://help.salesforce.com/s/articleView?id=platform.lightning_page_getting_into_salesforce1.htm&language=en_US&type=5)
+5. As a practice signer, open the assigned app, select **Service agreements**, and choose **Prepare agreement**. If you used a record page, open that record in the assigned app. Open the signing page, close that tab before signing, then check the status and try **Reopen my signing page**. You should get the same agreement. [See the signer’s screens](#event-signing-journey)
 
-For an approval on an Opportunity, resolve the authorized signer from the approved record and use an approval-and-document-version key to recognize repeat business submissions. The example’s interview key protects retries of one interview. A newly started interview is a new submission. [Start from an approval event](#signing-events)
+If everyone should stay on the same page throughout, [place the signing component inside the Flow](#flow-signatures). Admins can also [download the optional working project](https://portwood.dev/demos/studio/event-signing.zip).
 
-For several signers, give each person only their own link. If the person wants to sign directly on the Flow screen, use [Portwood: Sign in Flow](#flow-signatures).
+<a id="signing-handoff-setup"></a>
 
-In our sandbox the standard action opened the site’s **Verify your email** screen. Returning without signing left the request pending. Replaying the same event produced one receipt and one request. If the site fails to open, check the signer’s **Guide Signing Handoff** permission set and use **Review and sign** on the handoff screen. [Watch the event-to-signing chapter](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
+## Set up a signing receipt and event
+
+To let someone wait for a signing link in a Salesforce screen, give the screen and the background Flow a private place to meet. In this example a **Guide Signing Receipt** remembers which request belongs to the person. A **Guide Sign Requested** event tells the background Flow to start preparing it. Set these up once in a sandbox.
+
+#### 1. Make the receipt in Object Manager
+
+1. Open **Setup → Object Manager → Create → Custom Object**. Enter **Guide Signing Receipt** for the label and **Guide Signing Receipts** for the plural. Use `Guide_Sign_Receipt` for **Object Name** to match this example. For the record name, use **Receipt number**, choose **Auto Number** and enter `HANDOFF-{00000}` as the display format. Save.
+2. In **Fields & Relationships**, select **New** for each row below. Use these field names if you want to match the pictured example. Salesforce adds the `__c` suffix.
+
+| Field label          | Field name        | Type and setting                                                                         |
+| -------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| Receipt key          | `Receipt_Key`     | Text, 100 characters. Select **Unique** and treat uppercase and lowercase as duplicates. |
+| Preparation status   | `Stage`           | Text, 24 characters. The Flow uses **Preparing**, **Ready** and **Failed**.              |
+| Signature request ID | `Request_Id`      | Text, 18 characters. Holds the Portwood request ID.                                      |
+| Private signing URL  | `Signer_URL`      | Long Text Area, 4,096 characters. Holds this signer’s personal link temporarily.         |
+| Handoff link expires | `Link_Expires_At` | Date/Time. The screen checks this before opening the link.                               |
+
+![In Object Manager, the receipt fields include the private signing URL and a unique receipt key.](docs/images/userguide/v3.64/receipt-setup.png)
+
+3. In **Setup → Sharing Settings**, set the receipt object’s default access to **Private**. In a permission set, give participants **Read** on the receipt and the fields above. The background Flow creates and updates receipts. Restrict access to the signing URL when you review role hierarchy, sharing rules and administrative access. Open **Manage Assignments → Add Assignment** on the permission set and assign it to the people who run this screen. Give the person **Run Flows** and access to the screen Flow if your org restricts individual Flows.
+
+#### 2. Create the platform event
+
+1. In Setup’s **Quick Find**, enter **Platform Events**. Open it and select **New Platform Event**. Set the label to **Guide Sign Requested** and use `Guide_Sign_Requested` for the object name.
+2. Set **Publish Behavior** to **Publish After Commit** and save. Under **Custom Fields & Relationships**, choose **New → Text**. Use **Receipt key**, field name `Receipt_Key`, length **100**. The event carries only this key.
+
+![The platform event definition shows Guide Sign Requested and Publish After Commit.](docs/images/userguide/v3.64/event-definition.png)
+
+3. In the participant’s permission set, grant **Read** and **Create** on this event, and **Read** and **Edit** on its **Receipt key** field. Give the Flow’s execution user access to the records, template and Portwood action it uses. Test as a person who will actually sign.
+
+#### 3. Give Portwood an agreement to prepare
+
+In **Portwood → My Templates → New Template**, choose **Bring an Existing Template**, **Salesforce Record (SOQL)** and **HTML**. Select **Guide Signing Receipt** as the base object and add **Name** to the selected fields. Set **API Name** to `Guide_Event_Acceptance` and **Output Format** to **PDF**. Select **Next → Create Template**. Under **Upload New Version**, select **Choose File** and upload the [practice agreement HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/acceptance.html), or use your own HTML agreement. Select **Save as New Version** and confirm the template is active.
+
+Put the **Customer** signature field directly in the main template body. Confirm your org’s signing site works with a practice request. [Prepare a signable template](#sign-template) · [Set up external signing](#setup-signatures)
+
+Now [build the background Flow that prepares an agreement](#signing-events). If your team already has an approval event and a private tracking record, map their fields to the same roles when you follow that walkthrough.
 
 <a id="signing-events"></a>
 
-## Coordinate signature requests with platform events
+## Prepare a signature request when a platform event arrives
 
-Use this recipe when an approval happens in one process and someone signs later, possibly in another session. Imagine a sales manager approves a service agreement. The customer should receive one request, and the service team should start work only after the signed file is ready.
+Build the background half of a signing experience. When someone chooses **Prepare agreement** on the screen, this Flow creates one Portwood request and puts their personal signing link on their private receipt. Start with the [receipt, event and signable template](#signing-handoff-setup).
 
-[Try the complete Screen Flow, subscriber and private receipt.](#event-signing-journey)
+#### 1. Start a Flow when the request arrives
 
-#### Set up the handoff
+In **Setup → Flows**, select **New Flow**. In **New Automation**, choose **Platform Event—Triggered Flow**. In **Choose Platform Event**, search for and select **Guide Sign Requested**. If you return to the canvas, select **Start → Edit** to see the chosen event.
 
-| When this happens                  | Have Salesforce do this                                                                                                           | What you can check                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| The manager approves the agreement | Save the approved record and publish an **Agreement Approved** platform event. This is an event your administrator creates.       | The approval has a stable reference that survives a retry.         |
-| The event arrives                  | Start a **Platform Event–Triggered Flow**. Find the approved record and signer, then call **Portwood: Create Signature Request**. | The tracking record contains one Portwood request ID.              |
-| The customer is ready              | Deliver their invitation, or let their signed-in Screen Flow open the signing site.                                               | The intended customer sees the right agreement.                    |
-| Everyone finishes                  | Check the request is **Signed** and the signed File exists. Use that request ID to start fulfillment once.                        | The service team can open the completed agreement from the record. |
+![Choose Platform Event—Triggered Flow for the background work. Screen Flow is the separate choice for the person’s interview.](docs/images/userguide/v3.64/flow-type-choice.png)
 
-A background Flow has no browser to navigate. If a person is waiting in a Screen Flow, give the interview a receipt it can check. A **Check again** button can read that receipt after the background work finishes. [Open the signing site from a Screen Flow](#signing-site-handoff)
+![Choose Platform Event is set to Guide Sign Requested.](docs/images/userguide/v3.64/trigger-event.png)
 
-#### Test it before turning it on
+Under **Start**, select **+ → Get Records**. Find the first **Guide Signing Receipt** where **Receipt key** equals **Triggering Guide Sign Requested → Receipt key**. Add a **Decision**. When a receipt already exists, end that path. On the other path, use **Create Records** to create a receipt with the event’s key, **Preparation status = Preparing** and **Owner ID = the event’s Created By ID**. Keep the new record’s ID. The unique key also prevents two simultaneous deliveries from creating two receipts.
 
-Use a practice approval and a controlled signer. Deliver the same approval twice and confirm you still have one request. With parallel signing, have the second person sign first. The first signature should leave fulfillment pending. After everyone signs, open the completed File and check fulfillment ran once.
+#### 2. Tell Portwood who is signing
 
-The [Flow Builder worksheet](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/signature-event-recipe.md) gives your admin the event fields, unique-key handling, request and signer lookups, and the conditions for final file delivery.
+Use **Get Records** to find the **User** whose **Id** equals the event’s **Created By ID**. In **Manager → New Resource → Variable**, create a variable named `Person`, choose **Apex-Defined**, and select the packaged **DocGenSigner** class. Create a second variable named `People` with the same type and select **Allow multiple values (collection)**.
+
+Add an **Assignment**. Set `Person.name` to the User’s **Full Name**, `Person.email` to the User’s **Email**, and `Person.role` to **Customer**, matching the template. In the last row select `People`, change the operator to **Add**, and select `Person`.
+
+![The Assignment sets the signer’s name, email and Customer role, then adds Person to the People collection.](docs/images/userguide/v3.64/assign-signer.png)
+
+#### 3. Create the signature request
+
+Select **+** and search for **Create Signature Request**. Choose the Portwood action. For **Related Record Id**, select the receipt you just created. Enter these inputs for a person who will open the site from the same interview.
+
+| In the action          | Choose this value                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Signers                | `People`                                                                                        |
+| Signing Order          | `Single`                                                                                        |
+| Template API Name      | `Guide_Event_Acceptance`                                                                        |
+| Send Branded Emails    | `False`. The screen supplies the initial invitation.                                            |
+| Link Expiration (Days) | `1` for this practice agreement. Leave the signer verification policy to your template and org. |
+
+![The signing action uses People, Single, and the API name of the active agreement template.](docs/images/userguide/v3.64/signer-inputs.png)
+
+#### 4. Put the result on the receipt
+
+Use a **Decision** to check the action’s **Success** output. On success, use a **Loop** over **Signer URLs**. This example has one signer. Inside the loop, assign the current item to a Text variable named `SignerLink`. After the loop, confirm the link is populated.
+
+Use **Update Records** on the receipt you just created. Set **Signature request ID** to the action’s **Signature Request Id**, **Private signing URL** to `SignerLink`, **Preparation status** to `Ready`, and **Handoff link expires** to a Date/Time formula containing `NOW() + 1`. On an action fault, unsuccessful result, or missing link, update the receipt to **Failed** and keep any returned request ID for investigation.
+
+![The receipt update saves the expiry, Portwood request ID, private signer link and Ready status.](docs/images/userguide/v3.64/receipt-fields.png)
+
+To clear the temporary URL, add a separate record-triggered Flow on the receipt. Run it after save when a receipt first meets **Preparation status = Ready**. Under **Start → Add Scheduled Paths**, use **1 Day After** the record-triggering event. On that path, use **Update Records** to clear **Private signing URL** on the triggering receipt. The practice agreement and the local expiry both use one day. The screen also checks expiry immediately before navigation. Save both Flows. If Salesforce asks for a **Default Workflow User** when you activate the scheduled cleanup, set it in **Setup → Process Automation Settings**. Activate the cleanup and background Flows in your sandbox. Next, [build the screen that opens the signing site](#signing-site-handoff).
+
+#### If a manager’s approval starts the process
+
+Use the approved agreement and version as the unique key. Find the authorized customer on the approved record. The publishing user in this case is the manager, while the invitation belongs to the customer. For multiple signers, route each person’s own link to them.
+
+Test one approval twice and check that it produces one request. In a parallel two-person test, let the second person sign first. Fulfillment should still be waiting.
+
+#### Tell the service team when the signed file is ready
+
+1. Create a **Record-Triggered Flow** on **Portwood Signature Request**. In **Start**, select **A record is created or updated** and **Actions and Related Records**.
+2. Under **All Conditions Are Met**, set **Status** to **Signed** and **Protected Signed Content Document Id → Is Null** to **False**. For updates, choose **Only when a record is updated to meet the condition requirements**. A signer can finish before the protected File is ready.
+3. On that path, create the team’s follow-up task on the related business record, or pass the signed File ID to your delivery step. If another system can retry delivery, use the request ID as its unique reference. Try opening the finished File as someone on the receiving team.
+
+For a separate notification each time a person signs, a **Platform Event–Triggered Flow** can listen to **Portwood Signature PDF** where the package emits it. Look up the request and the event’s signer. Use the request’s final status and File for fulfillment across signing methods. [Approval and fulfillment field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/signature-event-recipe.md)
 
 ## account-letter.html
 
@@ -7274,7 +7443,9 @@ The [Flow Builder worksheet](https://github.com/Portwood-Global-Solutions/Portwo
 
 This subscriber project lets one signed-in person prepare and open a practice agreement. The screen publishes a platform event. A second Flow creates the Portwood request and writes the result to a private receipt. The same screen interview reads that receipt and uses Salesforce’s standard **Open a Page** action to open the signer’s URL. A third Flow clears that URL after the handoff window.
 
-## Set up the sample in a sandbox
+[See the signer’s screens](https://portwood.dev/guide#event-signing-journey) or [build it step by step in Salesforce Setup](https://portwood.dev/guide#signing-handoff-setup).
+
+## Install this optional project in a sandbox
 
 1. Use a sandbox with Portwood installed and a configured Salesforce Site or Experience Cloud signing page. The signer and Flow execution users need the Portwood permissions and record access appropriate to their roles. The source uses Salesforce Flow API 68 and the managed `portwoodglobal` namespace.
 2. From this project’s directory, deploy the sample objects, permission set and three **Draft** Flows. Substitute your sandbox alias in the command.
@@ -7284,7 +7455,7 @@ This subscriber project lets one signed-in person prepare and open a practice ag
 3. In Portwood, create an **HTML** template using **Salesforce Record (SOQL)**. Choose **Guide Signing Receipt** as the base object and select its **Name** field (the receipt number). Upload `acceptance.html`, give the template the exact API name `Guide_Event_Acceptance`, and save and activate it. The template puts the **Customer** signing tags directly in the body. This sample signs the receipt-backed agreement. To sign an already-generated quote PDF, use Portwood’s uploaded-PDF preparation route.
 4. Assign **Guide Signing Handoff** to your test signer. Grant **Run Flows** and access to **Guide · Request and open an agreement** if your org restricts flow access. Keep the receipt object private. Limit users with administrative, hierarchy or sharing-rule access to its signer-link field. The included permission set gives users read access to receipts and permission to publish this event. The background Flow writes receipts.
 5. In Flow Builder, activate **Guide · Clear expired signing link**, **Guide · Prepare the agreement**, then **Guide · Request and open an agreement**. Use a supported Lightning host, for example the standard Flow component on a Lightning app page. Test with the person who will actually use the interview. Configure the org’s **Default Workflow User** if Salesforce prompts for one when you activate the scheduled cleanup.
-6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. The finished path requires both the signed status and the protected signed File ID.
+6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. If the signer closed the signing tab, **Reopen my signing page → Check again** rechecks the private receipt and opens the same request. After signing, the Flow can report that the final file is still being saved. The finished path requires both the signed status and the protected signed File ID.
 
 ## Follow the fields
 
@@ -7311,8 +7482,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <actionCalls>
         <name>Open_Signing_Page</name>
         <label>Open the signing page</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
         <actionName>flowruntime:openAPage</actionName>
         <actionType>lwcComponent</actionType>
         <connector>
@@ -7339,8 +7510,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <decisions>
         <name>Ready</name>
         <label>Is the agreement ready?</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
         <defaultConnector>
             <targetReference>Waiting</targetReference>
         </defaultConnector>
@@ -7408,8 +7579,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <decisions>
         <name>Outcome</name>
         <label>Check the signed document</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1369</locationY>
         <defaultConnector>
             <targetReference>Pending</targetReference>
         </defaultConnector>
@@ -7435,6 +7606,21 @@ The retry key covers one interview. For repeat approvals across interviews, use 
                 <targetReference>Complete</targetReference>
             </connector>
             <label>Signed file available</label>
+        </rules>
+        <rules>
+            <name>Making_File</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Signed</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Finalizing</targetReference>
+            </connector>
+            <label>Signed and saving the file</label>
         </rules>
         <rules>
             <name>Declined</name>
@@ -7470,10 +7656,10 @@ The retry key covers one interview. For repeat approvals across interviews, use 
             <name>Timed_Out</name>
             <conditionLogic>and</conditionLogic>
             <conditions>
-                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
-                <operator>EqualTo</operator>
+                <leftValueReference>Request.portwoodglobal__Expires_At__c</leftValueReference>
+                <operator>LessThan</operator>
                 <rightValue>
-                    <stringValue>Expired</stringValue>
+                    <elementReference>$Flow.CurrentDateTime</elementReference>
                 </rightValue>
             </conditions>
             <connector>
@@ -7481,15 +7667,67 @@ The retry key covers one interview. For repeat approvals across interviews, use 
             </connector>
             <label>Expired</label>
         </rules>
+        <rules>
+            <name>No_Visible_Request</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.Id</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Request unavailable</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Check_Again</name>
+        <label>Reopen the signing page?</label>
+        <locationX>205</locationX>
+        <locationY>1659</locationY>
+        <defaultConnector>
+            <targetReference>Request</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Check signing status</defaultConnectorLabel>
+        <rules>
+            <name>Reopen</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>ReopenPage</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Receipt</targetReference>
+            </connector>
+            <label>Recheck my receipt and open</label>
+        </rules>
     </decisions>
     <interviewLabel>Guide · Request and open an agreement {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Request and open an agreement</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>Flow</processType>
     <recordCreates>
         <name>Publish</name>
         <label>Publish the preparation event</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
         <connector>
             <targetReference>Preparing</targetReference>
         </connector>
@@ -7508,9 +7746,9 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordLookups>
         <name>Receipt</name>
         <label>Read my receipt</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
-        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Ready</targetReference>
         </connector>
@@ -7539,9 +7777,9 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordLookups>
         <name>Request</name>
         <label>Check the request</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
-        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <locationX>480</locationX>
+        <locationY>1224</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Outcome</targetReference>
         </connector>
@@ -7563,8 +7801,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Confirm</name>
         <label>Prepare an agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7584,8 +7822,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Preparing</name>
         <label>Preparing your agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7605,8 +7843,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Waiting</name>
         <label>Waiting for the agreement</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>205</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7626,8 +7864,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Handoff</name>
         <label>Review and sign</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1079</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7646,9 +7884,40 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     </screens>
     <screens>
         <name>Pending</name>
-        <label>Waiting for the signed file</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <label>Agreement still needs a signature</label>
+        <locationX>205</locationX>
+        <locationY>1369</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Check_Again</targetReference>
+        </connector>
+        <fields>
+            <name>Pending_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Your agreement still needs a signature. Finish in the signing tab. If you closed it, select the box below and choose Check again.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <fields>
+            <name>ReopenPage</name>
+            <dataType>Boolean</dataType>
+            <defaultValue>
+                <booleanValue>false</booleanValue>
+            </defaultValue>
+            <fieldText>Reopen my signing page</fieldText>
+            <fieldType>InputField</fieldType>
+            <isRequired>true</isRequired>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Finalizing</name>
+        <label>Saving the signed file</label>
+        <locationX>1030</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7656,9 +7925,9 @@ The retry key covers one interview. For repeat approvals across interviews, use 
             <targetReference>Request</targetReference>
         </connector>
         <fields>
-            <name>Pending_Instructions</name>
+            <name>Finalizing_Instructions</name>
             <fieldText
-            >&lt;p&gt;The signed file is not ready yet. Use the same invitation to finish signing.&lt;/p&gt;</fieldText>
+            >&lt;p&gt;Your agreement is signed. Portwood is saving the final file. Choose Check again in a moment.&lt;/p&gt;</fieldText>
             <fieldType>DisplayText</fieldType>
         </fields>
         <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
@@ -7668,8 +7937,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Problem</name>
         <label>Agreement unavailable</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>1030</locationX>
+        <locationY>789</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7685,8 +7954,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Complete</name>
         <label>Signed file ready</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7701,8 +7970,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <screens>
         <name>Stopped</name>
         <label>Signing has stopped</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>755</locationX>
+        <locationY>1514</locationY>
         <allowBack>false</allowBack>
         <allowFinish>true</allowFinish>
         <allowPause>false</allowPause>
@@ -7716,8 +7985,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
         <showHeader>true</showHeader>
     </screens>
     <start>
-        <locationX>60</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <connector>
             <targetReference>Confirm</targetReference>
         </connector>
@@ -7735,8 +8004,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <actionCalls>
         <name>Prepare</name>
         <label>Create signature request</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
         <actionName>portwoodglobal__DocGenSignatureFlowAction</actionName>
         <actionType>apex</actionType>
         <connector>
@@ -7804,8 +8073,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <assignments>
         <name>Identify</name>
         <label>Use the publishing user</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
         <assignmentItems>
             <assignToReference>Person.name</assignToReference>
             <operator>Assign</operator>
@@ -7841,8 +8110,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <assignments>
         <name>Capture_Link</name>
         <label>Store the single signer link</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>205</locationX>
+        <locationY>1369</locationY>
         <assignmentItems>
             <assignToReference>SignerLink</assignToReference>
             <operator>Assign</operator>
@@ -7857,8 +8126,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <decisions>
         <name>New_Receipt</name>
         <label>Check for a replay</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
         <defaultConnector>
             <targetReference>Claim</targetReference>
         </defaultConnector>
@@ -7879,8 +8148,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <decisions>
         <name>Prepared</name>
         <label>Did Portwood create the request?</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1079</locationY>
         <defaultConnector>
             <targetReference>Set_Failed</targetReference>
         </defaultConnector>
@@ -7911,8 +8180,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <decisions>
         <name>Has_Link</name>
         <label>Check the result link</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
         <defaultConnector>
             <targetReference>Set_Failed</targetReference>
         </defaultConnector>
@@ -7940,12 +8209,24 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     </formulas>
     <interviewLabel>Guide · Prepare the agreement {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Prepare the agreement</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>AutoLaunchedFlow</processType>
     <loops>
         <name>Each_Link</name>
         <label>Read the signer URL</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1224</locationY>
         <collectionReference>Links</collectionReference>
         <iterationOrder>Asc</iterationOrder>
         <nextValueConnector>
@@ -7958,8 +8239,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordCreates>
         <name>Claim</name>
         <label>Claim this interview once</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
         <connector>
             <targetReference>Publisher</targetReference>
         </connector>
@@ -7987,8 +8268,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordLookups>
         <name>Prior</name>
         <label>Find an existing receipt</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>New_Receipt</targetReference>
@@ -8008,8 +8289,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordLookups>
         <name>Publisher</name>
         <label>Find the person who started the interview</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
         <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
         <connector>
             <targetReference>Identify</targetReference>
@@ -8032,8 +8313,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordUpdates>
         <name>Set_Ready</name>
         <label>Make the link available</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>1659</locationY>
         <filterLogic>and</filterLogic>
         <filters>
             <field>Id</field>
@@ -8071,8 +8352,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <recordUpdates>
         <name>Set_Failed</name>
         <label>Record the preparation problem</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>1030</locationX>
+        <locationY>1224</locationY>
         <filterLogic>and</filterLogic>
         <filters>
             <field>Id</field>
@@ -8096,8 +8377,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
         <object>Guide_Sign_Receipt__c</object>
     </recordUpdates>
     <start>
-        <locationX>60</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <connector>
             <targetReference>Prior</targetReference>
         </connector>
@@ -8160,12 +8441,24 @@ The retry key covers one interview. For repeat approvals across interviews, use 
     <apiVersion>68.0</apiVersion>
     <interviewLabel>Guide · Clear expired signing link {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Guide · Clear expired signing link</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
     <processType>AutoLaunchedFlow</processType>
     <recordUpdates>
         <name>Clear_Link</name>
         <label>Clear the expired private URL</label>
-        <locationX>180</locationX>
-        <locationY>120</locationY>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
         <filterLogic>and</filterLogic>
         <filters>
             <field>Id</field>
@@ -8183,8 +8476,8 @@ The retry key covers one interview. For repeat approvals across interviews, use 
         <object>Guide_Sign_Receipt__c</object>
     </recordUpdates>
     <start>
-        <locationX>60</locationX>
-        <locationY>0</locationY>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
         <doesRequireRecordChangedToMeetCriteria>true</doesRequireRecordChangedToMeetCriteria>
         <filterLogic>and</filterLogic>
         <filters>
