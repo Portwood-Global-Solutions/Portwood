@@ -4,7 +4,7 @@
 
 Make your first document, build a template, send it for signature, and keep your team moving. Pick the task you want to finish; you do not need to read this guide from beginning to end.
 
-**Current release:** 3.64.0. [Install in production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO) · [Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO) · [Open the visual guide](https://portwood.dev/guide)
+**Current release:** 3.65.0. [Install in production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO) · [Install in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO) · [Open the visual guide](https://portwood.dev/guide)
 
 ## Table of contents
 
@@ -171,8 +171,8 @@ Install Portwood once, then give each person the access they need.
 
 Open the link for your environment:
 
-- [Install Portwood 3.64.0 in production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO)
-- [Install Portwood 3.64.0 in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FBU1IAO)
+- [Install Portwood 3.65.0 in production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO)
+- [Install Portwood 3.65.0 in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO)
 
 Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. Wait for installation to finish before continuing.
 

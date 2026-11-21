@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## v3.65.0 — iPhone signing in Screen Flows
 
-### 3.65.0 hotfix candidate
+Released 2026-11-21 · `04tVx000001FJD3IAO` (build 3.65.0-1) · ancestor 3.64.0-1 · 79% package coverage
 
 The PDF now opens when a customer signs inside a Screen Flow in the Salesforce iPhone app. The embedded viewer could stall while preparing the first page because of how WebKit handled its asynchronous code under Lightning Web Security. The classic PDF.js library and worker now compile those operations for the Flow runtime. [Issue #589](https://github.com/Portwood-Global-Solutions/Portwood/issues/589) · [PR #590](https://github.com/Portwood-Global-Solutions/Portwood/pull/590)
 
 The Visualforce signing page now loads the bundled Korean font library through a declarative Salesforce static-resource include. The font file is still fetched only when the signature needs Korean characters. [Issue #592](https://github.com/Portwood-Global-Solutions/Portwood/issues/592)
+
+Validation passed on all 2,309 local Apex tests, 19 end-to-end suites (332 assertions) and 110 Flow signer checks. Salesforce Code Analyzer reported zero High or Critical findings. We upgraded from 3.64.0-1, completed the original signing request in WebKit and verified the signed PDF in the appointment’s Files.
 
 ## v3.64.0 — Sign inside a Screen Flow, flatten fillable PDFs, configuration migration, and signing in Korean
 
