@@ -49,3 +49,5 @@ The repository's [demo template library](https://github.com/Portwood-Global-Solu
 #### Advanced layout lab
 
 Use [Repeat table headers](#repeat-table-headers) for the 90-row, four-page HTML lab and [rich page footers](#running-headers-footers) for its two-line Page X of Y footer. The downloadable body/footer and scratch-only verification script make the recipe repeatable for later releases. For subscriber code, use the [custom provider](#apex-data-provider) and [Queueable generation example](#apex-generation).
+
+For a sequence you can build in a sandbox, open the [recipe library](#recipe-library).

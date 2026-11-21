@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/><title>Renewal review</title>
+    <style>
+        @page { size: Letter; margin: .75in; @bottom-right { content: "ACCOUNT REVIEW   /   " counter(page); font: 8pt Helvetica; color: #46586c; } }
+        body { margin: 0; font: 10.5pt/1.4 Helvetica, sans-serif; color: #242c46; }
+        h1, h2 { font: normal 36pt/1.05 Times, serif; margin: 9pt 0; }
+        h2 { font-size: 20pt; margin: 16pt 0 7pt; }
+        .mast { width: 100%; border-bottom: 2pt solid #a38768; }
+        .mast td { padding: 0 0 6pt; font-weight: bold; font-size: 9pt; }
+        .right { text-align: right; }
+        .kicker { color: #5c6175; font-size: 8pt; letter-spacing: 1.1pt; font-weight: bold; margin: 22pt 0 4pt; }
+        .decision { padding: 11pt 14pt; border-left: 4pt solid #996a48; background: #f6eee4; margin: 14pt 0; }
+        .ontrack { border-left-color: #476f65; background: #eaf0ea; }
+        .decision b { display: block; font-size: 14pt; }
+        .metrics, .teams { width: 100%; border-collapse: collapse; }
+        .metrics td { width: 33.33%; padding: 8pt; vertical-align: top; background: #343855; color: #fff; border-right: 1pt solid white; }
+        .value { display: block; font: 19pt Times, serif; padding-top: 3pt; }
+        .teams th,.teams td { padding: 6pt 3pt; border-bottom: .6pt solid #c9cbd5; text-align: left; }
+        .scale { display: block; background: #e5e7ee; height: 6pt; margin: 3pt 0; }
+        .fill { display: block; height: 6pt; background: #6a7094; }
+        .footnote { font-size: 9pt; color: #575f73; }
+    </style>
+</head>
+<body>
+    <table class="mast"><tr><td>Client services</td><td class="right">{ReviewPeriod}</td></tr></table>
+    <p class="kicker">RENEWAL DECISION</p><h1>{Client}</h1>
+    <p>{PlanName} · Renewal on {RenewalDate}</p>
+    {#IF HasUsage = true}
+        {#AtTarget}<div class="decision ontrack"><b>Prepare renewal terms</b>Active usage meets the agreed {Threshold}% threshold. Confirm scope with the sponsor before sending the renewal.</div>
+        {:else}<div class="decision"><b>Book an adoption review</b>Active usage is below the agreed {Threshold}% threshold. Ask the sponsor which team needs help before proposing renewal terms.</div>{/AtTarget}
+    {:else}<div class="decision"><b>Request usage data</b>Usage is unavailable for this period. Check the measurement window before making a renewal recommendation.</div>{/IF}
+    <table class="metrics"><tr>
+        <td>Annual contract<span class="value">USD {AnnualNet:#,##0}</span></td>
+        <td>Active usage<span class="value">{#IF HasUsage = true}{Adoption}%{:else}Unknown{/IF}</span></td>
+        <td>Open service cases<span class="value">{OpenCases}</span></td>
+    </tr></table>
+    {#IF HasUsage = true}<h2>Where adoption differs</h2><p>Active seats as a share of licensed seats, by team. The percentage is printed beside every bar.</p>
+    <table class="teams"><thead><tr><th>Team</th><th>Active / licensed</th><th style="width:42%;">Adoption</th></tr></thead>
+        <tbody><tr><td>{#Teams}{Name}</td><td>{Active} / {Licensed}</td><td>{Percent}%<div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>{/Teams}</td></tr></tbody></table>
+    <p class="footnote">Account adoption uses total active seats divided by total licensed seats. Last period: {PriorAdoption}%.</p>{/IF}
+    <h2>For the account owner</h2>
+    {#IF OpenCases > 0}<p>Review the {OpenCases} open service cases with the support lead. The oldest has been open for {DaysOpen} days.</p>
+    {:else}<p>The service queue is clear. Confirm the renewal scope and decision date with the sponsor.</p>{/IF}
+</body>
+</html>

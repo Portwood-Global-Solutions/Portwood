@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Service review</title>
+    <style>
+        @page { size: Letter portrait; margin: 0.7in 0.65in 0.85in; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #193b46; }
+        h1 { font-family: Times, serif; font-size: 34pt; font-weight: normal; margin: 8pt 0 18pt; }
+        h2 { font-size: 17pt; page-break-after: avoid; }
+        .mast, .ledger { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .mast td { padding: 9pt; background-color: #154d50; color: white; font-weight: bold; }
+        .right { text-align: right; }
+        .lede { font-size: 13pt; line-height: 1.45; }
+        .ledger { -fs-table-paginate: paginate; page-break-inside: auto; }
+        .ledger thead { display: table-header-group; }
+        .ledger tr { page-break-inside: avoid; }
+        .ledger td, .ledger th { padding: 6pt 7pt; border-bottom: 0.6pt solid #bdcfca; vertical-align: top; }
+        .ledger th { text-align: left; color: #ffffff; background-color: #154d50; }
+        .ledger .amount { text-align: right; white-space: nowrap; }
+        .summary { border-top: 2pt solid #ad7848; margin-top: 14pt; padding: 9pt 0; page-break-inside: avoid; }
+        .appendix { page-break-before: always; }
+        .page-no:before { content: counter(page); }
+        .page-count:before { content: counter(pages); }
+    </style>
+</head>
+<body>
+    <table class="mast"><tr><td>CLIENT SERVICES</td><td class="right">ACCOUNT REVIEW</td></tr></table>
+    <h1>{Name}</h1>
+    <p class="lede">Here is the work planned for your account. Use the reference number when discussing a service line.</p>
+    <h2>Service schedule</h2>
+    <table class="ledger">
+        <thead><tr><th style="width: 12%">Ref.</th><th style="width: 61%">Service line</th><th class="amount" style="width: 27%">Estimate</th></tr></thead>
+        <tbody><tr><td>{#Opportunities}{RowNumber}</td><td>{Name}</td><td class="amount">{Amount:#,##0.##}{/Opportunities}</td></tr></tbody>
+    </table>
+    <p class="summary">Combined estimate &nbsp; <strong>{SUM:Opportunities.Amount:#,##0.00}</strong></p>
+    <div class="appendix">
+        <h2>Handoff and acceptance</h2>
+        <p>Review the schedule with your account team. Reference numbers match the order in the service schedule.</p>
+        <div>{%snippet:guide-service-handoff}</div>
+    </div>
+</body>
+</html>

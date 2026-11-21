@@ -193,6 +193,10 @@ Seventeen PRs land together. People who are already signed in can now review and
   escaped for both cmd.exe passes, so SOQL queries and aliases reach the CLI unchanged. The
   error message now also includes the underlying reason.
 
+## v3.63.0 — Upgrade hotfix
+
+Released 2026-11-05 · `04tVx000001CfejIAC`. Upgrades from an earlier package could roll back during the 3.62 post-install script. The hotfix allows the upgrade to complete. See [the release notes](https://github.com/Portwood-Global-Solutions/Portwood/releases/tag/v3.63.0).
+
 ## v3.62.0 — Resend and revoke signatures, reusable terms and snippets, PDF merge Flow action, and version-activation fixes
 
 Released 2026-11-05 · `04tVx000001CeFdIAK` (build 3.62.0-1) · ancestor 3.61.0 · 2,292 tests,
@@ -280,6 +284,10 @@ Eleven PRs land together. Signature senders can resend or revoke a request strai
 - A revoke email for an uploaded-PDF request is titled "Document", and declined signers also receive it.
 - Each Save as New Version of an HTML-backed template now copies the body file, which increases storage.
 - `Portwood: Merge PDFs` and its classes are permanent global API, and the **Portwood: PDF Merge Demo** Flow ships as a Draft in every org.
+
+## v3.61.0 — Signing, HTML saves and email composition
+
+Released 2026-10-28 · `04tVx000001BaZ3IAK`. Parallel-signing notices identify the signer who acted. The signing page keeps the typed name and drawing editable, and the decline confirmation uses a plain layout. Large HTML templates save more reliably. The Send Email wizard accepts a manual recipient and a plain-text subject. See [the release notes](https://github.com/Portwood-Global-Solutions/Portwood/releases/tag/v3.61.0).
 
 ## v3.60.0 — Customer-uploaded PDF signing, branded signing experience, and custom font embedding
 

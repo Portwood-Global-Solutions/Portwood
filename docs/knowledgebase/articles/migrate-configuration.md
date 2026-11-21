@@ -13,8 +13,8 @@ You need:
 - **Portwood Admin** and **Portwood Configuration Migration** assigned to your user in both orgs. Font imports also need **Manage Portwood Fonts**, which Portwood Admin includes.
 
 ```sh
-sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org source-org
-sf org assign permset --name DocGen_Admin --name DocGen_Migration --target-org target-org
+sf org assign permset --name portwoodglobal__DocGen_Admin --name portwoodglobal__DocGen_Migration --target-org source-org
+sf org assign permset --name portwoodglobal__DocGen_Admin --name portwoodglobal__DocGen_Migration --target-org target-org
 ```
 
 #### Who can use the migration API

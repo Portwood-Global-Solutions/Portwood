@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Portfolio review</title>
+    <style>
+        @page { size: Letter portrait; margin: 0.65in; }
+        body { font: 10pt Helvetica, sans-serif; color: #183a41; }
+        .band { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .cover { color: #ffffff; background-color: #183e40; padding: 25pt 24pt 33pt; }
+        .folio { font-size: 9pt; letter-spacing: 1pt; }
+        h1 { font: 34pt Times, serif; margin: 14pt 0 8pt; }
+        h2 { font: 19pt Times, serif; margin: 19pt 0 5pt; page-break-after: avoid; }
+        .metric { width: 50%; background-color: #e6efeb; padding: 13pt; vertical-align: top; }
+        .metric strong { display: block; font-size: 21pt; margin-top: 5pt; }
+        .rule { border-top: 3pt solid #aa794b; }
+        .ledger { width: 100%; border-collapse: collapse; -fs-table-paginate: paginate; }
+        .ledger th, .ledger td { padding: 7pt 6pt; border-bottom: 0.7pt solid #c5d3cf; text-align: left; }
+        .ledger th { background-color: #e6efeb; }
+        .ledger thead { display: table-header-group; }
+        .ledger tr { page-break-inside: avoid; }
+        .ledger .number { text-align: right; }
+        .briefing { page-break-before: always; }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <div class="folio">CLIENT SERVICES &nbsp; / &nbsp; PORTFOLIO REVIEW</div>
+        <h1>{Name}</h1>
+        <p>Engagements by stage and the value of work under review.</p>
+    </div>
+    <table class="band"><tr>
+        <td class="metric">Engagements<strong>{COUNT:Opportunities}</strong></td>
+        <td class="metric">Combined estimate<strong>{SUM:Opportunities.Amount:#,##0.00}</strong></td>
+    </tr></table>
+    <h2>Stage distribution</h2>
+    {Chart:Opportunities:StageName:bar}
+    <h2>Review note</h2>
+    <p class="rule">{#IF Opportunities.totalSize != 0}The following schedule groups engagements by stage. Reference numbers restart in each group.{:else}There are no engagements in the selected data.{/IF}</p>
+    <div class="briefing">
+        <div class="folio">ACCOUNT DETAIL</div>
+        {#GroupBy Opportunities by StageName}
+        <h2>{GroupName}</h2>
+        <table class="ledger">
+            <thead><tr><th>Ref.</th><th>Engagement</th><th class="number">Estimate</th></tr></thead>
+            <tbody><tr><td>{#Opportunities}{RowNumber}</td><td>{Name}</td><td class="number">{Amount:#,##0.00}{/Opportunities}</td></tr></tbody>
+        </table>
+        <p>Stage subtotal &nbsp; <strong>{SUM:Opportunities.Amount:#,##0.00}</strong></p>
+        {/GroupBy}
+    </div>
+</body>
+</html>

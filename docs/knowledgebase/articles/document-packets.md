@@ -30,3 +30,5 @@ For a PDF template, use **Combine with existing PDFs on this record** if offered
 Packets and PDF combines are download workflows. If the result also belongs on the record, upload the finished packet to Files.
 
 For a packet that needs signatures, use the [template signing workflow](#sign-template) instead of treating a combined unsigned download as a completed signing request.
+
+Use [Merge PDFs in Flow](#merge-pdfs-flow) to create a Salesforce File from existing file versions and return its IDs to an automation.

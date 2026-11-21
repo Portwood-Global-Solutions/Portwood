@@ -1,17 +1,18 @@
 Install Portwood once, then give each person the access they need.
 
-**Before you start:** You need a Salesforce administrator who can install packages and assign permission sets. Try a sandbox before changing a live org.
+Use a Salesforce administrator who can install packages and assign permission sets. Assigning per-user seats also requires **Manage Package Licenses**. Try a sandbox before changing a live org.
 
 #### 1. Install the package
 
-Open the link for your environment:
+Open the [Portwood listing on Salesforce AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3) for the managed package. Choose the production org or sandbox where you want to install it.
 
-- [Install Portwood {{version}} in production](https://login.salesforce.com/packaging/installPackage.apexp?p0={{packageId}})
-- [Install Portwood {{version}} in a sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0={{packageId}})
+Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. When installation finishes, open **Setup → Installed Packages** and find **Portwood**. The current release is **{{version}}**.
 
-Sign in to the intended org. Choose **Install for Admins Only**, then complete Salesforce's installation prompts. Wait for installation to finish before continuing.
+#### 2. License the people who will use Portwood
 
-#### 2. Give yourself Portwood Admin
+In **Setup → Installed Packages**, open **Manage Licenses** on the **Portwood** row. With per-user licensing, assign a seat to each person who will build templates, generate documents or send signature requests. If your organization uses a site license, users are already covered. [See who needs a license, including guests and portal signers](#user-licenses)
+
+#### 3. Give people their permission sets
 
 1. Open Salesforce **Setup**.
 2. Enter **Permission Sets** in Quick Find and open it.
@@ -23,13 +24,13 @@ Give other people **Portwood User** when they need to generate documents or send
 
 Select the people who need the tool. Some Salesforce licenses cannot receive all of these permissions; assigning a set to an unsupported license can also prevent a later upgrade.
 
-#### 3. Check PDF rendering
+#### 4. Check PDF rendering
 
 In Setup, open **Release Updates**. If your org offers **Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations**, open it and follow Salesforce's steps to enable it.
 
 The update's availability and controls depend on your Salesforce release. A disabled **Enable Test Run** button is not proof that the update is active. If PDF output shows raw CSS or missing images, ask your Salesforce administrator to check the update and contact Salesforce Support if it cannot be enabled.
 
-#### 4. Open Portwood
+#### 5. Open Portwood
 
 Open the **App Launcher**, search for **Portwood**, and select the app. You should see the **Template Library** and the choices **Bring an Existing Template** and **Start from a Blank Canvas**.
 
