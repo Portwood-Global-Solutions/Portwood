@@ -27,7 +27,8 @@ when versions change, and disclose it in AppExchange security materials.
   runtime-computed URL, and `loadScript` cannot load an ES module. It is generated from
   `pdfjs4` by `scripts/build-pdfjs-classic.mjs` and differs from upstream only
   mechanically: each file is wrapped in a function scope and its trailing `export{...}`
-  becomes a global assignment. The Apache-2.0 header is preserved. Re-run the script
+  becomes a global assignment. Async functions and async iteration are precompiled for the
+  Flow runtime on WebKit. The Apache-2.0 header is preserved. Re-run the script
   (and `--check` it) whenever `pdfjs4` is upgraded.
 - These libraries make **no network requests** and have **no external runtime
   dependency** — they operate only on PDF bytes already in the browser.

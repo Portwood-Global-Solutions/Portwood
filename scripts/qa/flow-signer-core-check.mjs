@@ -10,6 +10,8 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { toClassic } from '../build-pdfjs-classic.mjs';
 
 const root = new URL('../../', import.meta.url);
 const dir = mkdtempSync(path.join(tmpdir(), 'portwood-signer-core-'));
@@ -33,6 +35,23 @@ function check(name, cond, detail) {
 const eq = (name, a, b) => check(name, JSON.stringify(a) === JSON.stringify(b), 'got ' + JSON.stringify(a) + ' want ' + JSON.stringify(b));
 
 const TOK = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+
+// Native async functions use their realm's intrinsic Promise even if LWS supplies a different one.
+// Exercise the same compiler that produces the PDF.js library and its main-thread worker (#589).
+{
+    class FlowPromise extends Promise {}
+    const sandbox = { Promise: FlowPromise };
+    const source = `
+        async function* pages() { yield 1; }
+        async function firstPage() { for await (const page of pages()) return page; }
+        export{pages,firstPage};
+    `;
+    runInNewContext(toClassic(source, 'viewer'), sandbox);
+    const page = sandbox.viewer.firstPage();
+    check('classic PDF viewer uses the Flow Promise for async functions', page instanceof FlowPromise);
+    check('classic PDF worker uses the Flow Promise for async iteration', sandbox.viewer.pages().next() instanceof FlowPromise);
+    eq('classic PDF worker delivers the first page', await page, 1);
+}
 
 // ---- parseToken
 eq('parseToken: explicit token wins', core.parseToken('https://x/apex/P?token=' + 'f'.repeat(64), TOK), TOK);
