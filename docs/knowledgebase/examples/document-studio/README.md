@@ -1,10 +1,10 @@
 # Use a design in your Salesforce sandbox
 
-| Start here          | What to look for                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `field-quote.pdf`   | Jump from the contents to a priced bundle. Check the draft mark, monthly price and separate optional service. |
-| `renewal-brief.pdf` | See why an account owner should book an adoption review and which team needs attention.                       |
-| `service-sheet.pdf` | Scan a QR code and compare the result with the printed equipment identifier.                                  |
+| Start here | What to look for |
+| --- | --- |
+| `field-quote.pdf` | Jump from the contents to a priced bundle. Check the draft mark, monthly price and separate optional service. |
+| `renewal-brief.pdf` | See why an account owner should book an adoption review and which team needs attention. |
+| `service-sheet.pdf` | Scan a QR code and compare the result with the printed equipment identifier. |
 
 Open a `-reading.html` file for a filled text edition with headings and labeled tables. The HTML file without `-reading` is the Portwood template. Its matching JSON file contains fictional data for one run.
 

@@ -1,10 +1,10 @@
 Start with a file someone actually needs. Open one of these finished PDFs, try its links or scan its equipment labels, then take the HTML and data into your own org.
 
-| Build this                                                                    | Try this in the finished file                                                                    | Make it your own                                                                          |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| [Commercial proposal](https://portwood.dev/demos/studio/field-quote.pdf)      | Click **Harbor reserve** on the cover. Find the battery options, then jump back to the contents. | [Nested pricing tables](#cpq-quote) · [Contents, links and watermarks](#print-navigation) |
-| [Renewal decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) | Read the recommendation, then find the team whose adoption is bringing the account below target. | [Design a brief that changes with the data](#renewal-decision)                            |
-| [Field-service sheet](https://portwood.dev/demos/studio/service-sheet.pdf)    | Scan either equipment card. Its QR code contains the asset identifier printed directly below it. | [Make a scannable service sheet](#service-sheet)                                          |
+| Build this | Try this in the finished file | Make it your own |
+| --- | --- | --- |
+| [Commercial proposal](https://portwood.dev/demos/studio/field-quote.pdf) | Click **Harbor reserve** on the cover. Find the battery options, then jump back to the contents. | [Nested pricing tables](#cpq-quote) · [Contents, links and watermarks](#print-navigation) |
+| [Renewal decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) | Read the recommendation, then find the team whose adoption is bringing the account below target. | [Design a brief that changes with the data](#renewal-decision) |
+| [Field-service sheet](https://portwood.dev/demos/studio/service-sheet.pdf) | Scan either equipment card. Its QR code contains the asset identifier printed directly below it. | [Make a scannable service sheet](#service-sheet) |
 
 A signer can also move from a Salesforce Screen Flow to a document prepared in the background. [Build the event-driven signing handoff](#event-signing-journey).
 
@@ -33,11 +33,11 @@ You can build the same experience from the Salesforce screens. [Download the des
 
 ![With HTML as the template type and PDF as the output, the document’s print styling comes from the uploaded HTML.](docs/images/userguide/v3.64/html-output.png)
 
-| Design                 | HTML and JSON filenames start with | API name used by the practice Flow |
-| ---------------------- | ---------------------------------- | ---------------------------------- |
-| Commercial proposal    | `field-quote`                      | `Guide364_Studio_field_quote`      |
-| Renewal decision brief | `renewal-brief`                    | `Guide364_Studio_renewal_brief`    |
-| Field-service sheet    | `service-sheet`                    | `Guide364_Studio_service_sheet`    |
+| Design | HTML and JSON filenames start with | API name used by the practice Flow |
+| --- | --- | --- |
+| Commercial proposal | `field-quote` | `Guide364_Studio_field_quote` |
+| Renewal decision brief | `renewal-brief` | `Guide364_Studio_renewal_brief` |
+| Field-service sheet | `service-sheet` | `Guide364_Studio_service_sheet` |
 
 3. The template editor opens. Under **Upload New Version**, select **Choose File**, choose the template HTML and select **Save as New Version**. In **Your Templates**, check that the version is active. Keep its API name for the next step.
 

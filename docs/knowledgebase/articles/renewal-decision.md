@@ -12,11 +12,11 @@ The sample’s teams have **72 active seats out of 100 licensed**. The account t
 
 Have the Flow or provider supply `HasUsage`, `AtTarget`, `Adoption` and `Threshold` together. Set `HasUsage` to false for a missing reporting period or a zero denominator. Set `AtTarget` from the data source’s comparison of the measured rate and the account’s agreed threshold. Keep that logic where the business rule lives.
 
-| Input state                         | What the reader sees                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Input state | What the reader sees |
+| --- | --- |
 | Usage is available and below target | **Book an adoption review**, with the agreed threshold and the team breakdown. |
-| Usage meets or exceeds target       | **Prepare renewal terms**, with the same underlying measurements.              |
-| No usable measurement               | **Request usage data** and an **Unknown** metric. The team chart is omitted.   |
+| Usage meets or exceeds target | **Prepare renewal terms**, with the same underlying measurements. |
+| No usable measurement | **Request usage data** and an **Unknown** metric. The team chart is omitted. |
 
 #### Print a bar the reader can check
 
@@ -24,13 +24,8 @@ The bar is ordinary HTML. The data supplies a numeric percentage between 0 and 1
 
 ```html
 <tr>
-    <td>{#Teams}{Name}</td>
-    <td>{Active} / {Licensed}</td>
-    <td>
-        {Percent}%
-        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
-        {/Teams}
-    </td>
+    <td>{#Teams}{Name}</td><td>{Active} / {Licensed}</td>
+    <td>{Percent}%<div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>{/Teams}</td>
 </tr>
 ```
 

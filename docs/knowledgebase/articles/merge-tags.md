@@ -28,7 +28,7 @@ There is no single fixed list of every Salesforce field tag. Your org supplies s
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Print a field or a parent record value                                     | `{Name}`, `{Account.Name}`                                           | [Fields and formatting](#tag-fields)                       |
 | Format money, numbers, dates, percent, checkbox, or picklist labels        | `{Amount:currency}`, `{CloseDate:MMMM d, yyyy}`, `{StageName:label}` | [Fields and formatting](#tag-fields)                       |
-| Print a Salesforce Custom Label in the running user's language             | `{!$Label.Payment_Terms}`                                            | This article's Custom Labels section                       |
+| Print a Salesforce Custom Label in the running user's language             | `{!$Label.Payment_Terms}`                                           | This article's Custom Labels section                        |
 | Print today's date, the current time, or the person preparing the document | `{Today}`, `{Now}`, `{RunningUser.Name}`                             | [Built-in and user tags](#tag-fields)                      |
 | Repeat one row per related record                                          | `{#Contacts}…{/Contacts}`                                            | [Loops](#tag-loops)                                        |
 | Number rows, group by a field, or use root data from inside a loop         | `{RowNumber}`, `{#GroupBy … by …}`, `{~Root}…{/Root}`                | [Grouping and scope](#tag-loops)                           |
@@ -36,14 +36,14 @@ There is no single fixed list of every Salesforce field tag. Your org supplies s
 | Count or total related records                                             | `{COUNT:Contacts}`, `{SUM:Opportunities.Amount:currency}`            | [Totals](#tag-totals)                                      |
 | Add a chart                                                                | `{Chart:Opportunities:StageName:donut}`                              | [Charts and options](#tag-charts)                          |
 | Add an image, asset, barcode, or QR code                                   | `{%LogoUrl}`, `{%asset:company-logo}`, `{*Website:qr:200}`           | [Images and codes](#tag-media)                             |
-| Insert a reusable formatted HTML section                                   | `{%snippet:terms-and-conditions}`                                    | [Shared content](#shared-content)                          |
+| Insert a reusable formatted HTML section                                    | `{%snippet:terms-and-conditions}`                                    | [Shared content](#shared-content)                           |
 | Place a signature or initials for a role                                   | `{@Signature_Buyer}`, `{@Signature_Buyer:1:Initials}`                | [Signature tags](#tag-signatures)                          |
 | Print classic approvals                                                    | `{#Approvals}…{/Approvals}`                                          | [Approval history](#tag-approvals)                         |
 | Repeat a Word table header                                                 | `{RepeatHeader}` in the header row                                   | [Repeating table headers](#repeat-table-headers)           |
 | Number PDF pages                                                           | `{PageNumber}`, `{TotalPages}` in Header/Footer HTML                 | [Page headers and footers](#running-headers-footers)       |
 | Collect an answer from the signer                                          | `{?poNumber}`, `{?poNumber\|N/A}`                                    | [Signer inputs and writeback](#signer-inputs)              |
 | Customize a signing email                                                  | `{SignerName}`, `{SignatureUrl}`, `{VerificationCode}`               | [Email tokens by type](#email-tokens)                      |
-| Use an approved custom PDF font                                            | `{%font:api-name}` or `{%font:asset-key:revision}` inside `style`    | [Font tags](#tag-media) and [font approval](#custom-fonts) |
+| Use an approved custom PDF font                                            | `{%font:api-name}` or `{%font:asset-key:revision}` inside `style`     | [Font tags](#tag-media) and [font approval](#custom-fonts) |
 
 #### Check the output path
 

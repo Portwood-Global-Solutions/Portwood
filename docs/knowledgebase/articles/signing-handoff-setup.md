@@ -7,13 +7,13 @@ This example starts with a signed-in person. For a portal or employee signing ro
 1. Open **Setup → Object Manager → Create → Custom Object**. Enter **Guide Signing Receipt** for the label and **Guide Signing Receipts** for the plural. Use `Guide_Sign_Receipt` for **Object Name** to match this example. For the record name, use **Receipt number**, choose **Auto Number** and enter `HANDOFF-{00000}` as the display format. Save.
 2. In **Fields & Relationships**, select **New** for each row below. Use these field names if you want to match the pictured example. Salesforce adds the `__c` suffix.
 
-| Field label          | Field name        | Type and setting                                                                         |
-| -------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-| Receipt key          | `Receipt_Key`     | Text, 100 characters. Select **Unique** and treat uppercase and lowercase as duplicates. |
-| Preparation status   | `Stage`           | Text, 24 characters. The Flow uses **Preparing**, **Ready** and **Failed**.              |
-| Signature request ID | `Request_Id`      | Text, 18 characters. Holds the Portwood request ID.                                      |
-| Private signing URL  | `Signer_URL`      | Long Text Area, 4,096 characters. Holds this signer’s personal link temporarily.         |
-| Handoff link expires | `Link_Expires_At` | Date/Time. The screen checks this before opening the link.                               |
+| Field label | Field name | Type and setting |
+| --- | --- | --- |
+| Receipt key | `Receipt_Key` | Text, 100 characters. Select **Unique** and treat uppercase and lowercase as duplicates. |
+| Preparation status | `Stage` | Text, 24 characters. The Flow uses **Preparing**, **Ready** and **Failed**. |
+| Signature request ID | `Request_Id` | Text, 18 characters. Holds the Portwood request ID. |
+| Private signing URL | `Signer_URL` | Long Text Area, 4,096 characters. Holds this signer’s personal link temporarily. |
+| Handoff link expires | `Link_Expires_At` | Date/Time. The screen checks this before opening the link. |
 
 ![In Object Manager, the receipt fields include the private signing URL and a unique receipt key.](docs/images/userguide/v3.64/receipt-setup.png)
 

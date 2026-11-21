@@ -2,16 +2,16 @@ Build a client service packet in stages. The first exercise needs one Account an
 
 [Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio) For a signing example, [see the buttons the signer uses](#event-signing-journey) or [build the experience in Salesforce](#signing-handoff-setup).
 
-| Start with                                      | Build this                                                                                                                                               | Check your result                                                                           |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| One Account                                     | [A one-field welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.html) | The PDF heading contains the Account name.                                                  |
-| Related Opportunities                           | [A paginated service schedule](#css-print-lab)                                                                                                           | The column labels repeat and the final line appears once.                                   |
-| Shared language                                 | [A versioned handoff clause](#shared-content)                                                                                                            | Two templates using the same key pick up the new active text.                               |
-| A fillable PDF                                  | [A fixed acceptance form](#fillable-pdf)                                                                                                                 | The account name is visible and the flattened output has no editable widget.                |
-| Two existing Salesforce Files                   | [An ordered PDF packet](#merge-pdfs-flow)                                                                                                                | Both source documents appear in order in a new File.                                        |
-| A signed-in customer                            | [Acceptance inside a Screen Flow](#flow-signatures)                                                                                                      | The Flow advances after the component confirms the outcome.                                 |
-| A signer using the signing site                 | [A navigation link in a Screen Flow](#signing-site-handoff)                                                                                              | The intended signer opens the site and the interview can check the request again.           |
-| Approval or signing activity in another process | [An event-driven signature workflow](#signing-events)                                                                                                    | One approval produces one request and a completed agreement produces one downstream action. |
+| Start with | Build this | Check your result |
+| --- | --- | --- |
+| One Account | [A one-field welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.html) | The PDF heading contains the Account name. |
+| Related Opportunities | [A paginated service schedule](#css-print-lab) | The column labels repeat and the final line appears once. |
+| Shared language | [A versioned handoff clause](#shared-content) | Two templates using the same key pick up the new active text. |
+| A fillable PDF | [A fixed acceptance form](#fillable-pdf) | The account name is visible and the flattened output has no editable widget. |
+| Two existing Salesforce Files | [An ordered PDF packet](#merge-pdfs-flow) | Both source documents appear in order in a new File. |
+| A signed-in customer | [Acceptance inside a Screen Flow](#flow-signatures) | The Flow advances after the component confirms the outcome. |
+| A signer using the signing site | [A navigation link in a Screen Flow](#signing-site-handoff) | The intended signer opens the site and the interview can check the request again. |
+| Approval or signing activity in another process | [An event-driven signature workflow](#signing-events) | One approval produces one request and a completed agreement produces one downstream action. |
 
 #### Generate the one-field letter
 

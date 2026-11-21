@@ -1,19 +1,19 @@
 Choose a format and run size that fit the document. Test representative data before a large run.
 
-| Item                                       | Practical limit or behavior                                                                              |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Uploaded template file                     | Uploader limit: **10 MB**; compress large pictures                                                       |
-| PDF prepared for uploaded-document signing | **2 MB**, **50 pages**, **10 recipients**, **100 fields**                                                |
-| Sign in a Screen Flow                      | Authenticated users only; prepared uploaded PDFs and oversized signing documents use the signing link    |
-| Flatten a fillable PDF                     | Standard AcroForm fields; some PDFs with compressed page object streams need a new template version      |
-| Configuration migration                    | Draft CLI for sandboxes/scratch orgs; template bundles about **1.5 MB**, files **10 MB**, fonts **9 MB** |
-| PDF/HTML/Canvas output                     | PDF; browser preview and final PDF can differ                                                            |
-| Word template output                       | Word or PDF                                                                                              |
-| PowerPoint / Excel template output         | Native Office file; no conversion to PDF                                                                 |
-| Bulk native Office or fillable PDF form    | Use **Individual Files**                                                                                 |
-| Large native Office save                   | May require downloading and then using the shown drag-to-attach uploader                                 |
-| Duplex combined packet                     | Size-dependent estimate; split the run or use Individual Files if it exceeds the available budget        |
-| Custom fonts per document                  | Up to **16 distinct approved faces**                                                                     |
+| Item                                       | Practical limit or behavior                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Uploaded template file                     | Uploader limit: **10 MB**; compress large pictures                                                |
+| PDF prepared for uploaded-document signing | **2 MB**, **50 pages**, **10 recipients**, **100 fields**                                         |
+| Sign in a Screen Flow                    | Authenticated users only; prepared uploaded PDFs and oversized signing documents use the signing link |
+| Flatten a fillable PDF                   | Standard AcroForm fields; some PDFs with compressed page object streams need a new template version |
+| Configuration migration                  | Draft CLI for sandboxes/scratch orgs; template bundles about **1.5 MB**, files **10 MB**, fonts **9 MB** |
+| PDF/HTML/Canvas output                     | PDF; browser preview and final PDF can differ                                                     |
+| Word template output                       | Word or PDF                                                                                       |
+| PowerPoint / Excel template output         | Native Office file; no conversion to PDF                                                          |
+| Bulk native Office or fillable PDF form    | Use **Individual Files**                                                                          |
+| Large native Office save                   | May require downloading and then using the shown drag-to-attach uploader                          |
+| Duplex combined packet                     | Size-dependent estimate; split the run or use Individual Files if it exceeds the available budget |
+| Custom fonts per document                  | Up to **16 distinct approved faces**                                                              |
 
 #### Large data is not the same as a large file
 

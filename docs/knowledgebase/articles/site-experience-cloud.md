@@ -4,11 +4,11 @@ Use this route when your organization wants signing served through an Experience
 
 #### Decide how customers will sign
 
-| What happens in your community or portal                                            | What you need                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A customer opens a private invitation link without logging in to the portal         | With per-user licensing, assign a Portwood license to this site’s Salesforce guest user. Public recipients need no individual seat. Assign **Portwood Guest Signature** to the guest user.                                     |
+| What happens in your community or portal | What you need |
+| --- | --- |
+| A customer opens a private invitation link without logging in to the portal | With per-user licensing, assign a Portwood license to this site’s Salesforce guest user. Public recipients need no individual seat. Assign **Portwood Guest Signature** to the guest user. |
 | A customer or partner logs in and signs as a member, including inside a Screen Flow | **Authenticated signing requires a Portwood site license.** Give the member Salesforce access to this site, its signing page and the specific Screen Flow. For the embedded signing screen, assign **Portwood Portal Signer**. |
-| The portal offers both routes                                                       | The org’s site license covers the members and the guest user. Configure the guest and member permissions for their respective signing routes.                                                                                  |
+| The portal offers both routes | The org’s site license covers the members and the guest user. Configure the guest and member permissions for their respective signing routes. |
 
 For a members-only experience, arrange the site license and test the Flow as a customer or partner. [Request an enterprise site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Add the signing screen to a Flow](#flow-signatures)
 

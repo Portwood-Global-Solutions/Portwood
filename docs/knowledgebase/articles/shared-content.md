@@ -18,15 +18,15 @@ Insert the tag where the complete section should appear. In HTML or Canvas autho
 
 1. In **Terms & snippets**, create a snippet with the key `guide-service-handoff`. In **HTML source**, paste this paragraph and save it with **Active for document generation** selected.
 
-    ```html
-    <p>After acceptance, our service coordinator will arrange a handoff with <strong>{Name}</strong>.</p>
-    ```
+   ```html
+   <p>After acceptance, our service coordinator will arrange a handoff with <strong>{Name}</strong>.</p>
+   ```
 
 2. In your Account template, include **Account Name** in the selected fields. Paste the snippet’s copied tag where you want the paragraph to appear.
 
-    ```html
-    {%snippet:guide-service-handoff}
-    ```
+   ```html
+   {%snippet:guide-service-handoff}
+   ```
 
 3. Select a sample Account in the designer and generate its PDF. For **Alder Works**, the last words are **“a handoff with Alder Works.”** You can see them under **Handoff and acceptance** on page four of the [finished service review](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf).
 

@@ -16,10 +16,10 @@ Use a business event to start an agreement, then let the rest of the process con
 
 On the package paths that publish it, **Portwood Signature PDF** (`portwoodglobal__DocGen_Signature_PDF__e`) is an after-commit signal used by Portwood's own subscriber. To inspect those signals, create a second **Platform Event–Triggered Flow**, select this existing event, and use the fields below. Subscribe to events produced by signing. Publishing this internal event yourself can invoke package PDF and notification work.
 
-| Event field in a subscriber org         | What to do with it                                                                                                                                                                                       |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$Record.portwoodglobal__Request_Id__c` | Get the Portwood Signature Request by ID. Use its current status and related record.                                                                                                                     |
-| `$Record.portwoodglobal__Signer_Id__c`  | When populated, get that signer and verify its request matches. In parallel signing this identifies the actor even if people signed out of order. An empty value supports request-level processing only. |
+| Event field in a subscriber org | What to do with it |
+| --- | --- |
+| `$Record.portwoodglobal__Request_Id__c` | Get the Portwood Signature Request by ID. Use its current status and related record. |
+| `$Record.portwoodglobal__Signer_Id__c` | When populated, get that signer and verify its request matches. In parallel signing this identifies the actor even if people signed out of order. An empty value supports request-level processing only. |
 
 A notification can arrive between signers, on a decline, or before final file generation finishes. The package also has paths that complete the PDF without this event. For a business milestone that must cover every signing path, use an after-save record-triggered Flow on **Portwood Signature Request**. Check for **Signed** and a populated **Protected Signed Content Document Id** when the subsequent action needs the final File. Run when the record first meets both conditions. Read the File with the appropriate access. Use the request ID as a unique completion key when delivering to another system.
 

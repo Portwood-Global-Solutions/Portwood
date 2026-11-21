@@ -22,12 +22,12 @@ Add an **Assignment**. Set `Person.name` to the User’s **Full Name**, `Person.
 
 Select **+** and search for **Create Signature Request**. Choose the Portwood action. For **Related Record Id**, select the receipt you just created. Enter these inputs for a person who will open the site from the same interview.
 
-| In the action          | Choose this value                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| Signers                | `People`                                                                                        |
-| Signing Order          | `Single`                                                                                        |
-| Template API Name      | `Guide_Event_Acceptance`                                                                        |
-| Send Branded Emails    | `False`. The screen supplies the initial invitation.                                            |
+| In the action | Choose this value |
+| --- | --- |
+| Signers | `People` |
+| Signing Order | `Single` |
+| Template API Name | `Guide_Event_Acceptance` |
+| Send Branded Emails | `False`. The screen supplies the initial invitation. |
 | Link Expiration (Days) | `1` for this practice agreement. Leave the signer verification policy to your template and org. |
 
 ![The signing action uses People, Single, and the API name of the active agreement template.](docs/images/userguide/v3.64/signer-inputs.png)

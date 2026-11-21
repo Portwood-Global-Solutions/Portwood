@@ -10,11 +10,11 @@ A buyer needs to see which options belong to each configured product and what th
 
 Use your quoting system’s approved, already-priced values. For each bundle, supply its key and display name. Put included lines under its `Components.records` and unselected optional offers under `AddOns.records`. Include `totalSize` so an empty options list suppresses its panel. The [sample data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json) shows each collection in full.
 
-| The buyer sees     | What your Flow or provider supplies                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Configuration      | One bundle per parent line, in selling order, with a stable key for the contents link.                                                          |
-| Included items     | Each child of that parent, with SKU, description, quantity, list unit price, discount and the net line total.                                   |
-| Options            | Separately quoted extras. A selected option that is already included in the bundle price should have one place in your total.                   |
+| The buyer sees | What your Flow or provider supplies |
+| --- | --- |
+| Configuration | One bundle per parent line, in selling order, with a stable key for the contents link. |
+| Included items | Each child of that parent, with SKU, description, quantity, list unit price, discount and the net line total. |
+| Options | Separately quoted extras. A selected option that is already included in the bundle price should have one place in your total. |
 | Commercial summary | Currency, approved one-time net, recurring price per billing period and payment installments. Keep internal cost and margin out of the payload. |
 
 For Salesforce CPQ, save the priced quote first. Start with its lines and inspect the **Required By** relationship to identify an option’s parent. A quote line group is a presentation grouping and can contain several independent bundles. Confirm how your org prices bundled options, prorates subscriptions and rounds line totals. The sample works without installing CPQ. Map your org’s prices into the sample shape. [Salesforce’s Required By field](https://help.salesforce.com/s/articleView?id=000382714&language=en_US&type=1) · [Generate from prepared data](#custom-data)
@@ -26,28 +26,14 @@ Paste the full example to keep the styling. The short version below shows where 
 ```html
 {#Bundles}
 <table class="bundle">
-    <tr>
-        <td><h3 id="bundle-{Key}">{Name}</h3></td>
-    </tr>
-    <tr>
-        <td>
-            <table class="lines">
-                <thead>
-                    <tr>
-                        <th>Component</th>
-                        <th>Net</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{#Components}{Description}</td>
-                        <td>{Net:#,##0.00}{/Components}</td>
-                    </tr>
-                </tbody>
-            </table>
-            <p>Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
-        </td>
-    </tr>
+    <tr><td><h3 id="bundle-{Key}">{Name}</h3></td></tr>
+    <tr><td>
+        <table class="lines">
+            <thead><tr><th>Component</th><th>Net</th></tr></thead>
+            <tbody><tr><td>{#Components}{Description}</td><td>{Net:#,##0.00}{/Components}</td></tr></tbody>
+        </table>
+        <p>Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+    </td></tr>
 </table>
 {/Bundles}
 ```

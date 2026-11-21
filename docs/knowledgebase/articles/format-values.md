@@ -13,7 +13,7 @@ Keep dates, amounts, labels, and numbers easy to read.
 | Euros                             | `{Amount:currency:EUR}`    |
 | Number with separators            | `{Quantity:number}`        |
 | Two decimal places                | `{Quantity:#,##0.00}`      |
-| Up to two decimal places          | `{Quantity:#,##0.##}`      |
+| Up to two decimal places           | `{Quantity:#,##0.##}`      |
 | Picklist label seen in Salesforce | `{StageName:label}`        |
 | Checkbox as `[X]` or `[ ]`        | `{IsClosed:checkbox}`      |
 | Today's date                      | `{Today:MMMM d, yyyy}`     |

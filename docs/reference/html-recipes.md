@@ -44,7 +44,9 @@ Put the opening and closing loop tags inside the first and last cells of the rep
         <td style="text-align: right; padding: 6pt;">{TotalPrice:currency}{/OpportunityLineItems}</td>
     </tr>
 </table>
-<p style="text-align: right; font-size: 14pt; font-weight: bold;">Total: {Amount:currency}</p>
+<p style="text-align: right; font-size: 14pt; font-weight: bold;">
+    Total: {Amount:currency}
+</p>
 ```
 
 For a row number, place `{RowNumber}` inside the loop. For nested child rows, use the relationship names from the query and keep each loop balanced. Do not wrap a whole `<tr>` with loop tags outside the row.
@@ -105,8 +107,7 @@ For HTML-to-PDF, choose chart styles that render as CSS bars or a table. Inline 
 {Chart:Survey_Responses__r:Selected_Answer__c}
 
 <h2>Department cross-tab</h2>
-{Chart:Survey_Responses__r:Selected_Answer__c:pivot:groupBy=Department__c&colSort=Sales,Service&title=Responses by
-department}
+{Chart:Survey_Responses__r:Selected_Answer__c:pivot:groupBy=Department__c&colSort=Sales,Service&title=Responses by department}
 ```
 
 Where an entry point supplies a prepared chart PNG, HTML-to-PDF can also display pie, donut, column, line or area charts. Without that PNG the HTML expander supports bar, pivot, clustered and stacked for PDF. Pivot, clustered and stacked require a second selected field in `groupBy=` and a list of column values in `colSort=`. Replace Sales and Service with values from your own records. See the [chart reference](merge-tags.md) and the included survey examples before composing modifiers.
@@ -118,8 +119,12 @@ Paste this table directly into the HTML template and assign the signer the **Cus
 ```html
 <table style="width: 100%; margin-top: 24pt;">
     <tr>
-        <td style="width: 60%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">{@Signature_Customer:1:Full}</td>
-        <td style="width: 40%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">{@Signature_Customer:1:Date}</td>
+        <td style="width: 60%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">
+            {@Signature_Customer:1:Full}
+        </td>
+        <td style="width: 40%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">
+            {@Signature_Customer:1:Date}
+        </td>
     </tr>
 </table>
 ```
@@ -131,7 +136,9 @@ Use the Signature Sender to prepare uploaded PDFs that do not contain Portwood s
 Set the template's header or footer HTML and place page counters there. They are not general-purpose body tags.
 
 ```html
-<div style="text-align: center; font-size: 8pt; color: #555;">{Account.Name} · Page {PageNumber} of {TotalPages}</div>
+<div style="text-align: center; font-size: 8pt; color: #555;">
+    {Account.Name} · Page {PageNumber} of {TotalPages}
+</div>
 ```
 
 ## Large related lists

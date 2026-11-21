@@ -21,16 +21,9 @@ Give your contents heading `id="contents"` for the return trip. For repeated sec
 #### Let the renderer calculate the page
 
 ```css
-.contents a {
-    display: block;
-    text-decoration: none;
-}
-.contents a:after {
-    content: leader('.') target-counter(attr(href), page);
-}
-.section {
-    page-break-before: always;
-}
+.contents a { display: block; text-decoration: none; }
+.contents a:after { content: leader('.') target-counter(attr(href), page); }
+.section { page-break-before: always; }
 ```
 
 The link supplies the destination. The CSS adds the dotted line and the page where that destination actually landed. In the supplied PDF, **Commercial terms** is on page 4. We added 42 component lines and generated again. The terms moved to page 7 and the contents entry and link moved with them. This is a contents page inside the PDF. Open the downloaded file in a PDF reader to test a jump in each direction.
@@ -40,22 +33,14 @@ The link supplies the destination. The CSS adds the dotted line and the page whe
 For review copies, put a fixed element near the start of the body. Bind the optional block to a Boolean and print a record-specific value in the mark.
 
 ```html
-{#IsDraft}
-<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
-{/IsDraft}
+{#IsDraft}<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>{/IsDraft}
 ```
 
 ```css
 .stamp {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    font: bold 9pt Helvetica;
-    letter-spacing: 1pt;
-    color: #674329;
-    border: 1pt solid #c19a72;
-    padding: 3pt 7pt;
-    background: #fff8ea;
+    position: fixed; bottom: 0; right: 0;
+    font: bold 9pt Helvetica; letter-spacing: 1pt; color: #674329;
+    border: 1pt solid #c19a72; padding: 3pt 7pt; background: #fff8ea;
 }
 ```
 
@@ -65,11 +50,8 @@ The proposal puts the stamp at the bottom of the printable area and its folio in
 
 ```css
 @page {
-    size: Letter;
-    margin: 0.65in 0.72in 0.85in;
-    @bottom-right {
-        content: counter(page) ' / ' counter(pages);
-    }
+    size: Letter; margin: 0.65in 0.72in 0.85in;
+    @bottom-right { content: counter(page) " / " counter(pages); }
 }
 ```
 
