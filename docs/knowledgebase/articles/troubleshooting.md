@@ -1,14 +1,19 @@
-Start with what you can see. Make one change, then try the same record again.
+#### First, check which version you have
 
-| What happened?                                          | Start here                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------- |
-| Portwood or the Generate tool is missing                | [Access and record-page setup](#manage-access)             |
-| A template is missing from the list                     | [Organize and limit template choices](#organize-templates) |
-| Blank values, visible tags, odd tables, or a broken PDF | [Fix a document](#fix-document)                            |
-| A signing link, PDF preview, or email does not work     | [Fix a signing problem](#fix-signing)                      |
-| A large job failed or stopped moving                    | [Read job status](#job-history)                            |
-| Canvas, HTML, or Excel is missing from Type             | [Upgrade checklist and picklist repair](#upgrade-portwood) |
-| A font looks wrong                                      | [Use custom PDF fonts](#custom-fonts)                      |
+Ask your Salesforce administrator to open **Setup → Installed Packages** and find **Portwood**. The current release is **{{version}}**. If yours is older, [upgrade in a sandbox](#upgrade-portwood) and try the same record again. If you already upgraded, tell support which version you installed and whether the problem started before or after the upgrade.
+
+#### Pick the symptom you see
+
+| What happened?                                            | Start here                                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| Unsure who needs a license, or a portal member can’t sign | [Check the license for the person and signing route](#user-licenses) |
+| Portwood or the Generate tool is missing                  | [Access and record-page setup](#manage-access)                       |
+| A template is missing from the list                       | [Organize and limit template choices](#organize-templates)           |
+| Blank values, visible tags, odd tables, or a broken PDF   | [Fix a document](#fix-document)                                      |
+| A signing link, PDF preview, or email does not work       | [Fix a signing problem](#fix-signing)                                |
+| A large job failed or stopped moving                      | [Read job status](#job-history)                                      |
+| Canvas, HTML, or Excel is missing from Type               | [Upgrade checklist and picklist repair](#upgrade-portwood)           |
+| A font looks wrong                                        | [Use custom PDF fonts](#custom-fonts)                                |
 
 #### Check these first
 

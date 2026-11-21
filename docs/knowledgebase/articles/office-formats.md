@@ -23,6 +23,8 @@ Image tags, shared-asset images, chart-tag images, and rich-text formatting are 
 
 Macro-enabled templates retain `.xlsm` output. Microsoft Excel may block macros in downloaded files according to the recipient's security policy. Test the intended delivery process with your administrator.
 
+For a large workbook, run a small batch first and open every worksheet. Check that the expected names appear on the detail sheet as well as the cover. Keep the .xlsm format if the workbook uses macros. If the job reports a size error, reduce its rows or columns and retry.
+
 #### Make a PowerPoint template
 
 1. Add field tags to a copy of a `.pptx` deck.

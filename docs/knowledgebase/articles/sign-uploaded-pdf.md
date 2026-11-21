@@ -38,11 +38,11 @@ Click **Review request**. Check the document, assigned people, positions, title,
 
 Choose delivery:
 
-| Delivery                          | What happens                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Preview signing in Salesforce** | Creates an actual practice request whose signing links require Salesforce login; invitation, reminder, and completion emails are suppressed |
-| **Create public signing links**   | Creates external signing links through your configured public site                                                                          |
-| **Email invitations**             | Sends invitations through your configured site and sender, in signing order                                                                 |
+| Delivery                          | What happens                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Preview signing in Salesforce** | Creates an actual practice request whose signing links require Salesforce login. Authenticated signing requires a Portwood site license. This route suppresses invitation, reminder and completion emails. [Signing license guide](#user-licenses) |
+| **Create public signing links**   | Creates external signing links through your configured public site                                                                                                                                                                                 |
+| **Email invitations**             | Sends invitations through your configured site and sender, in signing order                                                                                                                                                                        |
 
 The internal preview is useful for learning in a test org. Completing it still creates a signed file on the record.
 

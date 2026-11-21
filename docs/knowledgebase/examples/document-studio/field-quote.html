@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Field station renewal</title>
+    <style>
+        @page {
+            size: Letter; margin: 0.65in 0.72in 0.85in;
+            @bottom-left { content: "Morrow Field Systems   /   Commercial proposal"; font: 8pt Helvetica; color: #516069; }
+            @bottom-right { content: counter(page) "  /  " counter(pages); font: 9pt Helvetica; color: #193c43; }
+        }
+        body { margin: 0; color: #1a3036; font: 10.5pt/1.4 Helvetica, sans-serif; }
+        h1, h2 { font-family: Times, serif; font-weight: normal; }
+        h1 { font-size: 42pt; line-height: 1.02; margin: 14pt 0 8pt; }
+        h2 { font-size: 29pt; margin: 6pt 0 14pt; page-break-after: avoid; }
+        h3 { font-size: 13pt; margin: 3pt 0; }
+        a { color: #14555b; }
+        .mast { width: 100%; border-collapse: collapse; border-bottom: 2.5pt solid #db915c; }
+        .mast td { padding: 4pt 0 8pt; color: #17454a; font-weight: bold; }
+        .right { text-align: right; }
+        .edition { font-size: 8pt; letter-spacing: 1pt; color: #3a6468; font-weight: bold; }
+        .hero { padding: 27pt 24pt; background: #193e44; color: #ffffff; margin: 17pt 0; }
+        .hero p { margin: 8pt 0 0; }
+        .hero .edition { color: #f3bb8e; }
+        .summary, .bundle, .lines { width: 100%; border-collapse: collapse; }
+        .summary td { width: 50%; padding: 13pt 10pt; border-top: 1pt solid #537673; background: #e8efea; vertical-align: top; }
+        .metric { display: block; font: 21pt Times, serif; }
+        .contents { width: 95%; margin: 18pt 0; }
+        .contents a { display: block; text-decoration: none; line-height: 1.6; }
+        .contents a:after { content: leader('.') target-counter(attr(href), page); }
+        .contents .child { padding-left: 17pt; font-size: 9pt; }
+        .section { page-break-before: always; }
+        .stamp { position: fixed; bottom: 0; right: 0; font: bold 9pt Helvetica; letter-spacing: 1pt; color: #674329; border: 1pt solid #c19a72; padding: 3pt 7pt; background: #fff8ea; }
+        .jump { font-size: 8pt; margin: 6pt 0 14pt; }
+        .bundle { margin: 10pt 0 13pt; }
+        .bundle-head { background: #24545a; color: white; padding: 8pt; }
+        .bundle-head h3 { margin: 0; }
+        .bundle-body { border: 1pt solid #b8c6be; padding: 7pt; }
+        .lines { font-size: 8.5pt; table-layout: fixed; -fs-table-paginate: paginate; }
+        .lines th, .lines td { padding: 4pt 3pt; border-bottom: .5pt solid #c7d0cb; }
+        .lines th { text-align: left; color: #315956; background: #eff3ef; }
+        .lines .num { text-align: right; }
+        .lines tr { page-break-inside: avoid; }
+        .sub { text-align: right; font-weight: bold; margin: 6pt 0 0; }
+        .note { padding: 8pt 11pt; border-left: 3pt solid #cd8950; background: #fcf3e6; }
+        .term { border-top: 1pt solid #c4ccc7; padding-top: 8pt; }
+    </style>
+</head>
+<body>
+    {#IsDraft}<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>{/IsDraft}
+    <table class="mast"><tr><td>Morrow Field Systems</td><td class="right">{QuoteNumber}</td></tr></table>
+    <div class="hero"><div class="edition">COMMERCIAL PROPOSAL</div><h1>{Subject}</h1><p>Prepared for <strong>{Client}</strong> · {Sponsor}</p></div>
+    <table class="summary"><tr><td>One-time investment<span class="metric">{Currency} {OneTime:#,##0.00}</span></td><td>Monthly support<span class="metric">{Currency} {Monthly:#,##0.00}</span></td></tr></table>
+    <h2 id="contents" style="margin-top:20pt;">Inside this proposal</h2>
+    <div class="contents">
+        <a href="#scope">Scope of work</a>
+        <a href="#pricing">Configured pricing</a>
+        {#Bundles}<a class="child" href="#bundle-{Key}">{Name}</a>{/Bundles}
+        <a href="#terms">Commercial terms</a>
+    </div>
+    <p>Issued {Issued} · Valid through {ValidUntil}</p>
+    <div class="section"><p class="edition">DELIVERY</p><h2 id="scope">Scope of work</h2>
+        <p>Review what each configuration delivers, then follow its link to inspect quantities and prices.</p>
+        {#Bundles}<div class="term"><h3>{Name}</h3><p>{Use}</p><p><a href="#bundle-{Key}">See this configuration and its price</a></p></div>{/Bundles}
+        <h3>Delivery checkpoints</h3><table class="lines"><thead><tr><th style="width:27%;">When / who</th><th>Milestone and acceptance check</th></tr></thead>
+        <tbody><tr><td>{#Milestones}<b>{Window}</b><br/>{Owner}</td><td><b>{Phase}</b><br/>{Check}{/Milestones}</td></tr></tbody></table>
+        <p class="jump"><a href="#contents">Return to contents</a></p>
+    </div>
+    <div class="section"><p class="edition">CONFIGURATION SCHEDULE</p><h2 id="pricing">Configured pricing</h2><p>All prices in {Currency}. The net column includes the listed discount. Optional services are priced separately.</p>
+        {#IF Bundles.totalSize = 0}<p class="note">No configured bundles are included in this draft. Ask the account team for the priced configuration.</p>{/IF}
+        {#Bundles}
+        <table class="bundle">
+            <tr><td class="bundle-head"><h3 id="bundle-{Key}">{Name}</h3></td></tr>
+            <tr><td class="bundle-body">
+                <table class="lines">
+                    <thead><tr><th style="width:45%;">Component / SKU</th><th class="num" style="width:8%;">Qty</th><th class="num" style="width:18%;">List each</th><th class="num" style="width:11%;">Disc.</th><th class="num" style="width:18%;">Net</th></tr></thead>
+                    <tbody><tr><td>{#Components}<b>{Sku}</b><br/>{Description}</td><td class="num">{Qty}</td><td class="num">{ListPrice:#,##0.00}</td><td class="num">{Discount}%</td><td class="num">{Net:#,##0.00}{/Components}</td></tr></tbody>
+                </table>
+                <p class="sub">Bundle subtotal · {SUM:Components.Net:#,##0.00}</p><p class="sub">Monthly support · {Monthly:#,##0.00}</p>
+            </td></tr>
+        </table>
+        {#IF AddOns.totalSize > 0}<div class="note"><b>Optional service for {Name}</b>{#AddOns}<p>{Description} · {Net:#,##0.00}</p>{/AddOns}</div>{/IF}
+        {/Bundles}
+        <p class="jump"><a href="#contents">Return to contents</a></p>
+    </div>
+    <div class="section"><p class="edition">PURCHASE REVIEW</p><h2 id="terms">Commercial terms</h2>
+        <div class="term"><h3>Order value</h3><p>The one-time configuration totals {Currency} {OneTime:#,##0.00}. Monthly support is {Currency} {Monthly:#,##0.00}. Optional services require separate approval.</p></div>
+        <div class="term"><h3>Payment schedule</h3><p>Installments apply to the one-time investment.</p>
+        <table class="lines"><thead><tr><th>Milestone</th><th class="num">Share</th><th class="num">Amount</th></tr></thead>
+        <tbody><tr><td>{#Payments}{Due}</td><td class="num">{Share}%</td><td class="num">{Amount:#,##0.00}{/Payments}</td></tr></tbody></table></div>
+        <div class="term"><h3>Offer window</h3><p>Reference {QuoteNumber} when approving this proposal through {ValidUntil}.</p></div>
+        <div class="term"><h3>Handoff</h3><p>Confirm access to the work areas with the service coordinator before scheduling installation.</p></div>
+        <p class="jump"><a href="#pricing">Review itemized pricing</a> · <a href="#contents">Return to contents</a></p>
+    </div>
+</body>
+</html>

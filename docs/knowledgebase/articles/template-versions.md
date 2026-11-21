@@ -22,7 +22,7 @@ A clone starts **Inactive** and is not the object's Default. This keeps an unfin
 
 Open the template's **Versions** area and activate the earlier version. Canvas also has an active-version picker in its toolbar.
 
-Generate again after changing the active version. Some rendering settings are saved with each version, so returning to a version can restore its earlier paper, header, footer, and output settings too.
+Generate again after changing the active version. Reopen Edit Template Configuration and check the restored query, base object, output format, title format, page setup and header/footer. Each new legacy-designer HTML version stores its own body File. Switching versions reloads the selected body and uses additional Salesforce File storage.
 
 #### Remove versions you no longer need
 
@@ -31,3 +31,5 @@ Use **Delete** beside a non-active version in **Versions**. Check that you no lo
 #### Change the template type
 
 Changing Word to HTML, for example, also requires a body file in the new format. Upload it and **Save as New Version**. Changing only the Type field cannot convert the old document for you.
+
+In the legacy designer, **Back to Library** returns to the Designer (Beta) picker. When the unsaved-changes prompt appears, **OK** discards your edits. Cancel to keep editing.

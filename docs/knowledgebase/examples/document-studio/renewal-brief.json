@@ -1,0 +1,37 @@
+{
+    "Client": "Sable Harbor Cooperative",
+    "ReviewPeriod": "October 2026",
+    "RenewalDate": "31 January 2027",
+    "AnnualNet": 86400,
+    "DaysOpen": 18,
+    "Threshold": 80,
+    "HasUsage": true,
+    "Adoption": 72,
+    "PriorAdoption": 61,
+    "OpenCases": 2,
+    "PlanName": "Operations Plus",
+    "Teams": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Name": "Dispatch",
+                "Active": 33,
+                "Licensed": 40,
+                "Percent": 83
+            },
+            {
+                "Name": "Field service",
+                "Active": 24,
+                "Licensed": 40,
+                "Percent": 60
+            },
+            {
+                "Name": "Finance",
+                "Active": 15,
+                "Licensed": 20,
+                "Percent": 75
+            }
+        ]
+    },
+    "AtTarget": false
+}

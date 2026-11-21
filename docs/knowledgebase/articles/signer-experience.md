@@ -1,4 +1,6 @@
-This is what to expect when someone opens a Portwood signing link.
+If a sender gives you a public Portwood signing link, you can review and sign without buying a license or creating a Salesforce account. Use the link addressed to you.
+
+Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
 
 #### Open the link
 
@@ -15,7 +17,7 @@ If email verification is required, request the code, check the intended inbox, a
 5. Complete any requested date fields.
 6. Review the final confirmation, give electronic-signature consent, and submit.
 
-Drawing and typing are alternative ways to fill a signature. Clear the current value before switching methods.
+On the signing page you can edit the typed name with ink still on the pad. The drawing takes precedence when ink is present. Clear the pad to use the typed name. If the org or template requires typed signatures, type both signatures and initials.
 
 **Date signed** fields fill automatically. A **Date picker** field needs a date you select.
 
@@ -34,3 +36,5 @@ Some signing flows allow you to leave and resume through the same link while it 
 #### If the link does not work
 
 Ask the sender to check whether it expired, was revoked, was replaced by a resend, or has already been completed. Use the newest link after a resend. On a sequential request, your turn may not have started yet.
+
+The signing viewer redraws visible pages when you zoom. Korean and other non-Latin signer names and dates are supported in the signed PDF and certificate. The decline, waiting and final confirmation cards use a plain layout.

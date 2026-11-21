@@ -2,6 +2,18 @@ Use this route when your organization wants signing served through an Experience
 
 **Before you start:** Your administrator owns an active Experience Cloud site, its domain, and its guest-access policy. Experience templates and administrative screens vary; follow Salesforce's [Create an Experience Cloud Site](https://help.salesforce.com/s/articleView?id=networks_creating.htm&language=en_US&type=5) for the site's initial creation and publication.
 
+#### Decide how customers will sign
+
+| What happens in your community or portal                                            | What you need                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A customer opens a private invitation link without logging in to the portal         | With per-user licensing, assign a Portwood license to this site’s Salesforce guest user. Public recipients need no individual seat. Assign **Portwood Guest Signature** to the guest user.                                     |
+| A customer or partner logs in and signs as a member, including inside a Screen Flow | **Authenticated signing requires a Portwood site license.** Give the member Salesforce access to this site, its signing page and the specific Screen Flow. For the embedded signing screen, assign **Portwood Portal Signer**. |
+| The portal offers both routes                                                       | The org’s site license covers the members and the guest user. Configure the guest and member permissions for their respective signing routes.                                                                                  |
+
+For a members-only experience, arrange the site license and test the Flow as a customer or partner. [Request an enterprise site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Add the signing screen to a Flow](#flow-signatures)
+
+The steps below configure **public signing links** on an Experience Cloud site.
+
 #### 1. Open the site's administration
 
 In **Setup → Digital Experiences → All Sites**, open the site's **Workspaces** and administration controls. Confirm that the site is active/published and that the external domain works while signed out.
@@ -10,7 +22,7 @@ In **Setup → Digital Experiences → All Sites**, open the site's **Workspaces
 
 Find this site's guest profile/public access settings. In its **Enabled Visualforce Page Access**, enable the packaged pages `DocGenSignature`, `DocGenSignaturePdf`, `DocGenVerify`, and `DocGenSign` in the `portwoodglobal` namespace.
 
-Open that guest profile's actual user and assign **Portwood Guest Signature** under Permission Set Assignments. Keep the assignment tied to the correct site's guest user. Do not use the logged-in member profile as a substitute for guest access.
+On the guest profile, open **Assigned Users** or **View Users**, then select the site’s guest user. For per-user licensing, confirm **Portwood** under **Managed Packages** on that record. Assign **Portwood Guest Signature** under **Permission Set Assignments**. [Find and license the right user](#user-licenses)
 
 #### 3. Allow the public document preview
 

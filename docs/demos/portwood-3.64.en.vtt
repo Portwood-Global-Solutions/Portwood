@@ -1,0 +1,724 @@
+WEBVTT
+
+00:00:00.150 --> 00:00:04.110
+Alder Works needs three things before a service engagement can start.
+
+00:00:04.110 --> 00:00:09.150
+A schedule that finance can check, an acceptance form with the right account on
+
+00:00:09.150 --> 00:00:12.750
+it, and a signature the service team can find later.
+
+00:00:12.750 --> 00:00:14.550
+This is the actual schedule.
+
+00:00:14.550 --> 00:00:18.151
+We generated it in Salesforce from fifty-four fictional service lines.
+
+00:00:18.151 --> 00:00:22.471
+Let’s work backwards from the file, then follow it forward to acceptance.
+
+00:00:23.108 --> 00:00:26.505
+Before we build anything, who actually needs a license?
+
+00:00:26.505 --> 00:00:30.279
+Say one person builds templates and four people send agreements.
+
+00:00:30.279 --> 00:00:31.789
+That’s five staff licenses.
+
+00:00:31.789 --> 00:00:36.695
+If their customers sign through public links, add one license for the signing
+
+00:00:36.695 --> 00:00:37.828
+site’s guest user.
+
+00:00:37.828 --> 00:00:38.960
+That makes six.
+
+00:00:38.960 --> 00:00:44.244
+Each customer gets a private link and can verify their email without buying a
+
+00:00:44.244 --> 00:00:44.621
+seat.
+
+00:00:44.621 --> 00:00:50.282
+Now suppose those customers log in to your portal to sign, or your employees sign
+
+00:00:50.282 --> 00:00:51.037
+inside Salesforce.
+
+00:00:51.037 --> 00:00:52.170
+That’s authenticated signing.
+
+00:00:52.170 --> 00:00:54.811
+Ask Portwood for a site license quote.
+
+00:00:54.811 --> 00:00:58.586
+It covers the org’s users, including the signing guest user.
+
+00:00:59.192 --> 00:01:01.623
+Here’s the smallest version of the job.
+
+00:01:01.623 --> 00:01:04.749
+The template says “Welcome,” followed by Name in braces.
+
+00:01:04.749 --> 00:01:09.611
+Select Account as the source, choose Name in the query, and upload the HTML.
+
+00:01:09.611 --> 00:01:14.474
+The generated page now says “Welcome, Alder Works.” If you can get that one
+
+00:01:14.474 --> 00:01:18.989
+heading right, you’ve proved the connection between the record, the query, and the
+
+00:01:18.989 --> 00:01:19.336
+template.
+
+00:01:19.942 --> 00:01:24.671
+In the template library, choose Bring an Existing Template when the team already
+
+00:01:24.671 --> 00:01:25.762
+maintains a file.
+
+00:01:25.762 --> 00:01:27.945
+Word works well for flowing text.
+
+00:01:27.945 --> 00:01:30.492
+HTML gives you control over print layout.
+
+00:01:30.492 --> 00:01:33.766
+Canvas gives you a page you can arrange visually.
+
+00:01:33.766 --> 00:01:36.312
+Excel and PowerPoint keep their native formats.
+
+00:01:36.312 --> 00:01:39.587
+Filling a PDF form is a different route again.
+
+00:01:39.587 --> 00:01:42.497
+Start with the file the recipient actually needs.
+
+00:01:43.108 --> 00:01:47.621
+On Canvas, position the elements, choose fields and preview with a sample record.
+
+00:01:47.621 --> 00:01:52.133
+You can link elements, group them into named blocks, and reuse a design.
+
+00:01:52.133 --> 00:01:54.910
+For a growing schedule, I prefer a table.
+
+00:01:54.910 --> 00:01:59.422
+On the Account, select the related Opportunities and the fields for each row.
+
+00:01:59.422 --> 00:02:04.281
+Keep a stable sort order so line fourteen stays line fourteen when someone checks
+
+00:02:04.281 --> 00:02:05.322
+the printed copy.
+
+00:02:05.942 --> 00:02:09.306
+Look at the first and last cells of this row.
+
+00:02:09.306 --> 00:02:11.324
+The first opens the Opportunities loop.
+
+00:02:11.324 --> 00:02:12.670
+The last closes it.
+
+00:02:12.670 --> 00:02:16.370
+Portwood repeats the whole row, and Row Number counts each entry.
+
+00:02:16.370 --> 00:02:19.734
+Outside the table, a sum gives us the combined estimate.
+
+00:02:19.734 --> 00:02:22.089
+We used optional decimals for the lines.
+
+00:02:22.089 --> 00:02:26.462
+One hundred stays one hundred, and one hundred point one keeps its tenth.
+
+00:02:26.462 --> 00:02:28.817
+The total always prints two decimal places.
+
+00:02:29.442 --> 00:02:32.166
+Here’s where a short preview can fool you.
+
+00:02:32.166 --> 00:02:37.613
+On page two, the column headings need to repeat, and a row near the bottom needs
+
+00:02:37.613 --> 00:02:38.635
+to stay readable.
+
+00:02:38.635 --> 00:02:42.721
+The stylesheet uses a real table header and the renderer’s table pagination
+
+00:02:42.721 --> 00:02:43.061
+setting.
+
+00:02:43.061 --> 00:02:46.126
+The footer has a second line for page numbering.
+
+00:02:46.126 --> 00:02:49.190
+On the third page, the last line is fifty-four.
+
+00:02:49.190 --> 00:02:52.936
+The total is five thousand four hundred dollars and thirty-five cents.
+
+00:02:53.567 --> 00:02:58.709
+For a denser executive report, set widths on the columns and give each cell its
+
+00:02:58.709 --> 00:02:59.395
+own padding.
+
+00:02:59.395 --> 00:03:03.851
+Use solid fills for section bands and put full-page artwork in the background
+
+00:03:03.851 --> 00:03:04.194
+setting.
+
+00:03:04.194 --> 00:03:08.993
+A browser can draw a gradient, rounded corners, or an inline vector graphic that
+
+00:03:08.993 --> 00:03:10.707
+disappears in the final PDF.
+
+00:03:10.707 --> 00:03:13.793
+For a branded shape, use a sized image asset.
+
+00:03:13.793 --> 00:03:19.621
+For charts, use a prepared image on a supported path, or a CSS bar or pivot table.
+
+00:03:20.233 --> 00:03:22.897
+The service coordinator owns this handoff clause.
+
+00:03:22.897 --> 00:03:25.180
+In Assets, open Terms and Snippets.
+
+00:03:25.180 --> 00:03:28.604
+HTML source shows the fragment; Preview shows the wording.
+
+00:03:28.604 --> 00:03:31.267
+The template holds just the snippet key.
+
+00:03:31.267 --> 00:03:35.833
+When we generate the schedule, the clause picks up the account name.
+
+00:03:35.833 --> 00:03:38.497
+A later approved revision updates future documents.
+
+00:03:38.497 --> 00:03:42.682
+The files already sent to clients keep the wording they had.
+
+00:03:43.317 --> 00:03:47.759
+For a logo, copy the image tag and give it a print size.
+
+00:03:47.759 --> 00:03:50.835
+Deactivate or reactivate the asset with the same key.
+
+00:03:50.835 --> 00:03:54.935
+For a typeface, copy the approved font tag into an inline style.
+
+00:03:54.935 --> 00:03:59.719
+A stable font name can travel to another org with the same approved face.
+
+00:03:59.719 --> 00:04:03.820
+And when a title needs translated wording, use a Salesforce Custom Label.
+
+00:04:03.820 --> 00:04:07.237
+It resolves in the language of the person running generation.
+
+00:04:07.858 --> 00:04:13.326
+If I ask an assistant for a service review without telling it the data shape, it
+
+00:04:13.326 --> 00:04:16.059
+can produce a beautiful field that doesn’t exist.
+
+00:04:16.059 --> 00:04:19.135
+The designer’s Copy AI Prompt supplies the selected fields.
+
+00:04:19.135 --> 00:04:23.235
+Attach the authoring reference for recipes, font and snippet rules, chart limits,
+
+00:04:23.235 --> 00:04:24.261
+and Flow contracts.
+
+00:04:24.261 --> 00:04:29.728
+In an org with the Agentforce extension, you can also ask for a revision in the
+
+00:04:29.728 --> 00:04:30.070
+designer.
+
+00:04:30.070 --> 00:04:32.462
+Generate a PDF to check the answer.
+
+00:04:33.067 --> 00:04:34.768
+Here is a real AcroForm.
+
+00:04:34.768 --> 00:04:38.510
+On the source PDF the account name is an editable field.
+
+00:04:38.510 --> 00:04:42.252
+Our template maps Name and turns on Flatten PDF on generation.
+
+00:04:42.252 --> 00:04:43.953
+This is the sandbox output.
+
+00:04:43.953 --> 00:04:48.035
+Alder Works is still visible, and the PDF has zero form fields.
+
+00:04:48.035 --> 00:04:52.458
+If a client needs to keep typing in the form, leave flattening off.
+
+00:04:52.458 --> 00:04:56.881
+An older compressed form may need a fresh upload before it can flatten.
+
+00:04:57.483 --> 00:05:03.728
+From a record, the runner can download a file, save it to Files, or do both when
+
+00:05:03.728 --> 00:05:04.095
+configured.
+
+00:05:04.095 --> 00:05:08.135
+A document button can preview the exact file it then downloads.
+
+00:05:08.135 --> 00:05:11.441
+An email button walks through template, preview, and recipients.
+
+00:05:11.441 --> 00:05:16.216
+Choose None to clear the suggested record email and enter a recipient manually.
+
+00:05:16.216 --> 00:05:18.053
+The subject is plain text.
+
+00:05:18.053 --> 00:05:19.889
+Check the recipients before sending.
+
+00:05:20.525 --> 00:05:24.384
+For a batch, start with a filter you can inspect.
+
+00:05:24.384 --> 00:05:29.401
+Record Type developer name and standard lookup fields such as Owner Email work
+
+00:05:29.401 --> 00:05:30.559
+alongside custom relationships.
+
+00:05:30.559 --> 00:05:34.804
+Check a sample before choosing individual files or a combined PDF.
+
+00:05:34.804 --> 00:05:37.119
+A submitted job has an ID.
+
+00:05:37.119 --> 00:05:42.136
+The team checks the completed count, errors, and actual files before treating that
+
+00:05:42.136 --> 00:05:43.294
+batch as delivered.
+
+00:05:43.900 --> 00:05:46.916
+We already have a letter and a flattened form.
+
+00:05:46.916 --> 00:05:50.268
+Merge PDFs takes the exact Salesforce file versions in order.
+
+00:05:50.268 --> 00:05:51.944
+We turned on duplex padding.
+
+00:05:51.944 --> 00:05:57.641
+In the actual output, the letter is on page one, the form is on page three, and
+
+00:05:57.641 --> 00:05:59.652
+pages two and four are blank.
+
+00:05:59.652 --> 00:06:01.998
+The action also returns both file IDs.
+
+00:06:01.998 --> 00:06:06.690
+For a larger packet, check the input byte budget before sending it through Flow.
+
+00:06:07.317 --> 00:06:12.451
+You can send a template, or upload an existing PDF and place fields on it.
+
+00:06:12.451 --> 00:06:17.244
+A signature, initials, a signed date and a date the signer picks are different
+
+00:06:17.244 --> 00:06:17.586
+fields.
+
+00:06:17.586 --> 00:06:19.640
+Assign them to the right person.
+
+00:06:19.640 --> 00:06:22.378
+The active template picker follows the record’s object.
+
+00:06:22.378 --> 00:06:26.828
+For an automated request, build the signer collection with a name, email and
+
+00:06:26.828 --> 00:06:27.513
+matching role.
+
+00:06:27.513 --> 00:06:31.963
+Save the resulting request ID so you can follow the same agreement throughout.
+
+00:06:32.567 --> 00:06:38.240
+When the signer is already signed in, put Portwood Sign in Flow on the screen.
+
+00:06:38.240 --> 00:06:41.645
+For one person, pass the returned Signer URLs collection.
+
+00:06:41.645 --> 00:06:43.914
+The component uses its first link.
+
+00:06:43.914 --> 00:06:47.318
+Review the document, complete the fields, then confirm consent.
+
+00:06:47.318 --> 00:06:51.101
+The Flow can branch on Signed, Declined, and Request complete.
+
+00:06:51.101 --> 00:06:55.640
+One person finishing a parallel request is a different milestone from everybody
+
+00:06:55.640 --> 00:06:56.018
+finishing.
+
+00:06:56.650 --> 00:06:59.526
+Some journeys call for the signing site itself.
+
+00:06:59.526 --> 00:07:04.560
+The example Flow extracts one signer’s URL and passes it to Open a Page.
+
+00:07:04.560 --> 00:07:09.952
+The handoff screen also offers a link if the browser does not open the page.
+
+00:07:09.952 --> 00:07:12.829
+Now imagine the signer simply closes that tab.
+
+00:07:12.829 --> 00:07:14.267
+Nothing has been signed.
+
+00:07:14.267 --> 00:07:18.581
+Check signing status reads the saved request again, and keeps the interview
+
+00:07:18.581 --> 00:07:20.379
+pending until the outcome changes.
+
+00:07:20.983 --> 00:07:24.021
+An approval can come from another process entirely.
+
+00:07:24.021 --> 00:07:27.059
+Publish a business event after the approval commits.
+
+00:07:27.059 --> 00:07:30.857
+A platform-event-triggered Flow reads the approval key, checks the business
+
+00:07:30.857 --> 00:07:33.136
+record, and creates the signature request.
+
+00:07:33.136 --> 00:07:37.693
+A unique tracking key lets a repeat delivery find the first request.
+
+00:07:37.693 --> 00:07:42.630
+If an interactive screen started the work, give it a receipt to check.
+
+00:07:42.630 --> 00:07:44.908
+The background subscriber prepares the request.
+
+00:07:44.908 --> 00:07:47.187
+Navigation happens in the user’s browser.
+
+00:07:47.817 --> 00:07:52.484
+Portwood’s own signature PDF event carries a request ID and can identify the
+
+00:07:52.484 --> 00:07:53.920
+signer who caused it.
+
+00:07:53.920 --> 00:07:57.511
+That matters when the second person signs before the first.
+
+00:07:57.511 --> 00:08:02.537
+The event can arrive before the final file exists, and some signing paths finish
+
+00:08:02.537 --> 00:08:03.256
+without it.
+
+00:08:03.256 --> 00:08:07.923
+For fulfillment, check the saved request for Signed and the protected signed file
+
+00:08:07.923 --> 00:08:08.282
+ID.
+
+00:08:08.282 --> 00:08:12.591
+Use that request ID to keep your downstream action from running twice.
+
+00:08:13.192 --> 00:08:19.400
+On the signing page a person can type or draw, unless the org or template requires
+
+00:08:19.400 --> 00:08:20.951
+typed signatures and initials.
+
+00:08:20.951 --> 00:08:24.055
+The page redraws at higher resolution when zoomed.
+
+00:08:24.055 --> 00:08:29.487
+Korean and other non-Latin names and dates are supported in the signed file and
+
+00:08:29.487 --> 00:08:29.875
+certificate.
+
+00:08:29.875 --> 00:08:32.979
+The certificate can include a clickable verification link.
+
+00:08:32.979 --> 00:08:38.023
+An authenticated embedded signer uses the same signing service; a guest or a
+
+00:08:38.023 --> 00:08:40.739
+prepared uploaded PDF uses the signing site.
+
+00:08:41.358 --> 00:08:46.736
+A sender can resend an eligible open request or revoke the outstanding unsigned
+
+00:08:46.736 --> 00:08:47.150
+links.
+
+00:08:47.150 --> 00:08:51.287
+If you revoke, check email status separately from request status.
+
+00:08:51.287 --> 00:08:54.183
+A notice needs the configured sender address.
+
+00:08:54.183 --> 00:08:58.320
+Brands and email templates control the communication, including the revoked
+
+00:08:58.320 --> 00:08:58.733
+notice.
+
+00:08:58.733 --> 00:09:01.215
+A Portwood User can send requests.
+
+00:09:01.215 --> 00:09:06.180
+For embedded signing, an internal non-admin may also need the Portal Signer
+
+00:09:06.180 --> 00:09:07.007
+permission set.
+
+00:09:07.608 --> 00:09:13.586
+When you switch back to an older template version, check the body, query, title
+
+00:09:13.586 --> 00:09:15.294
+and page setup together.
+
+00:09:15.294 --> 00:09:18.283
+HTML versions keep their own body files.
+
+00:09:18.283 --> 00:09:22.552
+Background workbook generation handles sheets in compressed passes and preserves
+
+00:09:22.552 --> 00:09:22.979
+macros.
+
+00:09:22.979 --> 00:09:28.530
+To move configuration, start the migration command with a dry run between two
+
+00:09:28.530 --> 00:09:29.384
+nonproduction orgs.
+
+00:09:29.384 --> 00:09:34.081
+Review conflicts and mappings, then approve staged fonts in the destination.
+
+00:09:34.081 --> 00:09:37.496
+The command’s environment check belongs to the CLI.
+
+00:09:38.108 --> 00:09:42.782
+Finance asked for a workbook, and the account team asked for a slide.
+
+00:09:42.782 --> 00:09:45.298
+These came from the same sandbox account.
+
+00:09:45.298 --> 00:09:50.331
+On the workbook, both the Account tab and the Handoff tab contain the merged
+
+00:09:50.331 --> 00:09:51.050
+account name.
+
+00:09:51.050 --> 00:09:54.645
+On the PowerPoint slide, it appears inside the original layout.
+
+00:09:54.645 --> 00:09:57.521
+Use individual files for Office output in bulk.
+
+00:09:57.521 --> 00:10:00.037
+A macro-enabled workbook keeps its macro format.
+
+00:10:00.037 --> 00:10:03.992
+For a PDF deliverable, start with a template that supports PDF.
+
+00:10:04.608 --> 00:10:08.465
+If a button you saw here is missing, start with two questions.
+
+00:10:08.465 --> 00:10:12.322
+Which version of Portwood is installed, and has the org been upgraded?
+
+00:10:12.322 --> 00:10:15.858
+Your Salesforce administrator can find the answer in Setup, under Installed
+
+00:10:15.858 --> 00:10:16.179
+Packages.
+
+00:10:16.179 --> 00:10:21.000
+If you are current, try the same record as the person who needs the button.
+
+00:10:21.000 --> 00:10:25.178
+Check their permission set, the record page, and whether the template is active.
+
+00:10:25.178 --> 00:10:29.678
+Those details give support a much better starting point than a screenshot of an
+
+00:10:29.678 --> 00:10:30.321
+empty list.
+
+00:10:30.942 --> 00:10:32.514
+Imagine you are the buyer.
+
+00:10:32.514 --> 00:10:36.915
+You have four pages in front of you and one question about the Harbor
+
+00:10:36.915 --> 00:10:37.229
+configuration.
+
+00:10:37.229 --> 00:10:41.002
+Click Harbor on the cover and you land on the right bundle.
+
+00:10:41.002 --> 00:10:42.889
+Back to contents takes you home.
+
+00:10:42.889 --> 00:10:45.089
+Now add forty-two lines to the quote.
+
+00:10:45.089 --> 00:10:49.491
+The commercial terms move from page four to page seven, and the contents number
+
+00:10:49.491 --> 00:10:50.434
+moves with them.
+
+00:10:50.434 --> 00:10:54.521
+The draft stamp follows every page until the quote is ready to issue.
+
+00:10:55.150 --> 00:10:57.985
+Here are two field stations on the same order.
+
+00:10:57.985 --> 00:11:02.395
+Read down the Atlas table: the enclosure and accessories add up to six thousand
+
+00:11:02.395 --> 00:11:03.655
+five hundred forty dollars.
+
+00:11:03.655 --> 00:11:05.230
+Harbor has its own components.
+
+00:11:05.230 --> 00:11:07.750
+Its optional inspection stays outside the committed amount.
+
+00:11:07.750 --> 00:11:12.160
+Up front, the buyer sees ten thousand six hundred seventy dollars once and one
+
+00:11:12.160 --> 00:11:13.420
+hundred twenty a month.
+
+00:11:13.420 --> 00:11:16.256
+That is the same deal the sales team priced.
+
+00:11:16.256 --> 00:11:20.351
+The document gives each number a place where the buyer can check it.
+
+00:11:20.983 --> 00:11:25.715
+Would you walk into this renewal meeting ready to ask for a signature?
+
+00:11:25.715 --> 00:11:29.719
+At seventy-two percent adoption, the brief recommends booking an adoption review.
+
+00:11:29.719 --> 00:11:33.723
+The team bars make it easy to see where to start.
+
+00:11:33.723 --> 00:11:38.091
+Give the same design eighty-four percent adoption and the headline changes to
+
+00:11:38.091 --> 00:11:39.183
+preparing renewal terms.
+
+00:11:39.183 --> 00:11:42.822
+Take the reading away and it asks for usage data.
+
+00:11:42.822 --> 00:11:46.826
+When you brief an AI assistant, spell out that third case.
+
+00:11:46.826 --> 00:11:50.466
+An unknown reading and a zero call for different conversations.
+
+00:11:51.067 --> 00:11:55.624
+At the equipment cabinet, a technician needs the right unit, the right checks, and
+
+00:11:55.624 --> 00:11:56.600
+somewhere to write.
+
+00:11:56.600 --> 00:11:59.855
+Each card has its own checklist and a QR label.
+
+00:11:59.855 --> 00:12:03.761
+Scan the pump label and you get the pump’s identifier, even offline.
+
+00:12:03.761 --> 00:12:07.667
+The identifier is printed underneath for a person who cannot scan it.
+
+00:12:07.667 --> 00:12:10.271
+The tear-off receipt goes back to the office.
+
+00:12:10.271 --> 00:12:14.177
+Try the sheet on the printer your team takes into the field.
+
+00:12:14.817 --> 00:12:17.012
+Back in Salesforce, I choose Prepare agreement.
+
+00:12:17.012 --> 00:12:20.776
+The screen sends the event, and the background Flow prepares my agreement.
+
+00:12:20.776 --> 00:12:25.795
+When I open the signing page, this sandbox asks me to verify the email on my
+
+00:12:25.795 --> 00:12:26.423
+Salesforce user.
+
+00:12:26.423 --> 00:12:29.559
+Let’s say I close that tab to look something up.
+
+00:12:29.559 --> 00:12:32.069
+Back in the Flow, I check the status.
+
+00:12:32.069 --> 00:12:33.637
+It still needs my signature.
+
+00:12:33.637 --> 00:12:36.460
+I select Reopen my signing page and Check again.
+
+00:12:36.460 --> 00:12:37.401
+There’s my agreement.
+
+00:12:37.401 --> 00:12:39.911
+I can pick up where I left off.
+
+00:12:40.525 --> 00:12:45.023
+We started with one field and finished with something a service team can use.
+
+00:12:45.023 --> 00:12:49.842
+The schedule adds up, the form keeps the account name, and the workflow has a
+
+00:12:49.842 --> 00:12:52.091
+place to check for the signed agreement.
+
+00:12:52.091 --> 00:12:56.588
+The guide includes the HTML, footer, example Flow, and the PDFs you’ve seen here.
+
+00:12:56.588 --> 00:13:00.765
+Bring one of your own documents, one ordinary record and one difficult record.
+
+00:13:00.765 --> 00:13:03.656
+Those three things make a very good next demo.

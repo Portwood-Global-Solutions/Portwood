@@ -1,0 +1,50 @@
+{
+    "Site": "North pier workshop",
+    "WorkOrder": "WO-1842",
+    "Visit": "24 November 2026",
+    "Technician": "Morgan Lee",
+    "Handoff": "Return the signed paper checklist to the maintenance desk.",
+    "Equipment": {
+        "totalSize": 2,
+        "records": [
+            {
+                "Code": "AW-P17-201",
+                "Name": "Circulation pump",
+                "Location": "Bay 2 · supply manifold",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Check motor guard and isolation label"
+                        },
+                        {
+                            "Task": "Record cold-start pressure"
+                        },
+                        {
+                            "Task": "Inspect the coupling for movement"
+                        }
+                    ]
+                }
+            },
+            {
+                "Code": "AW-S08-414",
+                "Name": "Flow sensor",
+                "Location": "Bay 2 · return line",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Match the serial number to the register"
+                        },
+                        {
+                            "Task": "Record instrument reading at idle"
+                        },
+                        {
+                            "Task": "Return the enclosure cover"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

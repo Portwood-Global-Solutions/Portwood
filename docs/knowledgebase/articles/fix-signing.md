@@ -13,7 +13,7 @@ Changing DNS or email security policy requires your email administrator. Use the
 
 #### The public link says Invalid page
 
-Ask the administrator to check **Signature Site URL**. An Experience Cloud base URL should not end with `/s`. Confirm the signing Visualforce pages are enabled on the site currently serving the links, and that its own guest user has **Portwood Guest Signature**.
+Ask the administrator to check **Signature Site URL**. An Experience Cloud base URL should not end with `/s`. Confirm the signing Visualforce pages are enabled on the site currently serving the links, and that its own guest user has Portwood license coverage and **Portwood Guest Signature**. With per-user licensing, check **Managed Packages** on that guest user. [Check public and authenticated signing licenses](#user-licenses)
 
 After correcting setup, test a fresh request. Moving to another site does not transfer the old site's guest assignments automatically.
 

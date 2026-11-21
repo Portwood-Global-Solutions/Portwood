@@ -1,6 +1,6 @@
 These global helpers support specific jobs. Read the input limits before putting one into your process.
 
-#### Merge Portwood-native PDFs
+#### Merge PDF files in order
 
 ```apex
 Blob packet = portwoodglobal.DocGenPdfMerger.mergePdfs(
@@ -10,9 +10,9 @@ Integer pages = portwoodglobal.DocGenPdfMerger.pageCount(packet);
 
 `mergePdfCvs(List<Id>, Boolean)` accepts ContentVersion Ids and loads parts incrementally. Passing `true` adds a blank page after every odd-length part, including the last part. Two one-page parts therefore produce four pages. The blank pages carry no page number; the content pages retain numbering baked into their original render.
 
-This is a specialized server merger for Portwood's Flying Saucer/iText PDF 1.4 output with classic cross-reference tables and the expected page structure. It is not a general library for arbitrary uploaded product sheets, encrypted PDFs, object streams, or every PDF producer. Catch `DocGenPdfMerger.DocGenPdfMergeException` and use a compatible workflow for unsupported inputs. The packaged browser-side packet workflow is separate.
+The native merger handles standard uploaded PDFs, including supported compressed object and cross-reference streams. Ordinary AcroForm values are kept under separate field names for each source. Encrypted, signed, XFA and scripted forms are rejected. Catch `DocGenPdfMerger.DocGenPdfMergeException` for unsupported inputs. For exact file-version inputs and a saved File output, use [Merge PDFs in Flow](#merge-pdfs-flow).
 
-The 3.60.0 subscriber check generated a one-page Account Brief, merged two copies with padding, and confirmed the resulting four-page count.
+To check duplex padding, merge two one-page PDFs. The result should have four pages, with the two originals on pages one and three.
 
 #### Render a branded email without sending it
 
