@@ -13,6 +13,7 @@
         "format": "prettier --write \"force-app/**/*.{cls,trigger,page,component,cmp,html,js,xml}\" \"scripts/**/*.apex\" \"*.{json,md,yml,yaml}\"",
         "format:check": "prettier --check \"force-app/**/*.{cls,trigger,page,component,cmp,html,js,xml}\" \"scripts/**/*.apex\" \"*.{json,md,yml,yaml}\"",
         "prepare": "husky",
+        "manifest:update": "sf project generate manifest --source-dir force-app --api-version 67.0 --output-dir manifest",
         "smoke": "node scripts/ui-smoke.mjs",
         "qa": "node scripts/qa/run-all.mjs",
         "qa:offline": "node scripts/qa/run-all.mjs --offline",

@@ -21,6 +21,27 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 
+### Deploy the open-source base app
+
+Clone the repository to get the base app and its matching `manifest/package.xml` together:
+
+```bash
+git clone --branch main https://github.com/Portwood-Global-Solutions/Portwood.git
+cd Portwood
+```
+
+From the repository root, deploy the supplied manifest to an authenticated scratch org or sandbox. Replace `portwood-test` with its CLI alias.
+
+```bash
+sf project deploy start --manifest manifest/package.xml --target-org portwood-test --test-level RunLocalTests --api-version 67.0 --wait 60
+```
+
+After deployment succeeds, assign the admin permission set and open **App Launcher → Portwood**:
+
+```bash
+sf org assign permset --name DocGen_Admin --target-org portwood-test
+```
+
 ### Optional — AI template authoring
 
 **Portwood Agentforce Extension** `04tVx000000zxUbIAI` adds _Generate with
