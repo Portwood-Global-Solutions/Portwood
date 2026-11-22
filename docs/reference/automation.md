@@ -162,3 +162,7 @@ Error Message saying they were not attempted. Check `Is Valid` per row, and vali
 smaller batches if you are processing many at once.
 
 ---
+
+### 3.64 signing and file workflows
+
+For new interviews use [Sign inside a Screen Flow](../../UserGuide.md#flow-signatures) or [navigate to the signing site](../../UserGuide.md#signing-site-handoff). Use the [event-driven recipe](../../UserGuide.md#signing-events) when approval and signing run in separate transactions. The [PDF Merge Flow recipe](../../UserGuide.md#merge-pdfs-flow) covers input version IDs, byte limits, duplex padding and File outputs.

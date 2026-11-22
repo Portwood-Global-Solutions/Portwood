@@ -43,3 +43,5 @@ Click **Page** to set paper size, orientation, and margins. Click **Add page** f
 Click **Save**, then **Preview**. Review the first page, the last page, long values, empty lists, and page breaks.
 
 **Import HTML** converts an existing HTML document into Canvas blocks. Keep a copy of the original and check the conversion carefully. **Export HTML** downloads a reusable HTML copy; it is different from exporting the whole template bundle.
+
+The font picker includes a Salesforce standard-font section for Helvetica, Times and Courier. Test long unbroken words in the generated PDF. Canvas can wrap them in the editor while the PDF renderer uses different line-breaking rules.

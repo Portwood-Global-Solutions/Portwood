@@ -1,6 +1,6 @@
-# Portwood — Free Document Generation for Salesforce
+# Portwood — Document Generation for Salesforce
 
-Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. Merge PDFs, add barcodes and QR codes, compute totals — 100% native: no external services, no callouts, your data never leaves Salesforce. 100% free forever. All features, all users, no paid tiers.
+Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. Merge PDFs, add barcodes and QR codes, compute totals — 100% native: no external services, no callouts, your data never leaves Salesforce. The source is available under the Apache 2.0 license. The managed package is distributed through Salesforce AppExchange.
 
 [Join the Community Channel](https://portwood.dev/community) | [Website](https://portwood.dev) | [Roadmap](https://portwood.dev/roadmap)
 
@@ -17,11 +17,7 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 ## Install
 
-```bash
-sf package install --package 04tVx000001FJD3IAO --wait 10 --target-org <your-org>
-```
-
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tVx000001FJD3IAO)
+[Get the managed package on Salesforce AppExchange](https://appexchange.salesforce.com/appxListingDetail?listingId=5a580bd8-2745-41e5-b62c-c495957857d3). Choose your production org or sandbox during installation. [3.65 hotfix release notes and install links](https://github.com/Portwood-Global-Solutions/Portwood/releases/tag/v3.65.0).
 
 **Then:** Assign **Portwood Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **Portwood** app
 

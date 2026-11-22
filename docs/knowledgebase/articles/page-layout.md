@@ -1,5 +1,7 @@
 Set the paper, margins, repeated page content, and page background.
 
+[Give a long document clickable destinations and live page numbers.](#print-navigation)
+
 #### Choose paper and margins
 
 - **Canvas:** Open **Page**. Choose the paper size, orientation, and margins there.

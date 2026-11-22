@@ -505,7 +505,9 @@ export function buildAiPrompt(shape, options) {
     lines.push(
         '- NEVER use: flexbox, grid, gap, calc(), CSS variables, linear-gradient or any gradient, position:sticky, transforms. They are silently ignored and the layout collapses.'
     );
-    lines.push('- Solid colors only. No web fonts — stick to Helvetica/Arial/Times/Georgia/Courier.');
+    lines.push(
+        '- Use solid hex fills. For print, use Helvetica, Times or Courier, or a copied approved Portwood font tag in an inline style. Remote web fonts do not load.'
+    );
     lines.push(
         "- No <svg> and no JavaScript — they are dropped. Images must be <img> with regular src URLs; don't invent image URLs."
     );
@@ -516,7 +518,24 @@ export function buildAiPrompt(shape, options) {
         '- Declare the page setup with an @page rule in a <style> block, e.g. @page { size: Letter portrait; margin: 0.75in; }'
     );
     lines.push(
-        '- Every {...} pair is treated as a merge tag: unknown names render as empty text, and an unclosed { fails the merge. For literal braces use &#123; and &#125;.'
+        '- In document text, use braces for merge tags. Use &#123; and &#125; for literal braces in the wording. Write normal CSS declaration blocks inside <style>.'
+    );
+    lines.push('');
+    lines.push('DESIGNING A FINISHED DOCUMENT:');
+    lines.push(
+        '- For a linked contents page, pair href="#bundle-{Key}" with a unique matching id. Use .contents a:after { content: leader(".") target-counter(attr(href), page); } for the live destination page and include a return link. Put optional entries and destinations behind the same condition.'
+    );
+    lines.push(
+        '- For a repeated HTML draft mark, wrap a fixed element in {#IsDraft} ... {/IsDraft}. Reserve margin space for the mark. Use @page margin boxes with counter(page) and counter(pages) for folios. Check the issue-ready copy and a copy long enough to change pagination.'
+    );
+    lines.push(
+        '- For nested quote pricing, request the already-priced parent and component collections, stable IDs, billing frequency, currency, inclusion rules and rounded totals. Keep options outside accepted totals and reconcile installments to the one-time price.'
+    );
+    lines.push(
+        '- For a decision brief, pass HasUsage and a precomputed AtTarget Boolean from the data source. Provide a missing-data branch. For a field work order, print an offline QR payload alongside its readable identifier and leave room to write. Ask for the actual paper size.'
+    );
+    lines.push(
+        '- A Screen Flow can publish a custom event after commit. Its subscriber creates one request and returns the signer URL on a private receipt. The original interview checks the receipt, uses Open a Page, then verifies signed status and the protected File. To sign an existing approved PDF, choose that exact Salesforce File in Signature Sender.'
     );
     lines.push('');
     lines.push('PORTWOOD MERGE TAG SYNTAX:');
@@ -550,10 +569,10 @@ export function buildAiPrompt(shape, options) {
         '- Built-ins: {Today:MMMM d, yyyy}, {Now:yyyy-MM-dd HH:mm}, and running-user tags {RunningUser.Name}, {RunningUser.Email}, {RunningUser.Title}.'
     );
     lines.push(
-        '- Barcodes & QR codes (rendered server-side — no fonts, no external services, no <img> of your own): {*FieldName} = Code 128 barcode of the field value; {*FieldName:code128:300x80} = Code 128 sized 300x80px; {*FieldName:qr} = QR code; {*FieldName:qr:200} = QR at 200px. ONLY code128 and qr are supported — any other type renders nothing, silently. QR handles URLs and long text and survives low print quality best; Code 128 suits short IDs and serials. Place the tag alone in its own cell/block with white space around it — do not shrink below the default or scanners will struggle. Any queried field works, e.g. {*Id}, {*Name}, {*Tracking_Number__c}.'
+        '- Barcodes & QR codes (rendered server-side — no fonts, no external services, no <img> of your own): {*FieldName} = Code 128 barcode of the field value; {*FieldName:code128:300x80} = Code 128 sized 300x80px; {*FieldName:qr} = QR code; {*FieldName:qr:200} = QR at 200px. {*FieldName:code39:300x80} prints a Code 39 label. QR handles URLs and long text and survives low print quality best; Code 128 suits short IDs and serials. Place the tag alone in its own cell/block with white space around it — do not shrink below the default or scanners will struggle. Any queried field works, e.g. {*Id}, {*Name}, {*Tracking_Number__c}.'
     );
     lines.push(
-        '- Charts — ONE-LINE TAG, this is the path to use: {Chart:RelationshipName:FieldToGroupBy:style:opt=value&opt=value}, on its own line as a block-level element. Portwood aggregates the child records server-side and renders it as a real image, so you do NOT style it — no wrapper markup, no CSS bars. Styles: bar (horizontal, best for long labels), column (vertical), pie, donut, line, area, and the cross-tab styles stacked, clustered, pivot (these three REQUIRE groupBy=). Default style is bar. Modifiers, joined with &: title=Text (header drawn above the chart), width=420, height=240, colors=#1e40af,#b91c1c (6-char hex, cycles), groupBy=SecondField__c (second dimension), colSort=A,B,C (column order), where=SOQL fragment, split=; (multi-select field). Examples: {Chart:Survey_Responses__r:Answer__c:bar:title=Responses by Answer} and {Chart:Survey_Responses__r:Answer__c:stacked:groupBy=Location__c&title=Answer by Location}. Inside a {#Rel} loop the chart’s relationship resolves against the record being iterated, giving one chart per row.'
+        '- Charts — ONE-LINE TAG, this is the path to use: {Chart:RelationshipName:FieldToGroupBy:style:opt=value&opt=value}, on its own line as a block-level element. Portwood aggregates the child records server-side and renders it as a real image, when the entry point prepares a PNG. Without a prepared PNG, HTML-to-PDF supports CSS bar, stacked, clustered and pivot. Inline SVG is browser-only. Excel does not embed chart tags. Styles: bar (horizontal, best for long labels), column (vertical), pie, donut, line, area, and the cross-tab styles stacked, clustered, pivot (these three require both groupBy= and colSort=). Default style is bar. Modifiers, joined with &: title=Text (header drawn above the chart), width=420, height=240, colors=#1e40af,#b91c1c (6-char hex, cycles), groupBy=SecondField__c (second dimension), colSort=A,B,C (column order), where=SOQL fragment, split=; (multi-select field). Examples: {Chart:Survey_Responses__r:Answer__c:bar:title=Responses by Answer} and {Chart:Survey_Responses__r:Answer__c:stacked:groupBy=Location__c&title=Answer by Location}. Inside a {#Rel} loop the chart’s relationship resolves against the record being iterated, giving one chart per row.'
     );
     lines.push(
         '- Charts — hand-authored fallback, use ONLY when the one-line tag cannot produce the layout asked for: {#ChartBucket:Rel:Field} {key} {count} {percent} {/ChartBucket} groups child records by Field and repeats the body per bucket, so you style it yourself as CSS bars (a <div> whose width uses {percent}). Keep it CSS-only; no SVG or canvas.'
@@ -569,6 +588,31 @@ export function buildAiPrompt(shape, options) {
     );
     lines.push(
         '- E-signature placeholders (only if asked for a signable document): {@Signature_RoleName:1:Full}, {@Signature_RoleName:1:Initials}, {@Signature_RoleName:1:Date}, {@Signature_RoleName:1:DatePick}. Role is any string (underscores become spaces), then the signing order, then the type. Add :inline as a final suffix for a compact in-place mark instead of a stamp card. When the number of signers varies, use the {#Signatures} ... {/Signatures} loop instead of fixed role tags.'
+    );
+    lines.push(
+        '- Put each signature placement directly in the main template body. Portwood discovers signing fields before expanding shared snippets. Use the snippet for shared wording and record data, then put signature, initials and date tags alongside it in the template. Remove duplicate placement tags from the shared fragment.'
+    );
+    lines.push('');
+    lines.push(
+        '- Reusable wording: {!$Label.Payment_Terms} resolves a Salesforce Custom Label in the running user’s language, including in document titles. Use {!$Label.namespace.Name} for a namespaced label. Missing labels render empty. In a giant-query parent shell the literal label tag can remain.'
+    );
+    lines.push(
+        '- Shared content: insert {%snippet:approved-key} as a body fragment. Ask for the real, active key from Assets and include all fields the fragment reads. A field such as {Name} inside the snippet resolves on the current record, or on the current child when inserted inside its loop. An inactive or missing snippet stops generation. For approved fonts, use the copied tag as a whole declaration, e.g. <p style="{%font:approved-face};font-size:12pt">. Existing revision-pinned tags also work.'
+    );
+    lines.push(
+        '- Numeric precision: {Amount:#,##0.##} prints 100, 100.1 or 100.25; {Amount:#,##0.00} always prints two decimal places. In a mixed-currency sum request a supported :convert target and confirm rates, or group by currency.'
+    );
+    lines.push(
+        '- Print CSS: for a long table use -fs-table-paginate: paginate, a real thead, and page-break-inside: avoid on short rows. Reserve bottom margin for rich footers. Put counter(page) and counter(pages) in body CSS and the matching spans in the separate Footer HTML field. For full-page art use the template background setting. Keep a giant-query outer shell simple and verify it with representative volume.'
+    );
+    lines.push(
+        '- Inside child loops, {~Summary}...{/Summary} re-enters the root record. Choose a unique matching block name. Classic approval rows use {#Approvals}...{/Approvals} with Approvals enabled in the query. Configured signer input uses {?key} or {?key|fallback}. A {#Signatures} list shows signer text; placed signature fields collect marks.'
+    );
+    lines.push(
+        '- A document template cannot navigate a Flow or publish an event. For an automation request, use the separate Flow recipes: create the request using DocGenSigner, keep each signer URL private, and check the saved request and signed File before acting on completion.'
+    );
+    lines.push(
+        '- Signing setup for a Flow or portal: public signing links require Portwood license coverage for the site guest user. Public recipients need no individual license. Signing as an authenticated Salesforce or portal user requires a Portwood site license. For an enterprise quote, use https://portwood.dev/pricing#site-license.'
     );
     lines.push('');
     lines.push('DATA SHAPE — use ONLY these fields (any other tag renders empty):');
@@ -607,7 +651,7 @@ export function buildAiPrompt(shape, options) {
             '- Loop tags for a repeating table go INLINE, INSIDE the row that repeats: the opening {#Rel} in the FIRST cell of the data <tr>, and the closing {/Rel} in the LAST cell of that same <tr>.'
         );
         lines.push(
-            '- Do NOT put {#Rel} on its own line above <table> and {/Rel} below it. That repeats the ENTIRE TABLE — headers and all — once per child record, which is never what is wanted.'
+            '- For one growing line-item table, keep its header outside the child loop. For a CPQ configuration, wrap the whole bundle table in the parent loop and place a child component loop inside its own data row. This gives each bundle its own header and prices.'
         );
         lines.push('- Column headers belong in a real <thead>, OUTSIDE the loop, so they render once.');
         if (shape.children && shape.children.length) {
@@ -1452,7 +1496,7 @@ export function buildTagPalette(shape) {
         ]
     });
 
-    // Barcodes & QR — {*Field:qr} / {*Field:code128}, the only two types.
+    // Shared label types supported by the document renderer.
     const codeishFields = [...(shape.baseFields || [])].filter(
         (f) => /(number|code|sku|url|website)$/i.test(f) || /^name$/i.test(f)
     );

@@ -1,7 +1,12 @@
-Start with what you can see. Make one change, then try the same record again.
+#### First, check which version you have
+
+Ask your Salesforce administrator to open **Setup → Installed Packages** and find **Portwood**. The current release is **{{version}}**. If yours is older, [upgrade in a sandbox](#upgrade-portwood) and try the same record again. If you already upgraded, tell support which version you installed and whether the problem started before or after the upgrade.
+
+#### Pick the symptom you see
 
 | What happened?                                          | Start here                                                 |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
+| Unsure who needs a license, or a portal member can’t sign | [Check the license for the person and signing route](#user-licenses) |
 | Portwood or the Generate tool is missing                | [Access and record-page setup](#manage-access)             |
 | A template is missing from the list                     | [Organize and limit template choices](#organize-templates) |
 | Blank values, visible tags, odd tables, or a broken PDF | [Fix a document](#fix-document)                            |

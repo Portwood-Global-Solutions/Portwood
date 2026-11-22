@@ -33,7 +33,7 @@ In the current engine, literal `{PageNumber}` or `{TotalPages}` in a header/foot
 </div>
 ```
 
-Without the literal counter tags, Portwood uses a running HTML element for page furniture. The pseudo-elements supply the counters while keeping the HTML structure intact. The 3.60.0 lab verified both footer lines and the correct `Page 1 of 4` through `Page 4 of 4` values.
+With this setup, Portwood repeats your formatted footer and CSS supplies the page numbers. Generate a document long enough to cross a page. Keep both footer lines visible and check that `Page 1 of 4` advances all the way to `Page 4 of 4` in a four-page file.
 
 #### Make room for it
 
@@ -51,4 +51,4 @@ Keep counters in page furniture. These are PDF layout counters, not record field
 | Custom font and literal counters fail | Use running HTML plus CSS counters and test the approved font specimen           |
 | Header image is missing               | Confirm image access and dimensions in the actual render path                    |
 
-This recipe adapts Dave's [two-line footer answer in Portwood Community](https://portwoodcommunity.slack.com/archives/C0B37JT11RA/p1792162191491549), checked against `wrapHtmlForPdf` and a real 3.60.0 PDF.
+This recipe adapts Dave's [two-line footer answer in Portwood Community](https://portwoodcommunity.slack.com/archives/C0B37JT11RA/p1792162191491549). You can compare the layout with the [finished service schedule](#css-print-lab).

@@ -799,7 +799,7 @@ A size token must contain an `x` (the width × height separator); a bare number 
 
 **Permissions:** administrators (Portwood Admin) create and manage assets; standard Portwood users get read-only access, which is all that is needed to generate documents that reference them.
 
-> **v1 scope:** shared assets are **images** only. Text/HTML snippet assets and pinning a template to a specific asset version are planned follow-ups.
+Image keys use `{%asset:key}`. A reusable HTML clause uses `{%snippet:key}` and resolves to the active content. Approved fonts can use a portable `{%font:api-name}` declaration.
 
 #### 7.7.2 Sizing images in HTML → PDF
 
@@ -840,15 +840,18 @@ So `:3inx` → `:288x`, `:x25mm` → `:x95`.
 {*OrderNumber}                  Code 128 barcode (default)
 {*TrackingId:code128}           Explicit type
 {*SKU:code128:300x80}           300×80 px
+{*ProductCode:code39:300x80}    Code 39 barcode
 {*ProductCode:qr}               QR code
 {*URL:qr:200}                   200px QR code
 ```
 
-Barcodes render in Word **and** HTML templates (HTML support added in v3.15) across PDF and DOCX output. Types supported: `code128`, `qr` — **only** those two. A typo'd or unsupported type (e.g. `{*SKU:code39}`) renders nothing, silently; leaving the type off defaults to Code 128.
+Choose Code 128 (the default), Code 39 (`code39`) or a QR code (`qr`). The managed HTML-to-PDF renderer produced scannable Code 128 and Code 39 labels for `KIT-123`. Pair a printed identifier with the code for manual lookup. [Build a scannable work order](../knowledgebase/articles/service-sheet.md).
 
 QR codes are generated natively in Salesforce with Level Q error correction and support values up to 600 characters. For printed or mailed documents, short URLs or tokens under 120 characters are recommended for 1 inch square QR codes.
 
 ### 7.9 Signatures
+
+Put fixed signature placements directly in the template body. A snippet can provide reusable wording and record fields beside them. The sender discovers signing placements before expanding the snippet. [Copy the shared clause example](../../UserGuide.md#shared-content)
 
 See [§10](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#10-e-signatures-v3) for the full signature feature. Tag syntax:
 
@@ -895,11 +898,11 @@ Per-row fields available inside the block:
 | `{SignedDate}`     | The date they signed (blank before signing)                                                     |
 | `{Status}`         | `Pending` before signing, `Signed` after                                                        |
 
-**Styling is yours.** The block is plain template content, so style `{Name}` however you like — a cursive web font for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
+**Styling is yours.** The block is plain template content, so style `{Name}` however you like — an approved custom PDF face for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
 
 Notes:
 
-- **Backwards-compatible and additive.** Role tags (`{@Signature_Role}`) are unchanged and continue to work exactly as before — use them when you want signatures in fixed, scattered positions. A template **without** a `{#Signatures}` block renders identically to previous releases. You can even combine both in one template.
+- For a variable number of signers, put the `{#Signatures}` block in the main template body and leave out fixed-role tags. If the template includes both, the sender uses the fixed positions and the loop can stay empty.
 - **Where it applies.** The loop is populated by the snapshot/PDF-viewer signing flow (the flow that re-renders the document from a send-time data snapshot and attaches the completed PDF + certificate to the record). Before signing, the block previews the invited signers with a `Pending` status; on completion it shows each signer's typed signature and signed date.
 - **Typed-name signatures** today (drawn-signature images are a planned future enhancement; the loop already supports per-row image fields for when that lands).
 

@@ -39,3 +39,5 @@ For a headless preview action, use **docGenPreviewButton** and an active configu
 Sending generates the document, saves it to the record, and sends an attachment to the selected addresses. Review the preview and recipients before sending. An email-delivery failure is shown to the user; finding a generated file alone does not prove the email was sent.
 
 For very large related lists, use Portwood Runner or an appropriate background Flow action. The one-click document action uses a synchronous generation path.
+
+In **Recipients & message**, select **None** in the record-email picker to clear that choice and enter the address yourself. The subject is plain text. For a **Preview & Download** document button, close the Salesforce preview and use **Download** in the underlying dialog to retrieve that generated file.

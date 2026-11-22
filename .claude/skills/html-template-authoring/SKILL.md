@@ -82,29 +82,9 @@ and `Custom_Margins__c` fields. If your source HTML also declares `@page`, the e
 
 ## Charts
 
-Charts are **not** HTML-only — Word, PowerPoint and Excel get a rasterized PNG from
-`DocGenChartRasterizer`, and in fact support _more_ chart shapes than HTML→PDF does.
-What varies is which **style** survives which output.
+The HTML chart expander uses a prepared PNG when the caller supplies one. Without PNG preparation, use bar, stacked, clustered or pivot for PDF. Cross-tabs need a second field in `groupBy=`. Inline SVG is browser-only. Word and PowerPoint can embed prepared PNGs. Excel does not embed chart-tag images.
 
-| Style                                    | Word / PPTX / XLSX |  HTML → PDF  |    HTML in a browser     |
-| ---------------------------------------- | :----------------: | :----------: | :----------------------: |
-| `bar`                                    |       ✅ PNG       |  ✅ CSS-bar  |            ✅            |
-| `pivot`                                  |         ❌         | ✅ CSS table |            ✅            |
-| `clustered`, `stacked`                   |       ✅ PNG       | ✅ CSS table |            ✅            |
-| `column`, `pie`, `donut`, `line`, `area` |       ✅ PNG       |      ❌      | ✅ with `htmlRender=svg` |
-
-### The two rules behind that table
-
-**Flying Saucer drops inline `<svg>` from `Blob.toPdf`.** The `htmlRender=svg` modifier
-routes through `DocGenSvgChartSerializer` and looks perfect in a browser, then vanishes
-in the PDF. If your HTML template is destined for PDF, stay on the default CSS-bar
-styles: `bar`, `pivot`, `clustered`, `stacked`.
-
-**`pivot` never rasterizes.** It isn't in the rasterizer's `KNOWN_STYLES` because a
-cross-tab is a table, not a chart shape. Cross-tab belongs in HTML.
-
-So: rich chart shapes in a PDF → author the template in **Word** and let the PNG
-pipeline handle it. Cross-tab pivots → **HTML**.
+Use the [3.64 authoring context](../../../docs/knowledgebase/llm-context.md) for the complete tag and workflow reference. A shared HTML clause uses `{%snippet:key}`. Fields inside the clause merge against the record where the tag appears. Inside a selected child loop, `{Name}` reads that child’s name. The snippet editor previews formatting; generate a PDF with the template’s sample record to verify the values. For signing, keep the wording in the snippet and put each signing placement directly in the main template body. The sender scans the main template before expanding snippets. A translated Salesforce Custom Label uses `{!$Label.Name}`. Use an approved face’s copied `{%font:api-name}` declaration inside an inline style and include the real asset key and query fields in the authoring brief.
 
 ### The pivot layout gotcha
 
@@ -149,3 +129,11 @@ count on a full render before relying on it.
 - Confirm every `<img src>` is relative
 - If it has symbols, confirm the font is `'Arial Unicode MS'` and you haven't relied on bold
 - Render it and count the pages
+
+## Design studio patterns verified in the PDF renderer
+
+- Pair a unique `id="bundle-{Key}"` on each heading with `href="#bundle-{Key}"` in the contents. Use `content: leader('.') target-counter(attr(href), page)` on link `:after` to print the current destination page. Include a return link. Test again with a long list.
+- A fixed HTML stamp inside `{#IsDraft}…{/IsDraft}` repeats on each output page. Reserve its corner and test with both flag values. Put page numbers in `@page` margin boxes with `counter(page)` and `counter(pages)`.
+- For a CPQ-style packet, loop around the outer bundle table. Inside it, open and close the component loop in the row that repeats. Summarize approved net amounts by currency and billing period. Keep proposed options visibly separate.
+- For an executive brief, compute threshold and data-availability flags before merging. Label every bar with the numeric value and provide an explicit missing-data recommendation. A machine label can use `{*Code:qr:120}` with its human-readable identifier alongside it. Code 39 and Code 128 are available for linear scanners.
+- Supply any AI assistant with the matching [complete design and JSON](../../../docs/knowledgebase/examples/document-studio). The [signing handoff](../../../docs/knowledgebase/examples/event-signing) covers event publication, a private receipt, the standard page navigation action and status checks. Keep runtime signer links out of prompts.
