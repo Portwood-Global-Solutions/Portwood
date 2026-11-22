@@ -23,6 +23,8 @@ Generate PDF, Word, Excel, and PowerPoint documents from any Salesforce record. 
 
 ### Deploy the open-source base app
 
+[Follow the source deployment guide](https://portwood.dev/deploy-from-source/) to set up a scratch org or sandbox, deploy the included manifest, verify your first PDF, and move to production.
+
 Clone the repository to get the base app and its matching `manifest/package.xml` together:
 
 ```bash
