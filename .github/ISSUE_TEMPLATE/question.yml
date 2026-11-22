@@ -1,0 +1,21 @@
+name: Ask for help
+description: Get help with a task, a template, or getting started.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: Your question will be public. Use made-up examples and leave out names, customer documents, and Salesforce links.
+  - type: textarea
+    id: question
+    attributes:
+      label: Where are you stuck?
+      placeholder: I have an invoice template. How do I add one row for each product?
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: It’s fine to leave this blank if you’re just getting started.
+    validations:
+      required: false

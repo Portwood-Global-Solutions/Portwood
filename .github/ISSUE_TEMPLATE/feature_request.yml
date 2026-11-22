@@ -1,0 +1,21 @@
+name: Suggest an idea
+description: Tell us about something you wish Portwood could do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: This idea will be public. Use made-up examples and leave out names, customer documents, and Salesforce links.
+  - type: textarea
+    id: goal
+    attributes:
+      label: What would you like to do?
+      placeholder: I’d like to update a signature block once and have it change across all my templates.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do this today?
+      placeholder: I open each template and change the signature block by hand.
+    validations:
+      required: false
