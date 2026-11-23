@@ -30,6 +30,26 @@ If your data comes from a JSON file or another Flow, [build the illustrated Gene
 
 **You are done when:** One qualifying change creates the intended file, and an unrelated later edit does not create another copy.
 
+#### Keep one file and add a new version each time
+
+By default, every run creates a new file. To keep one file and add a new version to it instead, fill in **Save as New Version Of** with the existing file's **Content Document ID**. It starts with `069`; a Content Version ID, starting with `068`, also works.
+
+1. Leave **Save as New Version Of** blank on the first run, so the action creates the file.
+2. Store the returned **Content Document ID** somewhere the next run can read it, such as a text field on the record.
+3. On later runs, set **Save as New Version Of** to that stored ID. It takes an ID, not `True`.
+4. Keep the Decision on **Success** from the recipe above. A wrong ID returns **Success = False** with an **Error Message**; it does not stop the Flow.
+
+| Error Message says                               | What to check                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `is not a valid file ID`                         | The input holds something other than an ID, such as `True` or a file name       |
+| `is a … ID, not a file ID`                       | The input holds a record ID, such as the Account's, instead of the file's       |
+| `no file found with ID`                          | The file was deleted, or the running user cannot see it                         |
+| `you don't have permission to add a new version` | The running user can view the file but is not its owner or a Collaborator on it |
+
+The action returns the same **Content Document ID** and the **Content Version ID** of the version it just made. The record's Files list shows one entry with the newest version. Open the file and select **View File Details** to see earlier versions under **Version History**. With **Save to Record = True**, the action also attaches the file to the record if it is not attached yet. Each new version takes the generated **Document Title**.
+
+**You are done when:** Two runs leave one file on the record, and its Version History lists two versions.
+
 #### Email the generated file
 
 Use the returned **Content Version ID** with the supported attachment input of Salesforce's Send Email action. Verify the attachment ID type expected by that action. Preview and test with an inbox you control before enabling customer delivery.
