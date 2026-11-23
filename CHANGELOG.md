@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Save a generated document as a new version of an existing file (#593).** The **Generate
+  Document** Flow action has a new optional input, **Save as New Version Of**. Give it an
+  existing file's Content Document ID (`069…`; a Content Version ID `068…` also works) and
+  the document is saved as a new version of that file instead of a new file. The action
+  returns the same Content Document ID and the Content Version ID of the version it just
+  created, not an earlier version of the same file. Leave the
+  input blank to create a new file, as before. It works with Record ID, JSON Data, and JSON
+  Data without a record. With **Save to Record = True** the file is also attached to the
+  record if it is not attached yet. The running user needs to own the file or be a
+  Collaborator on it; Salesforce enforces this when the version is saved. A malformed ID, an
+  ID that is not a file, a deleted or hidden file, and a view-only file each return
+  **Success = False** with a plain **Error Message**, and nothing is saved.
+
 ## v3.65.0 — iPhone signing in Screen Flows
 
 Released 2026-11-21 · `04tVx000001FJD3IAO` (build 3.65.0-1) · ancestor 3.64.0-1 · 79% package coverage

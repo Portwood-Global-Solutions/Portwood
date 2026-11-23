@@ -48,6 +48,15 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
             description='Optional. Pre-built merge data as a JSON string — bypasses the SOQL data retrieval entirely. Use this when a Flow has assembled custom data from external APIs, computed values, or cross-object aggregations and wants to render directly without persisting to records first. Shape mirrors the merge engine: {"Name":"Acme","Amount":50000,"Items":{"records":[{"Product":"Widget","Qty":2}]}}. When supplied, this takes precedence over Record ID for data — but Record ID is still used as the file attachment target if Save to Record is true.'
         )
         global String jsonData;
+
+        // String, not Id: a malformed value must reach our own validation and come back as a
+        // readable Error Message, rather than failing Flow's type conversion before we run.
+        @InvocableVariable(
+            label='Save as New Version Of'
+            required=false
+            description='Optional. The ID of an existing file (ContentDocument ID, starts with 069; a ContentVersion ID starting with 068 also works). When filled in, the generated document is saved as a new version of that file instead of a new file, and Content Version ID returns the new version. Leave blank to create a new file (default). The running user needs edit access to the file (owner or Collaborator).'
+        )
+        global String saveAsNewVersionOf;
     }
 
     global class Response {
@@ -88,6 +97,8 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
                 if (!useDataMap && req.recordId == null) {
                     throw new DocGenException('Either Record ID or JSON Data must be supplied.');
                 }
+                // #593 — validate before rendering so a bad ID fails fast and clearly.
+                Id versionOfDocId = resolveVersionTarget(req.saveAsNewVersionOf);
 
                 Id docId;
                 if (useDataMap) {
@@ -107,6 +118,7 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
                         // when saveToRecord != true — produces a standalone ContentVersion the Flow
                         // can hand off via the returned ContentDocumentId (issue #90).
                         Id fileAttachmentTarget = (req.saveToRecord == true) ? req.recordId : null;
+                        DocGenService.saveAsNewVersionOf = versionOfDocId;
                         docId = DocGenService.generateAndSaveFromData(
                             req.templateId,
                             req.recordId,
@@ -130,26 +142,32 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
                         cv.Title = title;
                         cv.PathOnClient = title + '.pdf';
                         cv.VersionData = pdfBlob;
-                        SObjectAccessDecision dec = Security.stripInaccessible(
-                            AccessType.CREATABLE,
-                            new List<ContentVersion>{ cv }
-                        );
-                        insert dec.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
-                        Id newCvId = ((ContentVersion) dec.getRecords()[0]).Id;
-                        ContentVersion saved = [
-                            SELECT Id, ContentDocumentId
-                            FROM ContentVersion
-                            WHERE Id = :newCvId
-                            WITH USER_MODE
-                            LIMIT 1
-                        ];
-                        docId = saved.ContentDocumentId;
-                        res.contentVersionId = saved.Id;
+                        if (versionOfDocId != null) {
+                            res.contentVersionId = DocGenService.insertAsNewVersion(cv, versionOfDocId);
+                            docId = versionOfDocId;
+                        } else {
+                            SObjectAccessDecision dec = Security.stripInaccessible(
+                                AccessType.CREATABLE,
+                                new List<ContentVersion>{ cv }
+                            );
+                            insert dec.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
+                            Id newCvId = ((ContentVersion) dec.getRecords()[0]).Id;
+                            ContentVersion saved = [
+                                SELECT Id, ContentDocumentId
+                                FROM ContentVersion
+                                WHERE Id = :newCvId
+                                WITH USER_MODE
+                                LIMIT 1
+                            ];
+                            docId = saved.ContentDocumentId;
+                            res.contentVersionId = saved.Id;
+                        }
                     }
                 } else {
                     // attachmentRecordId is null when saveToRecord != true — keeps the file out of the
                     // record's Files related list while still using recordId for merge data (issue #90).
                     Id attachmentRecordId = (req.saveToRecord == true) ? req.recordId : null;
+                    DocGenService.saveAsNewVersionOf = versionOfDocId;
                     docId = DocGenService.generateDocument(
                         req.templateId,
                         req.recordId,
@@ -158,35 +176,46 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
                         attachmentRecordId
                     );
                 }
+                if (res.contentVersionId == null) {
+                    // The exact version the service just wrote — not a re-query by document.
+                    res.contentVersionId = DocGenService.lastSavedContentVersionId;
+                }
                 res.contentDocumentId = docId;
                 res.success = true;
                 docIdsByIndex.put(i, docId);
             } catch (Exception e) {
                 res.errorMessage = e.getMessage();
                 res.success = false;
+            } finally {
+                // One-shot settings: never let one request's state reach the next.
+                DocGenService.saveAsNewVersionOf = null;
+                DocGenService.lastSavedContentVersionId = null;
             }
             responses.add(res);
         }
 
-        // Phase 2: Bulk query ContentVersion IDs for all generated documents
-        Set<Id> allDocIds = new Set<Id>(docIdsByIndex.values());
-        allDocIds.remove(null);
+        // Phase 2: Fallback for any response that didn't capture its version Id directly.
+        // IsLatest = TRUE matters: for a file with several versions an unfiltered query can
+        // return v1 instead of the version just created (#593).
+        Set<Id> allDocIds = new Set<Id>();
+        for (Integer i : docIdsByIndex.keySet()) {
+            if (responses[i].contentVersionId == null && docIdsByIndex.get(i) != null) {
+                allDocIds.add(docIdsByIndex.get(i));
+            }
+        }
         if (!allDocIds.isEmpty()) {
             Map<Id, Id> cvIdByDocId = new Map<Id, Id>();
             for (ContentVersion cv : [
                 SELECT Id, ContentDocumentId
                 FROM ContentVersion
-                WHERE ContentDocumentId IN :allDocIds
+                WHERE ContentDocumentId IN :allDocIds AND IsLatest = TRUE
                 WITH USER_MODE
             ]) {
-                // Keep only the first CV per document (matching original LIMIT 1 behavior)
-                if (!cvIdByDocId.containsKey(cv.ContentDocumentId)) {
-                    cvIdByDocId.put(cv.ContentDocumentId, cv.Id);
-                }
+                cvIdByDocId.put(cv.ContentDocumentId, cv.Id);
             }
             for (Integer i : docIdsByIndex.keySet()) {
                 Id docId = docIdsByIndex.get(i);
-                if (docId != null && cvIdByDocId.containsKey(docId)) {
+                if (responses[i].contentVersionId == null && docId != null && cvIdByDocId.containsKey(docId)) {
                     responses[i].contentVersionId = cvIdByDocId.get(docId);
                 }
             }
@@ -242,5 +271,63 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
         }
 
         return responses;
+    }
+
+    /**
+     * #593 — turns the "Save as New Version Of" input into the ContentDocument Id to version,
+     * or null when blank (create a new file, the default). Accepts a ContentDocument Id (069)
+     * or a ContentVersion Id (068, resolved to its document). Queries run in USER_MODE, so a
+     * file the running user cannot see reports the same as a missing one — we never confirm
+     * that a file the user has no access to exists. Edit permission is enforced at insert time
+     * by DocGenService.insertAsNewVersion.
+     */
+    private static Id resolveVersionTarget(String rawId) {
+        if (String.isBlank(rawId)) {
+            return null;
+        }
+        String trimmed = rawId.trim();
+        Id targetId;
+        try {
+            targetId = Id.valueOf(trimmed);
+        } catch (StringException e) {
+            throw new DocGenException(
+                'Save as New Version Of: "' +
+                    trimmed +
+                    '" is not a valid file ID. Use the file\'s ContentDocument ID (18 characters, starts with 069).'
+            );
+        }
+
+        Schema.SObjectType targetType = targetId.getSObjectType();
+        if (targetType == ContentDocument.SObjectType) {
+            List<ContentDocument> docs = [SELECT Id FROM ContentDocument WHERE Id = :targetId WITH USER_MODE LIMIT 1];
+            if (!docs.isEmpty()) {
+                return docs[0].Id;
+            }
+        } else if (targetType == ContentVersion.SObjectType) {
+            List<ContentVersion> versions = [
+                SELECT ContentDocumentId
+                FROM ContentVersion
+                WHERE Id = :targetId
+                WITH USER_MODE
+                LIMIT 1
+            ];
+            if (!versions.isEmpty()) {
+                return versions[0].ContentDocumentId;
+            }
+        } else {
+            String typeName = targetType == null ? 'non-file' : targetType.getDescribe().getLabel();
+            throw new DocGenException(
+                'Save as New Version Of: ' +
+                    trimmed +
+                    ' is a ' +
+                    typeName +
+                    ' ID, not a file ID. Use the file\'s ContentDocument ID (starts with 069).'
+            );
+        }
+        throw new DocGenException(
+            'Save as New Version Of: no file found with ID ' +
+                trimmed +
+                '. It may have been deleted, or you may not have access to it.'
+        );
     }
 }

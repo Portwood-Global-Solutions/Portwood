@@ -71,6 +71,7 @@
         <members>DocGenFieldWritebackService</members>
         <members>DocGenFieldWritebackServiceTest</members>
         <members>DocGenFlowAction</members>
+        <members>DocGenFlowActionVersionTest</members>
         <members>DocGenFlowSigningController</members>
         <members>DocGenFlowSigningControllerTest</members>
         <members>DocGenFlsGuard</members>

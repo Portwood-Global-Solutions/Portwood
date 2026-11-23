@@ -123,6 +123,7 @@
             "global String documentTitle",
             "global String outputFormatOverride",
             "global String jsonData",
+            "global String saveAsNewVersionOf",
             "global class Response",
             "global Id contentDocumentId",
             "global Id contentVersionId",

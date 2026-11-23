@@ -121,6 +121,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     // skips DocGenController.generateDocumentData() and uses this data instead. Cleared after each use.
     private static Map<String, Object> preloadedRecordDataOverride;
 
+    // #593 — when set, the next file saveContentVersion() writes is saved as a new
+    // version of this ContentDocument instead of as a new file. One-shot: it is
+    // consumed (reset to null) by the save, so it can never leak into a later
+    // save in the same transaction. Public, not global — subscribers reach it
+    // through DocGenFlowAction's "Save as New Version Of" input.
+    public static Id saveAsNewVersionOf;
+
+    // #593 — the ContentVersion Id written by the most recent save. Lets callers
+    // return the exact version just created rather than re-querying by document
+    // (which, for a multi-version file, can pick up an older version).
+    public static Id lastSavedContentVersionId;
+
     // Salesforce Custom Labels are resolved lazily because subscriber-created
     // labels are not available as compile-time Apex references.
     @TestVisible
@@ -10098,6 +10110,17 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         cv.Title = title;
         cv.PathOnClient = fileName;
         cv.VersionData = fileBlob;
+
+        Id versionOf = saveAsNewVersionOf;
+        saveAsNewVersionOf = null;
+        lastSavedContentVersionId = null;
+        if (versionOf != null) {
+            // FirstPublishLocationId is only valid on a file's first version. Callers that
+            // want the file on a record link it afterwards (DocGenFlowAction phase 3).
+            insertAsNewVersion(cv, versionOf);
+            return versionOf;
+        }
+
         cv.FirstPublishLocationId = recordId;
 
         Id savedCvId;
@@ -10121,6 +10144,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 );
                 insert cvDecision2.getRecords();
                 savedCvId = cvDecision2.getRecords()[0].Id;
+                lastSavedContentVersionId = savedCvId;
 
                 Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :savedCvId WITH USER_MODE]
                 .ContentDocumentId;
@@ -10146,7 +10170,44 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             throw dml;
         }
 
+        lastSavedContentVersionId = savedCvId;
         return [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :savedCvId WITH USER_MODE].ContentDocumentId;
+    }
+
+    /**
+     * #593 — inserts cv as a new version of an existing file (ContentDocument).
+     *
+     * Runs in USER_MODE on purpose: Salesforce decides whether the running user may add a
+     * version (file owner, Collaborator share, library permission, inferred record access…),
+     * so we never re-implement Files sharing rules. stripInaccessible is deliberately NOT used —
+     * it would silently drop ContentDocumentId on a locked-down profile and quietly create a
+     * brand-new file instead, which is exactly the wrong-output-without-noticing case.
+     *
+     * @return the new ContentVersion Id (also written to lastSavedContentVersionId)
+     */
+    public static Id insertAsNewVersion(ContentVersion cv, Id contentDocumentId) {
+        cv.ContentDocumentId = contentDocumentId;
+        cv.FirstPublishLocationId = null;
+        try {
+            Database.insert(cv, AccessLevel.USER_MODE);
+        } catch (DmlException dml) {
+            StatusCode code = dml.getDmlType(0);
+            if (
+                code == StatusCode.INSUFFICIENT_ACCESS_OR_READONLY ||
+                code == StatusCode.INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY ||
+                code == StatusCode.ENTITY_IS_LOCKED
+            ) {
+                throw new DocGenException(
+                    'Save as New Version Of: you don\'t have permission to add a new version to file ' +
+                        contentDocumentId +
+                        '. Ask the file owner to share it with you as a Collaborator, or leave ' +
+                        '"Save as New Version Of" blank to create a new file.'
+                );
+            }
+            throw dml;
+        }
+        lastSavedContentVersionId = cv.Id;
+        return cv.Id;
     }
     /**
      * Extracts an attribute value from an XML tag string.
