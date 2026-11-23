@@ -272,6 +272,7 @@ try {
     System.debug('FLOW ACTION saveToRecord=false: FAIL — ' + e.getMessage());
 }
 
+Id savedDocId;
 try {
     DocGenFlowAction.Request reqOn = new DocGenFlowAction.Request();
     reqOn.templateId = tmplId;
@@ -286,6 +287,7 @@ try {
             FROM ContentDocumentLink
             WHERE LinkedEntityId = :acctId AND ContentDocumentId = :resOn[0].contentDocumentId
         ];
+        savedDocId = resOn[0].contentDocumentId;
         if (linkCount > 0) {
             pass++;
             System.debug('FLOW ACTION saveToRecord=true: PASS — CDL exists');
@@ -300,6 +302,60 @@ try {
 } catch (Exception e) {
     fail++;
     System.debug('FLOW ACTION saveToRecord=true: FAIL — ' + e.getMessage());
+}
+
+// ===== Issue #593: Save as New Version Of =====
+// Versions the file the saveToRecord=true run just made (one extra generation, to
+// stay inside the 100-SOQL budget). Must return the SAME document and the NEW version.
+try {
+    DocGenFlowAction.Request reqVer = new DocGenFlowAction.Request();
+    reqVer.templateId = tmplId;
+    reqVer.recordId = acctId;
+    reqVer.saveToRecord = true;
+    reqVer.saveAsNewVersionOf = savedDocId;
+    DocGenFlowAction.Response resVer = DocGenFlowAction.generateDocument(
+        new List<DocGenFlowAction.Request>{ reqVer }
+    )[0];
+    Integer versions = [SELECT COUNT() FROM ContentVersion WHERE ContentDocumentId = :savedDocId];
+    Id latestCvId = [SELECT Id FROM ContentVersion WHERE ContentDocumentId = :savedDocId AND IsLatest = TRUE].Id;
+    if (
+        resVer.success == true &&
+        resVer.contentDocumentId == savedDocId &&
+        versions == 2 &&
+        resVer.contentVersionId == latestCvId
+    ) {
+        pass++;
+        System.debug('FLOW ACTION saveAsNewVersionOf: PASS — 1 file, 2 versions, newest Id returned');
+    } else {
+        fail++;
+        System.debug(
+            'FLOW ACTION saveAsNewVersionOf: FAIL — success=' +
+                resVer.success +
+                ' sameDoc=' +
+                (resVer.contentDocumentId == savedDocId) +
+                ' versions=' +
+                versions +
+                ' newestReturned=' +
+                (resVer.contentVersionId == latestCvId) +
+                ' err=' +
+                resVer.errorMessage
+        );
+    }
+
+    reqVer.saveAsNewVersionOf = 'not-a-file-id';
+    DocGenFlowAction.Response resBad = DocGenFlowAction.generateDocument(
+        new List<DocGenFlowAction.Request>{ reqVer }
+    )[0];
+    if (resBad.success == false && resBad.errorMessage.contains('not a valid file ID')) {
+        pass++;
+        System.debug('FLOW ACTION saveAsNewVersionOf bad Id: PASS — clear error');
+    } else {
+        fail++;
+        System.debug('FLOW ACTION saveAsNewVersionOf bad Id: FAIL — ' + resBad.errorMessage);
+    }
+} catch (Exception e) {
+    fail++;
+    System.debug('FLOW ACTION saveAsNewVersionOf: FAIL — ' + e.getMessage());
 }
 
 System.debug('========================================');
