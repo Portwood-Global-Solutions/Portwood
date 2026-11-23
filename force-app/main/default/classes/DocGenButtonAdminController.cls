@@ -159,7 +159,8 @@ public with sharing class DocGenButtonAdminController {
             return out;
         }
         for (Schema.RecordTypeInfo rti : sot.getDescribe().getRecordTypeInfos()) {
-            if (!rti.isAvailable() || rti.isMaster()) {
+            // Button rules apply org-wide, independent of the configuring user's record creation assignments.
+            if (!rti.isActive() || rti.isMaster()) {
                 continue;
             }
             out.add(new Option(rti.getName(), rti.getDeveloperName()));
