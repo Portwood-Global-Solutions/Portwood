@@ -24,6 +24,7 @@ import {
     buildAiPrompt,
     prettyPrintHtml,
     scopeHtmlForInlinePreview,
+    protectTableMergeTags,
     buildTagPalette,
     buildBlockPalette,
     splitRegions,
@@ -7467,7 +7468,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
             const tpl = document.createElement('template');
             // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-            tpl.innerHTML = target;
+            tpl.innerHTML = protectTableMergeTags(target);
             const root = tpl.content;
             this._stripEditorLayer(root);
             this._unpillifyTags(root);
@@ -15314,7 +15315,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         const doc = pv.ownerDocument || document;
         const tpl = doc.createElement('template');
         // eslint-disable-next-line @lwc/lwc/no-inner-html -- deliberate manual-DOM canvas write; content passes _sanitizeStagedHtml / scopeHtmlForInlinePreview
-        tpl.innerHTML = markup;
+        tpl.innerHTML = protectTableMergeTags(markup);
         this._pillifyTags(tpl.content);
         // Capture BEFORE insertion — insertNode empties the fragment.
         const firstEl = tpl.content.firstElementChild;

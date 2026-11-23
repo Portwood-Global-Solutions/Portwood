@@ -835,6 +835,29 @@ export function prettyPrintHtml(html) {
 // Inline preview (Code ⇄ Preview toggle)
 // ---------------------------------------------------------------------------
 
+/** Keep merge boundaries between table rows/cells out of HTML foster parenting. */
+export function protectTableMergeTags(html) {
+    const tables = [];
+    return String(html || '').replace(
+        /<!--[\s\S]*?-->|<style\b[^>]*>[\s\S]*?<\/style\s*>|<script\b[^>]*>[\s\S]*?<\/script\s*>|<\/?([a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>|(\{(?:[#^/~][^{}]+|:else(?:\s[^{}]*)?)\})/gi,
+        (text, element, tag) => {
+            if (element) {
+                const name = element.toLowerCase();
+                const closing = text.startsWith('</');
+                if (name === 'table') {
+                    if (closing) tables.pop();
+                    else tables.push(false);
+                } else if (tables.length && ['td', 'th', 'caption'].includes(name)) {
+                    tables[tables.length - 1] = !closing;
+                }
+            }
+            // Comments remain at their exact position on every DOM round trip.
+            // The merge engine evaluates their tags before the PDF parses HTML.
+            return tag && tables.length && !tables[tables.length - 1] ? '<!--' + tag + '-->' : text;
+        }
+    );
+}
+
 /**
  * Prepare template HTML for INLINE rendering inside the admin UI.
  *
@@ -847,6 +870,7 @@ export function prettyPrintHtml(html) {
  * data merge.
  */
 export function scopeHtmlForInlinePreview(html) {
+    html = protectTableMergeTags(html);
     let work = (html || '').replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<link\b[^>]*>/gi, '');
     const styles = [];
     work = work.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (m, css) => {
