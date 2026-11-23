@@ -41,6 +41,104 @@ global without sharing class DocGenFieldWritebackService { // NOPMD AvoidGlobalM
     // contract pinned with the frontend: key is [A-Za-z0-9_]+.
     private static final Pattern KEY_PATTERN = Pattern.compile('^[A-Za-z0-9_]+$');
 
+    // This internal snapshot is written only from a sent request or its existing template.
+    private static final String EMPTY_FORM_FIELDS = '{"formFields":[]}';
+
+    public static void snapshotSendingRequests(
+        List<DocGen_Signature_Request__c> requests,
+        Map<Id, DocGen_Signature_Request__c> oldRequests
+    ) {
+        List<DocGen_Signature_Request__c> sending = new List<DocGen_Signature_Request__c>();
+        Set<Id> templateIds = new Set<Id>();
+        for (DocGen_Signature_Request__c request : requests) {
+            if (
+                request.Template__c != null &&
+                request.Status__c != 'Draft' &&
+                (oldRequests == null ||
+                oldRequests.get(request.Id).Status__c == 'Draft')
+            ) {
+                templateIds.add(request.Template__c);
+                sending.add(request);
+            }
+        }
+        if (templateIds.isEmpty()) {
+            return;
+        }
+        Map<Id, DocGen_Template__c> templates = new Map<Id, DocGen_Template__c>(
+            [SELECT Id, Form_Fields_Config__c FROM DocGen_Template__c WHERE Id IN :templateIds WITH SYSTEM_MODE]
+        );
+        for (DocGen_Signature_Request__c request : sending) {
+            DocGen_Template__c template = templates.get(request.Template__c);
+            if (template != null) {
+                request.Form_Fields_Snapshot__c = snapshotValue(template.Form_Fields_Config__c);
+            }
+        }
+    }
+
+    public static void preserveOpenRequestFields(
+        List<DocGen_Template__c> templates,
+        Map<Id, DocGen_Template__c> oldTemplates
+    ) {
+        Map<Id, String> previousByTemplate = new Map<Id, String>();
+        for (DocGen_Template__c template : templates) {
+            String oldConfig = oldTemplates.get(template.Id).Form_Fields_Config__c;
+            if (
+                oldConfig == null
+                    ? template.Form_Fields_Config__c != null
+                    : !oldConfig.equals(template.Form_Fields_Config__c)
+            ) {
+                Set<String> keys = new Set<String>();
+                Boolean duplicate = false;
+                for (FormFieldDef field : parseConfig(template.Form_Fields_Config__c)) {
+                    String key = field.key.toLowerCase();
+                    if (keys.contains(key)) {
+                        duplicate = true;
+                        break;
+                    }
+                    keys.add(key);
+                }
+                if (duplicate) {
+                    template.Form_Fields_Config__c.addError('Signer merge tag keys must be unique.');
+                } else {
+                    previousByTemplate.put(template.Id, snapshotValue(oldConfig));
+                }
+            }
+        }
+        if (previousByTemplate.isEmpty()) {
+            return;
+        }
+        Set<Id> templateIds = previousByTemplate.keySet();
+        List<DocGen_Signature_Request__c> snapshots = new List<DocGen_Signature_Request__c>();
+        for (DocGen_Signature_Request__c request : [
+            SELECT Id, Template__c, Form_Fields_Snapshot__c
+            FROM DocGen_Signature_Request__c
+            WHERE Template__c IN :templateIds AND Status__c IN ('Sent', 'Viewed', 'In Progress')
+            WITH SYSTEM_MODE
+        ]) {
+            if (String.isBlank(request.Form_Fields_Snapshot__c)) {
+                snapshots.add(
+                    new DocGen_Signature_Request__c(
+                        Id = request.Id,
+                        Form_Fields_Snapshot__c = previousByTemplate.get(request.Template__c)
+                    )
+                );
+            }
+        }
+        if (!snapshots.isEmpty()) {
+            Database.update(snapshots, AccessLevel.SYSTEM_MODE);
+        }
+    }
+
+    private static String snapshotValue(String config) {
+        return String.isBlank(config) ? EMPTY_FORM_FIELDS : config;
+    }
+
+    public static String requestConfig(DocGen_Signature_Request__c request) {
+        return String.isNotBlank(request.Form_Fields_Snapshot__c)
+            ? request.Form_Fields_Snapshot__c
+            : (request.Template__r == null ? null : request.Template__r.Form_Fields_Config__c);
+    }
+
     /**
      * One configured signer form field, parsed from the template's
      * Form_Fields_Config__c formFields[] array.
@@ -269,7 +367,7 @@ global without sharing class DocGenFieldWritebackService { // NOPMD AvoidGlobalM
             );
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             List<DocGen_Signature_Request__c> reqs = [
-                SELECT Related_Record_Id__c, Template__r.Form_Fields_Config__c
+                SELECT Related_Record_Id__c, Form_Fields_Snapshot__c, Template__r.Form_Fields_Config__c
                 FROM DocGen_Signature_Request__c
                 WHERE Id = :requestId
                 WITH SYSTEM_MODE
@@ -283,7 +381,7 @@ global without sharing class DocGenFieldWritebackService { // NOPMD AvoidGlobalM
                 return; // capture-only template or no base record — nothing to write.
             }
 
-            List<FormFieldDef> defs = parseConfig(req.Template__r.Form_Fields_Config__c);
+            List<FormFieldDef> defs = parseConfig(requestConfig(req));
             // 2. Allowlist = config fields where writeback==true AND a base field
             //    is mapped. NEVER derived from the guest JSON keys.
             Map<String, FormFieldDef> writebackDefs = new Map<String, FormFieldDef>();

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Form_Fields_Snapshot__c</fullName>
+    <description>Internal signer field definitions captured for this signature request.</description>
+    <externalId>false</externalId>
+    <label>Signer Fields Snapshot</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>
