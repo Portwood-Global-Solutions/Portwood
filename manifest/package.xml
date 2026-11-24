@@ -25,6 +25,8 @@
         <members>DocGenBrandControllerTest</members>
         <members>DocGenBrandResolver</members>
         <members>DocGenBrandResolverTest</members>
+        <members>DocGenBulkCondition</members>
+        <members>DocGenBulkConditionTest</members>
         <members>DocGenBulkController</members>
         <members>DocGenBulkControllerTest</members>
         <members>DocGenBulkFlowAction</members>
