@@ -102,6 +102,7 @@
         <members>DocGenMigrationRest</members>
         <members>DocGenMigrationRestTest</members>
         <members>DocGenMiscTests</members>
+        <members>DocGenNestedAggregateTest</members>
         <members>DocGenPageSetupTest</members>
         <members>DocGenPdfDocument</members>
         <members>DocGenPdfDocumentTest</members>

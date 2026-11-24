@@ -931,6 +931,7 @@ public with sharing class DocGenDataRetriever {
             SObjectType childObjType = validateObjectName(child.objectApiName);
             // Allowlist validation: get field map for ORDER BY field validation
             Map<String, Schema.SObjectField> childNodeFieldMap = childObjType.getDescribe().fields.getMap();
+            addCurrencyIsoCodeField(selectFields, childNodeFieldMap);
 
             // Issue #67: ProcessInstanceHistory and ProcessInstanceWorkitem
             // are NOT standalone-queryable. Route through a parent subquery
@@ -1104,6 +1105,7 @@ public with sharing class DocGenDataRetriever {
             SObjectType bulkChildObjType = validateObjectName(child.objectApiName);
             // Allowlist validation: get field map for ORDER BY field validation
             Map<String, Schema.SObjectField> bulkChildFieldMap = bulkChildObjType.getDescribe().fields.getMap();
+            addCurrencyIsoCodeField(selectFields, bulkChildFieldMap);
 
             // Issue #67: ProcessInstanceHistory and ProcessInstanceWorkitem
             // are NOT standalone-queryable. Route through a parent subquery
@@ -1746,6 +1748,7 @@ public with sharing class DocGenDataRetriever {
             if (gcValidatedFields.isEmpty()) {
                 gcValidatedFields.add('Id');
             }
+            addCurrencyIsoCodeField(gcValidatedFields, gcFieldMap);
             // parentIdField comes from Schema.ChildRelationship.getField() (resolveChildSchema)
             // — already allowlist-trusted, but escape defensively before concat.
             if (!gcValidatedFields.contains(grandchildSpec.parentIdField)) {

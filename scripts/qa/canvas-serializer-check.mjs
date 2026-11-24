@@ -183,6 +183,30 @@ nestTable.table.subColumns = [
 nestDoc.artboards[0].boxes.push(nestTable);
 const nestHtml = m.serialize(nestDoc, geo);
 
+// Collect aggregates from a text box before the table and from its totals cells.
+// Comparable prices may be fields on a lookup; only a declared loop is a subquery.
+const aggregateDoc = structuredClone(nestDoc);
+const aggregateTable = aggregateDoc.artboards[0].boxes[0].table;
+aggregateTable.totals = {
+    enabled: true,
+    cells: [
+        '{MIN:Opportunities.OpportunityLineItems.UnitPrice} {MAX:Opportunities.OpportunityLineItems.ListPrice}',
+        '{COUNT:Opportunities.OpportunityLineItems} {COUNT:Opportunities.OpportunityLineItems.Discount}'
+    ]
+};
+const summary = m.newTextBox(0, 0, 7, 1);
+summary.html =
+    '{SUM:Opportunities.OpportunityLineItems.TotalPrice:#,##0.00} ' +
+    '{AVG:opportunities.opportunitylineitems.Product2.Rating__c} {SUM:Opportunities.Account.AnnualRevenue}';
+aggregateDoc.artboards[0].boxes.unshift(summary);
+const aggregateFields = m.collectUsedFields(aggregateDoc).children;
+const leaves = aggregateFields['Opportunities.OpportunityLineItems'];
+const countOnly = m.blankDocument();
+const countText = m.newTextBox(0, 0, 7, 1);
+countText.html =
+    '{#ChildAccounts}{#ChildAccounts}*{/ChildAccounts}{/ChildAccounts}' + '{COUNT:ChildAccounts.ChildAccounts}';
+countOnly.artboards[0].boxes.push(countText);
+
 // The reverse shape: ONE parent column above TWO nested ones.
 const widerDoc = m.blankDocument();
 const widerTable = m.newTableBox(0.5, 2, 7);
@@ -417,6 +441,19 @@ const checks = [
     // {#IF …} opens a block, not a child collection. Treating it as one filed the
     // fields inside under a relationship that does not exist.
     ['a conditional does not become a relationship', derived.includes('Rating') && !derived.includes('FROM IF')],
+    [
+        'all nested aggregates select their leaf fields',
+        ['TotalPrice', 'Product2.Rating__c', 'UnitPrice', 'ListPrice', 'Discount', 'Id'].every((f) => leaves?.has(f))
+    ],
+    [
+        'a scalar parent lookup in an aggregate stays on its own row',
+        aggregateFields.Opportunities.has('Account.AnnualRevenue') &&
+            !aggregateFields.Opportunities.has('OpportunityLineItems')
+    ],
+    [
+        'a nested row count can select rows with no printed fields',
+        m.buildQueryConfig(countOnly).includes('(SELECT (SELECT Id FROM ChildAccounts) FROM ChildAccounts)')
+    ],
 
     // The sub loop must sit INSIDE the parent loop. Outside it, every grandchild piles
     // up once at the end under whichever parent happened to be last.
