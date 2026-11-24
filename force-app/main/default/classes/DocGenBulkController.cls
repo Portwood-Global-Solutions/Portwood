@@ -81,9 +81,10 @@ public with sharing class DocGenBulkController {
         if (objType == null) {
             throw DocGenService.ahe('Invalid or inaccessible object.');
         }
-        String sanitizedCondition = sanitizeCondition(condition);
+        String sanitizedCondition = validatedJobCondition(objectName, condition);
         // Allowlist validation: WHERE clause field names verified against Schema.describeSObjects() field map
-        if (String.isNotBlank(sanitizedCondition)) {
+        // (a semi-join condition was already parsed field-by-field against Schema above)
+        if (String.isNotBlank(sanitizedCondition) && !DocGenBulkCondition.hasSubquery(condition)) {
             Map<String, Schema.SObjectField> fieldMap = objType.getDescribe().fields.getMap();
             validateWhereClauseFields(sanitizedCondition, fieldMap);
         }
@@ -232,9 +233,36 @@ public with sharing class DocGenBulkController {
     }
 
     /**
+     * A bulk job's own condition, made safe to append after WHERE.
+     *
+     * A condition with a semi-join/anti-join (`Id IN (SELECT AccountId FROM Contact …)`)
+     * goes through DocGenBulkCondition's parser, which validates every field path on both
+     * objects and returns the canonical fragment (#600). Every other condition keeps the
+     * keyword blocklist below, which rejects any SELECT and therefore every semi-join.
+     *
+     * Throws AuraHandledException — for @AuraEnabled callers only.
+     */
+    @TestVisible
+    private static String validatedJobCondition(String objectName, String condition) {
+        if (!DocGenBulkCondition.hasSubquery(condition)) {
+            return sanitizeCondition(condition);
+        }
+        try {
+            return DocGenBulkCondition.validate(objectName, condition);
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e.getMessage());
+        }
+    }
+
+    /**
      * Sanitization of dynamic WHERE conditions to prevent SOQL injection.
      * Two layers: (1) keyword blocklist rejects structural SOQL/DML keywords,
      * (2) caller performs allowlist validation of field names against Schema describe.
+     *
+     * Rejects every sub-select. Bulk job conditions that legitimately carry a
+     * semi-join go through validatedJobCondition() instead; this method stays strict
+     * because the related-record picker (DocGenController) nests its filter inside
+     * parentheses, where SOQL does not allow a semi-join anyway.
      */
     public static String sanitizeCondition(String condition) {
         if (String.isBlank(condition)) {
@@ -1182,6 +1210,14 @@ public with sharing class DocGenBulkController {
                 ? null
                 : normalizeSortOrder(templateBaseObject(templateId), sortOrder);
 
+            // Same reasoning for a semi-join condition (#600): the parser rejects
+            // OR around a semi-join, more than two of them, and mismatched ID types.
+            // Catch those now, not as a job stuck in Processing. Conditions without
+            // a sub-select keep their existing path and are checked in start().
+            if (DocGenBulkCondition.hasSubquery(condition)) {
+                DocGenBulkCondition.validate(templateBaseObject(templateId), condition);
+            }
+
             // Duplex padding (#382) only applies to a Combined PDF; it is
             // meaningless on an Individual-Files job, so it's dropped there
             // rather than errored.
@@ -1234,11 +1270,11 @@ public with sharing class DocGenBulkController {
     }
 
     /**
-     * The SObject a template runs against — the schema a sort clause is validated
-     * against. Queried only when a sort order was actually supplied, so the common
-     * unsorted job pays nothing for it.
+     * The SObject a template runs against — the schema a sort clause or a semi-join
+     * condition is validated against. Queried only when one was actually supplied,
+     * so the common job pays nothing for it. Public for DocGenBulkFlowAction.
      */
-    private static String templateBaseObject(Id templateId) {
+    public static String templateBaseObject(Id templateId) {
         if (templateId == null) {
             return null;
         }
@@ -1391,7 +1427,7 @@ public with sharing class DocGenBulkController {
 
         // Query the same records the batch processed
         String recQuery = 'SELECT Id FROM ' + String.escapeSingleQuotes(baseObject);
-        String condition = sanitizeCondition(job.Query_Condition__c);
+        String condition = validatedJobCondition(baseObject, job.Query_Condition__c);
         if (String.isNotBlank(condition)) {
             recQuery += ' WHERE ' + condition;
         }

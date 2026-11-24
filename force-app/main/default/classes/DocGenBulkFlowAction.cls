@@ -120,7 +120,12 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                 // collection of IDs, fold them into an `Id IN (...)` clause so
                 // the bulk pipeline runs only against those records. Combines
                 // (AND) with any user-supplied queryCondition.
-                effectiveCondition = buildEffectiveCondition(req.queryCondition, req.recordIds);
+                // A semi-join condition must be combined by the parser so it stays at
+                // the top level of the WHERE clause (#600); that needs the base object.
+                String filterObject = req.recordIds != null && DocGenBulkCondition.hasSubquery(req.queryCondition)
+                    ? DocGenBulkController.templateBaseObject(req.templateId)
+                    : null;
+                effectiveCondition = buildEffectiveCondition(filterObject, req.queryCondition, req.recordIds);
 
                 // submitJobInternal, NOT submitJob: the @AuraEnabled entry point
                 // raises AuraHandledException, which cannot be thrown outside an
@@ -163,6 +168,17 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
      */
     @TestVisible
     private static String buildEffectiveCondition(String userCondition, List<String> recordIds) {
+        return buildEffectiveCondition(null, userCondition, recordIds);
+    }
+
+    /**
+     * As above. objectName is the template's base object, needed only when the user
+     * condition carries a semi-join: `(cond) AND Id IN (â€¦)` would nest the semi-join
+     * inside parentheses, which SOQL rejects, so that case is combined by
+     * DocGenBulkCondition, which keeps semi-joins at the top level (#600).
+     */
+    @TestVisible
+    private static String buildEffectiveCondition(String objectName, String userCondition, List<String> recordIds) {
         String idClause = null;
         if (recordIds != null && !recordIds.isEmpty()) {
             List<String> quoted = new List<String>();
@@ -184,6 +200,9 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
 
         Boolean hasUser = String.isNotBlank(userCondition);
         if (hasUser && idClause != null) {
+            if (DocGenBulkCondition.hasSubquery(userCondition)) {
+                return DocGenBulkCondition.combine(objectName, userCondition, idClause);
+            }
             return '(' + userCondition + ') AND ' + idClause;
         }
         if (idClause != null) {
