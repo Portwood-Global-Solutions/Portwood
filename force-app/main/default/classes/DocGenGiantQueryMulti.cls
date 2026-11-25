@@ -7,6 +7,7 @@ public with sharing class DocGenGiantQueryMulti {
     private static final Integer MAX_LONG_TEXT_CHARS_PER_PAGE = 1000000;
 
     public class Dataset {
+        public String key;
         public Map<String, Object> childNode;
         public String nestedQuery;
         public List<String> fields = new List<String>();
@@ -27,6 +28,7 @@ public with sharing class DocGenGiantQueryMulti {
         public Boolean wordSnapshot = false;
 
         public String queryConfig;
+        public DocGenGiantQueryTotals groupedTotals;
     }
 
     private class Worker implements Queueable {
@@ -81,18 +83,7 @@ public with sharing class DocGenGiantQueryMulti {
 
                 saveProgress();
                 if (datasetIndex == run.datasets.size()) {
-                    System.enqueueJob(
-                        new DocGenGiantQueryAssembler(
-                            run.jobId,
-                            run.templateId,
-                            run.recordId,
-                            run.templateVersionId,
-                            run.slots,
-                            run.fragmentCounts,
-                            run.queryConfig,
-                            run.wordSnapshot
-                        )
-                    );
+                    System.enqueueJob(new DocGenGiantQueryAssembler(run));
                 } else {
                     System.enqueueJob(this);
                 }
@@ -153,7 +144,8 @@ public with sharing class DocGenGiantQueryMulti {
                     new ContentVersion(
                         Title = title,
                         PathOnClient = title + '.html',
-                        VersionData = Blob.valueOf(rendered),
+                        // Keep this page's slot sequence even if every nested row was filtered out.
+                        VersionData = Blob.valueOf(String.isEmpty(rendered) ? '<!--empty-->' : rendered),
                         IsMajorVersion = false
                     )
                 );
@@ -162,7 +154,20 @@ public with sharing class DocGenGiantQueryMulti {
             if (!writable.getRemovedFields().isEmpty()) {
                 throw new DocGenException('ContentVersion field access denied for Giant Query fragments.');
             }
-            insert writable.getRecords();
+            if (!fragments.isEmpty()) {
+                insert writable.getRecords();
+            }
+            // Count each fetched row once, even when the dataset is printed in several slots.
+            // The cursor and the totals advance together after this page's fragments were written.
+            if (run.groupedTotals != null && run.groupedTotals.datasets().contains(dataset.key)) {
+                if (groupData != null) {
+                    run.groupedTotals.addRow(dataset.key, groupData);
+                } else {
+                    for (SObject row : rows) {
+                        run.groupedTotals.addRow(dataset.key, DocGenDataRetriever.mapSObject(row));
+                    }
+                }
+            }
             nextPage++;
             run.harvestedRows += rows.size() * dataset.slots.size();
             cursorRetries = 0;
@@ -219,6 +224,9 @@ public with sharing class DocGenGiantQueryMulti {
         }
         String snapshot = loadWordPdfSnapshot(versionId);
         Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
+        if (configVersion == 1 && !DocGenDataRetriever.planFlatGiantDatasets(parentId, queryConfig).isEmpty()) {
+            return planPlacements(snapshot, queryConfig, pageSize, true, parentId);
+        }
         if (configVersion == 1) {
             queryConfig = wordFlatPlanConfig(parentId, queryConfig);
         } else if (configVersion != 3) {
@@ -336,16 +344,19 @@ public with sharing class DocGenGiantQueryMulti {
             }
         }
 
+        DocGenGiantQueryTotals totals = grouped ? new DocGenGiantQueryTotals(queryKeys) : null;
         DocGenGiantQueryPlan planned = grouped
             ? DocGenGiantQueryPlan.compileGrouped(
                   documentBody,
                   byKey.keySet(),
-                  DocGenDataRetriever.getGroupedGiantRootData(recordId, queryConfig)
+                  DocGenDataRetriever.getGroupedGiantRootData(recordId, queryConfig),
+                  wordSnapshot,
+                  totals
               )
             : DocGenGiantQueryPlan.compile(documentBody, queryKeys, wordSnapshot);
         if (!grouped && !wordSnapshot && planned.slots.size() < 2)
             return null;
-        if (grouped && planned.slots.isEmpty()) {
+        if (grouped && planned.slots.isEmpty() && totals.datasets().isEmpty()) {
             throw new DocGenException('Giant Query requires a top-level relationship loop for the grouped PDF.');
         }
         if (!planned.nestedQueryKeys.isEmpty()) {
@@ -354,7 +365,7 @@ public with sharing class DocGenGiantQueryMulti {
                 String.join(new List<String>(planned.nestedQueryKeys), ', ')
             );
         }
-        if (planned.slots.isEmpty()) {
+        if (planned.slots.isEmpty() && !grouped) {
             return null;
         }
 
@@ -362,7 +373,9 @@ public with sharing class DocGenGiantQueryMulti {
         run.slots = planned.slots;
         run.queryConfig = queryConfig;
         run.wordSnapshot = wordSnapshot;
-        Map<String, Dataset> datasets = new Map<String, Dataset>();
+        run.groupedTotals = totals;
+        Map<String, List<DocGenGiantQueryPlan.Slot>> slotsByKey = new Map<String, List<DocGenGiantQueryPlan.Slot>>();
+
         for (DocGenGiantQueryPlan.Slot slot : planned.slots) {
             if (duplicates.contains(slot.queryKey)) {
                 throw new DocGenException('Child query alias must be unique: ' + slot.queryKey);
@@ -372,30 +385,38 @@ public with sharing class DocGenGiantQueryMulti {
                     'Root-anchor {~Label} tags are not supported inside giant-query table loops.'
                 );
             }
-            if (!datasets.containsKey(slot.queryKey)) {
-                Dataset dataset = new Dataset();
-                dataset.childNode = byKey.get(slot.queryKey);
-                if (dataset.childNode == null || dataset.childNode.get('junction') != null) {
-                    throw new DocGenException('Giant Query loops require a direct child lookup: ' + slot.queryKey);
+            if (!slotsByKey.containsKey(slot.queryKey)) {
+                slotsByKey.put(slot.queryKey, new List<DocGenGiantQueryPlan.Slot>());
+            }
+            slotsByKey.get(slot.queryKey).add(slot);
+        }
+        // A grand total may reference a configured dataset whose detail table is hidden.
+        if (totals != null) {
+            for (String key : totals.datasets()) {
+                if (!slotsByKey.containsKey(key)) {
+                    slotsByKey.put(key, new List<DocGenGiantQueryPlan.Slot>());
                 }
-                dataset.nestedQuery = (String) dataset.childNode.get('nestedQuery');
-                for (String fieldGroup : new List<String>{ 'fields', 'parentFields' }) {
-                    List<Object> names = (List<Object>) dataset.childNode.get(fieldGroup);
-                    if (names != null) {
-                        for (Object name : names) {
-                            dataset.fields.add(String.valueOf(name));
-                        }
+            }
+        }
+        for (String key : slotsByKey.keySet()) {
+            Dataset dataset = new Dataset();
+            dataset.key = key;
+            dataset.childNode = byKey.get(key);
+            if (dataset.childNode == null || dataset.childNode.get('junction') != null) {
+                throw new DocGenException('Giant Query loops require a direct child lookup: ' + key);
+            }
+            dataset.nestedQuery = (String) dataset.childNode.get('nestedQuery');
+            for (String fieldGroup : new List<String>{ 'fields', 'parentFields' }) {
+                List<Object> names = (List<Object>) dataset.childNode.get(fieldGroup);
+                if (names != null) {
+                    for (Object name : names) {
+                        dataset.fields.add(String.valueOf(name));
                     }
                 }
-                dataset.pageSize = pageSizeForFields(
-                    pageSize,
-                    (String) dataset.childNode.get('object'),
-                    dataset.fields
-                );
-                datasets.put(slot.queryKey, dataset);
-                run.datasets.add(dataset);
             }
-            datasets.get(slot.queryKey).slots.add(slot);
+            dataset.pageSize = pageSizeForFields(pageSize, (String) dataset.childNode.get('object'), dataset.fields);
+            dataset.slots = slotsByKey.get(key);
+            run.datasets.add(dataset);
         }
         return run;
     }

@@ -1771,6 +1771,7 @@ public with sharing class DocGenDataRetriever {
             if (gcValidatedFields.isEmpty()) {
                 gcValidatedFields.add('Id');
             }
+            addCurrencyIsoCodeField(gcValidatedFields, gcFieldMap);
             // parentIdField comes from Schema.ChildRelationship.getField() (resolveChildSchema)
             // — already allowlist-trusted, but escape defensively before concat.
             if (!gcValidatedFields.contains(grandchildSpec.parentIdField)) {
@@ -2023,7 +2024,7 @@ public with sharing class DocGenDataRetriever {
      * Child lists become { 'totalSize': N, 'records': [...] }.
      * Parent lookups become nested maps.
      */
-    private static Map<String, Object> mapSObject(SObject record) {
+    public static Map<String, Object> mapSObject(SObject record) {
         Map<String, Object> data = new Map<String, Object>();
         Map<String, Object> populatedFields = record.getPopulatedFieldsAsMap();
         Map<String, String> picklistLabels = new Map<String, String>();
@@ -2311,11 +2312,24 @@ public with sharing class DocGenDataRetriever {
 
     /** Resolve outer datasets without interpreting nested SELECTs as root relationships. */
     public static Map<String, Map<String, Object>> planFlatGiantDatasets(Id recordId, String config) {
+        return planFlatGiantDatasets(recordId, config, null);
+    }
+
+    private static Map<String, Map<String, Object>> planFlatGiantDatasets(
+        Id recordId,
+        String config,
+        Map<String, Integer> counts
+    ) {
         Map<String, Map<String, Object>> datasets = new Map<String, Map<String, Object>>();
         if (recordId == null || String.isBlank(config) || config.trim().startsWith('{')) {
             return datasets;
         }
         String rootObject = recordId.getSObjectType().getDescribe().getName();
+        Matcher selects = Pattern.compile('(?i)\\(\\s*SELECT\\b').matcher(config);
+        if (!selects.find() || !selects.find()) {
+            return datasets;
+        }
+        List<SubquerySpec> specs = new List<SubquerySpec>();
         Boolean hasNested = false;
         for (String part : splitTopLevel(flatConfigProjection(config))) {
             String token = part.trim();
@@ -2327,6 +2341,7 @@ public with sharing class DocGenDataRetriever {
                 continue;
             }
             hasNested = hasNested || !spec.children.isEmpty();
+            specs.add(spec);
             List<Object> fields = new List<Object>();
             for (String name : spec.fieldsOnly.split(',')) {
                 fields.add(name.trim());
@@ -2340,11 +2355,72 @@ public with sharing class DocGenDataRetriever {
                     'orderBy' => spec.orderByClause,
                     'limit' => spec.limitClause,
                     'fields' => fields,
+                    'relationshipName' => spec.relationshipName,
                     'nestedQuery' => spec.children.isEmpty() ? null : token
                 }
             );
         }
-        return hasNested ? datasets : new Map<String, Map<String, Object>>();
+        if (!hasNested) {
+            return new Map<String, Map<String, Object>>();
+        }
+        if (counts != null) {
+            for (SubquerySpec spec : specs) {
+                Integer volume = scoutGroupedRows(recordId, spec, spec.parentIdField, 1, counts);
+                datasets.get(spec.relationshipName).put('rowsIncludingChildren', volume);
+            }
+        }
+        return datasets;
+    }
+
+    /** Count the outer records for the UI and estimate the detail across the same root for PDF routing.
+     * Ancestor filters can make the estimate conservative. The worker applies every filter and limit. */
+    private static Integer scoutGroupedRows(
+        Id recordId,
+        SubquerySpec spec,
+        String lookupPath,
+        Integer parents,
+        Map<String, Integer> rootCounts
+    ) {
+        String soql = 'SELECT COUNT() FROM ' + spec.childObjectApiName + ' WHERE ' + lookupPath + ' = :recordId';
+        if (String.isNotBlank(spec.whereClause)) {
+            soql += ' AND (' + sanitizeWhereClause(spec.whereClause) + ')';
+        }
+        Integer rows;
+        try {
+            // Object and every lookup hop came from Schema.ChildRelationship in parseSubquerySpec.
+            rows = Database.countQuery(soql, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection
+        } catch (QueryException unavailable) {
+            // Some history relationships can only be queried as a parent subquery.
+            rows = 0;
+        }
+        if (String.isNotBlank(spec.limitClause)) {
+            Decimal cap = Decimal.valueOf(sanitizeClause(spec.limitClause, 'LIMIT')) * parents;
+            if (cap < rows) {
+                rows = cap.intValue();
+            }
+        }
+        if (rootCounts != null) {
+            rootCounts.put(spec.relationshipName, rows);
+        }
+        Long volume = rows;
+        if (rows > 0) {
+            for (SubquerySpec child : spec.children) {
+                if (String.isBlank(child.childObjectApiName) || String.isBlank(child.parentIdField)) {
+                    continue;
+                }
+                String hop = Schema.getGlobalDescribe()
+                    .get(child.childObjectApiName)
+                    .getDescribe()
+                    .fields.getMap()
+                    .get(child.parentIdField)
+                    .getDescribe()
+                    .getRelationshipName();
+                if (hop != null) {
+                    volume += scoutGroupedRows(recordId, child, hop + '.' + lookupPath, rows, null);
+                }
+            }
+        }
+        return (Integer) Math.min(2147483647L, volume);
     }
 
     public static Map<String, Object> getGroupedGiantRootData(Id recordId, String config) {
@@ -2392,6 +2468,7 @@ public with sharing class DocGenDataRetriever {
             }
         }
 
+        addCurrencyIsoCodeField(fields, fieldMap);
         String rawWhere = (String) childNode.get('where');
         String filter = sanitizeWhereClause(rawWhere == null ? (String) childNode.get('whereClause') : rawWhere);
         String sortClause = sanitizeClause((String) childNode.get('orderBy'), 'ORDER BY', fieldMap);
@@ -2433,6 +2510,14 @@ public with sharing class DocGenDataRetriever {
      * @return Map of relationship name to child record count
      */
     public static Map<String, Integer> scoutChildCounts(Id recordId, String queryConfigJson) {
+        return scoutChildCounts(recordId, queryConfigJson, new Map<String, Map<String, Object>>());
+    }
+
+    public static Map<String, Integer> scoutChildCounts(
+        Id recordId,
+        String queryConfigJson,
+        Map<String, Map<String, Object>> groupedNodes
+    ) {
         Map<String, Integer> counts = new Map<String, Integer>();
 
         if (recordId == null || String.isBlank(queryConfigJson)) {
@@ -2445,8 +2530,10 @@ public with sharing class DocGenDataRetriever {
             // V3 or V2 JSON config
             scoutFromJsonConfig(recordId, trimmed, counts);
         } else {
-            // V1 flat string — parse subqueries like (SELECT ... FROM RelName)
-            scoutFromFlatConfig(recordId, trimmed, counts);
+            groupedNodes.putAll(planFlatGiantDatasets(recordId, trimmed, counts));
+            if (groupedNodes.isEmpty()) {
+                scoutFromFlatConfig(recordId, trimmed, counts);
+            }
         }
 
         return counts;

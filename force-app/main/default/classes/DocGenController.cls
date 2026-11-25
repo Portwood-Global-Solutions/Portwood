@@ -83,6 +83,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         Id recordId,
         Set<String> excludedRootChildKeys
     ) {
+        return generateDocumentDataForWordShell(templateId, recordId, excludedRootChildKeys, null);
+    }
+
+    public static Map<String, Object> generateDocumentDataForWordShell(
+        Id templateId,
+        Id recordId,
+        Set<String> excludedRootChildKeys,
+        String singleStreamedKey
+    ) {
         if (templateId == null) {
             throw new DocGenException('Template ID is missing.');
         }
@@ -143,6 +152,24 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         DocGen_Template__c template = templates[0];
         if (excludedRootChildKeys != null && template.Type__c != 'Word') {
             throw new DocGenException('Multiple giant Word queries require a Word template.');
+        }
+        Set<String> streamedKeys = singleStreamedKey == null
+            ? excludedRootChildKeys
+            : new Set<String>{ singleStreamedKey };
+        if (streamedKeys != null) {
+            Map<String, Map<String, Object>> grouped = DocGenDataRetriever.planFlatGiantDatasets(
+                recordId,
+                template.Query_Config__c
+            );
+            for (String key : streamedKeys) {
+                if (grouped.get(key)?.get('nestedQuery') != null) {
+                    throw new DocGenException(
+                        'Native Word Giant Query supports direct child tables. Choose PDF to include nested rows and their grand totals for ' +
+                            key +
+                            '.'
+                    );
+                }
+            }
         }
 
         Map<String, Object> recordData = DocGenDataRetriever.getRecordData(
@@ -1745,7 +1772,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 giantSettings,
                 false
             );
-            useWordSnapshot = route.largePayload || (giantSettings.thresholdConfigured && route.exceedsRowThreshold);
+            useWordSnapshot =
+                savedNode.containsKey('nestedQuery') ||
+                route.largePayload ||
+                (giantSettings.thresholdConfigured && route.exceedsRowThreshold);
             pageSize = route.pageSize;
         }
 
@@ -1929,11 +1959,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         String queryConfig = templates[0].Query_Config__c;
         // CxSAST: SOQL injection — queryConfig sourced from DB record (not user input); scoutChildCounts uses Schema validation + escapeSingleQuotes + USER_MODE
-        Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(recordId, queryConfig);
+        Map<String, Map<String, Object>> childNodes = new Map<String, Map<String, Object>>();
+        Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(recordId, queryConfig, childNodes);
         result.put('counts', counts);
 
         // Build child node metadata for the client (works for all config formats)
-        Map<String, Map<String, Object>> childNodes = new Map<String, Map<String, Object>>();
         String trimmed = queryConfig.trim();
 
         if (trimmed.startsWith('{')) {
@@ -1971,7 +2001,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     }
                 }
             }
-        } else {
+        } else if (childNodes.isEmpty()) {
             // V1 flat string — resolve child relationships from Schema
             String baseObject = templates[0].Base_Object_API__c;
             Schema.DescribeSObjectResult parentDescribe = Schema.getGlobalDescribe().get(baseObject)?.getDescribe();

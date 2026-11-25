@@ -98,6 +98,12 @@ public with sharing class DocGenGiantQueryRouter {
                 // A numeric LIMIT outside the Integer range cannot reduce the scouted count.
             }
         }
+        if (
+            node?.get('rowsIncludingChildren') != null &&
+            (String.isBlank(outputFormat) || outputFormat.equalsIgnoreCase('PDF'))
+        ) {
+            effectiveRows = (Integer) node.get('rowsIncludingChildren');
+        }
         Assessment a = new Assessment();
         a.exceedsRowThreshold = effectiveRows > settings.rowThreshold;
         Integer longBytes = effectiveRows == 0 ? 0 : sampleLongTextBytes(parentRecordId, node);
@@ -255,7 +261,8 @@ public with sharing class DocGenGiantQueryRouter {
             d.reason = 'No record or query config to scout.';
             return d;
         }
-        d.counts = DocGenDataRetriever.scoutChildCounts(parentRecordId, queryConfig);
+        Map<String, Map<String, Object>> groupedNodes = new Map<String, Map<String, Object>>();
+        d.counts = DocGenDataRetriever.scoutChildCounts(parentRecordId, queryConfig, groupedNodes);
         if (d.counts.isEmpty()) {
             d.reason = 'Template has no child relationships to scout.';
             return d;
@@ -265,7 +272,8 @@ public with sharing class DocGenGiantQueryRouter {
             Integer rows = d.counts.get(relKey);
             if (rows == null || rows == 0)
                 continue;
-            Map<String, Object> node = resolveNodeConfig(parentRecordId, queryConfig, relKey);
+            Map<String, Object> node = groupedNodes.get(relKey) ??
+                resolveNodeConfig(parentRecordId, queryConfig, relKey);
             Boolean sampleOrdinary = sampleBudget > 0 && rows >= SAMPLE_MIN_ROWS && rows <= settings.rowThreshold;
             Assessment a = assess(parentRecordId, node, rows, outputFormat, settings, sampleOrdinary);
             if (sampleOrdinary)
@@ -279,9 +287,23 @@ public with sharing class DocGenGiantQueryRouter {
             d.estimatedPeakHeapBytes = a.estimatedPeakHeapBytes;
             d.useWordSnapshot = a.largePayload || (settings.thresholdConfigured && a.exceedsRowThreshold);
             d.pageSize = a.pageSize;
-            d.reason = a.exceedsRowThreshold
-                ? rows + ' "' + relKey + '" rows exceed the ' + settings.rowThreshold + '-row synchronous ceiling.'
-                : 'Estimated peak heap for ' + rows + ' "' + relKey + '" rows exceeds the safe synchronous limit.';
+            if (
+                groupedNodes.containsKey(relKey) &&
+                node.get('nestedQuery') != null &&
+                outputFormat?.equalsIgnoreCase('PDF') == true
+            ) {
+                d.useWordSnapshot = true;
+                d.reason =
+                    'Grouped query "' +
+                    relKey +
+                    '" has approximately ' +
+                    node.get('rowsIncludingChildren') +
+                    ' rows including nested detail.';
+            } else {
+                d.reason = a.exceedsRowThreshold
+                    ? rows + ' "' + relKey + '" rows exceed the ' + settings.rowThreshold + '-row synchronous ceiling.'
+                    : 'Estimated peak heap for ' + rows + ' "' + relKey + '" rows exceeds the safe synchronous limit.';
+            }
         }
         if (d.useGiantPath)
             return d;
@@ -320,7 +342,8 @@ public with sharing class DocGenGiantQueryRouter {
             }
         }
         // V1 flat string
-        return DocGenController.buildNodeConfigFromFlat(parentRecordId, queryConfig, relKey);
+        return DocGenDataRetriever.planFlatGiantDatasets(parentRecordId, queryConfig).get(relKey) ??
+            DocGenController.buildNodeConfigFromFlat(parentRecordId, queryConfig, relKey);
     }
 
     /**

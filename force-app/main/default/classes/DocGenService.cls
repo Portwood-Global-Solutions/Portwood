@@ -2,6 +2,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     // Collector for images to inject after XML processing
     private static List<Map<String, Object>> pendingImages = new List<Map<String, Object>>();
     private static Integer imageCounter = 0;
+    private static DocGenGiantQueryTotals groupedShellTotals;
     private static String currentTemplateType = 'Word'; // Set before processXml calls
     // PPTX/XLSX image embedding (#117): tracks which slide / worksheet processXml
     // is currently walking. Pendings tagged with this slidePath so the post-process
@@ -1579,7 +1580,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Map<String, Object> dataMap;
         try {
-            dataMap = DocGenController.generateDocumentDataForWordShell(templateId, recordId, giantRelationshipNames);
+            dataMap = DocGenController.generateDocumentDataForWordShell(
+                templateId,
+                recordId,
+                giantRelationshipNames,
+                giantRelationshipName
+            );
         } catch (Exception e) {
             throw new DocGenException('Error retrieving template data: ' + e.getMessage());
         }
@@ -4920,7 +4926,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     cursor = tagClose + 1;
                 } else if (tagContent.contains(':') && isAggregateTag(tagContent)) {
                     // Aggregate tag: {SUM:ChildList.Field}, {COUNT:ChildList}, {AVG:...}, {MIN:...}, {MAX:...}
-                    String aggResult = resolveAggregate(tagContent, data);
+                    String aggResult = groupedShellTotals?.resolve(tagContent, data) ??
+                        resolveAggregate(tagContent, data);
                     if (aggResult != null) {
                         output += aggResult.escapeXml();
                     }
@@ -6889,7 +6896,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * currency field for formatting uses that same field for the mixed-currency guard.
      * Null → the standard `CurrencyIsoCode`.
      */
-    private static String currencyIsoSourceField(String fmt) {
+    public static String currencyIsoSourceField(String fmt) {
         if (String.isBlank(fmt)) {
             return null;
         }
@@ -10735,6 +10742,16 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * @param fieldNames List of field API names to include in the data map
      * @return Concatenated rendered XML for all records
      */
+    public static String mergeGroupedGiantShell(String shell, Map<String, Object> root, DocGenGiantQueryTotals totals) {
+        DocGenGiantQueryTotals prior = groupedShellTotals;
+        groupedShellTotals = totals;
+        try {
+            return mergeGiantHtml(shell, root, null);
+        } finally {
+            groupedShellTotals = prior;
+        }
+    }
+
     public static String mergeGiantHtml(String innerHtml, Map<String, Object> data, Integer rowNumber) {
         String previousType = currentTemplateType;
         String previousOutput = currentOutputFormat;

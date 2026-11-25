@@ -113,8 +113,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                 // Sync vs async is a HEAP decision, not a row-count one. The
                 // shared router estimates peak synchronous heap (sampling one
                 // real child row so heavy rich-text rows are not under-counted).
-                // It scouts every config format for the estimate; only V3 is
-                // auto-routed to the batch (see the guard below) (#374).
+                // It scouts every config format before selecting a supported background renderer.
                 DocGenGiantQueryRouter.Decision route = DocGenGiantQueryRouter.decide(
                     req.recordId,
                     queryConfig,
@@ -126,7 +125,11 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                     // Predicted to exceed the synchronous heap governor. The heap
                     // LimitException is uncatchable, so this MUST be a decision
                     // made before generation, not a try/catch after it.
-                    if (template.Type__c != 'Word') {
+                    Boolean groupedPdf =
+                        route.giantNodeConfig?.containsKey('nestedQuery') == true &&
+                        'PDF'.equalsIgnoreCase(template.Output_Format__c) &&
+                        (template.Type__c == 'Word' || DocGenService.isHtmlBacked(template.Type__c));
+                    if (template.Type__c != 'Word' && !groupedPdf) {
                         throw new DocGenException(
                             'This ' +
                                 template.Type__c +
@@ -136,12 +139,13 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                                 'generate it from the Portwood Runner instead.'
                         );
                     }
-                    // Only V3 (tree) query configs are auto-routed to the batch.
+                    // Grouped PDFs resolve the shell and every group with the template engine.
+                    // The legacy batch still requires a V3 (tree) configuration.
                     // The batch path skips processXml, so parent-level {#IF} /
                     // inverse tags / secondary child loops would leak as raw text
                     // — routing a large V1/V2 template there could silently
                     // corrupt the output. Fail loud with a route instead (#374).
-                    if (DocGenDataRetriever.getConfigVersion(queryConfig) < 3) {
+                    if (!groupedPdf && DocGenDataRetriever.getConfigVersion(queryConfig) < 3) {
                         throw new DocGenException(
                             'This template is too large for synchronous generation (' +
                                 route.reason +
@@ -165,7 +169,7 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
                                 'Run this Generate Document step from a screen or record-triggered (synchronous) Flow.'
                         );
                     }
-                    if (route.useWordSnapshot) {
+                    if (groupedPdf || route.useWordSnapshot) {
                         Map<String, Object> job = DocGenController.startGiantQueryPdf(
                             req.templateId,
                             req.recordId,

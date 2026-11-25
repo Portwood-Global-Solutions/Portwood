@@ -62,8 +62,18 @@ public with sharing class DocGenGiantQueryPlan {
         Set<String> queryKeys,
         Map<String, Object> rootData
     ) {
-        DocGenGiantQueryPlan plan = compile(template, queryKeys, false, true);
-        String mergedShell = DocGenService.mergeGiantHtml(plan.shell, rootData, null);
+        return compileGrouped(template, queryKeys, rootData, false, new DocGenGiantQueryTotals(queryKeys));
+    }
+
+    public static DocGenGiantQueryPlan compileGrouped(
+        String template,
+        Set<String> queryKeys,
+        Map<String, Object> rootData,
+        Boolean wordSnapshot,
+        DocGenGiantQueryTotals totals
+    ) {
+        DocGenGiantQueryPlan plan = compile(template, queryKeys, wordSnapshot, true);
+        String mergedShell = DocGenService.mergeGroupedGiantShell(plan.shell, rootData, totals);
         List<Slot> visibleSlots = new List<Slot>();
         for (Slot slot : plan.slots) {
             if (mergedShell.contains(slot.marker)) {

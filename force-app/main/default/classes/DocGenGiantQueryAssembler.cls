@@ -21,6 +21,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     private Map<String, Integer> expectedFragmentCounts;
     private Boolean plannedWordSnapshot = false;
     private DocGenGiantQueryPlan htmlPlan;
+    private DocGenGiantQueryTotals groupedTotals;
     private String colGroupHtml = '';
     // The authored <table …> opening tag captured from the template snapshot. Chunk-break
     // tables reproduce this verbatim so every page renders at the SAME authored width /
@@ -101,6 +102,21 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         this.expectedFragmentCounts = expectedFragmentCounts;
         this.effectivePlanConfig = effectivePlanConfig;
         this.plannedWordSnapshot = plannedWordSnapshot == true;
+    }
+
+    public DocGenGiantQueryAssembler(DocGenGiantQueryMulti.Run run) {
+        this(
+            run.jobId,
+            run.templateId,
+            run.recordId,
+            run.templateVersionId,
+            run.slots,
+            run.fragmentCounts,
+            run.queryConfig,
+            run.wordSnapshot
+        );
+        groupedTotals = run.groupedTotals;
+        groupedTotals?.finish();
     }
 
     public void execute(QueueableContext ctx) {
@@ -739,11 +755,22 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             queryKeys.add(slot.queryKey);
         }
         Boolean groupedFlat = DocGenDataRetriever.getConfigVersion(effectivePlanConfig) == 1;
+        if (groupedFlat) {
+            // Include footer-only datasets. A job queued on an older version can still
+            // finish if it had no deferred totals; requesting a new total requires a rerun.
+            queryKeys = DocGenDataRetriever.planFlatGiantDatasets(recordId, effectivePlanConfig).keySet();
+            if (groupedTotals == null) {
+                groupedTotals = new DocGenGiantQueryTotals(queryKeys);
+                groupedTotals.finish();
+            }
+        }
         htmlPlan = groupedFlat
             ? DocGenGiantQueryPlan.compileGrouped(
                   bodyContent,
                   queryKeys,
-                  DocGenDataRetriever.getGroupedGiantRootData(recordId, effectivePlanConfig)
+                  DocGenDataRetriever.getGroupedGiantRootData(recordId, effectivePlanConfig),
+                  plannedWordSnapshot,
+                  groupedTotals
               )
             : DocGenGiantQueryPlan.compile(bodyContent, queryKeys, plannedWordSnapshot);
         if (htmlPlan.slots.size() != plannedSlots.size()) {
