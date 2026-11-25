@@ -38,6 +38,4 @@ Use the returned **Content Version ID** with the supported attachment input of S
 
 #### When the data can be large
 
-**Generate Document (Auto Giant Query)** can choose a background path for supported large Word datasets. It takes a **Template ID** and **Record ID**. Check **Is Giant Query**: if true, follow **Job ID** and wait for completion; otherwise use the returned file IDs.
-
-That action's background route requires a supported V3 query and is Word-only. For other large formats, use the runner or a suitable bulk workflow. A successful job submission does not mean its file is ready yet.
+**Generate Document (Auto Giant Query)** takes a **Template ID** and **Record ID**. It can run supported large Word datasets in the background using a V3 query. It also supports grouped PDF output from HTML or Word templates with nested SOQL. When **Is Giant Query** is true, follow the **Job ID** and wait for completion. For synchronous output, use the returned file IDs.
