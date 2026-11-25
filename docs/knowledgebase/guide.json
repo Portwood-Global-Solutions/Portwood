@@ -1,7 +1,7 @@
 {
     "schemaVersion": 1,
     "release": {
-        "packageAlias": "Portwood@3.63.0-1"
+        "packageAlias": "Portwood@3.65.0-1"
     },
     "groups": [
         {
@@ -40,32 +40,44 @@
             "description": "Manage templates, access, upgrades, and practical limits."
         },
         {
-            "id": "tags",
-            "title": "Merge tags, from A to Z",
-            "description": "Find a tag, understand its inputs, and copy an example."
+            "id": "help",
+            "title": "Examples and troubleshooting",
+            "description": "Learn from finished examples and fix the problem in front of you."
         },
         {
             "id": "advanced",
-            "title": "Make the engine purr",
-            "description": "Build long reports, repeat page furniture, and diagnose demanding templates."
+            "title": "Design studio and print layouts",
+            "description": "Build proposals, account briefs and work orders with print CSS, real data and finished examples."
+        },
+        {
+            "id": "tags",
+            "title": "Merge tag reference",
+            "description": "Find a tag, understand its inputs, and copy an example."
         },
         {
             "id": "apex",
-            "title": "Build with Apex",
-            "description": "Call the managed package from your own Salesforce processes."
-        },
-        {
-            "id": "help",
-            "title": "Examples and help",
-            "description": "Learn from finished examples and fix the problem in front of you."
+            "title": "Developer reference",
+            "description": "Look up Apex interfaces when connecting your own Salesforce code."
         }
     ],
     "learningPaths": [
         {
             "id": "first-pdf",
             "title": "Your first PDF",
-            "description": "A small, satisfying first project. Start here if Portwood is new to you.",
+            "description": "Make a template, put it on a record page, and generate a PDF from the record.",
             "articles": ["first-document", "add-to-record-page", "generate-document"]
+        },
+        {
+            "id": "team-setup",
+            "title": "Set up Portwood for your team",
+            "description": "Install the app, assign access, put it on a record, and try it as a teammate.",
+            "articles": [
+                "user-licenses",
+                "install-portwood",
+                "manage-access",
+                "add-to-record-page",
+                "generate-document"
+            ]
         },
         {
             "id": "template-builder",
@@ -81,9 +93,24 @@
         },
         {
             "id": "advanced-report",
-            "title": "Make a polished report",
-            "description": "Move from growing tables to grouped reports and reliable page furniture.",
-            "articles": ["tag-loops", "repeat-table-headers", "running-headers-footers", "engine-tuning"]
+            "title": "Build a buyer-ready proposal",
+            "description": "Use a finished quote to design bundle pricing, a clickable contents page and a draft watermark.",
+            "articles": ["document-studio", "cpq-quote", "print-navigation", "css-print-lab"]
+        },
+        {
+            "id": "service-acceptance",
+            "title": "Build a service acceptance workflow",
+            "description": "Build the agreement, collect a signature from a Screen Flow, and tell your team when the signed file is ready.",
+            "articles": [
+                "recipe-library",
+                "css-print-lab",
+                "merge-pdfs-flow",
+                "flow-signatures",
+                "event-signing-journey",
+                "signing-handoff-setup",
+                "signing-events",
+                "signing-site-handoff"
+            ]
         }
     ],
     "articles": [
@@ -98,8 +125,52 @@
             "related": ["first-document", "generate-document"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
+            }
+        },
+        {
+            "slug": "watch-walkthrough",
+            "title": "Watch a document go from account to acceptance",
+            "group": "start",
+            "audience": "Everyone",
+            "minutes": 11,
+            "summary": "Watch a customer document take shape, then follow it through delivery and signing.",
+            "sources": ["docs/demos", "docs/knowledgebase/examples/acceptance"],
+            "related": ["first-document", "recipe-library", "setup-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "user-licenses",
+            "title": "Who needs a Portwood license?",
+            "group": "start",
+            "audience": "Salesforce administrators and team leads",
+            "minutes": 4,
+            "summary": "Count licenses for staff and the public signing guest user, assign them in Setup, and get a site-license quote for authenticated portal signing.",
+            "sources": [
+                "force-app/main/default/permissionsets",
+                "force-app/main/default/lwc/docGenRunner",
+                "force-app/main/default/lwc/docGenFlowSigner",
+                "docs/knowledgebase/articles/manage-access.md",
+                "docs/knowledgebase/articles/site-experience-cloud.md"
+            ],
+            "related": [
+                "install-portwood",
+                "manage-access",
+                "setup-signatures",
+                "site-experience-cloud",
+                "flow-signatures"
+            ],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -115,7 +186,7 @@
                 "force-app/main/default/permissionsets",
                 "force-app/main/default/lwc/docGenAdmin"
             ],
-            "related": ["first-document", "manage-access", "add-to-record-page"],
+            "related": ["user-licenses", "first-document", "manage-access", "add-to-record-page"],
             "aliases": [
                 "3-install--post-install-setup",
                 "3-install-post-install-setup",
@@ -124,8 +195,8 @@
                 "133-blobtopdf-release-update"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -220,9 +291,9 @@
                 "known-limits-beta"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "org-and-source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
             }
         },
         {
@@ -247,8 +318,8 @@
                 "584-other-word-authoring-gotchas-worth-remembering"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -288,8 +359,8 @@
                 "5710-troubleshooting"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-30",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -298,15 +369,19 @@
             "title": "Fill an existing PDF form",
             "group": "design",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Map actual PDF form fields to Salesforce values.",
-            "sources": ["force-app/main/default/lwc/docGenAdmin", "force-app/main/default/classes/DocGenService.cls"],
+            "minutes": 7,
+            "summary": "Map actual PDF form fields to Salesforce values, and optionally flatten the result.",
+            "sources": [
+                "force-app/main/default/lwc/docGenAdmin",
+                "force-app/main/default/classes/DocGenService.cls",
+                "force-app/main/default/classes/DocGenAcroFormService.cls"
+            ],
             "related": ["choose-data", "limits"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -324,8 +399,8 @@
             "related": ["choose-data", "bulk-generation", "limits"],
             "aliases": ["149-excel-templates-alpha-limitations", "149-excel-templates--alpha-limitations"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -336,7 +411,12 @@
             "audience": "Template builders",
             "minutes": 5,
             "summary": "Draft and revise an HTML template, then verify the PDF.",
-            "sources": ["force-app/main/default/lwc/docGenAdmin", "agentforce-ext"],
+            "sources": [
+                "force-app/main/default/lwc/docGenAdmin",
+                "agentforce-ext",
+                "docs/reference/html-recipes.md",
+                "force-app/main/default/lwc/docGenAuthoringKit"
+            ],
             "related": ["import-html", "template-versions"],
             "aliases": [
                 "5711-generate-the-template-with-agentforce-v346",
@@ -348,8 +428,8 @@
                 "what-the-report-tells-you"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -412,9 +492,9 @@
                 "what-does-not-work"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -447,19 +527,20 @@
             "title": "Reuse terms and HTML snippets",
             "group": "data",
             "audience": "Template builders",
-            "minutes": 5,
-            "summary": "Create, format, version, and insert reusable document sections.",
+            "minutes": 6,
+            "summary": "Reuse a clause, fill in record fields, and place a signature beside it.",
             "sources": [
                 "force-app/main/default/lwc/docGenSnippetAssets",
                 "force-app/main/default/classes/DocGenSnippetController.cls",
-                "force-app/main/default/classes/DocGenSnippetService.cls"
+                "force-app/main/default/classes/DocGenSnippetService.cls",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls"
             ],
             "related": ["images-and-assets", "custom-fonts", "template-versions"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-30",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -477,8 +558,8 @@
             "related": ["page-layout", "custom-fonts", "brands-and-emails"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -600,8 +681,8 @@
             "related": ["sign-template", "bulk-generation"],
             "aliases": ["84-pdf-merge-combine-with-existing-pdfs", "85-document-packets"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -620,8 +701,8 @@
             "related": ["add-to-record-page", "manage-access"],
             "aliases": ["86-one-click-quick-action-button-v328"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -642,8 +723,8 @@
                 "87-document-naming--document-title-format-tokens"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -670,9 +751,9 @@
                 "94-what-bulk-supports-by-template-type"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "org-and-source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
             }
         },
         {
@@ -713,8 +794,8 @@
             "related": ["signer-experience", "manage-signatures", "setup-signatures"],
             "aliases": ["1011-signing-a-customer-uploaded-pdf"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -727,7 +808,8 @@
             "summary": "Match signature roles and send one document or a packet.",
             "sources": [
                 "force-app/main/default/lwc/docGenSignatureSender",
-                "force-app/main/default/lwc/docGenTemplateSignatureSender"
+                "force-app/main/default/lwc/docGenTemplateSignatureSender",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls"
             ],
             "related": ["signer-experience", "manage-signatures", "flow-signatures"],
             "aliases": [
@@ -740,9 +822,9 @@
                 "104-sequential-vs-parallel"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -761,8 +843,27 @@
                 "1072-stamp-card-vs-inline-how-a-signature-renders"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "event-signing-journey",
+            "title": "Open and sign an agreement from Salesforce",
+            "group": "sign",
+            "audience": "People signing an agreement",
+            "minutes": 4,
+            "summary": "Prepare your agreement, open your private signing page, and return to Salesforce to check the signed file.",
+            "sources": [
+                "docs/knowledgebase/examples/event-signing",
+                "force-app/main/default/classes/DocGenSignatureFlowAction.cls"
+            ],
+            "related": ["signer-experience", "signing-handoff-setup", "signing-site-handoff", "manage-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -775,7 +876,8 @@
             "summary": "Follow signing progress and find the completed PDF.",
             "sources": [
                 "force-app/main/default/lwc/docGenSignatureSender",
-                "force-app/main/default/classes/DocGenSignatureSenderController.cls"
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls",
+                "force-app/main/default/lwc/docGenSignatureSettings"
             ],
             "related": ["fix-signing", "brands-and-emails"],
             "aliases": [
@@ -787,9 +889,9 @@
                 "1011-decline-flow"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "org-and-source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
             }
         },
         {
@@ -803,7 +905,7 @@
                 "force-app/main/default/lwc/docGenSignatureSettings",
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml"
             ],
-            "related": ["brands-and-emails", "sign-uploaded-pdf", "fix-signing"],
+            "related": ["user-licenses", "brands-and-emails", "sign-uploaded-pdf", "fix-signing"],
             "aliases": [
                 "105-pin-verification",
                 "making-verification-configurable-onoff-pre-fill",
@@ -812,8 +914,8 @@
                 "132-signature-settings"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -886,13 +988,16 @@
             "title": "Create signing requests with Flow",
             "group": "automate",
             "audience": "Flow builders",
-            "minutes": 8,
-            "summary": "Build signers, create the request, and use its signing links.",
+            "minutes": 10,
+            "summary": "Build signers, create the request, and sign in the Flow or with its signing links.",
             "sources": [
                 "force-app/main/default/classes/DocGenSignatureFlowAction.cls",
-                "force-app/main/default/classes/DocGenSigner.cls"
+                "force-app/main/default/classes/DocGenSigner.cls",
+                "force-app/main/default/lwc/docGenFlowSigner",
+                "force-app/main/default/classes/DocGenFlowSigningController.cls",
+                "force-app/main/default/permissionsets/DocGen_Portal_Signer.permissionset-meta.xml"
             ],
-            "related": ["sign-template", "setup-signatures", "developer-reference"],
+            "related": ["user-licenses", "sign-template", "setup-signatures", "developer-reference"],
             "aliases": [
                 "116-recipe--send-a-contract-for-signature-on-opportunity-approval",
                 "116-recipe-send-a-contract-for-signature-on-opportunity-approval",
@@ -902,9 +1007,9 @@
                 "117-recipe--send-a-document-for-signature-on-the-pdf-viewer-page"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -955,9 +1060,9 @@
             "related": ["move-templates", "organize-templates"],
             "aliases": ["52-template-versions", "521-cloning-a-template-v329"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "org-and-source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
             }
         },
         {
@@ -990,7 +1095,7 @@
                 "force-app/main/default/lwc/docGenAdmin",
                 "force-app/main/default/classes/DocGenController.cls"
             ],
-            "related": ["template-versions", "upgrade-portwood"],
+            "related": ["template-versions", "migrate-configuration", "upgrade-portwood"],
             "aliases": [
                 "511-api-name-a-stable-key-for-automation-v328",
                 "511-api-name--a-stable-key-for-automation-v328",
@@ -1004,14 +1109,33 @@
             }
         },
         {
+            "slug": "migrate-configuration",
+            "title": "Migrate your Portwood setup between orgs",
+            "group": "manage",
+            "audience": "Salesforce administrators",
+            "minutes": 9,
+            "summary": "Copy templates, brands, fonts, snippets, and signing settings to another org with one command.",
+            "sources": [
+                "scripts/migration",
+                "force-app/main/default/classes/DocGenMigrationRest.cls",
+                "force-app/main/default/permissionsets/DocGen_Migration.permissionset-meta.xml"
+            ],
+            "related": ["move-templates", "custom-fonts", "brands-and-emails", "manage-access"],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
+            }
+        },
+        {
             "slug": "manage-access",
             "title": "Give people the right access",
             "group": "manage",
             "audience": "Salesforce administrators",
             "minutes": 5,
-            "summary": "Match permission sets to roles and troubleshoot access.",
+            "summary": "Give licensed users, signing guests and portal members the permissions their jobs require.",
             "sources": ["force-app/main/default/permissionsets", "force-app/main/default/classes/DocGenController.cls"],
-            "related": ["add-to-record-page", "organize-templates"],
+            "related": ["user-licenses", "add-to-record-page", "organize-templates"],
             "aliases": [
                 "4-permission-sets",
                 "assigning-a-permission-set",
@@ -1020,9 +1144,9 @@
                 "134-custom-fields-on-portwood-objects"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1035,13 +1159,14 @@
             "sources": [
                 "sfdx-project.json",
                 "force-app/main/default/objects/DocGen_Template__c",
-                "force-app/main/default/objects/DocGen_Template_Version__c"
+                "force-app/main/default/objects/DocGen_Template_Version__c",
+                "CHANGELOG.md"
             ],
             "related": ["template-versions", "troubleshooting"],
             "aliases": ["1512-a-value-is-missing-from-the-type-picklist-canvas-html-excel"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1074,8 +1199,8 @@
                 "148-template-output-size-guidance"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1090,9 +1215,9 @@
             "related": ["first-document", "repeating-tables", "sign-template"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "org-and-source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "source"
             }
         },
         {
@@ -1121,8 +1246,8 @@
                 "1513-still-stuck"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1166,9 +1291,9 @@
                 "1510-signing-link-opens-to-invalid-page-on-an-experience-cloud-site"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1233,8 +1358,8 @@
             "related": ["choose-data", "tag-fields", "tag-loops", "tag-charts"],
             "aliases": ["7-merge-tag-reference"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1370,9 +1495,9 @@
                 "711-watermarks-page-backgrounds-pdf-output"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1382,13 +1507,17 @@
             "audience": "Template builders",
             "minutes": 8,
             "summary": "Place signatures and initials, match roles, and repeat signer sections.",
-            "sources": ["force-app/main/default/classes/DocGenService.cls", "docs/reference/merge-tags.md"],
+            "sources": [
+                "force-app/main/default/classes/DocGenService.cls",
+                "force-app/main/default/classes/DocGenSignatureSenderController.cls",
+                "docs/reference/merge-tags.md"
+            ],
             "related": ["merge-tags", "choose-data", "fix-document"],
             "aliases": ["79-signatures"],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
-                "method": "source"
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
             }
         },
         {
@@ -1405,8 +1534,8 @@
                 "715-classic-approvals-related-list-approvals-v192"
             ],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1436,7 +1565,7 @@
             "group": "advanced",
             "audience": "Advanced template builders",
             "minutes": 7,
-            "summary": "Keep formatted page furniture while showing Page X of Y.",
+            "summary": "Keep your formatted header and footer while showing Page X of Y.",
             "sources": [
                 "force-app/main/default/classes/DocGenService.cls",
                 "docs/knowledgebase/examples/two-line-footer.html"
@@ -1568,8 +1697,8 @@
             "related": ["apex-generation", "document-packets", "ai-authoring"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -1605,11 +1734,11 @@
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml",
                 "force-app/main/default/lwc/docGenSignatureSettings"
             ],
-            "related": ["site-email", "setup-signatures", "fix-signing"],
+            "related": ["user-licenses", "site-email", "setup-signatures", "fix-signing"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "org-and-source"
             }
         },
@@ -1625,11 +1754,11 @@
                 "force-app/main/default/lwc/docGenSignatureSettings",
                 "force-app/main/default/permissionsets/DocGen_Guest_Signature.permissionset-meta.xml"
             ],
-            "related": ["site-salesforce", "site-email", "fix-signing"],
+            "related": ["user-licenses", "site-salesforce", "site-email", "fix-signing"],
             "aliases": [],
             "review": {
-                "version": "3.60.0",
-                "date": "2026-10-24",
+                "version": "3.64.0",
+                "date": "2026-11-20",
                 "method": "source"
             }
         },
@@ -1746,10 +1875,241 @@
                 "date": "2026-10-24",
                 "method": "source"
             }
+        },
+        {
+            "slug": "recipe-library",
+            "title": "Recipes from a first letter to a signed packet",
+            "group": "start",
+            "audience": "Template builders",
+            "minutes": 5,
+            "summary": "Build a letter, a service schedule and an automated signature handoff.",
+            "sources": ["docs/knowledgebase/examples/acceptance", "force-app/main/default/classes/DocGenService.cls"],
+            "related": ["css-print-lab", "signing-events"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "document-studio",
+            "title": "Start with a finished design",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 8,
+            "summary": "Try a finished design, generate its PDF, then build your own Generate PDF button in Flow Builder.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["cpq-quote", "renewal-decision", "service-sheet", "event-signing-journey"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "print-navigation",
+            "title": "Build a linked contents page and a draft watermark",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 7,
+            "summary": "Give readers clickable destinations, live page numbers and a draft mark that follows the quote.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["cpq-quote", "running-headers-footers", "css-print-lab"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "cpq-quote",
+            "title": "Build a quote with nested bundle pricing",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 8,
+            "summary": "Group components by bundle, reconcile one-time and monthly prices, then send this exact quote for signature.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["print-navigation", "sign-uploaded-pdf", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "renewal-decision",
+            "title": "Design a renewal brief that recommends a next step",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 6,
+            "summary": "Turn usage into an account decision, a readable adoption chart and a useful response to missing data.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["tag-conditions", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "service-sheet",
+            "title": "Print a scannable field-service work order",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 5,
+            "summary": "Give each machine an offline QR label, job-specific checks and space to record the visit.",
+            "sources": [
+                "docs/knowledgebase/examples/document-studio",
+                "force-app/main/default/classes/DocGenFlowAction.cls"
+            ],
+            "related": ["tag-media", "document-studio"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "css-print-lab",
+            "title": "Design an advanced document with print CSS",
+            "group": "advanced",
+            "audience": "Template builders",
+            "minutes": 10,
+            "summary": "Build a branded, multi-page service review with repeating columns, a separate acceptance page and rich footers.",
+            "sources": [
+                "force-app/main/default/classes/DocGenService.cls",
+                "docs/knowledgebase/examples/acceptance",
+                "docs/reference/template-layout.md"
+            ],
+            "related": ["repeat-table-headers", "running-headers-footers", "shared-content"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "merge-pdfs-flow",
+            "title": "Merge Salesforce Files in Flow",
+            "group": "automate",
+            "audience": "Salesforce administrators",
+            "minutes": 5,
+            "summary": "Create an ordered PDF from exact file versions and optionally pad it for duplex printing.",
+            "sources": [
+                "force-app/main/default/classes/DocGenPdfMergeFlowAction.cls",
+                "force-app/main/default/flows/DocGen_Merge_PDFs_Demo.flow-meta.xml"
+            ],
+            "related": ["document-packets", "sign-template"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "signing-site-handoff",
+            "title": "Open the signing site from a Screen Flow",
+            "group": "automate",
+            "audience": "Salesforce administrators",
+            "minutes": 10,
+            "summary": "Build the screens and the Open a Page action that take a signer to their agreement and back to check the result.",
+            "sources": [
+                "force-app/main/default/classes/DocGenSignatureFlowAction.cls",
+                "force-app/main/default/lwc/docGenFlowSigner",
+                "docs/knowledgebase/examples/acceptance",
+                "docs/knowledgebase/examples/event-signing"
+            ],
+            "related": ["event-signing-journey", "signing-handoff-setup", "signing-events", "flow-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "signing-handoff-setup",
+            "title": "Set up a signing receipt and event",
+            "group": "automate",
+            "audience": "Salesforce administrators",
+            "minutes": 8,
+            "summary": "Create the private receipt, event and practice template that connect a signing screen to its background Flow.",
+            "sources": [
+                "docs/knowledgebase/examples/event-signing",
+                "force-app/main/default/classes/DocGenSignatureFlowAction.cls"
+            ],
+            "related": ["signing-events", "signing-site-handoff", "event-signing-journey", "setup-signatures"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
+        },
+        {
+            "slug": "signing-events",
+            "title": "Prepare a signature request when a platform event arrives",
+            "group": "automate",
+            "audience": "Salesforce administrators",
+            "minutes": 10,
+            "summary": "Build the background Flow that finds the signer, prepares the agreement and saves a private link for their screen.",
+            "sources": [
+                "force-app/main/default/objects/DocGen_Signature_PDF__e",
+                "force-app/main/default/triggers/DocGenSignaturePdfTrigger.trigger",
+                "force-app/main/default/classes/DocGenSignatureService.cls",
+                "docs/knowledgebase/examples/event-signing"
+            ],
+            "related": ["signing-handoff-setup", "signing-site-handoff", "event-signing-journey"],
+            "aliases": [],
+            "review": {
+                "version": "3.64.0",
+                "date": "2026-11-20",
+                "method": "org-and-source"
+            }
         }
     ],
     "home": {
         "image": "docs/images/userguide/v3.60/first-document-result.png",
-        "imageAlt": "A finished Account brief shows Northstar Bikes and its phone number."
+        "imageAlt": "A finished Account brief shows Northstar Bikes and its phone number.",
+        "showcase": [
+            {
+                "slug": "cpq-quote",
+                "title": "A quote buyers can navigate",
+                "image": "docs/images/userguide/v3.64/quote-pricing.png",
+                "alt": "Proposal showing an Atlas bundle with its component prices and a separate Harbor bundle."
+            },
+            {
+                "slug": "renewal-decision",
+                "title": "A brief that recommends a next step",
+                "image": "docs/images/userguide/v3.64/renewal-decision.png",
+                "alt": "Renewal brief with an adoption recommendation and three labeled usage bars."
+            },
+            {
+                "slug": "service-sheet",
+                "title": "A work order technicians can scan",
+                "image": "docs/images/userguide/v3.64/work-order.png",
+                "alt": "Field work order with two equipment QR labels and printable inspection checks."
+            }
+        ]
     }
 }

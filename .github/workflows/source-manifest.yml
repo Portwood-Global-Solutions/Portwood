@@ -1,0 +1,29 @@
+name: Source manifest
+
+on:
+    pull_request:
+    push:
+        branches: [main, 'release/**']
+        tags: ['v*']
+
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: Install Salesforce CLI
+              run: npm install --global @salesforce/cli@2.144.6
+            - name: Verify the checked-in base manifest
+              run: |
+                  git ls-files --error-unmatch manifest/package.xml
+                  npm run manifest:update
+                  git diff --exit-code -- manifest/package.xml || {
+                    echo "::error file=manifest/package.xml::Run npm run manifest:update and commit the updated manifest."
+                    exit 1
+                  }

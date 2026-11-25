@@ -33,13 +33,14 @@
                 ></lightning-icon>
                 <p>{doneMessage}</p>
                 <div class="slds-m-top_medium">
-                    <template lwc:if={showDownload}>
-                        <lightning-button
-                            label="Download"
-                            variant="brand"
-                            class="slds-m-right_x-small"
-                            onclick={handleDownload}
-                        ></lightning-button>
+                    <template lwc:if={previewDownloadUrl}>
+                        <a
+                            class="slds-button slds-button_brand slds-m-right_x-small"
+                            href={previewDownloadUrl}
+                            download={previewDownloadName}
+                        >
+                            Download
+                        </a>
                     </template>
                     <lightning-button label="Close" onclick={handleClose}></lightning-button>
                 </div>

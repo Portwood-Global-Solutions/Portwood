@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Link_Expires_At__c</fullName>
+    <label>Handoff link expires</label>
+    <type>DateTime</type>
+</CustomField>

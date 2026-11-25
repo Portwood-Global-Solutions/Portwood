@@ -2909,6 +2909,10 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Default_Email_Message__c'
             }
         );
+        // #534 — Flatten_PDF__c is checked advisory-only: a field added in an upgrade must
+        // never break the template list for orgs whose users get Portwood access through
+        // their own permission sets (only the packaged ones gain it automatically).
+        DocGenFlsGuard.advisoryAssertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Flatten_PDF__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         return [
             SELECT
@@ -2940,6 +2944,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
                 Signature_Type_Only__c,
+                Flatten_PDF__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 CreatedDate,
@@ -2961,6 +2966,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * Keep the field list in step with getAllTemplates above — they are the same
      * projection, one filtered and one not.
      */
+    /**
+     * #534 — Flatten_PDF__c arrived in an upgrade. Packaged permission sets gain it
+     * automatically; custom permission sets and profiles do not. Writes are therefore
+     * skipped (never thrown) when the running user lacks edit access. The describe
+     * call is the FLS check; tests bypass the verdict like DocGenFlsGuard does.
+     */
+    private static Boolean canWriteFlattenPdf(Boolean forCreate) {
+        Schema.DescribeFieldResult field = DocGen_Template__c.Flatten_PDF__c.getDescribe();
+        Boolean allowed = forCreate ? field.isCreateable() : field.isUpdateable();
+        return allowed || Test.isRunningTest();
+    }
+
     private static List<DocGen_Template__c> queryTemplateById(Id templateId) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Template__c.sObjectType,
@@ -2997,6 +3014,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'Brand__c'
             }
         );
+        // #534 — advisory-only, see getAllTemplates.
+        DocGenFlsGuard.advisoryAssertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Flatten_PDF__c' });
         /* code-analyzer-suppress ApexFlsViolation */
         return [
             SELECT
@@ -3028,6 +3047,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Prefill_Signer_Email__c,
                 Hide_Signer_Decline__c,
                 Signature_Type_Only__c,
+                Flatten_PDF__c,
                 API_Name__c,
                 Default_Email_Message__c,
                 Brand__c,
@@ -3240,6 +3260,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // #367 — per-template "Hide Decline Button" switch
             if (fields.containsKey('Hide_Signer_Decline__c')) {
                 template.Hide_Signer_Decline__c = (Boolean) fields.get('Hide_Signer_Decline__c');
+            }
+            // #534 — "Flatten PDF on generation" (fillable PDF templates). Written only when
+            // the user can edit it, so saving a template never fails after an upgrade
+            // for users without the new field's FLS — their value is simply left as-is.
+            if (fields.containsKey('Flatten_PDF__c') && canWriteFlattenPdf(false)) {
+                template.Flatten_PDF__c = fields.get('Flatten_PDF__c') == true;
             }
             // PHD-9 — stable developer key for Flow lookups. Blank means "leave
             // unchanged": Flows/buttons reference this key, and the create-wizard's
@@ -5976,8 +6002,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
         // Strip quoted string literals so they don't confuse the tokenizer
         String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
-        // Tokenize on whitespace and parentheses
-        List<String> tokens = stripped.split('[\\s(),]+');
+        // Tokenize on whitespace, parentheses, commas and comparison operators (matches
+        // DocGenBulkController.validateWhereClauseFields)
+        List<String> tokens = stripped.split('[\\s(),=<>!]+');
         // SOQL operators and keywords to skip
         Set<String> skipTokens = new Set<String>{
             '=',
@@ -6042,16 +6069,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (Pattern.matches('LAST_N_.*:\\d+', upper) || Pattern.matches('NEXT_N_.*:\\d+', upper)) {
                 continue;
             }
-            // This looks like a field name — validate against Schema
-            String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
-            if (!fieldMap.containsKey(baseField)) {
-                // Try __r → __c for custom relationship traversals
-                String asLookup = baseField.endsWith('__r')
-                    ? baseField.substring(0, baseField.length() - 3) + '__c'
-                    : baseField;
-                if (!fieldMap.containsKey(asLookup)) {
-                    throw new DocGenException('Invalid field in WHERE clause: ' + t);
-                }
+            // This looks like a field name — validate against Schema (shared allowlist, #535:
+            // accepts standard relationship paths such as RecordType.DeveloperName)
+            if (!DocGenBulkController.isAllowedFieldPath(t, fieldMap)) {
+                throw new DocGenException(
+                    DocGenBulkController.invalidFieldMessage('Invalid field in WHERE clause: ', t, fieldMap)
+                );
             }
         }
     }
@@ -8338,6 +8361,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static String exportTemplate(Id templateId) {
+        return exportTemplateBundle(templateId, false);
+    }
+
+    // Migration reads non-HTML body bytes through the user's native Files API instead of Apex JSON.
+    public static String exportTemplateForMigration(Id templateId) {
+        return exportTemplateBundle(templateId, true);
+    }
+
+    private static String exportTemplateBundle(Id templateId, Boolean streamOfficeBody) {
         try {
             DocGenFlsGuard.assertAccessible(
                 DocGen_Template__c.sObjectType,
@@ -8373,6 +8405,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'Form_Fields_Config__c'
                 }
             );
+            // #534 — advisory-only, see getAllTemplates.
+            DocGenFlsGuard.advisoryAssertAccessible(
+                DocGen_Template__c.sObjectType,
+                new Set<String>{ 'Flatten_PDF__c' }
+            );
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template__c> templates = [
                 SELECT
@@ -8403,6 +8440,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Prefill_Signer_Email__c,
                     Hide_Signer_Decline__c,
                     Signature_Type_Only__c,
+                    Flatten_PDF__c,
                     Default_Email_Message__c,
                     Form_Fields_Config__c,
                     (
@@ -8468,6 +8506,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('Prefill_Signer_Email__c', tmpl.Prefill_Signer_Email__c);
             tmplData.put('Hide_Signer_Decline__c', tmpl.Hide_Signer_Decline__c);
             tmplData.put('Signature_Type_Only__c', tmpl.Signature_Type_Only__c);
+            tmplData.put('Flatten_PDF__c', tmpl.Flatten_PDF__c);
             tmplData.put('Default_Email_Message__c', tmpl.Default_Email_Message__c);
             tmplData.put('Form_Fields_Config__c', tmpl.Form_Fields_Config__c);
             bundle.put('template', tmplData);
@@ -8478,35 +8517,59 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (!tmpl.Versions__r.isEmpty()) {
                 ver = tmpl.Versions__r[0];
                 if (String.isNotBlank(ver.Content_Version_Id__c)) {
-                    // FLS-guard + SYSTEM_MODE, NOT USER_MODE. Template-internal CVs
-                    // (docgen_html_body_*, the uploaded template file) carry
-                    // ContentDocumentLinks that default to Visibility=InternalUsers,
-                    // which USER_MODE reads silently drop — the #114 quirk. Under
-                    // USER_MODE this returned empty and the export produced a bundle
-                    // with NO body at all, so the clone was created blank with no error.
-                    DocGenFlsGuard.assertAccessible(
-                        ContentVersion.sObjectType,
-                        new Set<String>{ 'VersionData', 'FileExtension', 'Title' }
-                    );
-                    /* code-analyzer-suppress ApexFlsViolation */
-                    List<ContentVersion> cvs = [
-                        SELECT VersionData, FileExtension, Title
-                        FROM ContentVersion
-                        WHERE Id = :ver.Content_Version_Id__c
-                        WITH SYSTEM_MODE
-                        LIMIT 1 // NOPMD — internal template file read
-                    ];
-                    if (!cvs.isEmpty()) {
-                        Map<String, Object> fileData = new Map<String, Object>();
-                        fileData.put('fileName', cvs[0].Title);
-                        fileData.put('fileExtension', cvs[0].FileExtension);
-                        fileData.put('base64', EncodingUtil.base64Encode(cvs[0].VersionData));
-                        bundle.put('templateFile', fileData);
-                        // For HTML templates, the body bytes are HTML text containing
-                        // shepherd URLs that reference inline-image CVs — capture the
-                        // text so we can scan it for asset IDs below.
-                        if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
-                            htmlBodyText = cvs[0].VersionData.toString();
+                    if (streamOfficeBody && !DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                        Id bodyId = Id.valueOf(ver.Content_Version_Id__c);
+                        ContentVersion file = [
+                            SELECT Id, Title, FileExtension, ContentSize, Checksum
+                            FROM ContentVersion
+                            WHERE Id = :bodyId
+                            WITH USER_MODE
+                        ];
+                        bundle.put(
+                            'templateFile',
+                            new Map<String, Object>{
+                                'fileName' => file.Title,
+                                'fileExtension' => file.FileExtension,
+                                'file' => new Map<String, Object>{
+                                    'id' => file.Id,
+                                    'title' => file.Title,
+                                    'extension' => file.FileExtension,
+                                    'size' => file.ContentSize,
+                                    'checksum' => file.Checksum
+                                }
+                            }
+                        );
+                    } else {
+                        // FLS-guard + SYSTEM_MODE, NOT USER_MODE. Template-internal CVs
+                        // (docgen_html_body_*, the uploaded template file) carry
+                        // ContentDocumentLinks that default to Visibility=InternalUsers,
+                        // which USER_MODE reads silently drop — the #114 quirk. Under
+                        // USER_MODE this returned empty and the export produced a bundle
+                        // with NO body at all, so the clone was created blank with no error.
+                        DocGenFlsGuard.assertAccessible(
+                            ContentVersion.sObjectType,
+                            new Set<String>{ 'VersionData', 'FileExtension', 'Title' }
+                        );
+                        /* code-analyzer-suppress ApexFlsViolation */
+                        List<ContentVersion> cvs = [
+                            SELECT VersionData, FileExtension, Title
+                            FROM ContentVersion
+                            WHERE Id = :ver.Content_Version_Id__c
+                            WITH SYSTEM_MODE
+                            LIMIT 1 // NOPMD — internal template file read
+                        ];
+                        if (!cvs.isEmpty()) {
+                            Map<String, Object> fileData = new Map<String, Object>();
+                            fileData.put('fileName', cvs[0].Title);
+                            fileData.put('fileExtension', cvs[0].FileExtension);
+                            fileData.put('base64', EncodingUtil.base64Encode(cvs[0].VersionData));
+                            bundle.put('templateFile', fileData);
+                            // For HTML templates, the body bytes are HTML text containing
+                            // shepherd URLs that reference inline-image CVs — capture the
+                            // text so we can scan it for asset IDs below.
+                            if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                                htmlBodyText = cvs[0].VersionData.toString();
+                            }
                         }
                     }
                 }
@@ -8616,6 +8679,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             return JSON.serialize(bundle);
         } catch (Exception e) {
+            if (streamOfficeBody)
+                throw e;
             throw DocGenService.ahe(e, 'Error exporting template.');
         }
     }
@@ -8654,6 +8719,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
     @AuraEnabled
     public static Id importTemplate(String jsonData) {
+        return importTemplateBundle(jsonData, null, false);
+    }
+
+    // Accepts a user-owned staging file validated by the authenticated migration transport.
+    public static Id importTemplateFromMigrationFile(String jsonData, ContentVersion stagedFile) {
+        return importTemplateBundle(jsonData, stagedFile, true);
+    }
+
+    private static Id importTemplateBundle(String jsonData, ContentVersion stagedFile, Boolean migration) {
         try {
             Map<String, Object> bundle = (Map<String, Object>) JSON.deserializeUntyped(jsonData);
             Map<String, Object> tmplData = (Map<String, Object>) bundle.get('template');
@@ -8696,6 +8770,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // #367 — a bundle without the key (older export) keeps Decline shown
             tmpl.Hide_Signer_Decline__c = tmplData.get('Hide_Signer_Decline__c') == true;
             tmpl.Signature_Type_Only__c = tmplData.get('Signature_Type_Only__c') == true;
+            // #534 — older bundles without the key import as fillable (unflattened); users
+            // without create access to the new field import it unflattened rather than fail.
+            if (tmplData.get('Flatten_PDF__c') == true && canWriteFlattenPdf(true)) {
+                tmpl.Flatten_PDF__c = true;
+            }
             tmpl.Default_Email_Message__c = (String) tmplData.get('Default_Email_Message__c');
             tmpl.Form_Fields_Config__c = (String) tmplData.get('Form_Fields_Config__c');
             // API_Name__c is unique — keep it (the whole point is a stable key
@@ -8825,7 +8904,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // 2. Upload template file if present
             Map<String, Object> fileData = (Map<String, Object>) bundle.get('templateFile');
             String cvId = null;
-            if (fileData != null && String.isNotBlank((String) fileData.get('base64'))) {
+            if (stagedFile != null) {
+                if (DocGenService.isHtmlBacked(tmpl.Type__c)) {
+                    throw new DocGenException('HTML templates with inline image references use the JSON import path.');
+                }
+                Database.update(new ContentVersion(Id = stagedFile.Id, Title = tmpl.Name), AccessLevel.USER_MODE);
+                Database.insert(
+                    new ContentDocumentLink(
+                        ContentDocumentId = stagedFile.ContentDocumentId,
+                        LinkedEntityId = tmpl.Id,
+                        ShareType = 'V'
+                    ),
+                    AccessLevel.USER_MODE
+                );
+                cvId = stagedFile.Id;
+            } else if (fileData != null && String.isNotBlank((String) fileData.get('base64'))) {
                 ContentVersion cv = new ContentVersion();
                 // HTML bodies MUST keep the docgen_html_body_<templateId>_<ts> convention:
                 // getHtmlTemplateBody finds the body by that title prefix, so titling it
@@ -8973,6 +9066,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             return tmpl.Id;
         } catch (Exception e) {
+            if (migration)
+                throw e;
             throw DocGenService.ahe(e, 'Error importing template.');
         }
     }
@@ -9482,7 +9577,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     /**
      * Retires an asset by clearing Is_Active__c. The resolver skips inactive
      * assets, so any template still using the tag renders a placeholder + logs an
-     * error rather than the old image. Reversible (re-activate via the platform).
+     * error rather than the old image. Reversible via reactivateAsset.
      */
     @AuraEnabled
     public static void deactivateAsset(Id assetId) {
@@ -9496,6 +9591,29 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             Database.update(asset, AccessLevel.SYSTEM_MODE);
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error deactivating asset.');
+        }
+    }
+
+    /**
+     * Reactivates a previously deactivated asset by setting Is_Active__c back to
+     * TRUE — the exact reverse of deactivateAsset. The resolver immediately
+     * resumes serving the asset's latest version, so templates using
+     * {%asset:<key>} render the image again instead of the missing-asset
+     * placeholder. Deactivation touches only Is_Active__c and never changes the
+     * version pointer, so the same latest version is restored.
+     */
+    @AuraEnabled
+    public static void reactivateAsset(Id assetId) {
+        if (assetId == null) {
+            throw DocGenService.ahe('Asset Id is required.');
+        }
+        try {
+            DocGen_Asset__c asset = new DocGen_Asset__c(Id = assetId, Is_Active__c = true);
+            DocGenFlsGuard.assertUpdateable(asset, new Set<String>{ 'Is_Active__c' });
+            /* code-analyzer-suppress ApexFlsViolation */
+            Database.update(asset, AccessLevel.SYSTEM_MODE);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error reactivating asset.');
         }
     }
 

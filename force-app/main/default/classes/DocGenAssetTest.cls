@@ -224,6 +224,20 @@ private class DocGenAssetTest {
         DocGenController.deactivateAsset(assetId);
         after = [SELECT Is_Active__c FROM DocGen_Asset__c WHERE Id = :assetId];
         System.assertEquals(false, after.Is_Active__c, 'deactivateAsset clears Is_Active__c');
+
+        // Issue #580: a deactivated asset can be reactivated from the Assets tab.
+        DocGenController.reactivateAsset(assetId);
+        after = [SELECT Is_Active__c FROM DocGen_Asset__c WHERE Id = :assetId];
+        System.assertEquals(true, after.Is_Active__c, 'reactivateAsset sets Is_Active__c back to TRUE');
+
+        // ...and the reactivated asset is listed as active again.
+        Boolean listedActive = false;
+        for (Map<String, Object> row : DocGenController.getAssets()) {
+            if (assetId == (Id) row.get('id')) {
+                listedActive = (Boolean) row.get('isActive');
+            }
+        }
+        System.assertEquals(true, listedActive, 'getAssets reports the reactivated asset as active');
     }
 
     @IsTest
@@ -312,7 +326,12 @@ private class DocGenAssetTest {
         } catch (Exception e) {
             thrown++;
         }
-        System.assertEquals(3, thrown, 'All null-arg guards should throw');
+        try {
+            DocGenController.reactivateAsset(null);
+        } catch (Exception e) {
+            thrown++;
+        }
+        System.assertEquals(4, thrown, 'All null-arg guards should throw');
     }
 
     // =========================================================================
@@ -361,6 +380,36 @@ private class DocGenAssetTest {
         // Empty / null inputs are safe.
         System.assert(DocGenService.resolveAssetCvIds(null).isEmpty(), 'null keys -> empty map');
         System.assert(DocGenService.resolveAssetCvIds(new Set<String>()).isEmpty(), 'empty keys -> empty map');
+    }
+
+    @IsTest
+    static void reactivationRestoresResolution() {
+        // Issue #580: deactivation makes the tag resolve to null (placeholder at
+        // generation); reactivation must restore the SAME latest version, since
+        // deactivation never touches the version pointer.
+        DocGen_Asset__c asset = new DocGen_Asset__c(Name = 'Seal', Asset_Key__c = 'seal');
+        insert asset;
+        uploadVersion(asset.Id, 'seal-v1');
+
+        DocGenService.assetCvCache = null;
+        String activeCv = DocGenService.resolveAssetCvIds(new Set<String>{ 'seal' }).get('seal');
+        System.assert(String.isNotBlank(activeCv), 'Active asset resolves to a CV Id');
+
+        DocGenController.deactivateAsset(asset.Id);
+        DocGenService.assetCvCache = null;
+        System.assertEquals(
+            null,
+            DocGenService.resolveAssetCvIds(new Set<String>{ 'seal' }).get('seal'),
+            'Deactivated asset resolves to null (placeholder at generation)'
+        );
+
+        DocGenController.reactivateAsset(asset.Id);
+        DocGenService.assetCvCache = null;
+        System.assertEquals(
+            activeCv,
+            DocGenService.resolveAssetCvIds(new Set<String>{ 'seal' }).get('seal'),
+            'Reactivated asset resolves to the same latest version it had before'
+        );
     }
 
     @IsTest

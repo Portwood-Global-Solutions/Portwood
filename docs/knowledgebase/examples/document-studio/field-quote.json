@@ -1,0 +1,142 @@
+{
+  "Client": "Alder Works",
+  "QuoteNumber": "Q-2048",
+  "Subject": "Field station renewal",
+  "Issued": "20 November 2026",
+  "ValidUntil": "20 December 2026",
+  "IsDraft": true,
+  "Currency": "USD",
+  "Sponsor": "Facilities Operations",
+  "Bundles": {
+    "totalSize": 2,
+    "records": [
+      {
+        "Key": "atlas",
+        "Name": "Atlas station",
+        "Use": "At each receiving bay, capture the equipment reading before dispatch.",
+        "Components": {
+          "totalSize": 3,
+          "records": [
+            {
+              "Sku": "AT-210",
+              "Description": "Field station with sealed enclosure",
+              "Qty": 2,
+              "ListPrice": 3125,
+              "Discount": 12,
+              "Net": 5500.0
+            },
+            {
+              "Sku": "AT-041",
+              "Description": "Mount and cable harness",
+              "Qty": 2,
+              "ListPrice": 95,
+              "Discount": 0,
+              "Net": 190.0
+            },
+            {
+              "Sku": "SV-106",
+              "Description": "Commissioning and operator training",
+              "Qty": 1,
+              "ListPrice": 850,
+              "Discount": 0,
+              "Net": 850.0
+            }
+          ]
+        },
+        "AddOns": {
+          "totalSize": 0,
+          "records": []
+        },
+        "OneTimeNet": 6540.0,
+        "Monthly": 60
+      },
+      {
+        "Key": "harbor",
+        "Name": "Harbor reserve",
+        "Use": "Keep one station online while the site supply is being serviced.",
+        "Components": {
+          "totalSize": 2,
+          "records": [
+            {
+              "Sku": "HB-310",
+              "Description": "Power cabinet with changeover relay",
+              "Qty": 1,
+              "ListPrice": 3750,
+              "Discount": 8,
+              "Net": 3450.0
+            },
+            {
+              "Sku": "HB-014",
+              "Description": "Reserve battery module",
+              "Qty": 2,
+              "ListPrice": 340,
+              "Discount": 0,
+              "Net": 680.0
+            }
+          ]
+        },
+        "AddOns": {
+          "totalSize": 1,
+          "records": [
+            {
+              "Sku": "SV-208",
+              "Description": "Annual on-site readiness inspection",
+              "Qty": 1,
+              "ListPrice": 450,
+              "Discount": 0,
+              "Net": 450.0
+            }
+          ]
+        },
+        "OneTimeNet": 4130.0,
+        "Monthly": 60
+      }
+    ]
+  },
+  "OneTime": 10670.0,
+  "Monthly": 120,
+  "AddOnNet": 450,
+  "Milestones": {
+    "totalSize": 3,
+    "records": [
+      {
+        "Phase": "Site survey",
+        "Owner": "Facilities lead",
+        "Window": "Week 1",
+        "Check": "Site access, power and mounting positions confirmed."
+      },
+      {
+        "Phase": "Installation",
+        "Owner": "Field engineering",
+        "Window": "Weeks 2–3",
+        "Check": "Each station commissioned against the equipment list."
+      },
+      {
+        "Phase": "Acceptance",
+        "Owner": "Operations sponsor",
+        "Window": "Week 4",
+        "Check": "Training and handoff checklist acknowledged."
+      }
+    ]
+  },
+  "Payments": {
+    "totalSize": 3,
+    "records": [
+      {
+        "Due": "At order",
+        "Share": 30,
+        "Amount": 3201
+      },
+      {
+        "Due": "After commissioning",
+        "Share": 40,
+        "Amount": 4268
+      },
+      {
+        "Due": "On acceptance",
+        "Share": 30,
+        "Amount": 3201
+      }
+    ]
+  }
+}

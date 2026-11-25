@@ -40,3 +40,5 @@ Edit the original Word file, save it, then open the template's **Edit** action. 
 For PDF output, simple tables and common fonts are easiest to maintain. Use fixed column widths when columns must line up. Avoid building a layout from spaces, floating shapes, or text boxes. If a table looks different, see [Fix a layout or output problem](#troubleshooting).
 
 Files larger than **10 MB** are rejected by the template uploader. Compress large pictures in Word before uploading.
+
+For a full-page Word cover, set the section margins and header/footer distances deliberately. For a cover with artwork at the page edge, Word-to-PDF conversion preserves a distance of zero. Check the cover and first body page for an unwanted extra page.

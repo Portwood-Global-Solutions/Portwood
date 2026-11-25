@@ -4375,6 +4375,27 @@ private class DocGenMiscTests {
     }
 
     @IsTest
+    static void testNumberFormatOptionalDecimals() {
+        Map<String, Object> data = new Map<String, Object>{
+            'Whole' => 100,
+            'Tenth' => 100.1,
+            'Hundredth' => 100.01,
+            'Small' => 100.00001,
+            'Negative' => -1234.50001,
+            'Carry' => 999.999996
+        };
+
+        String result = DocGenService.processXmlForTest(
+            '<p>{Whole:#,##0.#####}|{Tenth:#,##0.#####}|{Hundredth:#,##0.0####}|{Small:#,##0.#####}|' +
+            '{Whole:#,##0.0####}|{Negative:#,##0.##}|{Carry:#,##0.#####}|{Whole:#,##0.00}</p>',
+            data,
+            'HTML'
+        );
+
+        System.assertEquals('<p>100|100.1|100.01|100.00001|100.0|-1,234.5|1,000|100.00</p>', result);
+    }
+
+    @IsTest
     static void testNumberFormatNoDecimals() {
         Map<String, Object> data = new Map<String, Object>{ 'ItemCount' => 9876 };
 
@@ -4904,6 +4925,82 @@ private class DocGenMiscTests {
             outSheet.contains('Line one\nLine two'),
             'Multiline value keeps its literal newline in the cell: ' + outSheet
         );
+    }
+
+    @IsTest
+    static void testAsyncExcelSavesMacroWorkbookWithMergedWorksheets() {
+        Account account = TestDataFactory.getTestAccount();
+        DocGen_Template__c template = new DocGen_Template__c(
+            Name = 'Async macro workbook',
+            Type__c = 'Excel',
+            Output_Format__c = 'Native',
+            Base_Object_API__c = 'Account',
+            Query_Config__c = 'Name'
+        );
+        insert template;
+
+        String firstSheet =
+            '<worksheet><dimension ref="A1:B1"/><sheetData><row r="1">' +
+            '<c r="A1" t="inlineStr"><is><t>{Name}</t></is></c><c r="B1"><f>COUNTA(A1)</f></c>' +
+            '</row></sheetData><sheetProtection sheet="1"/></worksheet>';
+        String secondSheet = firstSheet.replace('COUNTA(A1)', 'LEN(A1)');
+        Blob vba = EncodingUtil.convertFromHex('D0CF11E0A1B11AE100');
+        Compression.ZipWriter templateZip = new Compression.ZipWriter();
+        templateZip.addEntry('[Content_Types].xml', Blob.valueOf('<Types/>'));
+        templateZip.addEntry('xl/worksheets/sheet1.xml', Blob.valueOf(firstSheet));
+        templateZip.addEntry('xl/worksheets/sheet2.xml', Blob.valueOf(secondSheet));
+        templateZip.addEntry('xl/vbaProject.bin', vba);
+        ContentVersion version = new ContentVersion(
+            Title = 'Async macro template',
+            PathOnClient = 'async-template.xlsm',
+            VersionData = templateZip.getArchive(),
+            FirstPublishLocationId = template.Id
+        );
+        insert version;
+        insert new DocGen_Template_Version__c(
+            Template__c = template.Id,
+            Content_Version_Id__c = version.Id,
+            Is_Active__c = true
+        );
+
+        Test.startTest();
+        System.enqueueJob(new AsyncExcelGeneration(template.Id, account.Id));
+        Test.stopTest();
+
+        ContentVersion saved = [
+            SELECT PathOnClient, VersionData
+            FROM ContentVersion
+            WHERE Title = 'Async macro result'
+            LIMIT 1
+        ];
+        System.assertEquals('Async macro result.xlsm', saved.PathOnClient);
+        Compression.ZipReader resultZip = new Compression.ZipReader(saved.VersionData);
+        System.assertEquals(
+            EncodingUtil.convertToHex(vba),
+            EncodingUtil.convertToHex(resultZip.extract('xl/vbaProject.bin'))
+        );
+        System.assertEquals(
+            firstSheet.replace('{Name}', account.Name.escapeXml()),
+            resultZip.extract('xl/worksheets/sheet1.xml').toString()
+        );
+        System.assertEquals(
+            secondSheet.replace('{Name}', account.Name.escapeXml()),
+            resultZip.extract('xl/worksheets/sheet2.xml').toString()
+        );
+    }
+
+    private class AsyncExcelGeneration implements Queueable {
+        private Id templateId;
+        private Id recordId;
+
+        private AsyncExcelGeneration(Id templateId, Id recordId) {
+            this.templateId = templateId;
+            this.recordId = recordId;
+        }
+
+        public void execute(QueueableContext context) {
+            DocGenService.generateDocument(templateId, recordId, null, 'Async macro result');
+        }
     }
 
     /** @description Minimal XLSX container shared by the Excel corruption regression tests. */

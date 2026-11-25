@@ -1,16 +1,20 @@
 Use a Google Docs export or an HTML file as a PDF template.
 
+![Bring an Existing Template is the starting point for importing a document into Portwood.](docs/images/userguide/v3.64/choose-existing.png)
+
 #### From Google Docs
 
 1. Make a copy of your document.
 2. Replace example values with tags, such as `{Name}` and `{Phone}` for an Account template.
 3. Choose **File → Download → Web Page (.html, zipped)**.
-4. In Portwood, choose **Create New → Bring an Existing Template**.
+4. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**.
 5. Choose the base object, **Type = HTML**, and PDF output.
 6. Include the fields used in the document.
-7. Upload the ZIP, keeping the HTML and images together.
-8. Finish creation and click **Save as New Version** if prompted.
+7. Choose **Next → Create Template**. In the template editor under **Upload New Version**, select **Choose File** and upload the ZIP with the HTML and images together.
+8. Select **Save as New Version**.
 9. Generate a PDF with your sample record and check the whole document.
+
+![In the HTML template editor, Choose File accepts a Google Docs ZIP, HTML or HTM.](docs/images/userguide/v3.64/upload-html.png)
 
 Portwood extracts the HTML and images from the export. You do not need to upload each exported picture separately.
 
@@ -37,3 +41,5 @@ If the designer has unsaved changes, Portwood opens an **Unsaved changes** confi
 Salesforce's PDF renderer supports a smaller set of layout features than a web browser. Plain paragraphs, tables, fixed widths, and common fonts are reliable starting points. Modern web layouts using flexbox or grid can change or disappear.
 
 Always check a generated PDF before sending it. For advanced styling and a reusable authoring prompt, see the [HTML and Word layout reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md).
+
+For a complete body, a separate footer, and the PDF they produce together, open the [print CSS lab](#css-print-lab).

@@ -93,6 +93,16 @@ sf code-analyzer run --workspace "force-app/" --rule-selector "Security" --rule-
 
 0 High severity required. ~30 Moderate false positives are expected and documented in `code-analyzer.yml`.
 
+### Keep the source deployment manifest current
+
+When you add, remove, rename, or move base-app metadata, or change what `.forceignore` excludes, run this from the repository root and commit the resulting `manifest/package.xml` in the same PR:
+
+```bash
+npm run manifest:update
+```
+
+The command uses Salesforce CLI to list the deployable contents of `force-app`. The optional Agentforce extension has its own package directory. CI regenerates the base manifest and compares it with the checked-in file. Before tagging a release, confirm that the **Source manifest** check passed on the release commit, so the tag includes the correct file. If the minimum deployment API version changes, update `manifest:update` and the customer deploy command together.
+
 ### Code guidelines
 
 - **Read `CLAUDE.md`** before touching the merge engine or PDF pipeline. It documents constraints that are easy to regress — relative image URLs, zero-heap PDF rendering, no `VersionData` in PDF-path queries.

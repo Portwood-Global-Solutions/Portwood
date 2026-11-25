@@ -152,6 +152,17 @@
         ]
     },
     {
+        "name": "DocGenMigrationRest",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenMigrationRest.cls",
+        "declarations": [
+            "global with sharing class DocGenMigrationRest",
+            "global static void readConfiguration()",
+            "global static void createConfiguration()",
+            "global static void discardStage()"
+        ]
+    },
+    {
         "name": "DocGenPdfMergeFlowAction",
         "package": "Core",
         "file": "force-app/main/default/classes/DocGenPdfMergeFlowAction.cls",

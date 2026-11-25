@@ -1,5 +1,7 @@
 Use one dataset and `{#GroupBy}` when the categories can change. Use deliberately filtered query aliases when each section has a different data-selection rule.
 
+[Build nested bundle tables from a priced quote.](#cpq-quote)
+
 #### One table per stage
 
 Select Opportunities with `Name`, `StageName`, and `Amount`. Sort by `StageName` if you want groups in stage order. This HTML wraps a complete table in the group and keeps the row loop inside its cells:

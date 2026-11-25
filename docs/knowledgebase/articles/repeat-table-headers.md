@@ -56,7 +56,7 @@ Use a real `<thead>` for labels and `<tbody>` for the repeated row. Keep both lo
 }
 ```
 
-The semantic header is the right starting point. In the 3.60.0 test, this baseline printed the labels on page one but did not repeat them on pages two through four.
+Start with the header shown above. If the labels appear on the first page only, add the pagination rule below and generate the same document again.
 
 #### Opt in to per-page table pagination
 
@@ -80,4 +80,4 @@ Use the [HTML body](https://github.com/Portwood-Global-Solutions/Portwood/blob/m
 
 **You are done when:** Every row appears once, labels repeat where needed, and no row or footer overlaps on any page.
 
-The semantic-table approach was adapted from a [Portwood Community example](https://portwoodcommunity.slack.com/archives/C0AQS3BJG6L/p1790805020706859). The pagination rule and observed limits above come from the fresh 3.60.0 lab, rather than an assumption that the community snippet repeats on every layout.
+The semantic-table approach was adapted from a [Portwood Community example](https://portwoodcommunity.slack.com/archives/C0AQS3BJG6L/p1790805020706859). Try the rule with your own longest table and compare it with the [multi-page service schedule](#css-print-lab).

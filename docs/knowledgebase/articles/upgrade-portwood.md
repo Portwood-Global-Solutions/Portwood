@@ -2,6 +2,8 @@ Keep templates and workflows working when you install a new release.
 
 **Before you start:** Read the [changelog](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/CHANGELOG.md), note your installed version in **Setup → Installed Packages**, and test in a sandbox.
 
+If you already hold a free production site license, your existing installed version can continue under that agreement. Moving to a paid release requires paid licensing. If you started on a free version in a sandbox, ask Portwood to confirm your production options. [Sandbox and production licensing](https://portwood.dev/pricing#sandbox-to-production)
+
 #### Before upgrading
 
 1. Export important templates and keep their authoring files.
@@ -42,6 +44,6 @@ If scripts create versions without setting Type, check whether **Word** is still
 
 Do not change the active production template just to test a new design. Use a clone and switch it on after review.
 
-#### Update this knowledgebase
+#### Customize the revoked-request email
 
-Documentation maintainers should follow the [release maintenance workflow](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/MAINTAINING.md). The guide is built from task articles so a release can update only the affected lessons and screenshots.
+When upgrading from 3.61 or earlier, check **Object Manager → Portwood Email Template → Fields & Relationships → Type**. Add the picklist API value `Signature_Revoked` if you want to customize the revoked notice and it is missing. The default notice can still send.

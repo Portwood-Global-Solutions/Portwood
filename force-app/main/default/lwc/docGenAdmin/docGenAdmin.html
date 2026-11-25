@@ -602,6 +602,17 @@
                                             class="slds-var-m-top_medium"
                                             required
                                         ></lightning-combobox>
+                                        <!-- #534 — fillable PDF templates only -->
+                                        <template if:true={showNewFlattenPdfOption}>
+                                            <lightning-input
+                                                type="checkbox"
+                                                label="Flatten PDF on generation"
+                                                checked={newTemplateFlattenPdf}
+                                                onchange={handleNewFlattenPdfChange}
+                                                class="slds-var-m-top_medium"
+                                                field-level-help="Merges the record values into the fillable PDF, then converts the form fields into static page content so recipients can't edit them after download."
+                                            ></lightning-input>
+                                        </template>
                                     </template>
                                     <template if:true={showNewPageLayoutFields}>
                                         <lightning-combobox
@@ -1620,23 +1631,36 @@
                                 ></lightning-button>
                             </div>
                         </template>
-                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
-                            {templateCountLabel}
+                        <template lwc:if={templateListLoading}>
+                            <div class="slds-is-relative slds-var-p-around_large">
+                                <lightning-spinner
+                                    alternative-text="Loading templates"
+                                    size="small"
+                                ></lightning-spinner>
+                            </div>
+                        </template>
+                        <p lwc:elseif={templateListFailed} role="alert">
+                            Templates could not be loaded. Use Refresh to try again.
                         </p>
-                        <div class="table-container">
-                            <lightning-datatable
-                                key-field="Id"
-                                data={filteredTemplates}
-                                columns={columns}
-                                onrowaction={handleRowAction}
-                                sorted-by={templateSortedBy}
-                                sorted-direction={templateSortedDirection}
-                                onsort={handleTemplateSort}
-                                min-column-width="70"
-                                hide-checkbox-column
-                            >
-                            </lightning-datatable>
-                        </div>
+                        <template lwc:else>
+                            <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
+                                {templateCountLabel}
+                            </p>
+                            <div class="table-container">
+                                <lightning-datatable
+                                    key-field="Id"
+                                    data={filteredTemplates}
+                                    columns={columns}
+                                    onrowaction={handleRowAction}
+                                    sorted-by={templateSortedBy}
+                                    sorted-direction={templateSortedDirection}
+                                    onsort={handleTemplateSort}
+                                    min-column-width="70"
+                                    hide-checkbox-column
+                                >
+                                </lightning-datatable>
+                            </div>
+                        </template>
                     </template>
                 </div>
             </lightning-tab>
@@ -3612,7 +3636,7 @@
 
                     <lightning-tabset variant="scoped" active-tab-value={activeEditTab}>
                         <!-- Tab 1: Settings -->
-                        <lightning-tab label="Settings" value="details">
+                        <lightning-tab label="Settings" value="details" onactive={handleTemplateSettingsActive}>
                             <!-- Grouped into balanced sections so the tab fits without heavy scrolling -->
                             <div class="slds-var-p-around_small">
                                 <h3 class="slds-text-heading_small slds-var-m-bottom_x-small">Template</h3>
@@ -3685,6 +3709,19 @@
                                             class="slds-var-m-top_medium"
                                             required
                                         ></lightning-combobox>
+                                        <!-- #534 — fillable PDF templates only, and only for users who can edit the field -->
+                                        <template if:true={showEditFlattenPdfOption}>
+                                            <lightning-input
+                                                type="toggle"
+                                                label="Flatten PDF on generation"
+                                                checked={editTemplateFlattenPdf}
+                                                onchange={handleEditFlattenPdfChange}
+                                                message-toggle-active="Generated PDFs are flattened — fields can't be edited"
+                                                message-toggle-inactive="Generated PDFs keep fillable form fields"
+                                                field-level-help="Merges the record values into the fillable PDF, then converts the form fields into static page content so recipients can't edit them after download. Applies to downloads, previews, saved files, bulk and Flow."
+                                                class="slds-var-m-top_medium"
+                                            ></lightning-input>
+                                        </template>
                                     </div>
                                     <div class="slds-col slds-size_1-of-2">
                                         <template if:true={showEditCanvasPageBanner}>
