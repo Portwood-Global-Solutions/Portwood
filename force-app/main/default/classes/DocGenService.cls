@@ -1593,6 +1593,43 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         Id recordId,
         String giantRelationshipName
     ) {
+        return prepareWordGiantQueryParts(templateId, recordId, giantRelationshipName, null);
+    }
+
+    /** Plans all requested direct child queries without loading their rows into the shell. */
+    public static Map<String, Object> generateDocumentPartsGiantQueryMulti(
+        Id templateId,
+        Id recordId,
+        List<String> giantRelationshipNames
+    ) {
+        if (giantRelationshipNames == null || giantRelationshipNames.isEmpty()) {
+            throw new DocGenException('At least one giant Word query is required.');
+        }
+        return prepareWordGiantQueryParts(templateId, recordId, null, new Set<String>(giantRelationshipNames));
+    }
+
+    private static Map<String, Object> prepareWordGiantQueryParts(
+        Id templateId,
+        Id recordId,
+        String giantRelationshipName,
+        Set<String> giantRelationshipNames
+    ) {
+        String previousOutputFormat = currentOutputFormat;
+        String previousTemplateType = currentTemplateType;
+        try {
+            return buildWordGiantQueryParts(templateId, recordId, giantRelationshipName, giantRelationshipNames);
+        } finally {
+            currentOutputFormat = previousOutputFormat;
+            currentTemplateType = previousTemplateType;
+        }
+    }
+
+    private static Map<String, Object> buildWordGiantQueryParts(
+        Id templateId,
+        Id recordId,
+        String giantRelationshipName,
+        Set<String> giantRelationshipNames
+    ) {
         // Use PDF output format to skip image blob loading during merge
         currentOutputFormat = 'PDF';
 
@@ -1604,7 +1641,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Map<String, Object> dataMap;
         try {
-            dataMap = DocGenController.generateDocumentData(templateId, recordId);
+            dataMap = DocGenController.generateDocumentDataForWordShell(templateId, recordId, giantRelationshipNames);
         } catch (Exception e) {
             throw new DocGenException('Error retrieving template data: ' + e.getMessage());
         }
@@ -1653,6 +1690,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
                     String xml = mergeRunsInTags(reader.extract(name).toString());
+                    if (giantRelationshipNames != null) {
+                        DocGenGiantQueryPlan partPlan = DocGenGiantQueryPlan.compile(xml, giantRelationshipNames);
+                        if (!partPlan.slots.isEmpty() || !partPlan.nestedQueryKeys.isEmpty()) {
+                            throw new DocGenException('Giant Word query loops must appear in the document body.');
+                        }
+                    }
                     xml = processXml(xml, recordDataMap);
                     mr.processedXmlEntries.put(name, xml);
                 } else {
@@ -1665,14 +1708,33 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             throw new DocGenException('Template does not contain word/document.xml.');
         }
 
-        // Merge runs first, then inject placeholder for the giant loop
-        rawDocumentXml = mergeRunsInTags(rawDocumentXml);
-
-        Map<String, String> loopParts = extractLoopBody(rawDocumentXml, giantRelationshipName);
         String giantLoopBodyXml = '';
-        if (loopParts != null) {
-            giantLoopBodyXml = loopParts.get('innerXml');
-            rawDocumentXml = loopParts.get('beforeLoop') + placeholder + loopParts.get('afterLoop');
+        List<Map<String, String>> slots = new List<Map<String, String>>();
+        if (giantRelationshipNames == null) {
+            rawDocumentXml = mergeRunsInTags(rawDocumentXml);
+            Map<String, String> loopParts = extractLoopBody(rawDocumentXml, giantRelationshipName);
+            if (loopParts != null) {
+                giantLoopBodyXml = loopParts.get('innerXml');
+                rawDocumentXml = loopParts.get('beforeLoop') + placeholder + loopParts.get('afterLoop');
+            }
+        } else {
+            DocGenGiantQueryPlan plan = DocGenGiantQueryPlan.compile(rawDocumentXml, giantRelationshipNames);
+            if (!plan.nestedQueryKeys.isEmpty()) {
+                throw new DocGenException('Giant Word queries require top-level loops in the document body.');
+            }
+            if (plan.slots.isEmpty()) {
+                throw new DocGenException('Could not find a giant query loop in the Word template.');
+            }
+            for (DocGenGiantQueryPlan.Slot slot : plan.slots) {
+                slots.add(
+                    new Map<String, String>{
+                        'queryKey' => slot.queryKey,
+                        'marker' => slot.marker,
+                        'innerXml' => slot.innerXml
+                    }
+                );
+            }
+            rawDocumentXml = plan.shell;
         }
 
         // Process remaining merge tags (parent-level fields, other loops)
@@ -1722,8 +1784,6 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
 
-        currentOutputFormat = 'Native';
-
         return new Map<String, Object>{
             'allXmlParts' => allXmlParts,
             'imageBase64Map' => imageBase64Map,
@@ -1731,7 +1791,8 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             'title' => mr.docTitle,
             'templateType' => mr.templateType,
             'placeholder' => placeholder,
-            'giantLoopBodyXml' => giantLoopBodyXml
+            'giantLoopBodyXml' => giantLoopBodyXml,
+            'slots' => slots
         };
     }
 
@@ -2603,6 +2664,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * image blobs into heap.
      */
     public static void ensureTemplateAssetImageAccessForPdf(Id templateId, Id recordId, String html) {
+        ensureTemplateAssetImageAccessForPdf(templateId, recordId, html, null);
+    }
+
+    public static void ensureTemplateAssetImageAccessForPdf(
+        Id templateId,
+        Id recordId,
+        String html,
+        Id templateVersionId
+    ) {
         pendingRenderImageLinkIds.clear();
         if (templateId == null || recordId == null || String.isBlank(html) || !html.contains('/version/download/')) {
             return;
@@ -2617,19 +2687,31 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             DocGen_Template_Version__c.sObjectType,
             new Set<String>{ 'Template__c', 'Is_Active__c' }
         );
-        /* code-analyzer-suppress ApexFlsViolation */
-        List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id
-            FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = TRUE
-            WITH SYSTEM_MODE
-            LIMIT 1
-        ];
-        if (activeVersions.isEmpty()) {
+        List<DocGen_Template_Version__c> versions;
+        if (templateVersionId == null) {
+            /* code-analyzer-suppress ApexFlsViolation */
+            versions = [
+                SELECT Id
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        } else {
+            /* code-analyzer-suppress ApexFlsViolation */
+            versions = [
+                SELECT Id
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Id = :templateVersionId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+        }
+        if (versions.isEmpty()) {
             return;
         }
 
-        String versionId = String.valueOf(activeVersions[0].Id);
+        String versionId = String.valueOf(versions[0].Id);
         String templateIdText = String.valueOf(templateId);
         List<String> assetPrefixes = new List<String>{
             'docgen_tmpl_img_' +
@@ -4898,14 +4980,22 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         val = resolveValue(data, fieldName);
                     }
                     if (val != null) {
-                        // Snapshot/cache JSON round-trips turn Date/Datetime values into strings.
-                        // Re-type them so format suffixes still apply (otherwise the raw string
-                        // prints — the snapshot signed-PDF date bug):
-                        //  - "yyyy-MM-dd" (DATE field): format by literal calendar day in GMT so
-                        //    it never shifts by time zone (dateOnlyGmt).
-                        //  - ISO datetime string (DATETIME field): parse and format in local time.
-                        Boolean dateOnlyGmt = false;
-                        if (val instanceof String) {
+                        // Apex Date also matches instanceof Datetime. Detect Date first so a
+                        // queried Date uses its calendar day and a genuine instant stays local.
+                        Boolean dateOnlyGmt = dateFormat != null && val instanceof Date;
+                        if (dateOnlyGmt) {
+                            Date calendarDate = (Date) val;
+                            val = DateTime.newInstanceGmt(
+                                calendarDate.year(),
+                                calendarDate.month(),
+                                calendarDate.day(),
+                                0,
+                                0,
+                                0
+                            );
+                        } else if (val instanceof String) {
+                            // Snapshot/cache JSON turns dates into strings. Restore the same
+                            // date-only or instant semantics before applying a format suffix.
                             String dv = (String) val;
                             if (Pattern.matches('\\d{4}-\\d{2}-\\d{2}', dv)) {
                                 val = DateTime.newInstanceGmt(
@@ -4932,7 +5022,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         if (
                             dateFormat != null &&
                             dateFormat.toLowerCase().trim().startsWith('date') &&
-                            (val instanceof DateTime || val instanceof Date)
+                            val instanceof DateTime
                         ) {
                             // {Field:date} → user's locale default | {Field:date:locale} → explicit locale
                             String dateTrimmed = dateFormat.trim();
@@ -4940,9 +5030,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                                 ? dateTrimmed.substring(dateTrimmed.indexOf(':') + 1).trim()
                                 : UserInfo.getLocale();
                             String pattern = getLocaleDatePattern(dateLocale);
-                            DateTime dt = val instanceof DateTime
-                                ? (DateTime) val
-                                : DateTime.newInstance((Date) val, Time.newInstance(0, 0, 0, 0));
+                            DateTime dt = (DateTime) val;
                             strVal = dateOnlyGmt ? dt.formatGmt(pattern) : dt.format(pattern);
                         } else if (dateFormat != null && dateFormat.toLowerCase().trim() == 'label') {
                             strVal = resolvePicklistLabel(data, fieldName, val);
@@ -4950,9 +5038,6 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                             strVal = dateOnlyGmt
                                 ? ((DateTime) val).formatGmt(dateFormat)
                                 : ((DateTime) val).format(dateFormat);
-                        } else if (dateFormat != null && val instanceof Date) {
-                            DateTime dt = DateTime.newInstance((Date) val, Time.newInstance(0, 0, 0, 0));
-                            strVal = dt.format(dateFormat);
                         } else if (dateFormat != null && dateFormat.toLowerCase().trim() == 'checkbox') {
                             // {IsActive:checkbox} → [X] or [ ]
                             // Uses ASCII representation for universal font compatibility in PDF/DOCX
@@ -10580,15 +10665,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     public static Map<String, String> extractLoopBody(String templateXml, String relationshipName) {
         Map<String, String> result = new Map<String, String>();
 
-        // Merge runs first so we find complete tags
-        String xml = mergeRunsInTags(templateXml);
-        // HTML fragments can be expanded here when this helper is used directly
-        // against an HTML body. Native Office XML is left intact: snippets are
-        // translated by processXml at their own tag, and expanding the whole
-        // document here would inject raw HTML into the surrounding XML.
-        if (xml != null && xml.toLowerCase().contains('{%snippet:') && !xml.contains('<w:') && !xml.contains('<a:')) {
-            xml = DocGenSnippetService.expand(xml);
-        }
+        String xml = normalizeGiantQueryTemplate(templateXml);
 
         // Find the opening tag {#relationshipName}
         String openTag = '{#' + relationshipName + '}';
@@ -10618,51 +10695,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
 
         Integer closeTagEnd = xml.indexOf('}', sectionEnd) + 1;
 
-        // Determine container boundaries (same logic as processXml — expand to
-        // the nearest valid row/list-item container if applicable). Checks both
-        // DOCX <w:tr> and HTML <tr>/<li> containers; whichever is closer and
-        // encloses the full {#Rel}...{/Rel} section wins. Safe for both
-        // template types because DOCX XML doesn't contain literal <tr>/<li>
-        // and HTML doesn't contain <w:tr>.
-        Integer containerStart = openIdx;
-        Integer containerEnd = closeTagEnd;
-
-        // DOCX <w:tr>
-        Integer wTrStart = lastIndexOfTagStart(xml, 'w:tr', openIdx);
-        if (wTrStart != -1) {
-            Integer wTrEnd = xml.indexOf('</w:tr>', wTrStart);
-            Boolean closedBeforeOpen = xml.substring(wTrStart, openIdx).contains('</w:tr>');
-            if (!closedBeforeOpen && wTrEnd != -1 && wTrEnd >= closeTagEnd) {
-                containerStart = wTrStart;
-                containerEnd = wTrEnd + 7; // </w:tr>
-            }
-        }
-
-        // HTML <tr>
-        Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', openIdx);
-        if (htmlTrStart != -1) {
-            Integer htmlTrEnd = xml.indexOf('</tr>', htmlTrStart);
-            Boolean closedBeforeOpen = xml.substring(htmlTrStart, openIdx).contains('</tr>');
-            if (!closedBeforeOpen && htmlTrEnd != -1 && htmlTrEnd >= closeTagEnd) {
-                if (containerStart == openIdx || htmlTrStart > containerStart) {
-                    containerStart = htmlTrStart;
-                    containerEnd = htmlTrEnd + 5; // </tr>
-                }
-            }
-        }
-
-        // HTML <li>
-        Integer htmlLiStart = lastIndexOfTagStart(xml, 'li', openIdx);
-        if (htmlLiStart != -1) {
-            Integer htmlLiEnd = xml.indexOf('</li>', htmlLiStart);
-            Boolean closedBeforeOpen = xml.substring(htmlLiStart, openIdx).contains('</li>');
-            if (!closedBeforeOpen && htmlLiEnd != -1 && htmlLiEnd >= closeTagEnd) {
-                if (containerStart == openIdx || htmlLiStart > containerStart) {
-                    containerStart = htmlLiStart;
-                    containerEnd = htmlLiEnd + 5; // </li>
-                }
-            }
-        }
+        List<Integer> container = giantQueryLoopContainer(xml, openIdx, closeTagEnd);
+        Integer containerStart = container[0];
+        Integer containerEnd = container[1];
 
         // Build inner XML (container content minus the open/close tags)
         String innerXml = xml.substring(containerStart, containerEnd);
@@ -10675,6 +10710,42 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         result.put('afterLoop', xml.substring(containerEnd));
 
         return result;
+    }
+
+    /** Normalizes the authored text without processing fields or expanding query loops. */
+    public static String normalizeGiantQueryTemplate(String templateXml) {
+        if (String.isBlank(templateXml)) {
+            return templateXml;
+        }
+        // Merge runs first so we find complete tags
+        String xml = mergeRunsInTags(templateXml);
+        // Native Office XML is left intact: snippets are translated by processXml
+        // at their own tag, and expanding the whole document here would inject
+        // raw HTML into the surrounding XML.
+        if (xml.contains('<w:') || xml.contains('<a:')) {
+            return xml;
+        }
+        xml = decodeBraceEntities(xml);
+        return xml.toLowerCase().contains('{%snippet:') ? DocGenSnippetService.expand(xml) : xml;
+    }
+
+    /** Selects the same enclosing row/list item used by the giant loop renderer. */
+    public static List<Integer> giantQueryLoopContainer(String xml, Integer openIdx, Integer closeTagEnd) {
+        Integer containerStart = openIdx;
+        Integer containerEnd = closeTagEnd;
+        for (String tagName : new List<String>{ 'w:tr', 'tr', 'li' }) {
+            Integer candidate = lastIndexOfTagStart(xml, tagName, openIdx);
+            if (candidate == -1 || (containerStart != openIdx && candidate <= containerStart)) {
+                continue;
+            }
+            String close = '</' + tagName + '>';
+            Integer candidateEnd = xml.indexOf(close, candidate);
+            if (candidateEnd != -1 && candidateEnd >= closeTagEnd) {
+                containerStart = candidate;
+                containerEnd = candidateEnd + close.length();
+            }
+        }
+        return new List<Integer>{ containerStart, containerEnd };
     }
 
     /**
@@ -10740,6 +10811,22 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * @param fieldNames List of field API names to include in the data map
      * @return Concatenated rendered XML for all records
      */
+    public static String mergeGiantHtml(String innerHtml, Map<String, Object> data, Integer rowNumber) {
+        String previousType = currentTemplateType;
+        String previousOutput = currentOutputFormat;
+        currentTemplateType = 'HTML';
+        currentOutputFormat = 'PDF';
+        try {
+            if (rowNumber != null) {
+                data.put('RowNumber', rowNumber);
+            }
+            return processXml(innerHtml, data);
+        } finally {
+            currentTemplateType = previousType;
+            currentOutputFormat = previousOutput;
+        }
+    }
+
     public static String renderLoopBodyForRecords(
         String innerXml,
         String relationshipName,
