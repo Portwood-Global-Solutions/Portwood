@@ -5968,6 +5968,15 @@ public with sharing class DocGenHtmlRenderer {
      */
     @TestVisible
     private static String unwrapTextboxes(String xml) {
+        return unwrapTextboxes(xml, true);
+    }
+
+    /**
+     * withMarkers=false is used for a textbox nested inside another textbox:
+     * its paragraphs flow inside the outer box, because nested position
+     * markers would pair with the wrong close marker.
+     */
+    private static String unwrapTextboxes(String xml, Boolean withMarkers) {
         if (
             String.isBlank(xml) ||
             (!xml.contains('<mc:AlternateContent') &&
@@ -5989,12 +5998,14 @@ public with sharing class DocGenHtmlRenderer {
                 break;
             }
 
-            String endTag = isAlt ? '</mc:AlternateContent>' : '</w:pict>';
-            Integer endIdx = xml.indexOf(endTag, nextStart);
-            if (endIdx == -1) {
+            // Match the block's own closing tag. A textbox can hold another
+            // AlternateContent, and the first closing tag would cut the block
+            // short, leaving its Fallback copy to be emitted as a duplicate.
+            Integer blockEnd = findInnerEnd(xml, nextStart, isAlt ? 'mc:AlternateContent' : 'w:pict');
+            if (blockEnd == -1) {
                 break;
             }
-            Integer blockEnd = endIdx + endTag.length();
+            blockEnd += (isAlt ? '</mc:AlternateContent>' : '</w:pict>').length();
             String block = xml.substring(nextStart, blockEnd);
             cursor = blockEnd;
             if (!block.contains('<w:txbxContent')) {
@@ -6006,18 +6017,20 @@ public with sharing class DocGenHtmlRenderer {
             String tbInner = '';
             if (isAlt) {
                 Integer choiceStart = block.indexOf('<mc:Choice');
+                Integer choiceEnd = -1;
                 if (choiceStart != -1) {
                     Integer choiceTagEnd = block.indexOf('>', choiceStart);
-                    Integer choiceEnd = block.indexOf('</mc:Choice>', choiceTagEnd);
+                    choiceEnd = findInnerEnd(block, choiceStart, 'mc:Choice');
                     if (choiceTagEnd != -1 && choiceEnd != -1) {
                         tbInner = block.substring(choiceTagEnd + 1, choiceEnd);
                     }
                 }
                 if (String.isBlank(tbInner)) {
-                    Integer fbStart = block.indexOf('<mc:Fallback');
+                    // Search after the Choice so a nested box's Fallback is not taken.
+                    Integer fbStart = block.indexOf('<mc:Fallback', Math.max(choiceEnd, 0));
                     if (fbStart != -1) {
                         Integer fbTagEnd = block.indexOf('>', fbStart);
-                        Integer fbEnd = block.indexOf('</mc:Fallback>', fbTagEnd);
+                        Integer fbEnd = findInnerEnd(block, fbStart, 'mc:Fallback');
                         if (fbTagEnd != -1 && fbEnd != -1) {
                             tbInner = block.substring(fbTagEnd + 1, fbEnd);
                         }
@@ -6037,7 +6050,9 @@ public with sharing class DocGenHtmlRenderer {
                 Integer outerPStart = findEnclosingParagraphStart(xml, nextStart);
                 Integer outerPEnd = outerPStart >= copyFrom ? findClosingTag(xml, outerPStart, 'w:p') : -1;
                 Boolean useOuter = outerPEnd >= blockEnd;
-                out += xml.substring(copyFrom, useOuter ? outerPStart : nextStart);
+                // Content kept outside textboxes, such as a picture in its own
+                // AlternateContent, would otherwise render Choice and Fallback.
+                out += stripAlternateFallbacks(xml.substring(copyFrom, useOuter ? outerPStart : nextStart));
                 copyFrom = useOuter ? outerPEnd : blockEnd;
             }
 
@@ -6159,9 +6174,15 @@ public with sharing class DocGenHtmlRenderer {
             Integer txbxStart = tbInner.indexOf('<w:txbxContent');
             if (txbxStart != -1) {
                 Integer txbxTagEnd = tbInner.indexOf('>', txbxStart);
-                Integer txbxEnd = tbInner.indexOf('</w:txbxContent>', txbxTagEnd);
+                Integer txbxEnd = findInnerEnd(tbInner, txbxStart, 'w:txbxContent');
                 if (txbxTagEnd != -1 && txbxEnd != -1) {
-                    String txbxInner = tbInner.substring(txbxTagEnd + 1, txbxEnd);
+                    // Flatten a textbox nested in this one, and keep only the
+                    // Choice branch of any other drawing inside it.
+                    String txbxInner = unwrapTextboxes(tbInner.substring(txbxTagEnd + 1, txbxEnd), false);
+                    if (!withMarkers) {
+                        out += txbxInner;
+                        continue;
+                    }
                     // Wrap inner paragraphs with sentinel text inside <w:t> runs.
                     // These survive processBodyContent's <w:p>/<w:t> walk and emerge
                     // as <p>__DGTXBX_OPEN_...__</p> in the rendered HTML; a later
@@ -6189,7 +6210,7 @@ public with sharing class DocGenHtmlRenderer {
                 }
             }
         }
-        return out + xml.substring(copyFrom);
+        return out + stripAlternateFallbacks(xml.substring(copyFrom));
     }
 
     /**
@@ -6220,5 +6241,82 @@ public with sharing class DocGenHtmlRenderer {
             searchFrom = idx - 1; // prefix false-match (<w:pPr> etc.) — keep walking back
         }
         return -1;
+    }
+
+    /**
+     * Returns the index of the closing </tagName> that matches the element
+     * opening at openIdx, counting nested elements of the same name. Falls back
+     * to the first closing tag when the opening tag is not in the expected
+     * '<tagName>' / '<tagName ' form. Returns -1 when there is no closing tag.
+     */
+    private static Integer findInnerEnd(String xml, Integer openIdx, String tagName) {
+        String closeTag = '</' + tagName + '>';
+        Integer afterName = openIdx + tagName.length() + 1;
+        if (afterName < xml.length()) {
+            String c = xml.substring(afterName, afterName + 1);
+            if (c == '>' || c == ' ') {
+                Integer matched = findClosingTag(xml, openIdx, tagName);
+                if (matched != -1) {
+                    return matched - closeTag.length();
+                }
+            }
+        }
+        return xml.indexOf(closeTag, openIdx);
+    }
+
+    /**
+     * Removes the <mc:Fallback> branch of each top-level <mc:AlternateContent>
+     * whose <mc:Choice> holds a <w:drawing>. Both branches carry the same
+     * content, so leaving both for the run walker renders it twice. Nested
+     * AlternateContent inside a kept Choice is handled the same way. Blocks
+     * whose Choice has no drawing are left unchanged.
+     */
+    @TestVisible
+    private static String stripAlternateFallbacks(String xml) {
+        if (String.isBlank(xml) || !xml.contains('<mc:Fallback')) {
+            return xml;
+        }
+        String out = '';
+        Integer cursor = 0;
+        while (cursor < xml.length()) {
+            Integer altStart = xml.indexOf('<mc:AlternateContent', cursor);
+            if (altStart == -1) {
+                break;
+            }
+            Integer altInnerEnd = findInnerEnd(xml, altStart, 'mc:AlternateContent');
+            if (altInnerEnd == -1) {
+                break;
+            }
+            Integer altEnd = altInnerEnd + '</mc:AlternateContent>'.length();
+            Integer choiceStart = xml.indexOf('<mc:Choice', altStart);
+            Integer choiceTagEnd = choiceStart == -1 ? -1 : xml.indexOf('>', choiceStart);
+            Integer choiceInnerEnd = (choiceStart == -1 ||
+                choiceStart > altInnerEnd)
+                ? -1
+                : findInnerEnd(xml, choiceStart, 'mc:Choice');
+            Integer choiceEnd = choiceInnerEnd == -1 ? -1 : choiceInnerEnd + '</mc:Choice>'.length();
+            Integer fbStart = choiceEnd == -1 ? -1 : xml.indexOf('<mc:Fallback', choiceEnd);
+            Integer fbInnerEnd = (fbStart == -1 ||
+                fbStart > altInnerEnd)
+                ? -1
+                : findInnerEnd(xml, fbStart, 'mc:Fallback');
+            Integer fbEnd = fbInnerEnd == -1 ? -1 : fbInnerEnd + '</mc:Fallback>'.length();
+            String choiceInner = (choiceTagEnd == -1 ||
+                choiceInnerEnd == -1 ||
+                choiceTagEnd > choiceInnerEnd)
+                ? ''
+                : xml.substring(choiceTagEnd + 1, choiceInnerEnd);
+            if (choiceInner.contains('<w:drawing') && fbEnd != -1 && fbEnd <= altInnerEnd) {
+                out +=
+                    xml.substring(cursor, choiceTagEnd + 1) +
+                    stripAlternateFallbacks(choiceInner) +
+                    xml.substring(choiceInnerEnd, fbStart) +
+                    xml.substring(fbEnd, altEnd);
+            } else {
+                out += xml.substring(cursor, altEnd);
+            }
+            cursor = altEnd;
+        }
+        return out + xml.substring(cursor);
     }
 }

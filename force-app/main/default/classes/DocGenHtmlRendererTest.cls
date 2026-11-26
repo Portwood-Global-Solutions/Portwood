@@ -3337,6 +3337,64 @@ private class DocGenHtmlRendererTest {
     }
 
     @IsTest
+    static void unwrapTextboxes_nestedTextboxRendersOnceInsideOuterBox() {
+        // A textbox holding another textbox. The block must end at its own
+        // closing tag, so the outer Fallback is never emitted as a second box.
+        String nested = '<w:p>' + floatingTextbox('Inner box', 0) + '</w:p>';
+        String outerBox =
+            '<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor>' +
+            '<wp:extent cx="2743200" cy="914400"/><wps:wsp><wps:txbx><w:txbxContent>' +
+            '<w:p><w:r><w:t>Outer box</w:t></w:r></w:p>' +
+            nested +
+            '</w:txbxContent></wps:txbx></wps:wsp></wp:anchor></w:drawing></mc:Choice>' +
+            '<mc:Fallback><w:pict><v:textbox><w:txbxContent>' +
+            '<w:p><w:r><w:t>Outer fallback</w:t></w:r></w:p>' +
+            nested +
+            '</w:txbxContent></v:textbox></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>';
+        String xml =
+            '<w:document><w:body>' +
+            outerBox +
+            '<w:p><w:r><w:t>Following paragraph</w:t></w:r></w:p></w:body></w:document>';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml);
+        Integer outerAt = html.indexOf('Outer box');
+        Integer innerAt = html.indexOf('Inner box');
+        System.assert(outerAt >= 0 && innerAt > outerAt, 'Keep nested box text after outer text');
+        System.assertEquals(outerAt, html.lastIndexOf('Outer box'), 'Emit outer box once');
+        System.assertEquals(innerAt, html.lastIndexOf('Inner box'), 'Emit inner box once');
+        System.assertEquals(1, html.countMatches('docgen-textbox'), 'Nested box flows inside the outer box');
+        System.assert(!html.contains('Outer fallback'), 'Skip outer Fallback');
+        System.assert(!html.contains('Duplicate fallback'), 'Skip inner Fallback');
+        System.assert(!html.contains('__DGTXBX_'), 'Resolve all textbox markers');
+        System.assert(html.indexOf('Following paragraph') > innerAt, 'Keep following paragraph');
+    }
+
+    @IsTest
+    static void unwrapTextboxes_pictureAlternateContentRendersOnce() {
+        // A picture in AlternateContent (no textbox) beside a floating textbox.
+        // The picture's paragraph stays, and only its Choice branch renders.
+        String picture =
+            '<w:p><w:r><w:t>Logo caption</w:t></w:r><w:r><mc:AlternateContent><mc:Choice Requires="wps">' +
+            '<w:drawing><wp:anchor><wp:extent cx="914400" cy="914400"/><a:graphic><a:graphicData><pic:pic>' +
+            '<pic:blipFill><a:blip r:embed="rIdLogo"/></pic:blipFill></pic:pic></a:graphicData></a:graphic>' +
+            '</wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape>' +
+            '<v:imagedata r:id="rIdLogo"/></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>';
+        String xml =
+            '<w:document><w:body>' +
+            picture +
+            '<w:p>' +
+            floatingTextbox('Box after logo', 0) +
+            '</w:p></w:body></w:document>';
+        String src = '/sfc/servlet.shepherd/version/download/068000000000001AAA';
+
+        String html = DocGenHtmlRenderer.convertToHtml(xml, new Map<String, String>{ 'rIdLogo' => src });
+        System.assert(html.contains('Logo caption'), 'Keep the picture paragraph');
+        System.assertEquals(1, html.countMatches(src), 'Render the picture once');
+        System.assert(html.indexOf('Box after logo') > html.indexOf(src), 'Keep textbox after the picture');
+        System.assert(!html.contains('Duplicate fallback'), 'Use the textbox Choice once');
+    }
+
+    @IsTest
     static void findEnclosingParagraphStart_skipsPrefixFalseMatches() {
         // <w:pPr>/<w:pStyle> share the '<w:p' prefix; the helper must skip them and
         // return the real <w:p> open tag.
