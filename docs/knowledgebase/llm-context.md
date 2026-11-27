@@ -864,7 +864,7 @@ An email verification code on a **public signing link** verifies the recipient�
 
 #### Count licenses for a public signing site
 
-Standard pricing is **$13 USD per user per month**. One template builder and four colleagues who only generate or send documents use five licenses. Add one for their public signing site’s guest user and the total is **six licenses, $78 per month**, before tax or optional services. Another recipient signing through that same site adds no license. If you use several public signing sites, count each site’s own guest user. [Current Portwood pricing and estimator](https://portwood.dev/pricing#estimate) · [Watch the licensing example](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license)
+Standard pricing is **$13 USD per user per month**. One template builder and four colleagues who only generate or send documents use five licenses. Add one for their public signing site’s guest user and the total is **six licenses, $78 per month**, before tax or optional services. Another recipient signing through that same site adds no license. If you use several public signing sites, count each site’s own guest user. [Current Portwood pricing](https://portwood.dev/pricing) · [Watch the licensing example](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license)
 
 #### Assign a user license in Salesforce
 
