@@ -5566,7 +5566,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             this.editTemplateTypeOnly,
             this.editTemplateApiName,
             this.editTemplateDefaultEmailMessage,
-            this.editTemplateDefaultSigningOrder
+            this.editTemplateDefaultSigningOrder,
+            this.editTemplateDefaultSignedTitle,
+            this.editTemplateDefaultSignatureExpiryDays
         ]);
     }
 
@@ -6162,7 +6164,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Signature_Type_Only__c: this.editTemplateTypeOnly,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage,
-            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder
+            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder,
+            Default_Signed_Title__c: this.editTemplateDefaultSignedTitle,
+            Default_Signature_Expiry_Days__c: this.editTemplateDefaultSignatureExpiryDays
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 
@@ -6261,7 +6265,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
             Signature_Type_Only__c: this.editTemplateTypeOnly,
             API_Name__c: this.editTemplateApiName,
             Default_Email_Message__c: this.editTemplateDefaultEmailMessage,
-            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder
+            Default_Signing_Order__c: this.editTemplateDefaultSigningOrder,
+            Default_Signed_Title__c: this.editTemplateDefaultSignedTitle,
+            Default_Signature_Expiry_Days__c: this.editTemplateDefaultSignatureExpiryDays
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 
