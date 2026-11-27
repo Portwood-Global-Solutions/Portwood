@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Signing tags inside a shared snippet now become signing fields (#587).** A template whose
+  signing tags came from a snippet (`{%snippet:key}`) was treated as having no tags, because
+  Portwood looked for them before filling in the snippet. The request got an extra
+  "Signatures" block, its signature and date fields landed on the snippet's first matching
+  tags, and initials and date-picker tags printed as literal text. A signature tag repeated in
+  the template itself also stayed as text. Portwood now fills in snippets, including nested
+  ones, before it looks for signing tags, in HTML and Word templates and in multi-document
+  packets, so each tag becomes a field of its type at its own position. Templates without
+  snippets are unchanged.
+
 ## v3.65.0 — iPhone signing in Screen Flows
 
 Released 2026-11-21 · `04tVx000001FJD3IAO` (build 3.65.0-1) · ancestor 3.64.0-1 · 79% package coverage
