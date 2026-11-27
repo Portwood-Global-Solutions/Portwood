@@ -177,6 +177,7 @@ sf apex run --target-org <org> -f scripts/e2e-07-syntax2.apex
 sf apex run --target-org <org> -f scripts/e2e-07-syntax3.apex
 sf apex run --target-org <org> -f scripts/e2e-07-syntax4.apex
 sf apex run --target-org <org> -f scripts/e2e-07-syntax5.apex
+sf apex run --target-org <org> -f scripts/e2e-11-giant-query-multi.apex
 sf apex run --target-org <org> -f scripts/e2e-08-cleanup.apex
 ```
 

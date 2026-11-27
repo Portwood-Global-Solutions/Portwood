@@ -43,6 +43,9 @@ export const E2E_SEQUENCE = [
     ['e2e-07-syntax6.apex', 'Merge-tag syntax', SEVERITY.BLOCKER],
     ['e2e-09-images.apex', 'Images', SEVERITY.MAJOR],
     ['e2e-10-custom-fonts.apex', 'Custom fonts', SEVERITY.BLOCKER],
+    // Standalone; its fixture rolls back. Plans, retrieves and reassembles
+    // several large tables in one document (#540).
+    ['e2e-11-giant-query-multi.apex', 'Giant Query multi-table', SEVERITY.BLOCKER],
     ['e2e-08-cleanup.apex', 'Cleanup', SEVERITY.MINOR]
 ];
 

@@ -74,6 +74,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      */
     @AuraEnabled
     public static Map<String, Object> generateDocumentData(Id templateId, Id recordId) {
+        return generateDocumentDataForWordShell(templateId, recordId, null);
+    }
+
+    /** Prepares merge data while deferring selected direct child queries to the Word runner. */
+    public static Map<String, Object> generateDocumentDataForWordShell(
+        Id templateId,
+        Id recordId,
+        Set<String> excludedRootChildKeys
+    ) {
         if (templateId == null) {
             throw new DocGenException('Template ID is missing.');
         }
@@ -132,11 +141,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             throw new DocGenException('Unable to access template. Verify it exists and you have permission.');
         }
         DocGen_Template__c template = templates[0];
+        if (excludedRootChildKeys != null && template.Type__c != 'Word') {
+            throw new DocGenException('Multiple giant Word queries require a Word template.');
+        }
 
         Map<String, Object> recordData = DocGenDataRetriever.getRecordData(
             recordId,
             template.Base_Object_API__c,
-            template.Query_Config__c
+            template.Query_Config__c,
+            excludedRootChildKeys
         );
 
         String fileContent = DocGenTemplateManager.getTemplateFileContent(templateId);
@@ -1363,8 +1376,15 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationship);
-            if (loopParts == null) {
+            String outputFormat = template.Output_Format__c != null ? template.Output_Format__c : 'PDF';
+            DocGenGiantQueryMulti.Run multi = 'PDF'.equalsIgnoreCase(outputFormat) &&
+                DocGenService.isHtmlBacked(template.Type__c)
+                ? DocGenGiantQueryMulti.plan(DocGenService.extractHtmlBodyContent(documentXml), queryConfig, recordId)
+                : null;
+            Map<String, String> loopParts = multi == null
+                ? DocGenService.extractLoopBody(documentXml, giantRelationship)
+                : null;
+            if (multi == null && loopParts == null) {
                 // v1.91+: templates using {#ChartBucket:<rel>:...} aggregate via
                 // their own SOQL — they don't need an eager-loaded loop body.
                 // Surface that pattern in the error so authors know the fix
@@ -1385,8 +1405,6 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
                 throw new DocGenException('Could not find loop for relationship: ' + giantRelationship);
             }
-
-            String outputFormat = template.Output_Format__c != null ? template.Output_Format__c : 'PDF';
 
             // Create Job record
             DocGen_Job__c job = new DocGen_Job__c(
@@ -1416,16 +1434,21 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(job, AccessLevel.SYSTEM_MODE);
 
-            // Launch batch — shell PDF generation happens in start() with fresh heap
-            DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
-                job.Id,
-                templateId,
-                recordId,
-                giantNodeConfig,
-                loopParts.get('innerXml'),
-                outputFormat
-            );
-            Database.executeBatch(batch, 1); // scope size 1: one page descriptor per execute
+            if (multi == null) {
+                Database.executeBatch(
+                    new DocGenGiantQueryBatch(
+                        job.Id,
+                        templateId,
+                        recordId,
+                        giantNodeConfig,
+                        loopParts.get('innerXml'),
+                        outputFormat
+                    ),
+                    1
+                );
+            } else {
+                DocGenGiantQueryMulti.launch(multi, job.Id, templateId, recordId, activeVersions[0].Id);
+            }
 
             return new Map<String, Object>{
                 'jobId' => job.Id,
@@ -1596,6 +1619,20 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
     }
 
+    /** Returns a Word shell and the individual placements to fill from paged queries. */
+    @AuraEnabled
+    public static Map<String, Object> generateDocumentPartsGiantQueryMulti(
+        Id templateId,
+        Id recordId,
+        List<String> giantRelationshipNames
+    ) {
+        try {
+            return DocGenService.generateDocumentPartsGiantQueryMulti(templateId, recordId, giantRelationshipNames);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error generating Giant Query Word document parts.');
+        }
+    }
+
     /**
      * Deletes the fragment ContentVersions for a Giant Query job after client-side
      * DOCX assembly is complete. Cleans up intermediate storage.
@@ -1654,10 +1691,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             // Load template body: DOCX uses pre-decomposed word/document.xml;
             // HTML uses the active version's Content_Version_Id__c directly.
-            DocGenFlsGuard.assertAccessible(DocGen_Template__c.sObjectType, new Set<String>{ 'Type__c' });
+            DocGenFlsGuard.assertAccessible(
+                DocGen_Template__c.sObjectType,
+                new Set<String>{ 'Type__c', 'Query_Config__c' }
+            );
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template__c> tplForType = [
-                SELECT Type__c
+                SELECT Type__c, Query_Config__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
                 WITH SYSTEM_MODE
@@ -1720,9 +1760,18 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
             }
 
-            Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationship);
+            DocGenGiantQueryMulti.Run multi = DocGenService.isHtmlBacked(templateType)
+                ? DocGenGiantQueryMulti.plan(
+                      DocGenService.extractHtmlBodyContent(documentXml),
+                      tplForType[0].Query_Config__c,
+                      recordId
+                  )
+                : null;
+            Map<String, String> loopParts = multi == null
+                ? DocGenService.extractLoopBody(documentXml, giantRelationship)
+                : null;
             documentXml = null; // free
-            if (loopParts == null) {
+            if (multi == null && loopParts == null) {
                 throw new DocGenException('Could not find loop for relationship: ' + giantRelationship);
             }
 
@@ -1741,21 +1790,30 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(job, AccessLevel.SYSTEM_MODE);
 
-            // Ensure relationshipName is in the config (V1 scout doesn't include it)
-            childNodeConfig.put('relationshipName', giantRelationship);
+            if (multi == null) {
+                // The V1 scout omits this field.
+                childNodeConfig.put('relationshipName', giantRelationship);
+                Database.executeBatch(
+                    new DocGenGiantQueryBatch(
+                        job.Id,
+                        templateId,
+                        recordId,
+                        childNodeConfig,
+                        loopParts.get('innerXml'),
+                        'PDF'
+                    ),
+                    1
+                );
+            } else {
+                DocGenGiantQueryMulti.launch(multi, job.Id, templateId, recordId, activeVersions[0].Id);
+            }
 
-            // Launch batch
-            DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
-                job.Id,
-                templateId,
-                recordId,
-                childNodeConfig,
-                loopParts.get('innerXml'),
-                'PDF'
-            );
-            Database.executeBatch(batch, 1);
-
-            return new Map<String, Object>{ 'jobId' => job.Id, 'isGiantQuery' => true, 'outputFormat' => 'PDF' };
+            return new Map<String, Object>{
+                'jobId' => job.Id,
+                'isGiantQuery' => true,
+                'outputFormat' => 'PDF',
+                'isMultiTable' => multi != null
+            };
         } catch (DocGenException e) {
             throw DocGenService.ahe(e);
         } catch (Exception e) {
@@ -1819,9 +1877,13 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     Map<String, Object> n = (Map<String, Object>) nodeObj;
                     String relName = (String) n.get('relationshipName');
                     if (String.isNotBlank(relName) && n.get('parentNode') != null) {
+                        String alias = (String) n.get('alias');
+                        String effectiveKey = String.isNotBlank(alias) ? alias : relName;
                         childNodes.put(
-                            relName,
+                            effectiveKey,
                             new Map<String, Object>{
+                                'relationshipName' => relName,
+                                'alias' => alias,
                                 'object' => n.get('object'),
                                 'lookupField' => n.get('lookupField'),
                                 'fields' => n.get('fields'),
@@ -2081,7 +2143,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String.escapeSingleQuotes(lookupField) +
             ' = :parentId';
         if (String.isNotBlank(whereClause)) {
-            query += ' AND ' + whereClause;
+            query += ' AND (' + whereClause + ')';
         }
         query += ' ORDER BY ' + orderByClause;
 

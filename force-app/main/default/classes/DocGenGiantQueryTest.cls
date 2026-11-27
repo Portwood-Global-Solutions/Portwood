@@ -108,6 +108,50 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testRunnerScoutKeepsSeparateAliasesForContacts() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = TestDataFactory.accountByName('Giant Query Test Account');
+            DocGen_Template__c tpl = [
+                SELECT Query_Config__c
+                FROM DocGen_Template__c
+                WHERE Name = 'Giant Query Test'
+                LIMIT 1
+            ];
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(tpl.Query_Config__c);
+            List<Object> nodes = (List<Object>) config.get('nodes');
+            Map<String, Object> contacts = (Map<String, Object>) nodes[1];
+            Map<String, Object> first = new Map<String, Object>(contacts);
+            first.put('id', 'n2');
+            first.put('alias', 'FirstContact');
+            first.put('where', 'FirstName = \'Test0\'');
+            Map<String, Object> others = new Map<String, Object>(contacts);
+            others.put('id', 'n3');
+            others.put('alias', 'OtherContacts');
+            others.put('where', 'FirstName != \'Test0\'');
+            nodes.add(first);
+            nodes.add(others);
+            tpl.Query_Config__c = JSON.serialize(config);
+            Database.update(tpl, AccessLevel.SYSTEM_MODE);
+
+            Test.startTest();
+            Map<String, Object> scout = DocGenController.scoutChildCounts(acc.Id, tpl.Id);
+            Test.stopTest();
+
+            System.assertEquals(
+                new Map<String, Integer>{ 'Contacts' => 10, 'FirstContact' => 1, 'OtherContacts' => 9 },
+                scout.get('counts')
+            );
+            Map<String, Map<String, Object>> childNodes = (Map<String, Map<String, Object>>) scout.get('childNodes');
+            System.assertEquals(new Set<String>{ 'Contacts', 'FirstContact', 'OtherContacts' }, childNodes.keySet());
+            System.assertEquals('Contacts', childNodes.get('FirstContact').get('relationshipName'));
+            System.assertEquals('FirstContact', childNodes.get('FirstContact').get('alias'));
+            System.assertEquals(first.get('where'), childNodes.get('FirstContact').get('where'));
+            System.assertEquals(others.get('where'), childNodes.get('OtherContacts').get('where'));
+        }
+    }
+
+    @IsTest
     static void testScoutChildCountsWithNullParams() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
