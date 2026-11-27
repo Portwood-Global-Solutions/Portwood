@@ -135,6 +135,7 @@
         <members>DocGenSignatureSenderController</members>
         <members>DocGenSignatureService</members>
         <members>DocGenSignatureSnapshotTest</members>
+        <members>DocGenSignatureSnippetTest</members>
         <members>DocGenSignatureSubmitter</members>
         <members>DocGenSignatureTests</members>
         <members>DocGenSignatureTypeOnlyTest</members>
