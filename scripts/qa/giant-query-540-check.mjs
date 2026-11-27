@@ -54,7 +54,9 @@ async function sfJson(args) {
 }
 
 async function query(soql) {
-    return (await sfJson(['data', 'query', '--target-org', org, '--query', soql])).records;
+    // One line: on Windows the sf shim runs through cmd.exe, which drops everything after a newline.
+    const flat = soql.replace(/\s+/g, ' ').trim();
+    return (await sfJson(['data', 'query', '--target-org', org, '--query', flat])).records;
 }
 
 async function runApex(source, key) {

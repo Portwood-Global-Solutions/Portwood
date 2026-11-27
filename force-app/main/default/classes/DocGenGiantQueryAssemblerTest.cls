@@ -55,6 +55,73 @@ private class DocGenGiantQueryAssemblerTest {
         System.assert(!actual.contains('docgen-giant-slot-'), actual);
     }
 
+    /**
+     * #540: the engine wraps sourceStyles in its own <style> element, so the CSS the
+     * assembler appends must be raw. A nested <style> voided the table rule and closed
+     * the stylesheet early, leaving the row rule outside it. Rows then straddled page
+     * breaks and were printed twice: clipped at the bottom of one page, whole on the next.
+     */
+    @IsTest
+    static void plannedPdfStylesheetIsWellFormedAndKeepsRowsWhole() {
+        Account acc = new Account(Name = 'Stylesheet account');
+        insert acc;
+        DocGen_Template__c tpl = new DocGen_Template__c(
+            Name = 'Giant Query stylesheet',
+            Base_Object_API__c = 'Account',
+            Type__c = 'HTML',
+            Output_Format__c = 'PDF'
+        );
+        insert tpl;
+        String body =
+            '<table><tbody>{#Alpha}<tr><td>{Name}</td></tr>{/Alpha}</tbody></table>' +
+            '<table><tbody>{#Beta}<tr><td>{Name}</td></tr>{/Beta}</tbody></table>';
+        ContentVersion source = new ContentVersion(
+            Title = 'giant-query-stylesheet-body',
+            PathOnClient = 'body.html',
+            VersionData = Blob.valueOf(
+                '<html><head><style>td { color: #111111; }</style></head><body>' + body + '</body></html>'
+            )
+        );
+        insert source;
+        DocGen_Template_Version__c version = new DocGen_Template_Version__c(
+            Template__c = tpl.Id,
+            Content_Version_Id__c = source.Id,
+            Type__c = 'HTML',
+            Is_Active__c = true
+        );
+        insert version;
+        DocGenGiantQueryPlan plan = DocGenGiantQueryPlan.compile(body, new Set<String>{ 'Alpha', 'Beta' });
+        String config = '{"v":3,"root":"Account","nodes":[{"id":"n0","object":"Account","fields":["Name"],"parentNode":null}]}';
+        DocGenGiantQueryAssembler assembler = new DocGenGiantQueryAssembler(
+            null,
+            tpl.Id,
+            acc.Id,
+            version.Id,
+            plan.slots,
+            new Map<String, Integer>(),
+            config
+        );
+
+        String html = assembler.buildHtmlTemplateForHtmlType(null, null);
+
+        Integer open = html.indexOf('<style');
+        System.assert(open > -1, html);
+        while (open != -1) {
+            Integer close = html.indexOf('</style>', open);
+            Integer next = html.indexOf('<style', open + 6);
+            System.assert(close > -1 && (next == -1 || next > close), 'Nested <style> element: ' + html);
+            open = next;
+        }
+        for (String rule : new List<String>{ 'tr { page-break-inside: avoid; }', '-fs-table-paginate: paginate' }) {
+            Integer at = html.indexOf(rule);
+            System.assert(at > -1, 'Missing ' + rule + ': ' + html);
+            System.assert(
+                html.lastIndexOf('<style', at) > html.lastIndexOf('</style>', at),
+                rule + ' must sit inside a stylesheet: ' + html
+            );
+        }
+    }
+
     @IsTest
     static void linksImagesForPinnedInactiveVersion() {
         Account account = new Account(Name = 'Giant Query asset recipient');

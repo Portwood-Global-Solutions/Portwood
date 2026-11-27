@@ -621,6 +621,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      * running header/footer with page counters). Output has the same shape
      * the DOCX path emits: a full HTML doc with {ROWS} ready for row injection.
      */
+    @TestVisible
     private String buildHtmlTemplateForHtmlType(String headerHtml, String footerHtml) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Template_Version__c.sObjectType,
@@ -683,7 +684,10 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         String sourceStyles = DocGenService.extractHtmlStyleBlocks(rawHtml);
         // #245 appends the cell wrap rule here too — this is the HTML-backed giant-query
         // path, which never passes through DocGenHtmlRenderer's stylesheet.
-        sourceStyles += '<style>table { border-collapse: collapse; border-spacing: 0; -fs-table-paginate: paginate; } thead { display: table-header-group; } td, th { word-wrap: break-word; overflow-wrap: break-word; }</style>';
+        // Raw CSS only: wrapHtmlForPdf wraps sourceStyles in its own <style> element. A
+        // nested <style> tag here voids the table rule and closes the stylesheet early,
+        // so any rule appended after it is dropped (#540).
+        sourceStyles += '\ntable { border-collapse: collapse; border-spacing: 0; -fs-table-paginate: paginate; } thead { display: table-header-group; } td, th { word-wrap: break-word; overflow-wrap: break-word; }';
         String bodyContent = DocGenService.extractHtmlBodyContent(rawHtml);
 
         if (plannedSlots == null) {
@@ -693,7 +697,9 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             bodyContent = prepareLegacyHtmlBody(bodyContent);
             captureTableShell(bodyContent);
         } else {
-            sourceStyles += 'tr { page-break-inside: avoid; }';
+            // Keeps a row from straddling a page break, where the renderer clips the
+            // row at the bottom margin and repeats it on the next page.
+            sourceStyles += '\ntr { page-break-inside: avoid; }';
             bodyContent = preparePlannedHtmlBody(bodyContent);
         }
 
