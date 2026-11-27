@@ -4983,7 +4983,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                                 // rewrite rtaImage URLs so Blob.toPdf can fetch the images.
                                 output += convertRichTextToHtml(strVal);
                             } else {
-                                output += convertRichTextToDocxXml(strVal);
+                                output += convertRichTextToDocxXml(strVal, extractCurrentRunProperties(output));
                             }
                         } else {
                             if (currentTemplateType == 'PowerPoint') {
@@ -7160,6 +7160,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Returns DOCX XML that closes the current run/paragraph context and reopens it after.
      */
     private static String convertRichTextToDocxXml(String html) {
+        return convertRichTextToDocxXml(html, '');
+    }
+
+    private static String convertRichTextToDocxXml(String html, String inheritedRunProperties) {
         // Normalize: named entities first, then numeric character references.
         // The Lightning RTE stores apostrophes as &#39;, smart quotes as &#8217;
         // /&#8220;/&#8221;, em/en dashes as &#8212;/&#8211;, accented chars as
@@ -7211,7 +7215,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
 
             // Process inline content within this paragraph
-            result += processInlineHtml(para);
+            result += processInlineHtml(para, inheritedRunProperties);
         }
 
         // If we never output anything, just return empty text
@@ -7220,7 +7224,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         }
 
         // Reopen run/text context for any content after the merge tag
-        result += '<w:r><w:t xml:space="preserve">';
+        result += '<w:r>' + inheritedRunProperties + '<w:t xml:space="preserve">';
         return result;
     }
 
@@ -7228,7 +7232,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
      * Processes inline HTML elements within a paragraph into DOCX w:r elements.
      * Handles <b>, <i>, <u>, <strong>, <em>, <span>, <img>, and plain text.
      */
-    private static String processInlineHtml(String html) {
+    private static String processInlineHtml(String html, String inheritedRunProperties) {
         String result = '';
         Integer cursor = 0;
 
@@ -7263,6 +7267,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 if (text != null && text.length() > 0) {
                     result += buildRun(
                         decodeInlineText(stripTags(text)),
+                        inheritedRunProperties,
                         isBold,
                         isItalic,
                         isUnderline,
@@ -7281,6 +7286,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 if (text != null && text.length() > 0) {
                     result += buildRun(
                         decodeInlineText(stripTags(text)),
+                        inheritedRunProperties,
                         isBold,
                         isItalic,
                         isUnderline,
@@ -7433,12 +7439,24 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                         result +=
                             '<w:hyperlink w:docgen-url="' +
                             href.escapeXml() +
-                            '"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' +
-                            linkText.escapeXml() +
-                            '</w:t></w:r></w:hyperlink>';
+                            '">' +
+                            buildRun(
+                                linkText,
+                                inheritedRunProperties,
+                                false,
+                                false,
+                                true,
+                                false,
+                                null,
+                                null,
+                                '0563C1',
+                                null
+                            ) +
+                            '</w:hyperlink>';
                     } else {
                         result += buildRun(
                             linkText,
+                            inheritedRunProperties,
                             isBold,
                             isItalic,
                             true,
@@ -7481,7 +7499,9 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     marker = indent + '• ';
                 }
                 result +=
-                    '</w:p><w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r><w:t xml:space="preserve">' +
+                    '</w:p><w:p><w:pPr><w:spacing w:after="120"/></w:pPr><w:r>' +
+                    inheritedRunProperties +
+                    '<w:t xml:space="preserve">' +
                     marker +
                     '</w:t></w:r>';
             }
@@ -7492,15 +7512,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return result;
     }
 
-    /**
-     * Builds a DOCX w:r (run) element with optional formatting.
-     */
-    private static String buildRun(String text, Boolean bold, Boolean italic, Boolean underline) {
-        return buildRun(text, bold, italic, underline, false, null, null, null, null);
-    }
-
+    /** Builds a DOCX run, keeping token formatting wherever the source HTML supplies no override. */
     private static String buildRun(
         String text,
+        String inheritedRunProperties,
         Boolean bold,
         Boolean italic,
         Boolean underline,
@@ -7513,38 +7528,43 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         if (text == null || text.length() == 0)
             return '';
 
-        String rPr = '';
-        if (
-            bold ||
-            italic ||
-            underline ||
-            strike ||
-            String.isNotBlank(fontFamily) ||
-            String.isNotBlank(fontSize) ||
-            String.isNotBlank(fontColor) ||
-            String.isNotBlank(backgroundColor)
-        ) {
-            rPr = '<w:rPr>';
-            if (String.isNotBlank(fontFamily))
-                rPr += '<w:rFonts w:ascii="' + fontFamily.escapeXml() + '" w:hAnsi="' + fontFamily.escapeXml() + '"/>';
-            Integer halfPoints = cssFontSizeToHalfPoints(fontSize);
-            if (halfPoints != null)
-                rPr += '<w:sz w:val="' + halfPoints + '"/>';
-            if (bold)
-                rPr += '<w:b/>';
-            if (italic)
-                rPr += '<w:i/>';
-            if (underline)
-                rPr += '<w:u w:val="single"/>';
-            if (strike)
-                rPr += '<w:strike/>';
-            if (String.isNotBlank(fontColor))
-                rPr += '<w:color w:val="' + fontColor + '"/>';
-            if (String.isNotBlank(backgroundColor))
-                rPr += '<w:shd w:val="clear" w:fill="' + backgroundColor + '"/>';
-            rPr += '</w:rPr>';
-        }
+        String properties = inheritedRunProperties == ''
+            ? ''
+            : inheritedRunProperties.substring(
+                  inheritedRunProperties.indexOf('>') + 1,
+                  inheritedRunProperties.length() - 8
+              );
+        if (String.isNotBlank(fontFamily))
+            properties = setRichTextRunProperty(
+                properties,
+                'rFonts',
+                'w:ascii="' + fontFamily.escapeXml() + '" w:hAnsi="' + fontFamily.escapeXml() + '"'
+            );
+        Integer halfPoints = cssFontSizeToHalfPoints(fontSize);
+        if (halfPoints != null)
+            properties = setRichTextRunProperty(properties, 'sz', 'w:val="' + halfPoints + '"');
+        if (bold)
+            properties = setRichTextRunProperty(properties, 'b', '');
+        if (italic)
+            properties = setRichTextRunProperty(properties, 'i', '');
+        if (underline)
+            properties = setRichTextRunProperty(properties, 'u', 'w:val="single"');
+        if (strike)
+            properties = setRichTextRunProperty(properties, 'strike', '');
+        if (String.isNotBlank(fontColor))
+            properties = setRichTextRunProperty(properties, 'color', 'w:val="' + fontColor + '"');
+        if (String.isNotBlank(backgroundColor))
+            properties = setRichTextRunProperty(properties, 'shd', 'w:val="clear" w:fill="' + backgroundColor + '"');
+
+        String rPr = properties == '' ? '' : '<w:rPr>' + properties + '</w:rPr>';
         return '<w:r>' + rPr + '<w:t xml:space="preserve">' + text.escapeXml() + '</w:t></w:r>';
+    }
+
+    private static String setRichTextRunProperty(String properties, String name, String attributes) {
+        String replacement = '<w:' + name + (attributes == '' ? '' : ' ' + attributes) + '/>';
+        // A prefix match would confuse elements such as w:b with w:bCs and w:sz with w:szCs.
+        String element = '<w:' + name + '(?=[ /\\t\\r\\n>])[^>]*(?:/>|>\\s*</w:' + name + '>)';
+        return properties.replaceAll(element, '') + replacement;
     }
 
     private static String decodeInlineText(String text) {
