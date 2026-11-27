@@ -3547,6 +3547,19 @@ Grand totals across a child relationship. Works in sync and giant-query paths.
 
 All five functions support any format suffix (`currency`, `number`, `percent`, custom patterns), including `currency:auto` (see [Auto-detecting the currency from the record](#auto-detecting-the-currency-from-the-record)).
 
+In standard and bulk generation, a footer can summarize the rows of a nested loop. For an Account template with Opportunities and Opportunity Line Items, put the service-date filter in the line-item query. Place the following tags after both closing loops to summarize all matching line items on that account.
+
+| Tag                                                            | Result                                                      |
+| -------------------------------------------------------------- | ----------------------------------------------------------- |
+| `{SUM:Opportunities.OpportunityLineItems.TotalPrice:currency}` | Total price of the matching lines                           |
+| `{AVG:Opportunities.OpportunityLineItems.TotalPrice:currency}` | Average price per matching line with a numeric price        |
+| `{MIN:Opportunities.OpportunityLineItems.TotalPrice}`          | Lowest numeric line price                                   |
+| `{MAX:Opportunities.OpportunityLineItems.TotalPrice}`          | Highest numeric line price                                  |
+| `{COUNT:Opportunities.OpportunityLineItems}`                   | Number of matching lines, including lines with blank prices |
+| `{COUNT:Opportunities.OpportunityLineItems.TotalPrice}`        | Number of matching lines with a numeric price               |
+
+The separate Giant Query batch calculates aggregates on direct fields of its streamed relationship.
+
 **Aggregate fields don't need to be rendered columns** — you can aggregate `UnitPrice` even if your loop table only shows `Product2.Name` and `Quantity`. The resolver validates field names against the child object's schema.
 
 <a id="tag-charts"></a>

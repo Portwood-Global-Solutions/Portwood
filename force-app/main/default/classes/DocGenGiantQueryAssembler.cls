@@ -1117,7 +1117,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         }
 
         Pattern p = Pattern.compile(
-            '\\{(SUM|COUNT|AVG|MIN|MAX):([A-Za-z0-9_]+)(?:\\.([A-Za-z0-9_]+))?(?::([^}]+))?\\}'
+            '\\{(SUM|COUNT|AVG|MIN|MAX):([A-Za-z0-9_]+)(?:\\.([A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*))?(?::([^}]+))?\\}'
         );
         Matcher m = p.matcher(html);
 
@@ -1219,6 +1219,26 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // Regex already restricts field names to [A-Za-z0-9_]+ so SOQL injection is
         // blocked; Schema existence check is the second line of defense.
         Map<String, Schema.SObjectField> childFieldMap = childType.getDescribe().fields.getMap();
+        // Streamed rows contain direct fields. A list-only COUNT has one fewer dot
+        // than a numeric aggregate, so distinguish it from COUNT:Rel.Field by schema.
+        for (Integer i = 0; i < fields.size(); i++) {
+            String field = fields[i];
+            if (
+                field.contains('.') ||
+                (fns[i] == 'COUNT' &&
+                String.isNotBlank(field) &&
+                !childFieldMap.containsKey(field.toLowerCase()))
+            ) {
+                throw new DocGenException(
+                    'Giant Query can aggregate direct fields on ' +
+                        giantRelationshipName +
+                        '. ' +
+                        'Check the field in ' +
+                        fullMatches[i] +
+                        ' or use standard generation for nested rows.'
+                );
+            }
+        }
         // Allowlist-validate lookupFld against the child schema. The batch sanitizes
         // its own incoming clauses, but lookupFld is only escapeSingleQuotes'd — that
         // doesn't protect against identifier-level injection (no quotes needed). Reject

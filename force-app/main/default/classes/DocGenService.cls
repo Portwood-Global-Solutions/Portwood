@@ -5710,6 +5710,10 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
     }
 
     private static Object resolveValue(Map<String, Object> data, String path) {
+        return resolveValue(data, path, true);
+    }
+
+    private static Object resolveValue(Map<String, Object> data, String path, Boolean inferBaseObject) {
         String normalizedPath = path == null ? null : path.trim();
         if (isCustomLabelPath(normalizedPath)) {
             return resolveCustomLabel(normalizedPath);
@@ -5739,7 +5743,12 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                     if (!found) {
                         // If first segment doesn't match, it may be the base object name
                         // (e.g., "Contact" in {!Contact.FirstName}). Skip it and continue.
-                        if (i == 0 && parts.size() > 1 && !part.endsWithIgnoreCase('__r')) {
+                        if (
+                            i == 0 &&
+                            parts.size() > 1 &&
+                            !part.endsWithIgnoreCase('__r') &&
+                            (inferBaseObject || isAggregateRowType(data, part))
+                        ) {
                             continue;
                         }
                         return null;
@@ -5760,6 +5769,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             }
         }
         return current;
+    }
+
+    // Only an actual record type can qualify an aggregate field. Dropping an absent
+    // relationship name here could sum an identically named field on the outer row.
+    private static Boolean isAggregateRowType(Map<String, Object> row, String typeName) {
+        Object attributes = row.get('attributes');
+        if (
+            attributes instanceof Map<String, Object> &&
+            typeName.equalsIgnoreCase(String.valueOf(((Map<String, Object>) attributes).get('type')))
+        ) {
+            return true;
+        }
+        Object rawId = row.get('Id');
+        if (rawId == null) {
+            return false;
+        }
+        try {
+            Id recordId = (Id) rawId;
+            return recordId.getSObjectType().getDescribe().getName().equalsIgnoreCase(typeName);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**
@@ -6693,30 +6724,18 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         String fn = tagContent.substring(0, colonIdx).trim().toUpperCase();
         String path = tagContent.substring(colonIdx + 1).trim();
 
-        // Strip optional format specifier: "List.Field:currency" → path="List.Field", fmt="currency"
+        // A format can contain dots and additional colons. Split it off before reading the path.
         String numberFormat = null;
-        Integer dotIdx = path.indexOf('.');
-        if (dotIdx > 0) {
-            // Check for format specifier after the field name: "List.Field:format"
-            String afterDot = path.substring(dotIdx + 1);
-            Integer fmtColon = afterDot.indexOf(':');
-            if (fmtColon > 0) {
-                numberFormat = afterDot.substring(fmtColon + 1).trim();
-                path = path.substring(0, dotIdx + 1 + fmtColon);
-            }
-        } else {
-            // COUNT:List:format — format on a no-field aggregate
-            Integer fmtColon = path.indexOf(':');
-            if (fmtColon > 0) {
-                numberFormat = path.substring(fmtColon + 1).trim();
-                path = path.substring(0, fmtColon);
-            }
+        Integer fmtColon = path.indexOf(':');
+        if (fmtColon > 0) {
+            numberFormat = path.substring(fmtColon + 1).trim();
+            path = path.substring(0, fmtColon).trim();
         }
 
         // Split path into list name and optional field: "QuoteLineItems.TotalPrice" → ["QuoteLineItems", "TotalPrice"]
         String listName;
         String fieldName = null;
-        dotIdx = path.indexOf('.');
+        Integer dotIdx = path.indexOf('.');
         if (dotIdx > 0) {
             listName = path.substring(0, dotIdx);
             fieldName = path.substring(dotIdx + 1);
@@ -6749,13 +6768,28 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             return null;
         }
 
-        // Get child records and extract numeric values
+        // Walk the lists the query already returned. Each nested list therefore
+        // retains its own WHERE, ordering, and limit. The remaining field path
+        // can still be a scalar lookup such as Product2.ListPrice__c.
         List<Object> records = getChildRecords(data, listName);
-        if (records == null || records.isEmpty()) {
-            return '0';
+        Integer nextDot = fieldName.indexOf('.');
+        while (records != null && !records.isEmpty() && nextDot > 0) {
+            String remaining = fieldName.substring(nextDot + 1);
+            List<Object> children = nestedAggregateRows(records, fieldName.substring(0, nextDot), remaining);
+            if (children == null) {
+                nextDot = fieldName.indexOf('.', nextDot + 1);
+            } else {
+                records = children;
+                fieldName = remaining;
+                nextDot = fieldName.indexOf('.');
+            }
+        }
+        if (records == null) {
+            records = new List<Object>();
         }
 
         List<Decimal> values = new List<Decimal>();
+        Integer nestedRowCount = 0;
         // Currency ISO of each contributing row, index-aligned with `values`. Only
         // populated for currency-formatted aggregates in multi-currency orgs — see
         // applyCurrencySemantics below.
@@ -6766,7 +6800,15 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         for (Object item : records) {
             if (item instanceof Map<String, Object>) {
                 Map<String, Object> row = (Map<String, Object>) item;
-                Object fieldVal = resolveValue(row, fieldName);
+                Object fieldVal = resolveValue(row, fieldName, false);
+                if (fn == 'COUNT') {
+                    List<Object> children = unwrapChildRecords(fieldVal);
+                    if (children != null) {
+                        // COUNT:Orders.Lines counts rows even when their amount is blank.
+                        nestedRowCount += children.size();
+                        continue;
+                    }
+                }
                 if (fieldVal != null) {
                     try {
                         values.add(Decimal.valueOf(String.valueOf(fieldVal)));
@@ -6787,7 +6829,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
             values = applyCurrencySemantics(values, rowIsos, numberFormat, tagContent, data);
         }
 
-        if (values.isEmpty()) {
+        if (values.isEmpty() && fn != 'SUM' && fn != 'COUNT') {
             return '0';
         }
 
@@ -6818,18 +6860,7 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
                 }
             }
         } else if (fn == 'COUNT') {
-            String countResult = String.valueOf(values.size());
-            if (numberFormat != null && isNumericFormat(numberFormat)) {
-                // Strip `:convert` here too — the SUM/AVG/MIN/MAX path below does,
-                // and without it `{COUNT:Rel.Field:currency:EUR:convert}` leaks
-                // `convert` into the formatter's locale slot (#297).
-                return formatNumber(
-                    Decimal.valueOf(countResult),
-                    DocGenCurrency.stripConvertSegment(numberFormat),
-                    data
-                );
-            }
-            return countResult;
+            result = values.size() + nestedRowCount;
         } else {
             return null;
         }
@@ -6917,9 +6948,39 @@ global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — globa
         return converted;
     }
 
+    /** Null denotes a scalar lookup; an empty list is a valid filtered relationship. */
+    private static List<Object> nestedAggregateRows(List<Object> records, String path, String remaining) {
+        List<Object> children;
+        for (Object item : records) {
+            if (!(item instanceof Map<String, Object>)) {
+                continue;
+            }
+            Object value = resolveValue((Map<String, Object>) item, path, false);
+            List<Object> rows = unwrapChildRecords(value);
+            if (rows != null) {
+                // A wrapper can also expose a scalar such as Contacts.totalSize.
+                if (
+                    value instanceof Map<String, Object> &&
+                    !remaining.contains('.') &&
+                    resolveValue((Map<String, Object>) value, remaining) != null
+                ) {
+                    return null;
+                }
+                if (children == null) {
+                    children = new List<Object>();
+                }
+                children.addAll(rows);
+            }
+        }
+        return children;
+    }
+
     /** Extracts the child record list from the data map. */
     private static List<Object> getChildRecords(Map<String, Object> data, String listName) {
-        Object val = resolveValue(data, listName);
+        return unwrapChildRecords(resolveValue(data, listName));
+    }
+
+    private static List<Object> unwrapChildRecords(Object val) {
         if (val instanceof Map<String, Object>) {
             Map<String, Object> mapVal = (Map<String, Object>) val;
             if (mapVal.containsKey('records') && mapVal.get('records') instanceof List<Object>) {

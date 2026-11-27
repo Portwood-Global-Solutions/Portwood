@@ -224,6 +224,62 @@ try {
     System.debug('ROOTANCHOR GIANT-QUERY UNCHANGED WITHOUT TAG: FAIL — ' + e.getMessage());
 }
 
+// All five aggregates read the rows that the nested detail loop prints.
+try {
+    Map<String, Object> data = new Map<String, Object>{
+        'Orders' => new List<Object>{
+            new Map<String, Object>{
+                'Payments' => new Map<String, Object>{
+                    'records' => new List<Object>{
+                        new Map<String, Object>{ 'Amount' => 25 },
+                        new Map<String, Object>{ 'Amount' => 50 },
+                        new Map<String, Object>{ 'Amount' => null }
+                    }
+                }
+            },
+            new Map<String, Object>{ 'Payments' => new List<Object>{ new Map<String, Object>{ 'Amount' => 100 } } },
+            new Map<String, Object>{ 'Payments' => new List<Object>() }
+        }
+    };
+    r = DocGenService.processXmlForTest(
+        '{#Orders}{#Payments}[{Amount}]{/Payments}{/Orders}' +
+            '{SUM:Orders.Payments.Amount:currency}|{AVG:Orders.Payments.Amount:currency}' +
+            '|{MIN:Orders.Payments.Amount}|{MAX:Orders.Payments.Amount}|{COUNT:Orders.Payments}|{COUNT:Orders.Payments.Amount}',
+        data
+    );
+    System.assertEquals('[25][50][][100]$175.00|$58.33|25|100|4|3', r);
+    pass++;
+    System.debug('NESTED AGGREGATES: PASS');
+} catch (Exception e) {
+    fail++;
+    System.debug('NESTED AGGREGATES: FAIL — ' + e.getMessage());
+}
+
+// The streamed parent-field pass hands aggregates to the separate Giant Query resolver.
+Savepoint giantTest = Database.setSavepoint();
+try {
+    Account acct = new Account(Name = 'Aggregate scope proof');
+    insert acct;
+    DocGen_Template__c t = new DocGen_Template__c(
+        Name = 'Aggregate scope',
+        Type__c = 'HTML',
+        Base_Object_API__c = 'Account'
+    );
+    insert t;
+    DocGenGiantQueryAssembler assembler = new DocGenGiantQueryAssembler(null, t.Id, acct.Id, 'Opportunities');
+    String tags =
+        '{SUM:Opportunities.Lines.Price}{AVG:Opportunities.Lines.Price}{MIN:Opportunities.Lines.Price}' +
+        '{MAX:Opportunities.Lines.Price}{COUNT:Opportunities.Lines}{COUNT:Opportunities.Lines.Price}';
+    System.assertEquals(acct.Name + tags, assembler.resolveParentMergeTags('{Name}' + tags));
+    pass++;
+    System.debug('GIANT PARENT PRESERVES NESTED AGGREGATES: PASS');
+} catch (Exception e) {
+    fail++;
+    System.debug('GIANT PARENT PRESERVES NESTED AGGREGATES: FAIL — ' + e.getMessage());
+} finally {
+    Database.rollback(giantTest);
+}
+
 System.debug('========================================');
 System.debug(
     'E2E-07-SYNTAX6 — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED')

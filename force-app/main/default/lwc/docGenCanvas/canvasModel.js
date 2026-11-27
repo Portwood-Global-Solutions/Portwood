@@ -3549,7 +3549,7 @@ const NON_FIELD_TAGS =
  * never mutate the `lastIndex` of the regex they're called on (the engine resets it
  * per call), so one module-level instance is safe to reuse rather than a copy per use.
  */
-const MERGE_TAG_RE = /\{([#/^%]?)([A-Za-z0-9_.:=&'"\s-]+?)\}/g;
+const MERGE_TAG_RE = /\{([#/^%]?)((?:SUM|COUNT|AVG|MIN|MAX):[^{}]+|[A-Za-z0-9_.:=&'"\s-]+?)\}/gi;
 
 /**
  * Walks a dotted tag body (e.g. Client__r.BillingStreet) through the nested record
@@ -3682,14 +3682,16 @@ function collectFromText(text, out, rel) {
             // {#IF …} and {#ChartBucket:…} open blocks, not child collections — pushing
             // them would file the fields inside under a relationship that does not exist.
             const head = body.split(/[\s:]/)[0];
-            if (!/^(IF|ChartBucket)$/i.test(head)) {
+            if (!/^(IF|ChartBucket|GroupBy)$/i.test(head)) {
                 stack.push(head);
+                const loop = stack.join('.');
+                out.loops.set(loop.toLowerCase(), loop);
             }
             continue;
         }
         if (prefix === '/') {
             const head = body.split(/[\s:]/)[0];
-            if (!/^(IF|ChartBucket)$/i.test(head)) {
+            if (!/^(IF|ChartBucket|GroupBy)$/i.test(head)) {
                 stack.pop();
             }
             continue;
@@ -3697,12 +3699,17 @@ function collectFromText(text, out, rel) {
         if (prefix === '^' || prefix === '%') {
             continue;
         }
+        const aggregate = /^(SUM|COUNT|AVG|MIN|MAX):([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)(?::|$)/i.exec(body);
+        if (aggregate) {
+            const [list, ...fields] = aggregate[2].split('.');
+            out.aggregates.push({ list: [...stack, list].join('.'), fields, count: /^COUNT$/i.test(aggregate[1]) });
+            continue;
+        }
         // Strip a format suffix: {Amount:currency:USD} is still the Amount field.
         body = body.split(':')[0].trim();
         if (!body || NON_FIELD_TAGS.test(body)) {
             continue;
         }
-        // Aggregates name their own relationship and are resolved from it, not selected.
         if (body.indexOf('(') !== -1 || body.indexOf(' ') !== -1) {
             continue;
         }
@@ -3726,12 +3733,13 @@ function collectFromText(text, out, rel) {
  * the requirement off the document removes the whole class.
  */
 export function collectUsedFields(doc) {
-    const out = { base: new Set(), children: {} };
+    const out = { base: new Set(), children: {}, loops: new Map(), aggregates: [] };
     for (const board of doc.artboards || []) {
         for (const box of board.boxes || []) {
             if (box.kind === 'table') {
                 const t = box.table || {};
                 const rel = t.relationship || '';
+                if (rel) out.loops.set(rel.toLowerCase(), rel);
                 for (const c of t.columns || []) {
                     collectFromText(c.tag, out, rel);
                 }
@@ -3739,21 +3747,17 @@ export function collectUsedFields(doc) {
                 // the subquery rather than asking the account for line items.
                 const subRel = (t.subRelationship || '').trim();
                 if (subRel && rel) {
+                    const path = rel + '.' + subRel;
+                    out.loops.set(path.toLowerCase(), path);
                     for (const c of t.subColumns || []) {
-                        collectFromText(c.tag, out, rel + '.' + subRel);
+                        collectFromText(c.tag, out, path);
                     }
                 }
                 for (const r of t.rows || []) {
                     for (const cell of r) collectFromText(cell, out, rel);
                 }
                 for (const cell of (t.totals || {}).cells || []) {
-                    // Totals are aggregates over the relationship — the field they name
-                    // has to be queried even though the tag itself is not a plain field.
-                    const m = /\{(?:SUM|COUNT|AVG|MIN|MAX):([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/i.exec(cell || '');
-                    if (m) {
-                        if (!out.children[m[1]]) out.children[m[1]] = new Set();
-                        out.children[m[1]].add(m[2]);
-                    }
+                    collectFromText(cell, out, '');
                 }
             } else {
                 collectFromText(box.html != null && box.html !== '' ? box.html : box.text, out, '');
@@ -3768,7 +3772,28 @@ export function collectUsedFields(doc) {
             }
         }
     }
-    return out;
+    // A footer may precede its table. Once all loops are known we can distinguish
+    // Orders.Lines.Price from a scalar parent lookup such as Orders.Product.Price.
+    for (const { list, fields, count } of out.aggregates) {
+        let rel = out.loops.get(list.toLowerCase()) || list;
+        let i = 0;
+        while (i < fields.length && out.loops.has((rel + '.' + fields[i]).toLowerCase())) {
+            rel = out.loops.get((rel + '.' + fields[i]).toLowerCase());
+            i++;
+        }
+        let field = fields.slice(i).join('.');
+        if (!field) {
+            // A direct COUNT can use the server fallback. Nested counts need the
+            // rows themselves, including a loop that prints only literal text.
+            if (!count || !rel.includes('.')) continue;
+            field = 'Id';
+        } else if (i > 0 && field.toLowerCase() === 'totalsize') {
+            field = 'Id';
+        }
+        if (!out.children[rel]) out.children[rel] = new Set();
+        out.children[rel].add(field);
+    }
+    return { base: out.base, children: out.children };
 }
 
 /**
@@ -3793,10 +3818,12 @@ export function buildQueryConfig(doc) {
     const tree = {};
     for (const path of Object.keys(used.children)) {
         const segs = path.split('.');
-        let node = tree;
+        let siblings = tree;
+        let node;
         for (const seg of segs) {
-            if (!node[seg]) node[seg] = { fields: new Set(), children: {} };
-            node = seg === segs[segs.length - 1] ? node[seg] : node[seg].children;
+            if (!siblings[seg]) siblings[seg] = { fields: new Set(), children: {} };
+            node = siblings[seg];
+            siblings = node.children;
         }
         for (const f of used.children[path]) node.fields.add(f);
     }
