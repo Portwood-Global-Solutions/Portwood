@@ -1,0 +1,22 @@
+name: Report a problem
+description: Something went wrong while you were using Portwood.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: This issue will be public. Use made-up examples and leave out names, customer documents, and Salesforce links.
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+      description: Tell us what you were trying to do and what you saw.
+      placeholder: I clicked Generate Invoice. The PDF opened with a blank second page.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: If it helps, tell us how this usually works for you.
+    validations:
+      required: false

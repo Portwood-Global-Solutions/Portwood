@@ -50,11 +50,11 @@ See [`TRIAGE.md`](TRIAGE.md) for the full priority rubric.
 
 ## Reporting bugs
 
-[Open a bug report](https://github.com/Portwood-Global-Solutions/Portwood/issues/new?template=bug_report.md). Include your package version, Salesforce edition, output format (PDF/DOCX/PPTX/XLSX), whether the template is HTML or DOCX, and steps to reproduce. Attach the template body if you can — it's the single most useful thing.
+[Open a bug report](https://github.com/Portwood-Global-Solutions/Portwood/issues/new?template=bug_report.yml). Tell us what happened. A package version, output format, or small made-up example can help us reproduce it. Keep customer documents and Salesforce record links private.
 
 ## Suggesting features
 
-[Open a feature request](https://github.com/Portwood-Global-Solutions/Portwood/issues/new?template=feature_request.md) or start a [Discussion](https://github.com/Portwood-Global-Solutions/Portwood/discussions) to talk through the idea first.
+[Open a feature request](https://github.com/Portwood-Global-Solutions/Portwood/issues/new?template=feature_request.yml) or start a [Discussion](https://github.com/Portwood-Global-Solutions/Portwood/discussions) to talk through the idea first.
 
 ## Submitting code
 
