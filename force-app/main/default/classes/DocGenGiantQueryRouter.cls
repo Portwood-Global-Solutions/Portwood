@@ -44,6 +44,153 @@ public with sharing class DocGenGiantQueryRouter {
     // Below this row count even fat rows cannot realistically blow the sync
     // heap, so skip the sampling SOQL.
     private static final Integer SAMPLE_MIN_ROWS = 25;
+    private static final Integer MAX_LONG_TEXT_SAMPLE_CHARS = 600000;
+    public static final Integer DEFAULT_PAGE_SIZE = 50;
+
+    public class Settings {
+        public final Integer rowThreshold;
+        public final Integer pageSize;
+        public final Boolean thresholdConfigured;
+        public final Boolean pageSizeConfigured;
+
+        public Settings(DocGen_Template__c template) {
+            DocGen_Settings__c org = DocGen_Settings__c.getOrgDefaults();
+            Decimal selectedThreshold = positive(
+                template?.Giant_Query_Row_Threshold__c,
+                org?.Giant_Query_Row_Threshold__c
+            );
+            Decimal selectedPageSize = positive(template?.Giant_Query_Page_Size__c, org?.Giant_Query_Page_Size__c);
+            thresholdConfigured = selectedThreshold != null;
+            pageSizeConfigured = selectedPageSize != null;
+            rowThreshold = thresholdConfigured ? selectedThreshold.intValue() : GIANT_ROW_CEILING;
+            pageSize = pageSizeConfigured
+                ? Math.min(DEFAULT_PAGE_SIZE, selectedPageSize.intValue())
+                : DEFAULT_PAGE_SIZE;
+        }
+    }
+
+    public class Assessment {
+        public Integer estimatedPeakHeapBytes;
+        public Boolean useGiantPath;
+        public Boolean largePayload;
+        public Boolean exceedsRowThreshold;
+        public Integer pageSize;
+    }
+
+    private static Decimal positive(Decimal preferred, Decimal fallback) {
+        return preferred != null && preferred >= 1 ? preferred : (fallback != null && fallback >= 1 ? fallback : null);
+    }
+
+    public static Assessment assess(
+        Id parentRecordId,
+        Map<String, Object> node,
+        Integer rows,
+        String outputFormat,
+        Settings settings,
+        Boolean sampleOrdinaryRows
+    ) {
+        Integer effectiveRows = rows == null ? 0 : rows;
+        Object configuredLimit = node?.get('limit');
+        if (configuredLimit != null && String.valueOf(configuredLimit).isNumeric()) {
+            try {
+                effectiveRows = Math.min(effectiveRows, Integer.valueOf(String.valueOf(configuredLimit)));
+            } catch (Exception oversizedLimit) {
+                // A numeric LIMIT outside the Integer range cannot reduce the scouted count.
+            }
+        }
+        if (
+            node?.get('rowsIncludingChildren') != null &&
+            (String.isBlank(outputFormat) || outputFormat.equalsIgnoreCase('PDF'))
+        ) {
+            effectiveRows = (Integer) node.get('rowsIncludingChildren');
+        }
+        Assessment a = new Assessment();
+        a.exceedsRowThreshold = effectiveRows > settings.rowThreshold;
+        Integer longBytes = effectiveRows == 0 ? 0 : sampleLongTextBytes(parentRecordId, node);
+        Integer sample = longBytes;
+        if (sample == 0 && sampleOrdinaryRows && !a.exceedsRowThreshold && effectiveRows >= SAMPLE_MIN_ROWS) {
+            sample = sampleChildRowBytes(parentRecordId, node);
+        }
+        a.estimatedPeakHeapBytes = estimatePeakHeapBytes(effectiveRows, sample, outputFormat);
+        a.largePayload = longBytes > 0 && a.estimatedPeakHeapBytes > safeHeapBytes();
+        a.useGiantPath = effectiveRows > 0 && (a.exceedsRowThreshold || a.estimatedPeakHeapBytes > safeHeapBytes());
+        a.pageSize = longBytes > 0 ? Math.min(settings.pageSize, Math.max(1, 450000 / longBytes)) : settings.pageSize;
+        return a;
+    }
+
+    /**
+     * Samples up to three of the newest rows when configured fields can contain long text.
+     * Sampling is based on field capacity, including for lists with fewer than 25 records.
+     * Only accessible fields are projected, with a bounded worst-case payload.
+     */
+    @TestVisible
+    private static Integer sampleLongTextBytes(Id parentRecordId, Map<String, Object> node) {
+        if (node == null || parentRecordId == null || Limits.getLimitQueries() - Limits.getQueries() < 8) {
+            return 0;
+        }
+        try {
+            Schema.SObjectType childType = Schema.getGlobalDescribe().get((String) node.get('object'));
+            String lookup = (String) node.get('lookupField');
+            List<Object> raw = (List<Object>) node.get('fields');
+            if (childType == null || String.isBlank(lookup) || raw == null || raw.isEmpty()) {
+                return 0;
+            }
+            Map<String, Schema.SObjectField> described = childType.getDescribe().fields.getMap();
+            Schema.SObjectField parentField = described.get(lookup.toLowerCase());
+            if (parentField == null || !parentField.getDescribe().isAccessible()) {
+                return 0;
+            }
+            Set<String> selected = new Set<String>();
+            Integer capacity = 0;
+            for (Object fieldName : raw) {
+                Schema.SObjectField field = described.get(String.valueOf(fieldName).toLowerCase());
+                if (field == null)
+                    continue;
+                Schema.DescribeFieldResult d = field.getDescribe();
+                Integer length = d.getLength();
+                if (
+                    d.isAccessible() &&
+                    length >= 4000 &&
+                    !selected.contains(d.getName()) &&
+                    capacity + length <= MAX_LONG_TEXT_SAMPLE_CHARS
+                ) {
+                    selected.add(d.getName());
+                    capacity += length;
+                }
+            }
+            if (selected.isEmpty()) {
+                return 0;
+            }
+            Integer sampleSize = Math.min(3, MAX_LONG_TEXT_SAMPLE_CHARS / capacity);
+            String soql =
+                'SELECT ' +
+                String.join(new List<String>(selected), ', ') +
+                ' FROM ' +
+                childType.getDescribe().getName() +
+                ' WHERE ' +
+                parentField.getDescribe().getName() +
+                ' = :parentRecordId';
+            String whereClause = DocGenDataRetriever.sanitizeWhereClause((String) node.get('where'));
+            if (String.isNotBlank(whereClause))
+                soql += ' AND (' + whereClause + ')';
+            soql += described.containsKey('createddate') ? ' ORDER BY CreatedDate DESC, Id DESC' : ' ORDER BY Id DESC';
+            soql += ' LIMIT :sampleSize';
+            Integer maximum = 0;
+            for (SObject row : Database.query(soql, AccessLevel.USER_MODE)) {
+                Integer bytes = 0;
+                for (String fieldName : selected) {
+                    String value = (String) row.get(fieldName);
+                    if (value != null)
+                        bytes += Blob.valueOf(value).size();
+                }
+                maximum = Math.max(maximum, bytes);
+            }
+            return maximum;
+        } catch (Exception unavailable) {
+            // The estimate is best effort. The row and renderer limits still apply.
+            return 0;
+        }
+    }
 
     /** The routing verdict for one parent record + template. */
     public class Decision {
@@ -58,6 +205,8 @@ public with sharing class DocGenGiantQueryRouter {
         public Integer estimatedPeakHeapBytes = 0;
         /** Human-readable explanation, surfaced in the Flow error / debug log. */
         public String reason = '';
+        public Boolean useWordSnapshot = false;
+        public Integer pageSize;
     }
 
     /** 60 % of the sync heap governor — the ceiling for a synchronous generation. */
@@ -103,67 +252,61 @@ public with sharing class DocGenGiantQueryRouter {
      * Works for every config format (V1 flat string, V2/V3 JSON).
      */
     public static Decision decide(Id parentRecordId, String queryConfig, String outputFormat) {
+        return decide(parentRecordId, queryConfig, outputFormat, new Settings(null));
+    }
+
+    public static Decision decide(Id parentRecordId, String queryConfig, String outputFormat, Settings settings) {
         Decision d = new Decision();
         if (parentRecordId == null || String.isBlank(queryConfig)) {
             d.reason = 'No record or query config to scout.';
             return d;
         }
-
-        d.counts = DocGenDataRetriever.scoutChildCounts(parentRecordId, queryConfig);
+        Map<String, Map<String, Object>> groupedNodes = new Map<String, Map<String, Object>>();
+        d.counts = DocGenDataRetriever.scoutChildCounts(parentRecordId, queryConfig, groupedNodes);
         if (d.counts.isEmpty()) {
             d.reason = 'Template has no child relationships to scout.';
             return d;
         }
-
-        Integer safe = safeHeapBytes();
-        // Sample a real child row for any relationship in the "not tiny, not
-        // certainly-giant" band — that is where a row's true payload decides
-        // sync vs async, in BOTH directions: a few hundred rows carrying 30 KB
-        // fields must route async (the #374 crash), and a few hundred skinny
-        // rows must stay sync (or a PDF template is handed to the Word-only
-        // batch). SOQL is bounded by sampleBudget, not by the relationship
-        // count, because decide() runs once per Request in the Flow bulk loop —
-        // a relationship past the budget falls back to the row-count estimate,
-        // which errs toward async (safe).
         Integer sampleBudget = 2;
         for (String relKey : d.counts.keySet()) {
             Integer rows = d.counts.get(relKey);
-            if (rows == null || rows == 0) {
+            if (rows == null || rows == 0)
+                continue;
+            Map<String, Object> node = groupedNodes.get(relKey) ??
+                resolveNodeConfig(parentRecordId, queryConfig, relKey);
+            Boolean sampleOrdinary = sampleBudget > 0 && rows >= SAMPLE_MIN_ROWS && rows <= settings.rowThreshold;
+            Assessment a = assess(parentRecordId, node, rows, outputFormat, settings, sampleOrdinary);
+            if (sampleOrdinary)
+                sampleBudget--;
+            if (!a.useGiantPath || (d.useGiantPath && a.estimatedPeakHeapBytes <= d.estimatedPeakHeapBytes)) {
                 continue;
             }
-
-            Map<String, Object> nodeConfig = resolveNodeConfig(parentRecordId, queryConfig, relKey);
-
-            Boolean overCeiling = rows > GIANT_ROW_CEILING;
-            Integer sampleBytes = 0;
-            if (!overCeiling && sampleBudget > 0 && rows >= SAMPLE_MIN_ROWS) {
-                sampleBytes = sampleChildRowBytes(parentRecordId, nodeConfig);
-                sampleBudget--;
-            }
-            Integer estPeak = estimatePeakHeapBytes(rows, sampleBytes, outputFormat);
-
-            Boolean overHeap = estPeak > safe;
-            if (overCeiling || overHeap) {
-                d.useGiantPath = true;
-                d.giantRelationship = relKey;
-                d.giantNodeConfig = nodeConfig;
-                d.estimatedPeakHeapBytes = estPeak;
-                Integer estMb = estPeak / 1048576;
-                Integer safeMb = safe / 1048576;
-                d.reason = overHeap
-                    ? 'Estimated peak heap ~' +
-                      estMb +
-                      ' MB for ' +
-                      rows +
-                      ' "' +
-                      relKey +
-                      '" rows exceeds the safe synchronous limit (~' +
-                      safeMb +
-                      ' MB).'
-                    : rows + ' "' + relKey + '" rows exceed the ' + GIANT_ROW_CEILING + '-row synchronous ceiling.';
-                return d;
+            d.useGiantPath = true;
+            d.giantRelationship = relKey;
+            d.giantNodeConfig = node;
+            d.estimatedPeakHeapBytes = a.estimatedPeakHeapBytes;
+            d.useWordSnapshot = a.largePayload || (settings.thresholdConfigured && a.exceedsRowThreshold);
+            d.pageSize = a.pageSize;
+            if (
+                groupedNodes.containsKey(relKey) &&
+                node.get('nestedQuery') != null &&
+                outputFormat?.equalsIgnoreCase('PDF') == true
+            ) {
+                d.useWordSnapshot = true;
+                d.reason =
+                    'Grouped query "' +
+                    relKey +
+                    '" has approximately ' +
+                    node.get('rowsIncludingChildren') +
+                    ' rows including nested detail.';
+            } else {
+                d.reason = a.exceedsRowThreshold
+                    ? rows + ' "' + relKey + '" rows exceed the ' + settings.rowThreshold + '-row synchronous ceiling.'
+                    : 'Estimated peak heap for ' + rows + ' "' + relKey + '" rows exceeds the safe synchronous limit.';
             }
         }
+        if (d.useGiantPath)
+            return d;
         d.reason = 'All child datasets fit the synchronous heap budget.';
         return d;
     }
@@ -173,8 +316,9 @@ public with sharing class DocGenGiantQueryRouter {
      * alias||relationshipName matches the scout key. V1: parsed from the flat
      * subquery. V2 (children array) is not supported for the batch → null.
      */
-    @TestVisible
-    private static Map<String, Object> resolveNodeConfig(Id parentRecordId, String queryConfig, String relKey) {
+    public static Map<String, Object> resolveNodeConfig(Id parentRecordId, String queryConfig, String relKey) {
+        if (String.isBlank(queryConfig) || String.isBlank(relKey))
+            return null;
         String trimmed = queryConfig.trim();
         if (trimmed.startsWith('{')) {
             try {
@@ -198,7 +342,8 @@ public with sharing class DocGenGiantQueryRouter {
             }
         }
         // V1 flat string
-        return DocGenController.buildNodeConfigFromFlat(parentRecordId, queryConfig, relKey);
+        return DocGenDataRetriever.planFlatGiantDatasets(parentRecordId, queryConfig).get(relKey) ??
+            DocGenController.buildNodeConfigFromFlat(parentRecordId, queryConfig, relKey);
     }
 
     /**

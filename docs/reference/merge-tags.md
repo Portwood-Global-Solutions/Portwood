@@ -366,6 +366,10 @@ All five functions support any format suffix (`currency`, `number`, `percent`, c
 
 **Aggregate fields don't need to be rendered columns** — you can aggregate `UnitPrice` even if your loop table only shows `Product2.Name` and `Quantity`. The resolver validates field names against the child object's schema.
 
+For a grouped Giant Query PDF, place an account total after both closing loops. For example, `{SUM:Opportunities.OpportunityLineItems.TotalPrice:currency}` adds the line items selected by the nested query across all Opportunities on the account. `AVG`, `MIN`, and `MAX` use the same numeric line prices. `{COUNT:Opportunities.OpportunityLineItems}` includes every matching line. Adding `.TotalPrice` to the count includes only lines with a numeric price. Printing the same table twice counts each queried line once.
+
+Grouped Giant Query PDFs support nested SOQL in an HTML template or a Word template saved as PDF. Native Word Giant Query supports direct child tables.
+
 ### 7.6 Charts
 
 Render **nine chart styles** inline in your generated documents — bar, column, pie, donut, pivot, stacked, clustered, line, and area. Charts use a prepared PNG image on supported paths, with browser rendering for interactive work and an Apex rasterizer for server work. HTML can also use CSS chart blocks or opt-in browser-only SVG. Excel output does not embed chart-tag images. Test the exact entry point you intend to use:

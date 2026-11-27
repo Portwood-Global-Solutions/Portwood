@@ -16,6 +16,7 @@
         <members>DocGenAiTemplateControllerTest</members>
         <members>DocGenApprovalHistory</members>
         <members>DocGenAssetKeyHandler</members>
+        <members>DocGenAssetPolicy</members>
         <members>DocGenAssetTest</members>
         <members>DocGenAuthenticatorController</members>
         <members>DocGenAuthenticatorControllerTest</members>
@@ -61,6 +62,8 @@
         <members>DocGenDeclineToggleTest</members>
         <members>DocGenDocxTemplateLinter</members>
         <members>DocGenDocxTemplateLinterTest</members>
+        <members>DocGenEmailInlineImages</members>
+        <members>DocGenEmailInlineImagesTest</members>
         <members>DocGenEmailTemplateController</members>
         <members>DocGenEmailTemplateInstall</members>
         <members>DocGenEmailTemplateService</members>
@@ -82,14 +85,23 @@
         <members>DocGenFontTest</members>
         <members>DocGenFontTestData</members>
         <members>DocGenGettingStartedController</members>
+        <members>DocGenGiantMedia</members>
+        <members>DocGenGiantMediaTest</members>
         <members>DocGenGiantQueryAssembler</members>
+        <members>DocGenGiantQueryAssemblerTest</members>
         <members>DocGenGiantQueryBatch</members>
         <members>DocGenGiantQueryFlowAction</members>
         <members>DocGenGiantQueryFlowActionTest</members>
+        <members>DocGenGiantQueryMulti</members>
+        <members>DocGenGiantQueryPlan</members>
+        <members>DocGenGiantQueryPlanTest</members>
         <members>DocGenGiantQueryRouter</members>
         <members>DocGenGiantQueryRouterTest</members>
         <members>DocGenGiantQueryStitchJob</members>
         <members>DocGenGiantQueryTest</members>
+        <members>DocGenGiantQueryTotals</members>
+        <members>DocGenGiantQueryTotalsTest</members>
+        <members>DocGenGiantQueryWordTest</members>
         <members>DocGenGuestRenderQueueable</members>
         <members>DocGenGuestRenderQueueableTest</members>
         <members>DocGenGuidedSigningTest</members>
@@ -284,6 +296,8 @@
         <members>DocGen_Settings__c.AI_Provider_Class__c</members>
         <members>DocGen_Settings__c.Company_Name__c</members>
         <members>DocGen_Settings__c.Experience_Site_Url__c</members>
+        <members>DocGen_Settings__c.Giant_Query_Page_Size__c</members>
+        <members>DocGen_Settings__c.Giant_Query_Row_Threshold__c</members>
         <members>DocGen_Settings__c.Signature_Email_Brand_Color__c</members>
         <members>DocGen_Settings__c.Signature_Email_Footer_Text__c</members>
         <members>DocGen_Settings__c.Signature_Email_Logo_Url__c</members>
@@ -405,6 +419,8 @@
         <members>DocGen_Template__c.Flatten_PDF__c</members>
         <members>DocGen_Template__c.Footer_Html__c</members>
         <members>DocGen_Template__c.Form_Fields_Config__c</members>
+        <members>DocGen_Template__c.Giant_Query_Page_Size__c</members>
+        <members>DocGen_Template__c.Giant_Query_Row_Threshold__c</members>
         <members>DocGen_Template__c.Header_Html__c</members>
         <members>DocGen_Template__c.Hide_Signer_Decline__c</members>
         <members>DocGen_Template__c.Is_Active__c</members>

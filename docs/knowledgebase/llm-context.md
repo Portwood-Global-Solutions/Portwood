@@ -2434,9 +2434,7 @@ Use the returned **Content Version ID** with the supported attachment input of S
 
 #### When the data can be large
 
-**Generate Document (Auto Giant Query)** can choose a background path for supported large Word datasets. It takes a **Template ID** and **Record ID**. Check **Is Giant Query**: if true, follow **Job ID** and wait for completion; otherwise use the returned file IDs.
-
-That action's background route requires a supported V3 query and is Word-only. For other large formats, use the runner or a suitable bulk workflow. A successful job submission does not mean its file is ready yet.
+**Generate Document (Auto Giant Query)** takes a **Template ID** and **Record ID**. It can run supported large Word datasets in the background using a V3 query. It also supports grouped PDF output from HTML or Word templates with nested SOQL. When **Is Giant Query** is true, follow the **Job ID** and wait for completion. For synchronous output, use the returned file IDs.
 
 <a id="flow-bulk"></a>
 
@@ -4440,6 +4438,10 @@ Start with the smallest document that proves the business result. Add data, grap
 | A packet of Portwood-native PDF parts in Apex        | Global `DocGenPdfMerger`, within its supported PDF structure |
 
 Giant-query generation is asynchronous once it crosses the engine's large-relationship threshold. Follow the returned job rather than expecting an immediate File Id. It is different from bulk generation across many parent records.
+
+For a grouped Giant Query PDF, place an account total after both closing loops. For example, `{SUM:Opportunities.OpportunityLineItems.TotalPrice:currency}` adds the line items selected by the nested query across all Opportunities on the account. `AVG`, `MIN`, and `MAX` use the same numeric line prices. `{COUNT:Opportunities.OpportunityLineItems}` includes every matching line. Adding `.TotalPrice` to the count includes only lines with a numeric price. Printing the same table twice counts each queried line once.
+
+Grouped Giant Query PDFs support nested SOQL in an HTML template or a Word template saved as PDF. Native Word Giant Query supports direct child tables.
 
 #### Make the data smaller before making the heap larger
 

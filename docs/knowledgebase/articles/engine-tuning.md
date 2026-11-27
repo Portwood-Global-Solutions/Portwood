@@ -13,6 +13,10 @@ Start with the smallest document that proves the business result. Add data, grap
 
 Giant-query generation is asynchronous once it crosses the engine's large-relationship threshold. Follow the returned job rather than expecting an immediate File Id. It is different from bulk generation across many parent records.
 
+For a grouped Giant Query PDF, place an account total after both closing loops. For example, `{SUM:Opportunities.OpportunityLineItems.TotalPrice:currency}` adds the line items selected by the nested query across all Opportunities on the account. `AVG`, `MIN`, and `MAX` use the same numeric line prices. `{COUNT:Opportunities.OpportunityLineItems}` includes every matching line. Adding `.TotalPrice` to the count includes only lines with a numeric price. Printing the same table twice counts each queried line once.
+
+Grouped Giant Query PDFs support nested SOQL in an HTML template or a Word template saved as PDF. Native Word Giant Query supports direct child tables.
+
 #### Make the data smaller before making the heap larger
 
 Select only used fields, filter relationships, order them deliberately, and set justified limits. Avoid huge rich-text fields and full-resolution images when the document prints a small thumbnail. A query limit changes the document's data and totals; disclose intended truncation to the reader rather than quietly hiding rows.
