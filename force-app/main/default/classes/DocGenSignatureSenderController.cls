@@ -249,7 +249,9 @@ public with sharing class DocGenSignatureSenderController {
                 WITH USER_MODE
                 LIMIT 1
             ];
-            return htmlCvs.isEmpty() || htmlCvs[0].VersionData == null ? null : htmlCvs[0].VersionData.toString();
+            return htmlCvs.isEmpty() || htmlCvs[0].VersionData == null
+                ? null
+                : expandSnippetsForPlacementScan(htmlCvs[0].VersionData.toString());
         }
 
         String xmlPrefix = 'docgen_tmpl_xml_' + activeVersion.Id + '_';
@@ -289,7 +291,29 @@ public with sharing class DocGenSignatureSenderController {
         while (wtMatch.find()) {
             plainText += wtMatch.group(1);
         }
-        return plainText;
+        return expandSnippetsForPlacementScan(plainText);
+    }
+
+    /**
+     * #587: signing tags placed inside a shared snippet ({%snippet:key}) only exist
+     * after expansion. Placement discovery must scan the same expanded content that
+     * generation produces; otherwise those tags get no placement (Initials/DatePick
+     * stay literal text) and the tag-less fallback's synthetic Full + Date tags are
+     * substituted at the snippet's first matching occurrence.
+     *
+     * A missing or inactive snippet keeps the unexpanded text: generation raises the
+     * real error, and the Sender can still list the template's own roles.
+     */
+    @TestVisible
+    private static String expandSnippetsForPlacementScan(String text) {
+        if (text == null || !text.toLowerCase().contains('{%snippet:')) {
+            return text;
+        }
+        try {
+            return DocGenSnippetService.expand(text);
+        } catch (DocGenException e) {
+            return text;
+        }
     }
 
     /**
