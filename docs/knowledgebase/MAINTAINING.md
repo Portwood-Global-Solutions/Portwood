@@ -8,6 +8,10 @@ docs/knowledgebase/guide.json ────┼─ npm run guide:build ─┬─ U
 sfdx-project.json package alias ─┘                      └─ docs/knowledgebase/catalog.json
 ```
 
+The same build generates [the downloadable assistant context](llm-context.md) from the authoring articles, reference chapters and complete example templates. The shared prompt for **Copy AI Prompt** and **Generate with Agentforce** lives in `docGenAuthoringKit.js`. Package changes to that prompt reach installed users in a subsequent package release.
+
+The [guide verification record](VERIFICATION-3.64.md) lists the sandbox outcomes, browser checks and outstanding permission-test failures for this edition. The walkthrough source files are in `docs/demos/`. For the public site, copy those same files into the website checkout’s `static-site/demos/` alongside the reader update.
+
 ## Where to make a change
 
 | Change                                                      | Edit                                                                                |
@@ -179,3 +183,7 @@ The article slugs are the current public links. The imported legacy anchors pres
 Publish the content changes, including `catalog.json` and images, before switching the live website to the new reader. The new reader fetches the catalog from the content repository's main branch. Keep its schema compatible, or coordinate a reader update when changing the schema.
 
 The root `UserGuide.md` remains readable on GitHub and usable by the previous Markdown renderer during the transition. Old anchors in the generated Markdown are explicit HTML anchors.
+
+## Design studio downloads
+
+The files in `examples/document-studio` and `examples/event-signing` are the sources for the sample projects. After editing a sample, run `python3 scripts/knowledgebase/package-designs.py` and verify the archives with `--check`. When changing sample data, regenerate the example PDF in the managed sandbox, then update the matching text edition, screenshot and expected figures. Copy the three finished PDFs, three text editions and two ZIPs into the website repository’s `static-site/demos/studio/`. The website’s dry-run publisher compares all hosted downloads with the product checkout before staging them.

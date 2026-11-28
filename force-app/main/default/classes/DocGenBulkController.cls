@@ -81,6 +81,53 @@ public with sharing class DocGenBulkController {
         return countMatchingRecords(objectName, condition, null);
     }
 
+    /**
+     * Returns true when a WHERE-clause token names a field on the object described by
+     * fieldMap, either directly (Name, RecordTypeId) or as a relationship path whose first
+     * hop is a lookup on that object:
+     *   - custom relationships:   My_Lookup__r.Name  → My_Lookup__c
+     *   - standard relationships: RecordType.DeveloperName → RecordTypeId,
+     *                             Owner.Name → OwnerId, Account.Name → AccountId (#535)
+     * Shared by the bulk filter validator and DocGenController's WHERE validator so the
+     * two allowlists stay identical. Mirrors the standard-relationship rule the ORDER BY
+     * validators already apply.
+     */
+    public static Boolean isAllowedFieldPath(String token, Map<String, Schema.SObjectField> fieldMap) {
+        if (String.isBlank(token) || fieldMap == null) {
+            return false;
+        }
+        Boolean isPath = token.contains('.');
+        String baseField = (isPath ? token.substringBefore('.') : token).toLowerCase();
+        if (fieldMap.containsKey(baseField)) {
+            return true;
+        }
+        // Custom relationship traversal: My_Lookup__r → My_Lookup__c
+        if (baseField.endsWith('__r') && fieldMap.containsKey(baseField.removeEnd('__r') + '__c')) {
+            return true;
+        }
+        // Standard relationship traversal: RecordType → RecordTypeId. Only for dotted paths,
+        // and only when the matching ...Id field really is a lookup.
+        if (isPath) {
+            Schema.SObjectField idField = fieldMap.get(baseField + 'id');
+            if (idField != null && idField.getDescribe().getType() == Schema.DisplayType.REFERENCE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Error text for a filter token that failed isAllowedFieldPath. Adds a hint when the
+     * token targets Record Types on an object that has none (no RecordTypeId field).
+     */
+    public static String invalidFieldMessage(String prefix, String token, Map<String, Schema.SObjectField> fieldMap) {
+        String msg = prefix + token;
+        if (token != null && token.toLowerCase().startsWith('recordtype') && !fieldMap.containsKey('recordtypeid')) {
+            msg += '. This object has no Record Types, so it cannot be filtered by Record Type.';
+        }
+        return msg;
+    }
+
     /** Validates the selection the Bulk Generation screen will submit. */
     @AuraEnabled
     public static Integer validateTemplateFilter(Id templateId, String condition) {
@@ -119,6 +166,8 @@ public with sharing class DocGenBulkController {
                 query += ' WHERE ' + whereClause;
             }
             return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - Schema object name, parsed filter, user-mode query
+        } catch (QueryException e) {
+            throw DocGenService.ahe(e, 'The filter condition could not be run');
         } catch (DocGenException e) {
             throw DocGenService.ahe(e);
         }

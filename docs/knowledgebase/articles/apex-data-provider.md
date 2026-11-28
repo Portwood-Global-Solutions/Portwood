@@ -43,7 +43,7 @@ Choose **Apex Class (Data Provider)** as its data source and enter `KBAccountPro
 { "v": 4, "provider": "KBAccountProvider" }
 ```
 
-Save and activate a version, select a valid sample Account, and preview. The provider example was deployed and executed against the installed 3.60.0 package. It returned Northstar Bikes and two Contacts; its field list exposed the expected paths.
+Save and activate a version, select a valid sample Account, and preview. In the example, the preview returned Northstar Bikes and two Contacts. With your own sample record, compare the Account name and Contact rows with the record in Salesforce.
 
 #### 4. Test your own boundary cases
 

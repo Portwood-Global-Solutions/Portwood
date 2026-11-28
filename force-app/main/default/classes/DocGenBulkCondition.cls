@@ -374,7 +374,13 @@ public with sharing class DocGenBulkCondition {
     private static String validateFieldPath(SObjectType root, String path) {
         List<String> parts = path.split('\\.');
         if (parts.size() > MAX_RELATIONSHIP_HOPS + 1) {
-            throw new DocGenException('Invalid field in filter condition: ' + path);
+            throw new DocGenException(
+                DocGenBulkController.invalidFieldMessage(
+                    'Invalid field in filter condition: ',
+                    path,
+                    root.getDescribe().fields.getMap()
+                )
+            );
         }
         List<String> canonical = new List<String>();
         Set<SObjectType> currentTypes = new Set<SObjectType>{ root };
@@ -393,7 +399,13 @@ public with sharing class DocGenBulkCondition {
                 }
             }
             if (nextTypes.isEmpty()) {
-                throw new DocGenException('Invalid field in filter condition: ' + path);
+                throw new DocGenException(
+                    DocGenBulkController.invalidFieldMessage(
+                        'Invalid field in filter condition: ',
+                        path,
+                        root.getDescribe().fields.getMap()
+                    )
+                );
             }
             canonical.add(relationship);
             currentTypes = nextTypes;
@@ -407,7 +419,13 @@ public with sharing class DocGenBulkCondition {
                 return String.join(canonical, '.');
             }
         }
-        throw new DocGenException('Invalid field in filter condition: ' + path);
+        throw new DocGenException(
+            DocGenBulkController.invalidFieldMessage(
+                'Invalid field in filter condition: ',
+                path,
+                root.getDescribe().fields.getMap()
+            )
+        );
     }
 
     private static Schema.DescribeFieldResult findRelationship(SObjectType root, String relationship) {

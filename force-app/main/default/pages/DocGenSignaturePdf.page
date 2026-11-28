@@ -22,6 +22,7 @@
             <!-- pdf-lib — client-side composition of drawn/typed signatures onto the
                  final PDF at the located sign-spots (#163). Bundled static resource. -->
             <apex:includeScript value="{!URLFOR($Resource.pdflib, 'pdf-lib.min.js')}" />
+            <apex:includeScript value="{!URLFOR($Resource.DocGenKoreanSigningFont, 'fontkit.umd.min.js')}" />
 
             <style>
                 * {
@@ -1029,7 +1030,7 @@
                              draws with mouse/finger; the strokes are composited onto the PDF
                              with pdf-lib at finish. Falls back to the typed name below. -->
                         <div class="form-group" id="modal-draw-group" style="display: none">
-                            <label>Draw your signature</label>
+                            <label id="modal-draw-label">Draw your signature</label>
                             <canvas
                                 id="modal-draw-canvas"
                                 width="440"
@@ -1101,6 +1102,11 @@
                 </div>
             </div>
 
+            <template id="signed-text-chip"> <span class="tab">✓</span><span class="sig-value"></span> </template>
+            <template id="signed-image-chip">
+                <span class="tab">✓</span><img alt="" style="max-height: 26px; width: auto; display: block" />
+            </template>
+
             <!--
                 ============================================================================
                 DocGenPdfViewer — swappable PDF render module
@@ -1152,10 +1158,36 @@
                     var MODULE_URL = "{!URLFOR($Resource.pdfjs4, 'pdf.min.js')}";
                     var WORKER_SRC = "{!URLFOR($Resource.pdfjs4, 'pdf.worker.min.js')}";
                     var MAX_SCALE = 1.8;
+                    // #413 — page canvases are backed at device resolution, bounded so a phone
+                    // doesn't run out of canvas memory: at most 3x, at most MAX_CANVAS_PIXELS
+                    // per page (iOS Safari refuses a larger canvas outright), and at most
+                    // DOC_PIXEL_BUDGET across the document (every page canvas stays live).
+                    var MAX_DEVICE_RATIO = 3;
+                    var MAX_CANVAS_PIXELS = 16777216; // 4096 x 4096
+                    var DOC_PIXEL_BUDGET = 48000000; // ~192 MB of RGBA
+                    // #413 — pinch-zoom (visualViewport.scale) and browser zoom (devicePixelRatio)
+                    // re-render only the pages in view at the zoomed resolution, sharing
+                    // ZOOM_PIXEL_BUDGET; a page that leaves the view drops back to its base render.
+                    var ZOOM_PIXEL_BUDGET = 2 * MAX_CANVAS_PIXELS;
+                    var ZOOM_SETTLE_MS = 250; // re-render once the gesture or scroll settles
+                    var ZOOM_MIN_CHANGE = 0.15; // skip re-renders that change resolution < 15%
+                    // While zoomed, also watch the view position directly: a zoomed pan or fling
+                    // on a phone doesn't reliably deliver the events above, and without this a
+                    // page scrolled into view stayed soft until the signer re-zoomed.
+                    var ZOOM_WATCH_MS = 400;
 
                     var pdfjsLib = null; // resolved ESM module (cached after first import)
-                    var pages = []; // { pageNum, viewport, textContent, wrapEl }
+                    // { pageNum, viewport, textContent, wrapEl, pdfPage, canvas, ratio, task, pendingRatio }
+                    var pages = [];
                     var ready = false;
+                    var docPageCount = 1;
+                    var zoomTimer = null;
+                    var zoomListening = false;
+                    var zoomWatch = null; // interval id while pinch-zoomed
+                    var viewerEl = null;
+                    var lastViewKey = '';
+                    var lastMovedAt = 0;
+                    var refreshedViewKey = ''; // view the last refresh evaluated
 
                     function ensurePdfjs(containerEl) {
                         if (pdfjsLib) {
@@ -1207,21 +1239,202 @@
                         return Math.min(MAX_SCALE, avail / base.width);
                     }
 
+                    // Backing-store pixels per CSS pixel for one page canvas (#413). Never
+                    // below 1, so a page that hits a cap is no worse than before.
+                    function backingRatio(viewport, numPages) {
+                        var ratio = Math.min(MAX_DEVICE_RATIO, window.devicePixelRatio || 1);
+                        var cssPixels = viewport.width * viewport.height;
+                        var perPage = Math.min(MAX_CANVAS_PIXELS, DOC_PIXEL_BUDGET / Math.max(1, numPages));
+                        if (cssPixels * ratio * ratio > perPage) {
+                            ratio = Math.sqrt(perPage / cssPixels);
+                        }
+                        return Math.max(1, ratio);
+                    }
+
+                    // Resolution for a page in view at the current zoom (#413): the device ratio
+                    // times the pinch-zoom factor, bounded by the pixels this page may use, and
+                    // never below its base render. Pure — scripts/qa/signing-page-dpr-check.mjs
+                    // exercises it directly.
+                    function zoomedRatio(viewport, baseRatio, deviceRatio, zoom, pixelAllowance) {
+                        var want = Math.min(MAX_DEVICE_RATIO, deviceRatio || 1) * Math.max(1, zoom || 1);
+                        var cap = Math.sqrt(pixelAllowance / (viewport.width * viewport.height));
+                        return Math.max(baseRatio, Math.min(want, cap));
+                    }
+
+                    function pinchZoom() {
+                        var vv = window.visualViewport;
+                        return vv && vv.scale > 1 ? vv.scale : 1;
+                    }
+
+                    // Is any of the page inside both the viewer box and what the signer can see
+                    // (the visual viewport, which pinch-zoom shrinks)?
+                    function inView(entry) {
+                        var r = entry.wrapEl.getBoundingClientRect();
+                        var box = entry.wrapEl.parentNode ? entry.wrapEl.parentNode.getBoundingClientRect() : r;
+                        var vv = window.visualViewport;
+                        var left = Math.max(box.left, vv ? vv.offsetLeft : 0);
+                        var top = Math.max(box.top, vv ? vv.offsetTop : 0);
+                        var right = Math.min(box.right, vv ? vv.offsetLeft + vv.width : window.innerWidth);
+                        var bottom = Math.min(box.bottom, vv ? vv.offsetTop + vv.height : window.innerHeight);
+                        return r.right > left && r.left < right && r.bottom > top && r.top < bottom;
+                    }
+
+                    // Re-render one page into a fresh canvas and swap it in when done, so the
+                    // current render stays on screen meanwhile. Sign-spot chips share the wrap and
+                    // are positioned in CSS pixels, so the swap doesn't move them.
+                    function rerenderPage(entry, ratio) {
+                        if (entry.task) {
+                            entry.task.cancel();
+                        }
+                        var vp = entry.pdfPage.getViewport({ scale: entry.viewport.scale * ratio });
+                        var next = document.createElement('canvas');
+                        next.width = Math.floor(vp.width);
+                        next.height = Math.floor(vp.height);
+                        next.style.width = entry.viewport.width + 'px';
+                        next.style.height = entry.viewport.height + 'px';
+                        var task = entry.pdfPage.render({ canvasContext: next.getContext('2d'), viewport: vp });
+                        entry.task = task;
+                        entry.pendingRatio = ratio;
+                        task.promise.then(
+                            function () {
+                                if (entry.task !== task || entry.canvas.parentNode !== entry.wrapEl) {
+                                    next.width = 0;
+                                    next.height = 0;
+                                    return;
+                                }
+                                entry.task = null;
+                                entry.wrapEl.replaceChild(next, entry.canvas);
+                                entry.canvas.width = 0; // release the old backing store
+                                entry.canvas.height = 0;
+                                entry.canvas = next;
+                                entry.ratio = ratio;
+                            },
+                            function () {
+                                // Superseded by a newer zoom, or failed: keep the current render.
+                                if (entry.task === task) {
+                                    entry.task = null;
+                                }
+                                next.width = 0;
+                                next.height = 0;
+                            }
+                        );
+                    }
+
+                    function refreshResolution() {
+                        zoomTimer = null;
+                        if (!ready || !pages.length) {
+                            return;
+                        }
+                        refreshedViewKey = viewKey();
+                        var zoom = pinchZoom();
+                        var dpr = window.devicePixelRatio || 1;
+                        var visible = pages.filter(inView);
+                        var allowance = Math.min(MAX_CANVAS_PIXELS, ZOOM_PIXEL_BUDGET / Math.max(1, visible.length));
+                        for (var i = 0; i < pages.length; i++) {
+                            var entry = pages[i];
+                            var base = backingRatio(entry.viewport, docPageCount);
+                            var target = entry.ratio;
+                            if (visible.indexOf(entry) >= 0) {
+                                target = zoomedRatio(entry.viewport, base, dpr, zoom, allowance);
+                            } else if (entry.ratio > base * (1 + ZOOM_MIN_CHANGE)) {
+                                target = base; // left the view: hand its zoom pixels back
+                            }
+                            var current = entry.task ? entry.pendingRatio : entry.ratio;
+                            if (Math.abs(target - current) <= current * ZOOM_MIN_CHANGE) {
+                                continue; // already there, or already on its way
+                            }
+                            if (entry.task && Math.abs(target - entry.ratio) <= entry.ratio * ZOOM_MIN_CHANGE) {
+                                entry.task.cancel(); // zoomed back to where the current render is
+                                continue;
+                            }
+                            rerenderPage(entry, target);
+                        }
+                    }
+
+                    function scheduleRefresh() {
+                        if (zoomTimer) {
+                            clearTimeout(zoomTimer);
+                        }
+                        zoomTimer = setTimeout(refreshResolution, ZOOM_SETTLE_MS);
+                        watchWhileZoomed();
+                    }
+
+                    // Where the signer is looking: scroll positions plus the pinch viewport.
+                    function viewKey() {
+                        var vv = window.visualViewport;
+                        return [
+                            window.scrollX,
+                            window.scrollY,
+                            viewerEl ? viewerEl.scrollTop : 0,
+                            vv ? vv.offsetLeft : 0,
+                            vv ? vv.offsetTop : 0,
+                            pinchZoom()
+                        ].join(',');
+                    }
+
+                    // While pinch-zoomed, poll the view: once it has stopped moving for
+                    // ZOOM_SETTLE_MS, refresh (a no-op when nothing needs re-rendering). This
+                    // converges whichever events the browser did or didn't send for a zoomed
+                    // pan, fling or scroll. Stops when the signer zooms back out.
+                    function watchWhileZoomed() {
+                        if (zoomWatch || pinchZoom() <= 1) {
+                            return;
+                        }
+                        lastViewKey = viewKey();
+                        lastMovedAt = Date.now();
+                        zoomWatch = setInterval(function () {
+                            if (pinchZoom() <= 1) {
+                                clearInterval(zoomWatch);
+                                zoomWatch = null;
+                                scheduleRefresh(); // hand zoomed pages back to base
+                                return;
+                            }
+                            var key = viewKey();
+                            if (key !== lastViewKey) {
+                                lastViewKey = key;
+                                lastMovedAt = Date.now();
+                            } else if (
+                                !zoomTimer &&
+                                key !== refreshedViewKey &&
+                                Date.now() - lastMovedAt >= ZOOM_SETTLE_MS
+                            ) {
+                                refreshResolution();
+                            }
+                        }, ZOOM_WATCH_MS);
+                    }
+
+                    function listenForZoom(containerEl) {
+                        viewerEl = containerEl;
+                        if (zoomListening) {
+                            return;
+                        }
+                        zoomListening = true;
+                        if (window.visualViewport) {
+                            window.visualViewport.addEventListener('resize', scheduleRefresh);
+                            window.visualViewport.addEventListener('scroll', scheduleRefresh);
+                        }
+                        window.addEventListener('resize', scheduleRefresh); // browser zoom changes devicePixelRatio
+                        // On a phone the viewer isn't height-bound, so the document scrolls; on a
+                        // desktop the viewer box does. Either brings different pages into view.
+                        window.addEventListener('scroll', scheduleRefresh, { passive: true });
+                        containerEl.addEventListener('scroll', scheduleRefresh, { passive: true });
+                    }
+
                     function renderOnePage(pdf, pageNum, containerEl) {
                         return pdf.getPage(pageNum).then(function (page) {
                             var viewport = page.getViewport({ scale: fitScale(page, containerEl) });
-                            // Render at device-pixel density so text and fine signature fields
-                            // stay sharp on Retina/HiDPI displays while preserving the same
-                            // CSS dimensions for overlays and scrolling.
-                            var pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
-                            var renderViewport = page.getViewport({ scale: viewport.scale * pixelRatio });
+                            // #413 — draw at device resolution, display at CSS size. `viewport`
+                            // stays in CSS pixels: the wrap, anchor lookup and hitToPdfRect all
+                            // use it, so sign-spot placement and stamping are unchanged.
+                            var ratio = backingRatio(viewport, pdf.numPages);
+                            var renderViewport = page.getViewport({ scale: viewport.scale * ratio });
                             var wrap = document.createElement('div');
                             wrap.className = 'dg-page-wrap';
                             wrap.style.width = viewport.width + 'px';
                             wrap.style.height = viewport.height + 'px';
                             var canvas = document.createElement('canvas');
-                            canvas.width = Math.ceil(renderViewport.width);
-                            canvas.height = Math.ceil(renderViewport.height);
+                            canvas.width = Math.floor(renderViewport.width);
+                            canvas.height = Math.floor(renderViewport.height);
                             canvas.style.width = viewport.width + 'px';
                             canvas.style.height = viewport.height + 'px';
                             wrap.appendChild(canvas);
@@ -1236,7 +1449,12 @@
                                         pageNum: pageNum,
                                         viewport: viewport,
                                         textContent: tc,
-                                        wrapEl: wrap
+                                        wrapEl: wrap,
+                                        pdfPage: page,
+                                        canvas: canvas,
+                                        ratio: ratio,
+                                        task: null,
+                                        pendingRatio: ratio
                                     });
                                 });
                         });
@@ -1313,6 +1531,11 @@
                         // Returns a Promise that resolves when every page is painted.
                         render: function (base64, containerEl) {
                             ready = false;
+                            pages.forEach(function (p) {
+                                if (p.task) {
+                                    p.task.cancel();
+                                }
+                            });
                             pages = [];
                             if (!containerEl) {
                                 return Promise.resolve();
@@ -1346,6 +1569,7 @@
                                     return lib.getDocument({ data: bytes, isEvalSupported: false }).promise;
                                 })
                                 .then(function (pdf) {
+                                    docPageCount = pdf.numPages;
                                     var chain = Promise.resolve();
                                     for (var p = 1; p <= pdf.numPages; p++) {
                                         (function (pageNum) {
@@ -1362,6 +1586,10 @@
                                         return a.pageNum - b.pageNum;
                                     });
                                     ready = true;
+                                    // #413 — sharpen on pinch/browser zoom; also picks up a zoom
+                                    // the signer applied while a long document was still loading.
+                                    listenForZoom(containerEl);
+                                    scheduleRefresh();
                                 })
                                 .catch(function (err) {
                                     showMessage(containerEl, 'Unable to display this document.');
@@ -2044,16 +2272,11 @@
                         chip.style.width = 'auto';
                         chip.style.minWidth = sentinelWidth + 'px';
                         chip.style.height = 'auto';
-                        while (chip.firstChild) chip.removeChild(chip.firstChild);
-                        var tab = document.createElement('span');
-                        tab.className = 'tab';
-                        tab.textContent = '✓'; // check mark
-                        chip.appendChild(tab);
-                        var val = document.createElement('span');
-                        var isDate = type === 'Date' || type === 'DatePick';
-                        val.className = 'sig-value' + (isDate ? ' plain' : '');
+                        var content = document.getElementById('signed-text-chip').content.cloneNode(true);
+                        var val = content.querySelector('.sig-value');
+                        if (type === 'Date' || type === 'DatePick') val.classList.add('plain');
                         val.textContent = value || '';
-                        chip.appendChild(val);
+                        chip.replaceChildren(content);
                     }
 
                     function signedCount() {
@@ -2270,15 +2493,9 @@
                         chip.classList.remove('current');
                         chip.classList.add('signed');
                         chip.style.height = 'auto';
-                        while (chip.firstChild) chip.removeChild(chip.firstChild);
-                        var tab = document.createElement('span');
-                        tab.className = 'tab';
-                        tab.textContent = '✓';
-                        chip.appendChild(tab);
-                        var img = document.createElement('img');
-                        img.src = dataUrl;
-                        img.style.cssText = 'max-height:26px;width:auto;display:block;';
-                        chip.appendChild(img);
+                        var content = document.getElementById('signed-image-chip').content.cloneNode(true);
+                        content.querySelector('img').src = dataUrl;
+                        chip.replaceChildren(content);
                     }
 
                     // Fetch the certificate roster (all signers + whether this signer
@@ -2542,6 +2759,7 @@
                             // whoever has to check the document. drawWrappedText returns
                             // the y AFTER the last line it drew, so the sentence below
                             // moves down instead of landing on top of a two-line URL.
+                            var verifyTop = y + 8;
                             y = drawWrappedText(page, String(cert.verifyUrl), {
                                 x: 54,
                                 y: y,
@@ -2550,6 +2768,19 @@
                                 color: brand,
                                 lineHeight: 10
                             });
+                            // A wrapped URL is not reliably auto-linked by PDF readers.
+                            // Keep the complete destination on one clickable annotation.
+                            page.node.addAnnot(
+                                doc.context.register(
+                                    doc.context.obj({
+                                        Type: 'Annot',
+                                        Subtype: 'Link',
+                                        Rect: [CERT_LEFT, y + 8, CERT_LEFT + CERT_LINE_WIDTH, verifyTop],
+                                        Border: [0, 0, 0],
+                                        A: { S: 'URI', URI: PDFLib.PDFString.of(String(cert.verifyUrl)) }
+                                    })
+                                )
+                            );
                             y -= 2;
                             page.drawText('Drop the PDF you received at that link to confirm its integrity.', {
                                 x: 54,
@@ -2559,6 +2790,61 @@
                                 color: gray
                             });
                         }
+                    }
+
+                    var koreanSigningFontPromise;
+
+                    function shortSigningDate(date, locale) {
+                        var options = { year: 'numeric', month: 'short', day: 'numeric' };
+                        try {
+                            var localized = date.toLocaleDateString(locale, options);
+                            if (/^ko(?:-|$)/i.test(locale || '') || /^[\u0020-\u007e\u00a0-\u00ff]+$/.test(localized)) {
+                                return localized;
+                            }
+                        } catch (error) {
+                            // Unsupported locale identifiers use the standard caption date.
+                        }
+                        return date.toLocaleDateString('en-US', options);
+                    }
+
+                    function needsKoreanSigningFont(text) {
+                        return /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7ff]/.test(text || '');
+                    }
+
+                    function loadKoreanSigningFont() {
+                        if (!koreanSigningFontPromise) {
+                            if (!window.fontkit) {
+                                return Promise.reject(new Error('Korean signing font library did not load.'));
+                            }
+                            koreanSigningFontPromise = fetch(
+                                "{!URLFOR($Resource.DocGenKoreanSigningFont, 'NanumGothic-Regular.ttf')}"
+                            )
+                                .then(function (response) {
+                                    if (!response.ok) throw new Error('Korean signing font did not load.');
+                                    return response.arrayBuffer();
+                                })
+                                .catch(function (error) {
+                                    koreanSigningFontPromise = null;
+                                    throw error;
+                                });
+                        }
+                        return koreanSigningFontPromise;
+                    }
+
+                    function signingPdfFonts(doc, useKoreanFont) {
+                        if (useKoreanFont) {
+                            return loadKoreanSigningFont().then(function (fontBytes) {
+                                doc.registerFontkit(window.fontkit);
+                                return doc.embedFont(fontBytes, { subset: true }).then(function (font) {
+                                    return [font, font, font];
+                                });
+                            });
+                        }
+                        return Promise.all([
+                            doc.embedFont(PDFLib.StandardFonts.HelveticaOblique),
+                            doc.embedFont(PDFLib.StandardFonts.Helvetica),
+                            doc.embedFont(PDFLib.StandardFonts.HelveticaBold)
+                        ]);
                     }
 
                     // Composite ALL captured fields (drawn images + typed text + dates) onto
@@ -2575,26 +2861,23 @@
                         // Short date for the inline caption (full timestamp lives on the
                         // certificate page) so the caption fits beside the signature without
                         // bleeding into an adjacent column.
-                        var capShort = (function () {
-                            try {
-                                return new Date().toLocaleDateString(undefined, {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric'
-                                });
-                            } catch (e) {
-                                return '';
-                            }
-                        })();
+                        var capShort = shortSigningDate(new Date(), navigator.language);
                         return getCertificateData()
                             .then(function (cert) {
                                 var bytes = b64ToBytes(sourcePdfBase64);
                                 return PDFLib.PDFDocument.load(bytes).then(function (doc) {
-                                    return Promise.all([
-                                        doc.embedFont(PDFLib.StandardFonts.HelveticaOblique),
-                                        doc.embedFont(PDFLib.StandardFonts.Helvetica),
-                                        doc.embedFont(PDFLib.StandardFonts.HelveticaBold)
-                                    ]).then(function (fonts) {
+                                    var spotValues =
+                                        guided && guided.spots
+                                            ? guided.spots.map(function (spot) {
+                                                  return spot.value || spot.placement.signedValue;
+                                              })
+                                            : [];
+                                    var useKoreanFont = needsKoreanSigningFont(
+                                        [capShort, typedName, formFieldJson, JSON.stringify(cert)]
+                                            .concat(spotValues)
+                                            .join(' ')
+                                    );
+                                    return signingPdfFonts(doc, useKoreanFont).then(function (fonts) {
                                         var oblique = fonts[0],
                                             helv = fonts[1],
                                             helvBold = fonts[2];
@@ -3076,6 +3359,8 @@
                         DrawPad.clear();
                         signatureInputSource = null;
                         drawGroup.style.display = allowDraw ? '' : 'none';
+                        document.getElementById('modal-draw-label').textContent =
+                            type === 'Initials' ? 'Draw your initials' : 'Draw your signature';
 
                         if (type === 'Date') {
                             modalMode = 'spot';
@@ -3092,7 +3377,12 @@
                             nameInput.type = type === 'DatePick' ? 'date' : 'text';
                             if (type === 'Initials') {
                                 titleEl.textContent = 'Add Initials';
-                                subEl.textContent = 'Type your initials for this field.';
+                                // #582 — only promise drawing when the pad is actually offered.
+                                // allowDraw is false when the org or template turns on "Allow
+                                // Typed Signatures Only" (#500), which hides the draw group.
+                                subEl.textContent = allowDraw
+                                    ? 'Draw or type your initials for this field.'
+                                    : 'Type your initials for this field.';
                                 nameLabel.textContent = 'Your initials';
                                 nameInput.placeholder = 'e.g., JS';
                                 nameInput.value = '';

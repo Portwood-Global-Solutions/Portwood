@@ -28,6 +28,8 @@ AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
 
 Use your org's record type developer name. Salesforce supports up to two top-level `IN` or `NOT IN` subqueries joined by `AND`. The count also applies the selected template's saved Record Filter.
 
+Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
+
 ![The bulk runner has validated the three fictional Accounts and is set to Individual Files](docs/images/userguide/v3.60/bulk-ready.png)
 
 #### Choose the right output

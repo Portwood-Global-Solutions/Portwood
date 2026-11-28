@@ -32,11 +32,52 @@ try {
     page.setDefaultTimeout(8000);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await check('homepage loads the local catalog and correct release', async () => {
+    await check('homepage opens setup and the support version check', async () => {
         await page.goto(url);
         await page.getByRole('heading', { name: 'What would you like to do?', exact: true }).waitFor();
-        assert.equal(await page.locator('#pg-release').innerText(), `Portwood ${catalog.product.version}`);
+        await page.locator('.pg-task[href="#install-portwood"]').waitFor();
+        await page.getByRole('link', { name: 'Check my installed version' }).click();
+        assert.ok((await page.locator('#pg-prose').innerText()).includes(catalog.product.version));
+        await page.goto(url);
+        await page.getByRole('heading', { name: 'What would you like to do?' }).waitFor();
         assert.equal(await page.locator('.pg-task').count(), 6);
+    });
+    await check('license guidance covers public guests, signed-in signers, and the enterprise quote', async () => {
+        await page.goto(url);
+        await page.getByRole('link', { name: 'Who needs a license?', exact: true }).click();
+        await page.getByRole('heading', { name: 'Who needs a Portwood license?', exact: true }).waitFor();
+        const article = page.locator('#pg-prose');
+        const guest = article.getByRole('row').filter({ hasText: 'A customer opens a public signing link' });
+        assert.match(await guest.innerText(), /one Portwood user license to that site’s guest user/);
+        assert.match(await guest.innerText(), /Each recipient gets their own private signing link/);
+        const signedIn = article.getByRole('row').filter({ hasText: 'signs using their login' });
+        assert.match(await signedIn.innerText(), /Portwood site license required/);
+        assert.match(await signedIn.innerText(), /specific Screen Flow/);
+        assert.match(await signedIn.innerText(), /Portwood Portal Signer/);
+        const quote = article.getByRole('link', { name: 'Request a site-license quote', exact: true });
+        assert.equal(await quote.getAttribute('href'), 'https://calendar.app.google/HJLhcSFRFDoqxXEM9');
+        assert.equal(await article.getByRole('img').count(), 3);
+        assert.match(await article.innerText(), /Setup → Company Information/);
+        await page.goto(`${url}#install-portwood`);
+        await page.getByRole('link', { name: 'See who needs a license, including guests and portal signers' }).click();
+        await page.getByRole('heading', { name: 'Who needs a Portwood license?', exact: true }).waitFor();
+        assert.equal(catalog.learningPaths.find((path) => path.id === 'team-setup').articles[0], 'user-licenses');
+    });
+    await check('design studio cards open their recipes and section links move keyboard focus', async () => {
+        await page.goto(url);
+        await page.locator('.pg-studio a').first().waitFor();
+        for (const card of catalog.home.showcase) {
+            assert.equal(await page.locator(`.pg-studio a[href="#${card.slug}"] img`).getAttribute('alt'), card.alt);
+        }
+        await page.locator('.pg-studio a[href="#cpq-quote"]').click();
+        await page.getByText('In this lesson', { exact: true }).click();
+        const jump = page.getByRole('link', { name: 'Send this exact quote for signature', exact: true });
+        await jump.focus();
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => document.activeElement?.textContent === 'Send this exact quote for signature');
+        assert.equal(await page.locator(':focus').evaluate((node) => node.tagName), 'H2');
+        await page.keyboard.press('Tab');
+        assert.match(await page.locator(':focus').getAttribute('href'), /#sign-uploaded-pdf$/);
     });
     await check('all task articles render, keep merge tags, and have no missing screenshot files', async () => {
         for (const article of catalog.articles) {
@@ -96,7 +137,36 @@ try {
             await page.getByRole('heading', { name: title, exact: true }).waitFor();
         }
     });
+    await check('signers and admins can follow illustrated steps without opening a project file', async () => {
+        const routes = [
+            ['event-signing-journey', 'sign-prepare', 'sign-return', 'sign-verify', 'signer-enter-signature', 'signer-consent', 'sign-pending'],
+            ['signing-handoff-setup', 'receipt-setup', 'event-definition'],
+            ['signing-events', 'trigger-event', 'assign-signer', 'signer-inputs', 'receipt-fields'],
+            ['signing-site-handoff', 'publish-event', 'read-receipt', 'find-navigation', 'open-signing-page', 'host-palette', 'host-selected'],
+            ['document-studio', 'sample-select', 'sample-file', 'choose-json', 'upload-html', 'generate-json']
+        ];
+        for (const [slug, ...steps] of routes) {
+            await page.goto(`${url}#${slug}`);
+            const prose = page.locator('#pg-prose');
+            await prose.locator('figure').first().waitFor();
+            const pictures = await prose.locator('figure img').evaluateAll((nodes) =>
+                nodes.map((img) => img.src.split('/').pop().replace(/\.png$/, ''))
+            );
+            let previous = -1;
+            for (const step of steps) {
+                assert.ok(pictures.indexOf(step) > previous, `${slug}: missing or misplaced illustration ${step}`);
+                previous = pictures.indexOf(step);
+            }
+            assert.equal(await prose.locator('a[href*=".flow-meta.xml"]').count(), 0);
+            assert.doesNotMatch(await prose.innerText(), /sf project deploy/);
+        }
+        await page.goto(`${url}#event-signing-journey`);
+        await page.locator('#pg-prose a[href="#signing-handoff-setup"]').first().click();
+        await page.getByRole('heading', { name: 'Set up a signing receipt and event', exact: true }).waitFor();
+    });
     await check('search matches article content and opens a result', async () => {
+        await page.goto(url);
+        await page.getByRole('heading', { name: 'What would you like to do?', exact: true }).waitFor();
         const search = page.getByRole('searchbox', { name: 'Search the Portwood guide', exact: true });
         await search.fill('email verification');
         await page.locator('.pg-result').first().waitFor();
@@ -134,14 +204,17 @@ try {
     await check('raw Markdown compatibility and return navigation work', async () => {
         await page.goto(`${url}?raw=1`);
         await page.locator('#pg-raw-text').filter({ hasText: '# Portwood Knowledgebase' }).waitFor();
-        assert.ok((await page.locator('#pg-raw-text').innerText()).includes(catalog.product.packageId));
+        const markdown = await page.locator('#pg-raw-text').innerText();
+        assert.ok(markdown.includes('[Check your installed version](#troubleshooting)'));
+        assert.ok(markdown.includes('[Who needs a Portwood license?](#user-licenses)'));
+        assert.ok(markdown.includes(`The current release is **${catalog.product.version}**`));
         await page.locator('[data-article="first-document"]').click();
         await page.getByRole('heading', { name: 'Make your first document', exact: true }).waitFor();
     });
     await check('phone and tablet layouts have no page overflow and a working topic menu', async () => {
         for (const width of [390, 768, 1024]) {
             await page.setViewportSize({ width, height: 900 });
-            for (const slug of ['sign-uploaded-pdf', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface']) {
+            for (const slug of ['sign-uploaded-pdf', 'user-licenses', 'site-experience-cloud', 'site-salesforce', 'merge-tags', 'tag-charts', 'apex-surface', 'signing-site-handoff', 'document-studio']) {
                 await page.goto(`${url}#${slug}`);
                 await page.locator('#pg-prose').waitFor();
                 assert.ok(
@@ -151,6 +224,22 @@ try {
             }
         }
         await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${url}#signing-site-handoff`);
+        const detail = page.getByRole('button', { name: /Enlarge screenshot: The three navigation settings/ });
+        await detail.click();
+        const actual = page.getByRole('button', { name: 'Actual size' });
+        await actual.click();
+        assert.equal(await actual.getAttribute('aria-pressed'), 'true');
+        await page.waitForFunction(() => {
+            const img = document.querySelector('#pg-zoom-image');
+            const view = document.querySelector('#pg-zoom-view');
+            return img.clientWidth === img.naturalWidth && view.scrollWidth > view.clientWidth;
+        });
+        await page.locator('#pg-zoom-view').evaluate((view) => view.scrollTo(75, 0));
+        assert.ok(await page.locator('#pg-zoom-view').evaluate((view) => view.scrollLeft > 0));
+        await page.keyboard.press('Escape');
+        assert.ok(await detail.evaluate((node) => node === document.activeElement));
+        await page.waitForFunction(() => document.querySelector('#pg-zoom-size').getAttribute('aria-pressed') === 'false');
         const menu = page.getByRole('button', { name: 'Browse topics', exact: true });
         await menu.click();
         assert.equal(await menu.getAttribute('aria-expanded'), 'true');

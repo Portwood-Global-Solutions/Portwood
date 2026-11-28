@@ -535,3 +535,8 @@
     flex: 0 0 auto;
     min-width: 0;
 }
+
+.nav-access-status {
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+}

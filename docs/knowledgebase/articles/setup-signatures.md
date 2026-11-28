@@ -2,6 +2,8 @@ Set up the public signing page and email sender before inviting external recipie
 
 **Before you start:** You are a Salesforce administrator with authority to configure a Salesforce Site or Experience Cloud site and the organization's email settings.
 
+**Choose the signing route.** For public links under per-user licensing, cover the signing site’s guest user with a Portwood license. Each customer opens their own link and needs no individual seat. If customers, partners or employees sign while logged in, arrange a **Portwood site license**. It also covers the public guest user. [Compare signing licenses and request a quote](#user-licenses)
+
 #### 1. Open the checklist
 
 Go to **Portwood → Signatures**. The **Setup Status** checklist shows what is configured and what still needs attention.
@@ -26,7 +28,8 @@ For a classic Salesforce Site:
 1. Open **Setup → Sites → your site**.
 2. Click **Public Access Settings**.
 3. Open **View Users**, then the site's guest user.
-4. Under **Permission Set Assignments**, assign **Portwood Guest Signature**.
+4. Under per-user licensing, check **Managed Packages** for **Portwood** on the guest user. If needed, use **Assign Licenses** to assign an available license. With a site license the guest is already covered.
+5. Under **Permission Set Assignments**, assign **Portwood Guest Signature**.
 
 For Experience Cloud, find that site's guest user through its administration/profile controls and assign the same packaged set.
 

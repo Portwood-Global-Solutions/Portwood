@@ -382,4 +382,115 @@ public with sharing class DocGenBulkControllerTest {
         System.assertNotEquals(null, job.Status__c, 'Job status should be populated');
         System.assertEquals('Test Job', job.Label__c, 'Job label should match');
     }
+
+    // ── #535: standard relationship paths in the Step 2 record filter ──
+
+    @IsTest
+    static void testValidateFilterAcceptsStandardRelationshipPath() {
+        Test.startTest();
+        // Owner → OwnerId: a standard lookup on every Account, so this needs no org setup
+        Integer count = DocGenBulkController.validateFilter('Account', 'Owner.Name != null AND Name LIKE \'Heap%\'');
+        Test.stopTest();
+
+        System.assertEquals(1, count, 'Owner.Name must be accepted as a standard relationship path');
+    }
+
+    @IsTest
+    static void testValidateFilterRecordTypePath() {
+        Boolean hasRecordTypes = Schema.SObjectType.Account.fields.getMap().containsKey('recordtypeid');
+        String message;
+        Integer count;
+        Test.startTest();
+        try {
+            count = DocGenBulkController.validateFilter(
+                'Account',
+                'RecordType.DeveloperName != null OR RecordType.Name = null'
+            );
+        } catch (AuraHandledException e) {
+            message = e.getMessage();
+        }
+        Test.stopTest();
+
+        if (hasRecordTypes) {
+            System.assertEquals(null, message, 'RecordType.* must validate when Account has Record Types: ' + message);
+            System.assert(count >= 1, 'Every Account matches the either/or condition');
+        } else {
+            System.assertNotEquals(null, message, 'No RecordTypeId field — the filter cannot run');
+            System.assert(message.contains('no Record Types'), 'Error should explain why: ' + message);
+        }
+    }
+
+    @IsTest
+    static void testValidateFilterWithoutSpacesAroundOperator() {
+        Test.startTest();
+        Integer count = DocGenBulkController.validateFilter('Account', 'Name=\'Heap Test Account\'');
+        Test.stopTest();
+
+        System.assertEquals(1, count, 'A condition with no spaces round = must validate');
+    }
+
+    @IsTest
+    static void testValidateFilterStillRejectsUnknownField() {
+        String message;
+        Test.startTest();
+        try {
+            DocGenBulkController.validateFilter('Account', 'NotARealRel.Name = \'x\'');
+        } catch (AuraHandledException e) {
+            message = e.getMessage();
+        }
+        Test.stopTest();
+
+        System.assertNotEquals(null, message, 'An unknown relationship must still be rejected');
+        System.assert(message.contains('Invalid field in filter condition'), 'Unexpected message: ' + message);
+    }
+
+    @IsTest
+    static void testValidateFilterReportsMalformedValue() {
+        String message;
+        Test.startTest();
+        try {
+            // A wrong-length Id is a SOQL error. (A 15/18-char placeholder such as
+            // '012XXXXXXXXXXXX' is syntactically valid and simply matches 0 rows.)
+            DocGenBulkController.validateFilter('Account', 'OwnerId = \'abc\'');
+        } catch (AuraHandledException e) {
+            message = e.getMessage();
+        }
+        Test.stopTest();
+
+        System.assertNotEquals(null, message, 'An invalid Id literal must fail validation');
+        System.assert(message.contains('could not be run'), 'SOQL errors should be explained: ' + message);
+    }
+
+    @IsTest
+    static void testIsAllowedFieldPath() {
+        Map<String, Schema.SObjectField> fm = Schema.SObjectType.Contact.fields.getMap();
+        System.assert(DocGenBulkController.isAllowedFieldPath('LastName', fm), 'Direct field');
+        System.assert(DocGenBulkController.isAllowedFieldPath('Account.Name', fm), 'Account → AccountId');
+        System.assert(
+            DocGenBulkController.isAllowedFieldPath('Owner.Profile.Name', fm),
+            'Multi-hop, first hop OwnerId'
+        );
+        System.assert(!DocGenBulkController.isAllowedFieldPath('Account', fm), 'Bare relationship name is not a field');
+        System.assert(!DocGenBulkController.isAllowedFieldPath('Bogus.Name', fm), 'Unknown relationship');
+        System.assert(!DocGenBulkController.isAllowedFieldPath('Bogus__r.Name', fm), 'Unknown custom relationship');
+        System.assert(!DocGenBulkController.isAllowedFieldPath(null, fm), 'Null token');
+    }
+
+    @IsTest
+    static void testSortedChildIdsWhereAcceptsStandardRelationship() {
+        Account acc = [SELECT Id FROM Account WHERE Name = 'Heap Test Account' LIMIT 1];
+        insert new Contact(LastName = 'Rel535', AccountId = acc.Id);
+
+        Test.startTest();
+        List<Id> ids = DocGenController.getSortedChildIds(
+            'Contact',
+            'AccountId',
+            acc.Id,
+            'LastName ASC',
+            'Account.Name = \'Heap Test Account\''
+        );
+        Test.stopTest();
+
+        System.assertEquals(1, ids.size(), 'DocGenController WHERE validator shares the #535 allowlist');
+    }
 }

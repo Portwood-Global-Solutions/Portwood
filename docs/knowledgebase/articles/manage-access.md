@@ -1,19 +1,19 @@
-Give each person enough access for their job and test the experience as that person.
+Start with the person’s job. Confirm [who needs a Portwood license](#user-licenses), then give them the permissions for the work they do.
 
-| Person                                                     | Usually needs                                                     |
-| ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| Template builder / administrator                           | **Portwood Admin**                                                |
-| Internal user making documents or sending signing requests | **Portwood User**                                                 |
-| Signing site's guest user                                  | **Portwood Guest Signature**                                      |
-| Administrator configuring document/email buttons           | **Portwood Button Manager** plus the platform metadata permission |
+| What the person does | Permission set to assign |
+| --- | --- |
+| Builds templates or configures Portwood | **Portwood Admin** |
+| Generates documents or sends signature requests | **Portwood User** |
+| Serves public signing links as the site’s guest user | **Portwood Guest Signature**, on that site's licensed guest user |
+| Signs inside a Screen Flow using a portal login | **Portwood Portal Signer**, with a Portwood site license and Salesforce access to the portal, page and specific Flow |
+| Signs inside a Screen Flow as an internal non-admin | **Portwood User** plus **Portwood Portal Signer** for the embedded component, with a Portwood site license |
+| Configures document and email buttons | **Portwood Button Manager** plus the required Salesforce metadata permission |
 
-You can find these sets in Salesforce **Setup → Permission Sets**. Open the set, choose **Manage Assignments → Add Assignments**, and select the intended users.
-
-Portwood Quick Action and Guest Runner are additional specialized sets. Do not assign every set to every user; use the set appropriate to the entry point and supported Salesforce license.
+In **Setup → Permission Sets**, open the set, choose **Manage Assignments → Add Assignments**, and select the intended users. Public guests can sign through their invitation. The old **Portwood Guest Runner (deprecated)** permission set grants no access. Document generation from a portal record requires a signed-in user with access to the generator. [Set up external signing](#setup-signatures)
 
 #### A user cannot open Portwood
 
-Check the permission assignment, user license, app visibility, and whether the page or action is available in the user's app/profile. Refresh the session after an access change.
+Check **Installed Packages → Portwood** for license coverage. On the user’s record, check their permission set, Salesforce user license and access to the app or page. Refresh the session after an access change.
 
 #### A user can open Portwood but sees no template
 

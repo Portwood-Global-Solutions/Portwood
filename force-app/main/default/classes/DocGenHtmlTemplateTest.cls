@@ -939,6 +939,61 @@ private class DocGenHtmlTemplateTest {
         System.assert(result.contains('Before') && result.contains('After'), 'Surrounding HTML preserved: ' + result);
     }
 
+    @IsTest
+    static void richTextAbsoluteFileUrlUsesRelativePdfPath() {
+        String path = '/sfc/servlet.shepherd/version/download/068000000000001';
+        String suffix = '?operationContext=S1&amp;dgsz=128x150';
+        String attributes = ' width="128" height="150" alt="Related image"/>';
+        String relativeTag = '<img src="' + path + suffix + '"' + attributes;
+        for (
+            String host : new Set<String>{
+                URL.getOrgDomainUrl().getHost(),
+                DomainCreator.getContentHostname(),
+                DomainCreator.getLightningHostname()
+            }
+        ) {
+            String absoluteTag = '<img src="https://' + host + path + suffix + '"' + attributes;
+            System.assertEquals(
+                '<p>Before ' + relativeTag + ' After</p>',
+                DocGenService.convertRichTextToHtml('<p>Before ' + absoluteTag + ' After</p>'),
+                'Same-org File images should preserve the query and dimensions on a relative URL'
+            );
+        }
+        System.assertEquals(relativeTag, DocGenService.convertRichTextToHtml(relativeTag));
+    }
+
+    @IsTest
+    static void richTextForeignFileUrlIsDiscarded() {
+        String path = '/sfc/servlet.shepherd/version/download/068000000000001';
+        String localHost = URL.getOrgDomainUrl().getHost();
+        for (
+            String src : new List<String>{
+                'https://untrusted.example' + path,
+                'https://' +
+                localHost +
+                '.untrusted.example' +
+                path,
+                'https://' +
+                localHost +
+                '@untrusted.example' +
+                path,
+                'http://' +
+                localHost +
+                path,
+                'https://' +
+                localHost +
+                path +
+                '?redirect=https://untrusted.example'
+            }
+        ) {
+            System.assertEquals(
+                '<p>Before  After</p>',
+                DocGenService.convertRichTextToHtml('<p>Before <img src="' + src + '"/> After</p>'),
+                'Unapproved absolute File URL should not be emitted'
+            );
+        }
+    }
+
     // Lightning inline rich-text images use ContentReference IDs (0EM prefix),
     // which aren't queryable as ContentVersion/ContentDocument. We can't rewrite
     // those to /sfc/, so leave the original absolute rtaImage URL — Blob.toPdf

@@ -1,24 +1,18 @@
 import { LightningElement, track, wire } from 'lwc';
-import getAllTemplates from '@salesforce/apex/DocGenController.getAllTemplates';
 import getOrgId from '@salesforce/apex/DocGenController.getOrgId';
 import canManageButtons from '@salesforce/apex/DocGenButtonAdminController.canManageButtons';
 import DOCGEN_LOGO from '@salesforce/resourceUrl/DocGenLogo';
 
 export default class DocGenCommandHub extends LightningElement {
     logoUrl = DOCGEN_LOGO;
-    @track templateCount = 0;
     communityOrgId = '';
-    @track showBanner = false;
-    @track bannerDismissed = false;
     @track activeSection = 'templates';
-    @track isLoaded = false;
     // The Buttons tab is shown only to users who have the DocGen_Button_Manager
     // permission set (needed to call canManageButtons at all) AND the platform
     // metadata-write permission the builder's Metadata API deploy requires. A
     // user without class access gets a rejected promise → tab stays hidden.
     @track showButtonsTab = false;
-
-    _wiredTemplates;
+    buttonAccessPending = true;
 
     connectedCallback() {
         canManageButtons()
@@ -27,6 +21,9 @@ export default class DocGenCommandHub extends LightningElement {
             })
             .catch(() => {
                 this.showButtonsTab = false;
+            })
+            .finally(() => {
+                this.buttonAccessPending = false;
             });
     }
 
@@ -39,30 +36,6 @@ export default class DocGenCommandHub extends LightningElement {
 
     get communityUrl() {
         return 'https://portwood.dev/community?view=signup&orgId=' + this.communityOrgId;
-    }
-
-    @wire(getAllTemplates)
-    wiredTemplates(result) {
-        this._wiredTemplates = result;
-        if (result.data) {
-            this.templateCount = result.data.length;
-            if (!this.bannerDismissed && this.templateCount < 10) {
-                this.showBanner = true;
-            }
-            this.isLoaded = true;
-        } else if (result.error) {
-            this.isLoaded = true;
-        }
-    }
-
-    get bannerHeading() {
-        return this.templateCount === 0 ? 'Welcome to Portwood' : 'Portwood';
-    }
-
-    get bannerSubtext() {
-        return this.templateCount === 0
-            ? "Let's create your first template. It takes about 3 minutes."
-            : 'Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint from any record.';
     }
 
     get isTemplates() {
@@ -152,11 +125,6 @@ export default class DocGenCommandHub extends LightningElement {
     }
     handleShowHelp() {
         this.activeSection = 'help';
-    }
-
-    handleDismissBanner() {
-        this.showBanner = false;
-        this.bannerDismissed = true;
     }
 
     handleCopyTag(event) {

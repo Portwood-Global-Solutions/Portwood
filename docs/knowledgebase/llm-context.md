@@ -1,0 +1,8619 @@
+# Portwood 3.65.0 authoring and workflow context
+
+Use this reference with the data shape from Copy AI Prompt. Ask for the template type, output format, generation entry point, selected fields and relationship aliases. For signing, ask for the roles, audience and delivery route. Use fictional values for examples. Preserve existing bindings on edits.
+
+For an HTML task return a complete printable HTML body, with separate Header HTML and Footer HTML when applicable. For a Flow task return a sequence of elements with input and output mappings, fault and pending branches, and a visible completion check. A template carries content. Flow handles navigation, events, and delivery.
+
+# Portwood HTML template recipes
+
+Use these as small authoring patterns when authoring an HTML template for Salesforce PDF output. Keep the HTML simple, use the exact field API names from the template query, and verify the generated PDF in the target org. For the full renderer rules and reusable LLM prompt, see [HTML and Word layout](template-layout.md).
+
+Start with the [one-field letter](../knowledgebase/examples/acceptance/account-letter.html). For a full working example, use the [service schedule](../knowledgebase/examples/acceptance/service-review.html) and its [rendered PDF](../knowledgebase/examples/acceptance/service-review.pdf).
+
+## Two-column header
+
+Use a table for side-by-side content. Fixed widths and cell padding are more predictable than flexbox or grid.
+
+```html
+<table style="width: 100%; border-collapse: collapse;">
+    <tr>
+        <td style="width: 62%; vertical-align: top;">
+            <strong>{Account.Name}</strong><br />
+            {Account.BillingStreet}<br />
+            {Account.BillingCity}, {Account.BillingState} {Account.BillingPostalCode}
+        </td>
+        <td style="width: 38%; text-align: right; vertical-align: top;">
+            Quote {Name}<br />
+            Prepared {Today:MMMM d, yyyy}<br />
+            {RunningUser.Name}
+        </td>
+    </tr>
+</table>
+```
+
+## Repeating line items with totals
+
+Put the opening and closing loop tags inside the first and last cells of the repeating row. The table header stays in place while the data row repeats.
+
+```html
+<table style="width: 100%; border-collapse: collapse;">
+    <tr style="background-color: #eaf2fb;">
+        <th style="text-align: left; padding: 6pt;">Item</th>
+        <th style="text-align: right; padding: 6pt;">Qty</th>
+        <th style="text-align: right; padding: 6pt;">Price</th>
+        <th style="text-align: right; padding: 6pt;">Total</th>
+    </tr>
+    <tr>
+        <td style="padding: 6pt;">{#OpportunityLineItems}{Product2.Name}</td>
+        <td style="text-align: right; padding: 6pt;">{Quantity}</td>
+        <td style="text-align: right; padding: 6pt;">{UnitPrice:currency}</td>
+        <td style="text-align: right; padding: 6pt;">{TotalPrice:currency}{/OpportunityLineItems}</td>
+    </tr>
+</table>
+<p style="text-align: right; font-size: 14pt; font-weight: bold;">Total: {Amount:currency}</p>
+```
+
+For a row number, place `{RowNumber}` inside the loop. For nested child rows, use the relationship names from the query and keep each loop balanced. Do not wrap a whole `<tr>` with loop tags outside the row.
+
+## Optional clause with a fallback
+
+Use the field conditional when a section should disappear for blank or false values. Use a translated Custom Label for reusable wording that administrators maintain in Salesforce.
+
+```html
+<p>{#Special_Terms__c}Special terms: {Special_Terms__c}{:else}Standard terms apply.{/Special_Terms__c}</p>
+<p>{!$Label.Payment_Terms}</p>
+```
+
+The label uses the running user's Salesforce language. The field used by the conditional and its value must be in the template's selected data.
+
+## Reusable terms and approved fonts
+
+Save a reusable section under **Portwood → Assets → Terms & snippets**, then insert the copied tag where it should appear:
+
+```html
+<div>{%snippet:terms-and-conditions}</div>
+```
+
+The snippet itself can contain fields. Save `<p>Prepared for <strong>{Name}</strong>.</p>` in **HTML source**. Include **Name** in your Account template, then insert the copied snippet tag. For an Account named Alder Works, the PDF reads **Prepared for Alder Works.** Inside a Contacts loop, the same field reads the current Contact’s name when **Contacts → Name** is selected. [Follow the snippet exercise](../../UserGuide.md#shared-content)
+
+Use the stable API name of an approved custom font. Copy the exact tag from the Custom Fonts area; do not guess a font key or revision:
+
+```html
+<p style="{%font:brand-sans-bold};font-size:12pt;color:#193b57;">Prepared for {Account.Name}</p>
+```
+
+Snippets are body fragments, not complete HTML documents. Add page-wide CSS in the parent template. Test office output separately; recipients may need the font installed in their Office application.
+
+## QR code and barcode
+
+Portwood generates these images natively. Use a short, scannable value for printed QR codes.
+
+```html
+<table style="width: 100%;">
+    <tr>
+        <td>Order: {OrderNumber}</td>
+        <td style="text-align: right;">{*TrackingUrl:qr:150}</td>
+    </tr>
+    <tr>
+        <td colspan="2">{*ProductCode:code128:300x80}</td>
+    </tr>
+</table>
+```
+
+Only the supported `qr` and `code128` types render. QR values up to 600 characters are accepted; short URLs and tokens under 120 characters scan more reliably at print size.
+
+## HTML-safe chart patterns
+
+For HTML-to-PDF, choose chart styles that render as CSS bars or a table. Inline SVG chart output is suitable for browser HTML but disappears in the Flying Saucer PDF renderer.
+
+```html
+<h2>Responses by answer</h2>
+{Chart:Survey_Responses__r:Selected_Answer__c}
+
+<h2>Department cross-tab</h2>
+{Chart:Survey_Responses__r:Selected_Answer__c:pivot:groupBy=Department__c&colSort=Sales,Service&title=Responses by
+department}
+```
+
+Where an entry point supplies a prepared chart PNG, HTML-to-PDF can also display pie, donut, column, line or area charts. Without that PNG the HTML expander supports bar, pivot, clustered and stacked for PDF. Pivot, clustered and stacked require a second selected field in `groupBy=` and a list of column values in `colSort=`. Replace Sales and Service with values from your own records. See the [chart reference](merge-tags.md) and the included survey examples before composing modifiers.
+
+## Signature lines
+
+Paste this table directly into the HTML template and assign the signer the **Customer** role when creating the request. You can put a shared clause immediately above the table with its snippet tag. Portwood discovers the signing fields in the main template before it expands the clause. [Example with shared wording](../../UserGuide.md#shared-content)
+
+```html
+<table style="width: 100%; margin-top: 24pt;">
+    <tr>
+        <td style="width: 60%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">{@Signature_Customer:1:Full}</td>
+        <td style="width: 40%; border-bottom: 1px solid #445; padding: 18pt 4pt 4pt;">{@Signature_Customer:1:Date}</td>
+    </tr>
+</table>
+```
+
+Use the Signature Sender to prepare uploaded PDFs that do not contain Portwood signature tags. Do not invent signature-role names; match the template's signer setup.
+
+## Page footer
+
+Set the template's header or footer HTML and place page counters there. They are not general-purpose body tags.
+
+```html
+<div style="text-align: center; font-size: 8pt; color: #555;">{Account.Name} · Page {PageNumber} of {TotalPages}</div>
+```
+
+## Large related lists
+
+When the child query exceeds the giant-query threshold, keep the outer shell limited to supported parent-level tags and put the long list in the giant-query table. Do not rely on nested child loops, conditions, barcode tags, form fields, or signature tags in the outer shell. For large table rendering, review [repeat table headers](../knowledgebase/articles/repeat-table-headers.md) and [engine tuning](../knowledgebase/articles/engine-tuning.md).
+
+## Adapt a finished design
+
+The [design studio](../knowledgebase/articles/document-studio.md) includes complete HTML, JSON, generated PDFs and text editions. Use the [quote](../knowledgebase/articles/cpq-quote.md) for two levels of pricing, the [contents and watermark](../knowledgebase/articles/print-navigation.md) for long proposals, the [renewal brief](../knowledgebase/articles/renewal-decision.md) for missing-data decisions, and the [field work order](../knowledgebase/articles/service-sheet.md) for offline labels. The [event-driven signing example](../knowledgebase/articles/event-signing-journey.md) shows how a Screen Flow opens the signer’s page and checks for the finished File.
+
+# Build the event subscriber for a signing workflow
+
+For a signed-in employee or portal member signing an agreement, arrange a Portwood site license. Public signing links run under the signing site’s licensed guest user. [Choose signing licenses](https://portwood.dev/guide#user-licenses)
+
+Use a business event to start an agreement, then let the rest of the process continue when the signed file exists. A platform-event-triggered Flow runs in its own transaction and has no screen. Keep the customer's navigation in the [Screen Flow handoff](../../UserGuide.md#signing-site-handoff).
+
+#### Start a request from an approval event
+
+1. In your own org, define **Agreement Approved** (`Agreement_Approved__e`) with **Publish After Commit** and Text fields `Approval_Key__c` and `Opportunity_Id__c`. These are example names for metadata you create. Publish the event from the approval transaction after recording who approved which agreement version.
+2. Create a **Platform Event–Triggered Flow** on that event. Read `$Record.Approval_Key__c` and `$Record.Opportunity_Id__c`. Get the approved Opportunity, confirm its approved version still matches the key, and resolve the intended signer from the approved record. The subscriber needs document, signer and business-record access in its running context.
+3. To keep a replay from sending another invitation, create a tracking record with a **unique** approval-key field. Use a value identifying the approval and document version. An ordinary Get-then-Create check allows two simultaneous subscribers through. On a duplicate-key fault, load the existing row. Reuse its request ID, or route an unfinished attempt for reconciliation.
+4. Call **Portwood: Create Signature Request** once for the claimed work. Pass the template API name, related record and signer collection. Store the returned request ID and email status on the tracking record. Route both unsuccessful results and faults to a recoverable state. On retry, check for an existing request before creating another.
+5. Use Portwood's branded invitation for an unattended send, or start a separate, authorized interactive workflow for the signer. Keep signer URLs out of event payloads. An event subscriber cannot navigate a browser. [Salesforce platform-event Flow behavior](https://developer.salesforce.com/docs/platform/platform-events/guide/platform-events-subscribe-flow.html)
+
+#### Follow activity from the Portwood signing site
+
+On the package paths that publish it, **Portwood Signature PDF** (`portwoodglobal__DocGen_Signature_PDF__e`) is an after-commit signal used by Portwood's own subscriber. To inspect those signals, create a second **Platform Event–Triggered Flow**, select this existing event, and use the fields below. Subscribe to events produced by signing. Publishing this internal event yourself can invoke package PDF and notification work.
+
+| Event field in a subscriber org         | What to do with it                                                                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$Record.portwoodglobal__Request_Id__c` | Get the Portwood Signature Request by ID. Use its current status and related record.                                                                                                                     |
+| `$Record.portwoodglobal__Signer_Id__c`  | When populated, get that signer and verify its request matches. In parallel signing this identifies the actor even if people signed out of order. An empty value supports request-level processing only. |
+
+A notification can arrive between signers, on a decline, or before final file generation finishes. The package also has paths that complete the PDF without this event. For a business milestone that must cover every signing path, use an after-save record-triggered Flow on **Portwood Signature Request**. Check for **Signed** and a populated **Protected Signed Content Document Id** when the subsequent action needs the final File. Run when the record first meets both conditions. Read the File with the appropriate access. Use the request ID as a unique completion key when delivering to another system.
+
+#### Prove the two boundaries
+
+In a sandbox, publish the same fictional approval twice. Expect one tracking record and one request. Sign the second invitation first on a parallel two-person test, then decline or complete the other in separate tests. Check that the first signature never starts fulfillment, a decline takes the stopped path, and the completed case links the signed File once. For an uploaded PDF, also exercise finalization without relying on receipt of the package event.
+
+# HTML and Word layout reference
+
+This advanced reference accompanies the [task-based knowledgebase](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md). The renderer observations below retain their original probe and release context; the prompt and examples now include 3.62–3.64 capabilities such as Custom Labels, reusable snippets, portable font tags, and optional number decimals. Use the task articles for installation and user workflows. For copy-ready patterns, see [Portwood HTML template recipes](html-recipes.md).
+
+#### 5.7.3 CSS rules — what works, what doesn't, and an LLM prompt
+
+PDF rendering goes through Salesforce's `Blob.toPdf()`, which is a Flying Saucer engine under the hood. **Flying Saucer is essentially a CSS 2.1 renderer with a small CSS 3 subset.** Modern layout primitives are silently ignored — the page still renders, but your layout collapses to default block flow. The result is a PDF that "looks wrong" without any error message.
+
+This section gives you the rules and a paste-ready prompt for ChatGPT / Claude / Gemini so you can have an LLM produce templates that render correctly the first time.
+
+##### Quick reference
+
+| Use                                      | Don't use                                          | Replacement                                           |
+| ---------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| `<table>` for side-by-side layout        | `display: flex`, `display: grid`                   | One `<table>` with one `<tr>`, columns become `<td>`s |
+| Solid `background-color`                 | `linear-gradient(...)`, `radial-gradient(...)`     | Pick the dominant color, drop the gradient            |
+| `padding`, `margin`                      | `gap` (CSS 3 grid/flex gap)                        | `padding` on cells, `margin` on blocks                |
+| Fixed `width`/`height` in `pt`/`in`/`px` | `calc(...)`, CSS variables (`--foo`, `var(--foo)`) | Compute the literal value in your template            |
+| `font-size` in `pt`                      | `rem`, `em` based on a non-default root            | Pt is most predictable for print                      |
+| `border` — incl. `dashed` and `dotted`   | `border-radius`, `box-shadow`, `text-shadow`       | Corners stay square; see "Rounded corners" below      |
+| Hex colours (`#eaf2fb`)                  | `rgba(...)`, `hsla(...)`                           | Pre-compute the tint as a flat hex                    |
+| Full-strength colour                     | `opacity`                                          | Pick a lighter hex instead                            |
+| `:nth-child(even)` for zebra striping    | `:has(...)`, `:is(...)`, container queries         | nth-child + nth-of-type are supported                 |
+| `<table>`-based two/three-column layouts | `column-count`, `columns`                          | Tables work everywhere                                |
+| `text-align`, `vertical-align` on `<td>` | `place-items`, `align-self`                        | Old-school alignment on cells                         |
+
+##### Rounded corners, shadows and tints — the honest answer
+
+**There are no rounded corners.** `border-radius` is ignored in _every_ form: on a
+`<div>`, on a `<td>`, on a `<table>` with `border-collapse: separate`, in the
+four-value corner shorthand, and via the engine's own `-fs-border-radius`. Boxes
+render square. This is measured, not inferred — `scripts/css-capability-probe.apex`
+renders a labelled swatch per property and compares each against a control, and
+the rendered proof is in `docs/css-capability-probe.png`.
+
+An earlier version of this table listed "`border-radius` (basic)" as supported.
+It is not, and a template built on that advice renders square with no warning.
+
+What you can use for visual interest, all CSS 2.1 and all confirmed working:
+
+- **`border: 2pt dashed #2b6cb0`** and **`border: 2pt dotted #b02b2b`** — these
+  genuinely render. They are the only border decoration available.
+- Solid fills, contrasting borders, and `:nth-child(even)` zebra striping.
+- A background **image** if you truly need a rounded shape — draw it once and
+  reference it; the engine will place it faithfully.
+
+Two failure modes that look similar and are not:
+
+- **`linear-gradient(...)` is discarded when the stylesheet is parsed.** The
+  cascade then falls back to any solid `background` set earlier, so the element
+  keeps a sensible colour. Harmless.
+- **`rgba(...)` is not.** It parses, resolves to nothing, and the background
+  disappears entirely — so a tinted panel renders **invisible** rather than
+  falling back to a colour. This is the one that quietly ruins a layout. Compute
+  the tint yourself and write it as a flat hex.
+
+`opacity`, `box-shadow`, `transform`, `calc()` and `outline` are all ignored too.
+
+##### Long values overflow a table cell — and no CSS fixes it
+
+A value with no spaces in it (an external id, a URL, a base64 fragment, a long
+product code) will **run straight through the cell border**. This is not a
+styling mistake; the engine cannot break an unbroken run of characters at all.
+Measured across every candidate:
+
+| Technique                   | Result                                                                   |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `word-wrap: break-word`     | **ignored** — the engine injects this on every cell and it does nothing  |
+| `overflow-wrap: break-word` | **ignored**                                                              |
+| `word-break: break-all`     | **ignored**                                                              |
+| `table-layout: fixed`       | the column stops growing, so the text overflows the border instead       |
+| `&#8203;` zero-width space  | **ignored**                                                              |
+| `&shy;` soft hyphen         | breaks, but prints VISIBLE hyphens into the value — it corrupts the data |
+| **`<wbr/>`**                | **works** — breaks cleanly, and the text is unchanged                    |
+
+So the only correct fix is a `<wbr/>` at each allowed break point:
+
+```html
+<!-- overflows the cell -->
+<td>{External_Reference__c}</td>
+
+<!-- wraps, value unchanged -->
+<td>ORD-2026<wbr />-000148<wbr />-REV3<wbr />-APPROVED</td>
+```
+
+For merged values you cannot pre-break by hand, keep the column wide enough for
+the longest value you expect, or split the value into its own row beneath the
+label rather than beside it. Do **not** reach for `&shy;` — a hyphen that was
+never in the data is worse than a column that is too narrow.
+
+##### How to draw a circle (bullets, status dots, timeline markers)
+
+Since `border-radius` does nothing, a circle has to be a **character**, not a box.
+Unicode circle glyphs render correctly and scale with `font-size`, so you can size
+one anywhere from a bullet to a display graphic:
+
+| Want              | Use                           | Character |
+| ----------------- | ----------------------------- | --------- |
+| Small filled dot  | `&#8226;` (U+2022 bullet)     | •         |
+| Filled circle     | `&#9679;` (U+25CF)            | ●         |
+| Hollow circle     | `&#9675;` (U+25CB)            | ○         |
+| Large hollow ring | `&#9711;` (U+25EF)            | ◯         |
+| Small hollow ring | `&#176;` (U+00B0 degree sign) | °         |
+
+```html
+<!-- A 14pt status dot in brand colour -->
+<span style="font-size: 14pt; color: #184d47;">&#9679;</span> Delivered
+
+<!-- A display-size disc — the same glyph at 80pt -->
+<span style="font-size: 80pt; color: #184d47; line-height: 1;">&#8226;</span>
+```
+
+Colour comes from `color`, size from `font-size`, and a light glyph on a dark
+filled table cell reverses cleanly (white `&#8226;` on a solid background).
+
+**Never use ZapfDingbats or Symbol for this.** Those fonts are not present in the
+rendering engine, so `font-family: ZapfDingbats` with the letter `l` or `m` — the
+usual trick for a filled/hollow circle — falls back to a serif face and prints a
+literal **"l"** or **"m"** into the document. That is worse than an unsupported
+property, because nothing fails: a wrong character is silently typeset where a
+circle was intended. Stick to the Unicode glyphs above, which need no particular
+font.
+
+##### Paste-ready LLM prompt
+
+Copy this verbatim into ChatGPT, Claude, or Gemini. Replace the bracketed sections with what you want. The prompt explains current tag families, but you still need to provide the real object/field API names and check the result in a generated PDF:
+
+```
+Generate a single self-contained HTML file for Portwood.
+
+Audience: rendered to PDF by Flying Saucer (CSS 2.1 + small CSS 3 subset). Modern CSS layout features are silently ignored.
+
+HARD RULES — never use these (Flying Saucer drops them):
+- display: flex, display: grid, gap
+- linear-gradient(...), radial-gradient(...), conic-gradient(...)
+- calc(...), CSS variables (--name, var(--name))
+- transform, transition, animation, @keyframes
+- box-shadow, text-shadow, outline
+- border-radius — in EVERY form, including on a <td>, on a <table> with
+  border-collapse: separate, and the -fs-border-radius variant. There are no
+  rounded corners. Every box is square. Do not attempt a workaround.
+- rgba(...) and hsla(...) — these do not fall back to a solid colour, the
+  background disappears completely. Write a pre-computed flat hex instead.
+
+POSITIONING — measured 2026-08-05, not assumed. `position: absolute`, `relative`,
+`fixed` and `float` all WORK and are pixel-exact against declared inches. Two
+limits that matter more than the support itself:
+- An absolutely positioned box with **no explicit height GROWS** to fit merged
+  content, background and border following it. Pin a height and the content
+  overflows the box instead — visible, not clipped, but the chrome stays put.
+- Nothing beyond **page 1** renders. A box at `top: 10.5in` on Letter is dropped
+  entirely. Absolute layout is single-page; use one artboard per page.
+- opacity — pick a lighter hex colour instead.
+- :has(), :is(), :where(), container queries
+
+USE INSTEAD:
+- <table> for any side-by-side layout. One <tr>, columns are <td>s with explicit widths.
+- Solid background-color as a HEX value (no gradients, no rgba).
+- padding/margin in pt or in. gap is not a thing.
+- font-size in pt. Standard fonts: Helvetica, Arial, "Times New Roman", Courier.
+- text-align / vertical-align on <td> for alignment.
+- Fixed width/height in pt or in.
+- For visual interest use solid fills, contrasting borders, and :nth-child(even)
+  zebra striping. border: dashed and border: dotted DO work and are the only
+  border decoration available.
+- CIRCLES (bullets, status dots, markers) must be CHARACTERS, never CSS boxes,
+  because border-radius does nothing. Use these and size them with font-size,
+  colour them with color:
+    &#8226;  small filled dot (U+2022)      &#9679;  filled circle (U+25CF)
+    &#9675;  hollow circle (U+25CB)         &#9711;  large hollow ring (U+25EF)
+    &#176;   small hollow ring (U+00B0)
+  e.g. <span style="font-size:14pt;color:#184D47;">&#9679;</span> Delivered
+  NEVER use font-family: ZapfDingbats or Symbol to make a circle. Those fonts are
+  absent, so the letter falls back to a serif face and prints a literal "l" or
+  "m" in the document instead of a shape.
+
+PAGE SETUP — put a single <style> in <head> with:
+  @page { size: 8.5in 11in; margin: 0.6in; }    /* US Letter portrait */
+  /* or @page { size: 8.27in 11.69in; margin: 1.5cm; }   for A4 */
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #333; }
+Do NOT include @media queries — Flying Saucer ignores them.
+
+DOCGEN MERGE TAGS — use these as plain text:
+- Field merge:        {FieldApiName}              e.g. {Name}, {Account.Name}, {Amount}
+- Custom Label:       {!$Label.Label_API_Name}    e.g. {!$Label.Payment_Terms}
+- Built-ins:          {Today}, {Now}, {RunningUser.Name}, {RunningUser.Email}
+- Format suffixes:    {Amount:currency}, {CloseDate:MM/dd/yyyy}, {Quantity:#,##0.00}
+                      Optional decimal places use #, as in {Amount:#,##0.##}; fixed
+                      decimal places use 0, as in {Amount:#,##0.00}.
+- Loop:               {#RelationshipName} ... {/RelationshipName}
+- Row counter:        {RowNumber} inside a loop; it restarts for each nested loop/group.
+- Grouped loop:       {#GroupBy RelationshipName by FieldName} ... {/GroupBy}
+- Conditions:         {#Field} ... {:else} ... {/Field}; {^Field} ... {/Field};
+                      {#IF Field op Value} ... {:else} ... {/IF}
+- Shared section:     {%snippet:terms-and-conditions} (a saved Terms & Snippets asset)
+- Shared image:       {%asset:company-logo:144x} (copy the real key from Portwood Assets)
+- Approved font:      {%font:poppins-bold} (copy the stable font API name from Assets)
+- QR / barcode:       {*Website:qr}, {*ProductCode:code128:300x80}
+- Signature fields (main template body only, next to any shared wording):
+                      {@Signature_Customer:1:Full}, {@Signature_Customer:2:Initials},
+                      {@Signature_Customer:3:Date}, {@Signature_Customer:4:DatePick}
+- Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
+- Charts for HTML→PDF: {Chart:Line_Items__r:Product2.Family} (default CSS bar),
+                      {Chart:Line_Items__r:Product2.Family:pivot:groupBy=Region__c} (CSS table)
+- Loop IN A TABLE:    put the tags INSIDE the cells — open in the first cell of the
+                      repeating row, close in the last. The engine expands the whole <tr>.
+                        <tr><th>First Name</th><th>Last Name</th><th>Title</th></tr>
+                        <tr><td>{#Contacts}{FirstName}</td><td>{LastName}</td><td>{Title}{/Contacts}</td></tr>
+                      Do NOT wrap the row from outside ({#Rel}<tr>...</tr>{/Rel}) and never
+                      put a loop tag on its own line between rows — text placed directly
+                      inside <table> is foster-parented out of the table by the HTML parser.
+                      This is the same pattern Word (<w:tr>) and Excel (<row>) use.
+- Conditional:        {#IF Field = "Value"} ... {:else} ... {/IF}
+                      Use double quotes around string literals; numeric needs no quotes.
+- Page counters:      {PageNumber}, {TotalPages}   (only inside header/footer fields, not body)
+
+DATA AND TAG RULES:
+- Treat every tag above as literal Portwood syntax. Do not rename, escape, or invent field names.
+- Ask for the object's API name and exact field/relationship API names when they are not supplied.
+- Keep each selected field in the template query; do not assume a tag alone adds the field to the query.
+- Use `{!$Label...}` for translated, organization-owned wording. Use `{%snippet:key}` for a saved,
+  versioned reusable section. Do not paste an entire reusable clause when the user requested the asset tag.
+- Use stable custom-font API names only when the user confirms the font exists and is approved in Portwood.
+- HTML templates should use the default CSS-bar chart styles. Do not use `htmlRender=svg` for PDF output;
+  Flying Saucer drops inline SVG. A supported path with a prepared PNG can render additional chart shapes in HTML-to-PDF; test the actual entry point.
+- For large/giant-query tables, keep the outer document shell simple. Do not invent conditional, nested-loop,
+  barcode, or signature tags outside the giant-query loop; check the Giant Query reference for its tag limits.
+- Put a copied approved font tag in a quoted inline style as a complete declaration. Keep other tags out of CSS selectors, JavaScript and external URLs. Keep tags in visible HTML content,
+  table cells, and the supported header/footer fields.
+
+OUTPUT: a single .html file. No external CSS, no <script>, no web fonts, no <link rel="stylesheet">.
+Inline everything. The file uploads as one piece.
+
+Now generate a [PURCHASE ORDER / QUOTE / INVOICE / etc.] template for the [Opportunity / Account / Order]
+record, with these sections: [list your sections, e.g. header with logo + date, customer info, line items
+table, totals, notes, signature]. Use the merge tag syntax above.
+```
+
+##### Skeleton template (copy + adapt)
+
+A minimal CSS 2.1-clean starting point. Side-by-side header, two-column "for/from" block, line-item loop, totals, signature row, footer. Drop in your fields and adjust colors/typography:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Document</title>
+        <style>
+            @page {
+                size: 8.5in 11in;
+                margin: 0.6in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                color: #08163a;
+                font-size: 11pt;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            td {
+                vertical-align: top;
+            }
+
+            .hdr {
+                border-bottom: 3px solid #004693;
+                padding-bottom: 8px;
+            }
+            .hdr-logo {
+                font-size: 22pt;
+                font-weight: bold;
+                color: #004693;
+            }
+            .hdr-meta {
+                font-size: 9pt;
+                text-align: right;
+            }
+            .accent-bar {
+                height: 4px;
+                background-color: #35c6f4;
+                margin: 8px 0 18px 0;
+            }
+
+            .section-title {
+                font-size: 10pt;
+                font-weight: bold;
+                color: #004693;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                border-bottom: 1px solid #e6ecf4;
+                padding-bottom: 3px;
+                margin-bottom: 6px;
+            }
+
+            .grid-table td {
+                width: 50%;
+                padding-right: 18px;
+            }
+            .grid-table td.r {
+                padding-right: 0;
+                padding-left: 18px;
+            }
+
+            .items th {
+                background-color: #004693;
+                color: #ffffff;
+                font-size: 10pt;
+                padding: 6px 8px;
+                text-align: left;
+            }
+            .items th.r,
+            .items td.r {
+                text-align: right;
+            }
+            .items td {
+                font-size: 10pt;
+                padding: 6px 8px;
+                border-bottom: 1px solid #edf1f7;
+            }
+
+            .totals tr.final td {
+                font-size: 13pt;
+                font-weight: bold;
+                padding-top: 8px;
+            }
+
+            .sig-line {
+                border-bottom: 1px solid #8899b5;
+                height: 30px;
+                margin-top: 4px;
+            }
+            .footer {
+                margin-top: 36px;
+                border-top: 1px solid #d9e2ef;
+                padding-top: 8px;
+                font-size: 8pt;
+                color: #8899b5;
+            }
+        </style>
+    </head>
+    <body>
+        <table class="hdr">
+            <tr>
+                <td>
+                    <div class="hdr-logo">{Account.Name}</div>
+                </td>
+                <td class="hdr-meta">
+                    Quote #: {Name}<br />
+                    Date: {Today}
+                </td>
+            </tr>
+        </table>
+        <div class="accent-bar"></div>
+
+        <table class="grid-table">
+            <tr>
+                <td>
+                    <div class="section-title">Prepared For</div>
+                    <strong>{Account.Name}</strong><br />
+                    {Account.ShippingAddress}
+                </td>
+                <td class="r">
+                    <div class="section-title">Prepared By</div>
+                    {RunningUser.Name}<br />
+                    {RunningUser.Email}
+                </td>
+            </tr>
+        </table>
+
+        <div class="section-title" style="margin-top: 18px;">Line Items</div>
+        <table class="items">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th class="r">Qty</th>
+                    <th class="r">Price</th>
+                    <th class="r">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {#OpportunityLineItems}
+                <tr>
+                    <td>{Product2.Name}</td>
+                    <td class="r">{Quantity}</td>
+                    <td class="r">{UnitPrice:currency}</td>
+                    <td class="r">{TotalPrice:currency}</td>
+                </tr>
+                {/OpportunityLineItems}
+            </tbody>
+        </table>
+
+        <table class="totals" style="margin-top: 8px;">
+            <tr class="final">
+                <td></td>
+                <td class="r">Total</td>
+                <td class="r">{Amount:currency}</td>
+            </tr>
+        </table>
+
+        <table style="margin-top: 36px;">
+            <tr>
+                <td style="width: 50%; padding-right: 24px;">
+                    Customer Signature
+                    <div class="sig-line">{@Signature_Buyer}</div>
+                </td>
+                <td style="width: 50%; padding-left: 24px;">
+                    Date
+                    <div class="sig-line">{@Signature_Buyer:1:Date}</div>
+                </td>
+            </tr>
+        </table>
+
+        <table class="footer">
+            <tr>
+                <td>{Account.Name} &bull; {Account.BillingCity}, {Account.BillingState}</td>
+                <td style="text-align: right;">{Account.Website}</td>
+            </tr>
+        </table>
+    </body>
+</html>
+```
+
+##### Common conversion patterns
+
+When an LLM (or a designer) hands you a template using modern CSS, here are the mechanical rewrites:
+
+**Flex header → table header**
+
+```html
+<!-- BEFORE: ignored by Flying Saucer -->
+<div style="display: flex; justify-content: space-between;">
+    <div class="logo">ACME</div>
+    <div class="meta">Date: {Today}</div>
+</div>
+
+<!-- AFTER: works -->
+<table style="width: 100%;">
+    <tr>
+        <td>ACME</td>
+        <td style="text-align: right;">Date: {Today}</td>
+    </tr>
+</table>
+```
+
+**Grid columns → table columns**
+
+```html
+<!-- BEFORE -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div>Left content</div>
+    <div>Right content</div>
+</div>
+
+<!-- AFTER -->
+<table style="width: 100%;">
+    <tr>
+        <td style="width: 50%; padding-right: 12px;">Left content</td>
+        <td style="width: 50%; padding-left: 12px;">Right content</td>
+    </tr>
+</table>
+```
+
+**Gradient → solid color**
+
+```css
+/* BEFORE */
+.accent-bar {
+    background: linear-gradient(to right, #004693, #35c6f4);
+}
+
+/* AFTER */
+.accent-bar {
+    background-color: #35c6f4;
+}
+```
+
+**`gap` between rows → margin**
+
+```css
+/* BEFORE */
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* AFTER */
+.stack > * {
+    margin-bottom: 12px;
+}
+```
+
+##### `@page` rules — don't double-declare
+
+Two ways to control the page size, margins, and orientation:
+
+1. **Template fields** — `Page_Size__c`, `Page_Orientation__c`, `Page_Margins__c`, `Custom_Margins__c` on the Portwood Template record. Portwood wraps the template's HTML with an engine `<style>` block declaring `@page` from these fields.
+2. **Source CSS** — your HTML's own `<style>` declares `@page { size: ... }`.
+
+Pick one. If both are set, you get **two `<style>` blocks each declaring `@page`**, the cascade is non-deterministic, and dimensions can come out wrong. Recommended: leave the template fields blank when your source HTML already specifies `@page`. If you author in Google Docs (which sometimes injects an `@page` block on export) and then set `Page_Size__c` to "Legal", the conflict will silently produce a Letter document because the source CSS wins.
+
+#### 5.7.4 Header / Footer fields
+
+Two optional fields on a dedicated **Header / Footer** tab in the template edit modal (the tab shows for HTML templates, and the fields apply to **any** template type's PDF output — a Word→PDF template with Header/Footer HTML set gets them too):
+
+- `Header_Html__c` — rendered in the top page margin of every PDF page
+- `Footer_Html__c` — rendered in the bottom page margin of every PDF page
+
+Each field has a WYSIWYG rich-text editor with a **Show HTML** / **Show Editor** toggle that flips to a monospace textarea showing the raw HTML (for image widths, inline styles, or any markup the rich editor can't expose). Every merge tag that works in the body works in these fields.
+
+#### 5.7.5 Page numbers
+
+Put `{PageNumber}` and `{TotalPages}` in the Header HTML or Footer HTML field. These compile to Flying Saucer CSS page counters inside the PDF's `@page` margin boxes — "Page 3 of 17" renders correctly on every page automatically.
+
+Example footer HTML:
+
+```html
+<div style="text-align:center; font-size:9pt; color:#888;">Page {PageNumber} of {TotalPages}</div>
+```
+
+**Flying Saucer limitation:** page counters only resolve inside `@page` rules, not on DOM elements. When a header/footer contains counter tokens, Portwood renders that margin as plain text (no inline images or rich formatting). A header _without_ counters stays rich HTML via CSS running elements. Practical workaround: logo in the header (no counters), page count in the footer (counters only). Both fields can be populated simultaneously.
+
+#### 5.7.6 Images
+
+Three ways to get images into an HTML template:
+
+1. **Google Docs zip** — images inserted in the Google Doc are bundled into the `.zip` and extracted automatically on upload.
+2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on save — upload, template-bundle import, or Generate-with-AI alike — and each is saved as its own ContentVersion with the `src` rewritten (v3.57+ extends this beyond the upload path).
+3. **`{%Image:N}` / `{%FieldName}` merge tags** — same syntax as Word templates. Renders the Nth record-attached image, or a ContentVersion ID stored in a field. Emits `<img src="/sfc/...">` at merge time.
+
+#### 5.7.7 Loops in tables
+
+Loop auto-expansion works the same as Word. Either pattern produces one repeated row per record:
+
+```html
+<table>
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Pattern A: loop wraps the row -->
+        {#OpportunityLineItems}
+        <tr>
+            <td>{Product2.Name}</td>
+            <td>{TotalPrice:currency}</td>
+        </tr>
+        {/OpportunityLineItems}
+
+        <!-- Pattern B: loop inside the row (Portwood expands to the <tr>) -->
+        <tr>
+            {#OpportunityLineItems}
+            <td>{Product2.Name}</td>
+            {/OpportunityLineItems}
+        </tr>
+    </tbody>
+</table>
+```
+
+`<li>` list items auto-expand the same way.
+
+#### 5.7.8 Bulk generation + Giant Query
+
+HTML templates work with every generation path: single-record, bulk (individual PDFs or merged), and Giant Query (60K+ row child relationships via batched rendering). Same 12 MB Queueable heap envelope, same 50,000-row batch ceiling, same Flow action.
+
+> **Giant-query limitation (HTML templates):** outside the giant loop itself — the title block, summary text, headers — only these tag families resolve: plain field/parent tags with format suffixes, `{Today}`/`{Now}`, `{RunningUser.X}`, aggregates, `{#ChartBucket}`, `{%Image:N}`, and `{%asset:…}`. Conditionals (`{#IF}`, `{^…}`), secondary child loops, barcodes, `{%FieldName}` image-field tags, and signature/form-field tags **print as raw text at the parent level** on this path. Keep the parent shell of a 2,000+-row HTML template to the supported tags. Word templates don't have this restriction — their parent content runs the full engine.
+
+#### 5.7.9 Known limitations
+
+- **Barcodes / QR codes** — `{*Field:qr}` / `{*Field:code128}` render in both Word **and** HTML templates (HTML support added in v3.15). They render as crisp CSS in the PDF — no external services.
+- **DOCX output** — not applicable. HTML templates are PDF-only.
+- **Signatures** — fully supported on HTML templates (as well as Word). `{@Signature_Role:Order:Type}` tags, guided field-to-field signing, draw-or-type, multi-signer, and the Certificate of Completion all work on HTML; HTML is in fact the recommended format for signature templates because the stamp-card layout has the most room to breathe.
+- **Page counters + rich header/footer content** — see §5.7.5. Flying Saucer flattens the margin to text when counters are present.
+
+#### 5.7.10 Troubleshooting
+
+- **"Your company doesn't support the following file types: .zip"** — Portwood's LWC extracts the zip client-side and never uploads the zip itself, so this org-level File Upload Security error shouldn't appear in normal use. If you see it, hard-refresh the page (Cmd+Shift+R / Ctrl+Shift+R) to clear any cached LWC bundle.
+- **Images show as broken squares in the PDF** — `Blob.toPdf` can only fetch images via relative `/sfc/` URLs; it can't reach arbitrary HTTPS URLs (no session ID). Make sure the image source is in the zip, a data URI in the HTML, a `{%Image:N}` tag, or a `{%FieldName}` pointing at a real ContentVersion.
+- **Page numbers appearing without a configured header/footer** — your template's source HTML already has `@page { @bottom-center { content: counter(page) ... } }`. Google Docs' Web Page export sometimes includes this automatically. Either remove the `@page` block from the HTML body before upload, or accept it (many users actually want page numbers).
+- **Merge tag shows up literally in the PDF (e.g. the text "{Name}")** — the tag didn't resolve. Check the field name is correct and in your Query Config, and that the WYSIWYG editor didn't HTML-encode the braces (Portwood decodes `&#123;` and `&#125;` automatically, but non-standard editors could still trip this).
+
+### 5.8 Word template authoring tips
+
+Word templates are the most common Portwood authoring path, and 95% of issues come from one of three quirks below. Worth a five-minute read before debugging a "but it looks fine in Word" rendering bug.
+
+#### 5.8.1 Aligning columns across multiple tables — the "phantom width" trap
+
+**Symptom.** Two or three tables that look identical in Word render with subtly different column widths in the PDF. Common variation: the middle columns of tables 2/3 collapse and the right-side columns push outward. Tables that look the same in Word do _not_ render the same.
+
+**Why.** A `.docx` file describes table column widths in two places that must agree:
+
+- `<w:tblGrid>` on each table — the column-grid definition (`<w:gridCol w:w="N"/>` per column, in twips; 1440 twips = 1 inch).
+- `<w:tcW>` per `<w:tc>` (table cell) — a per-cell width override.
+
+Word's display engine reconciles disagreements at render time and shows you a clean layout. **Flying Saucer (the Salesforce PDF engine) reads the XML literally** — small numeric differences become visible column-width differences. Common ways the two specs drift apart:
+
+- A column boundary was dragged with the mouse, even briefly. Word may update some `<w:tcW>` values but not the `<w:tblGrid>`.
+- AutoFit to Contents was on. Word recalculates column widths from cell content every time the table is touched — and any row with empty/sparse cells will collapse those columns toward minimum width.
+- Cells were copy/pasted between tables. The cell brings its own `<w:tcW>` with it, which may not match the destination table's grid.
+
+**Fix — in priority order.**
+
+1. **Click in the table → Table Layout → AutoFit → Fixed Column Width.** This stops Word from recalculating widths on every save. Do this for _every_ table that needs to line up, not just the first one.
+2. **Table Properties → Table tab → Preferred width = exact inches (or cm).** Not "Auto", not percentage. A literal measurement.
+3. **Select each column → Table Properties → Column tab → Preferred width = exact inches.** Repeat for every column in every table.
+4. **Build one table first, copy it to make the others.** After step 1–3 on Table 1, delete Tables 2 and 3 entirely, then paste-copy Table 1 below itself to create them. Edit only the cell _contents_ — never the column boundaries.
+
+**If steps 1–4 don't fix it.** The `.docx` is a ZIP. Unzip it, open `word/document.xml` in a text editor, find each `<w:tbl>` block, and compare the `<w:tblGrid>` and `<w:tcW>` values. They should be byte-for-byte identical across the tables that need to align. If they're not, paste the values from your "good" table over the bad ones. Re-zip with the same compression and rename to `.docx`.
+
+**Architectural alternative.** When in doubt, use **one big table** with borderless divider rows between sections instead of three separate tables. One grid means guaranteed alignment, with no Word arithmetic to fight.
+
+#### 5.8.2 AutoFit settings — what each option does to the PDF
+
+Word's Layout → AutoFit menu has three modes. They behave very differently when rendered to PDF.
+
+| Mode                   | What Word does                                                          | What the PDF renderer sees                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **AutoFit Contents**   | Recalculates column widths from cell content on every save.             | Widths read from the recalculated `<w:tcW>` — empty cells collapse, full cells expand. _Avoid for multi-table layouts._           |
+| **AutoFit Window**     | Tables expand to the page width, columns scale proportionally.          | Widths are percentages of page width — usually renders correctly _if_ the template doesn't fight with `@page` margins.            |
+| **Fixed Column Width** | Locks widths to whatever you set in Table Properties. No recalculation. | Widths read exactly as written — predictable, reproducible. **Recommended for any table that has to line up with anything else.** |
+
+#### 5.8.3 Inspecting a problematic `.docx`
+
+Sometimes you just want to confirm what the XML actually says. A `.docx` is a ZIP file — change the extension to `.zip`, unzip it, and inspect `word/document.xml`. The structure that matters for table issues:
+
+```xml
+<w:tbl>
+  <w:tblPr> ... </w:tblPr>
+  <w:tblGrid>
+    <w:gridCol w:w="1440" />   <!-- column 1: 1 inch -->
+    <w:gridCol w:w="2880" />   <!-- column 2: 2 inches -->
+    ...
+  </w:tblGrid>
+  <w:tr>
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="1440" w:type="dxa" />   <!-- must match grid col 1 -->
+      </w:tcPr>
+      ...
+    </w:tc>
+    ...
+  </w:tr>
+</w:tbl>
+```
+
+For tables to align across the document, the `<w:tblGrid>` blocks of those tables must contain the same `<w:gridCol w:w="N"/>` values in the same order, and every `<w:tcW>` in column N must match `<w:gridCol>` N.
+
+#### 5.8.4 Other Word authoring gotchas worth remembering
+
+- **Track Changes.** Save with Track Changes off and all suggestions accepted/rejected. Tracked changes are stored in `<w:ins>` / `<w:del>` markup and the renderer treats them as live content.
+- **Comments.** Same as above — `<w:commentRangeStart/>` markup can leave artifacts.
+- **Embedded objects (Excel, drawings).** Native Word handles these; the PDF renderer treats them as static images and the result is hit-or-miss. Replace with screenshots if pixel-perfect output matters.
+- **Section breaks with different page sizes.** Each section emits its own `@page` rule. Mixing portrait + landscape sections works in DOCX output but is fragile in PDF output (Flying Saucer applies the first section's page size to the whole document in some configurations).
+- **Wingdings / custom symbol fonts.** See §14.2 — Flying Saucer ships with Helvetica, Times, Courier, Arial Unicode MS only. Wingdings checkboxes are auto-translated; other Wingdings glyphs render as empty boxes.
+- **Image compression.** A 20MB Word template with uncompressed images will fail upload (10MB cap). Right-click any image → Compress Pictures → Email (96 ppi) or Web (150 ppi). A 20MB template typically drops to 1–2 MB with no visible quality loss.
+
+---
+
+## Link the sections of a long proposal
+
+Pair stable fragment links with destination IDs. A contents link can print the destination page with `content: leader('.') target-counter(attr(href), page)`. A fixed element gated by `{#IsDraft}` can repeat a draft mark on every page. [Copy the tested CSS and HTML](../knowledgebase/articles/print-navigation.md).
+
+<a id="user-licenses"></a>
+
+## Who needs a Portwood license?
+
+If five employees send agreements and their customers sign through public links, count the five employees and one signing site guest user. The customers opening those links need no individual Portwood license. **If people sign as logged-in Salesforce users or as members of a community, customer portal or partner portal, your organization needs a Portwood site license.** [Request a site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9)
+
+#### Who needs what?
+
+| Who and what they do                                                                     | Portwood license                                                                                                                                                                         | What the admin sets up                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An admin builds templates or configures Portwood                                         | One user license under per-user licensing, or coverage under the org’s site license.                                                                                                     | Assign **Portwood Admin**. An admin who also generates or sends documents still counts once.                                                                                                                        |
+| An employee generates a document or sends a signature request                            | One user license per employee who uses Portwood, or coverage under the site license. Sending is included.                                                                                | Assign **Portwood User** and give access to the records and templates they use.                                                                                                                                     |
+| A signed-in portal member generates a document from a record                             | The member running Portwood needs a user license or coverage under the org’s site license.                                                                                               | Give the member access to the portal page with the generator, the template, and the records and fields it reads. Test **Generate** as that member.                                                                  |
+| A customer opens a public signing link                                                   | The **signing site’s Salesforce guest user** needs a Portwood license. All public recipients using that site share its guest access. Each recipient gets their own private signing link. | Under per-user licensing, assign one Portwood user license to that site’s guest user. The site license already covers the guest. Assign **Portwood Guest Signature** in either case.                                |
+| An employee or a signed-in customer, partner or community member signs using their login | **Portwood site license required.** This includes signing inside a Screen Flow.                                                                                                          | Give portal members access to the site, the page and the specific Screen Flow. For embedded signing, assign **Portwood Portal Signer** to members and to internal non-admin signers using the packaged permissions. |
+| Someone only receives the finished PDF or Office file                                    | The recipient needs no Portwood license to open a delivered file.                                                                                                                        | For a Salesforce File link, give the recipient access to the File, or deliver a copy through your usual channel.                                                                                                    |
+
+An email verification code on a **public signing link** verifies the recipient’s email. It still uses the site guest user. A community member who signs in a **members-only portal** uses authenticated signing. If the same portal offers both experiences, the site license covers the signed-in users and the guest. [Set up signing in Experience Cloud](#site-experience-cloud)
+
+#### Count licenses for a public signing site
+
+Standard pricing is **$13 USD per user per month**. One template builder and four colleagues who only generate or send documents use five licenses. Add one for their public signing site’s guest user and the total is **six licenses, $78 per month**, before tax or optional services. Another recipient signing through that same site adds no license. If you use several public signing sites, count each site’s own guest user. [Current Portwood pricing](https://portwood.dev/pricing) · [Watch the licensing example](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=who-needs-a-license)
+
+#### Assign a user license in Salesforce
+
+1. If your org pays per user, open **Setup → Installed Packages**. On the **Portwood** row, select **Manage Licenses**. Your administrator needs the **Manage Package Licenses** permission. The **Portwood Agentforce Extension** has its own row.
+
+![Select Manage Licenses next to the Portwood package in Salesforce Setup.](docs/images/userguide/v3.64/installed-package-action.png)
+
+2. Compare **Allowed Licenses** and **Used Licenses**. With a seat available, choose **Add Users**, select the user and then **Add**. If all seats are used, an admin can review assignments or contact Portwood for more. In this example both seats are in use.
+
+![The Package Details screen shows two allowed licenses, two used licenses, and a disabled Add Users button.](docs/images/userguide/v3.64/package-license-counts.png)
+
+3. For public signing, open the **guest user** attached to the site that serves your links. Under per-user licensing, look for **Portwood** in that user’s **Managed Packages**. If it is missing, select **Assign Licenses**, choose **Portwood**, select **Add**, then check that it shows as active. With either licensing model, assign **Portwood Guest Signature** under **Permission Set Assignments**. [Find the Salesforce Site guest user](#site-salesforce) · [Find the Experience Cloud guest user](#site-experience-cloud)
+
+![The signing guest user’s Managed Packages section has an Assign Licenses button.](docs/images/userguide/v3.64/guest-managed-packages.png)
+
+4. For staff, assign the permission set for their job and try the action as that user. An org-wide site license covers users automatically, so go straight to permission sets once you’ve confirmed that coverage. [Give people the right access](#manage-access) · [Salesforce package license instructions](https://help.salesforce.com/s/articleView?id=distribution_managing_licenses.htm&language=en_US&type=5)
+
+**Can’t see Manage Licenses?** Ask an administrator with **Manage Package Licenses** to check. To confirm site-wide coverage, check your accepted Portwood quote or order for this production org, or email Portwood with the **Salesforce.com Organization ID** from **Setup → Company Information**. [Ask Portwood to confirm coverage](mailto:hello@portwood.dev?subject=Confirm%20Portwood%20license%20coverage) · [Find your Salesforce org ID](https://help.salesforce.com/s/articleView?id=000006019&language=en_US&type=1)
+
+#### Get a quote for enterprise or authenticated signing
+
+Portwood’s **Founder’s Site License** is quoted for your Salesforce org. It covers the org’s users, including the public signing guest user. You need it when employees or portal members sign while authenticated. Enterprise teams can also request site-wide coverage for document generation and sending. If an integration or service account runs your documents, include it when you ask about coverage. [Portwood site-license pricing](https://portwood.dev/pricing#site-license)
+
+Tell Portwood which Salesforce org and portals you use, who will send, and whether people will sign through public links, while logged in, or both. Portwood can then quote the relevant coverage. [Book a site-license call](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Email hello@portwood.dev for a quote](mailto:hello@portwood.dev?subject=Portwood%20site%20license%20quote)
+
+<a id="canvas-design"></a>
+
+## Design with Canvas
+
+Build a PDF by putting blocks on a page. Canvas is currently **Beta**.
+
+**Before you start:** Create a Canvas template or open one from **Your Templates → Show actions → Design**.
+
+#### Add and edit a block
+
+1. Choose a tool on the left: **Text**, **Table**, **Image**, **Code**, **Chart**, **Signature**, or **Shape**.
+2. Click the white page to place it.
+3. Select the block to open its properties.
+4. Edit its content. Drag it to move it; use its handles to resize it.
+5. Give it a useful **Name**, such as **Customer details** or **Order totals**.
+
+Use **Elements** to select a block hidden behind another block.
+
+![Canvas shows the selected block, content editor, page, and real sample values](docs/images/userguide/v3.60/canvas-first-document.png)
+
+#### Add Salesforce information
+
+Open **Data**, choose the fields and related lists you need, and select a preview record. Use the field controls to insert tags, or type a tag such as `{Name}` in a text box.
+
+Turn on **Show sample data** to see values from the preview record while arranging the page. The display helps you size boxes; it does not replace a real **Preview** PDF. Long lists are shortened in the on-screen sample, and some formatting is approximate.
+
+#### Keep a total below a growing table
+
+1. Name the table **Line items**.
+2. Select the totals block.
+3. Set **Follows** to **Line items**.
+4. Set the gap and any keep-together option you need.
+5. Preview with a record that has enough rows to reach a second page.
+
+The totals block follows the table as it grows. A block pinned to a fixed position stays there instead.
+
+#### Show one of several alternatives
+
+Use **Show only when** to give a block a condition. For alternatives that should occupy the same space, put the blocks in the same **variant group**. Test every condition, including when none of them matches.
+
+#### Set up the page
+
+Click **Page** to set paper size, orientation, and margins. Click **Add page** for another designed page. These Canvas page settings control its PDF.
+
+#### Save and check
+
+Click **Save**, then **Preview**. Review the first page, the last page, long values, empty lists, and page breaks.
+
+**Import HTML** converts an existing HTML document into Canvas blocks. Keep a copy of the original and check the conversion carefully. **Export HTML** downloads a reusable HTML copy; it is different from exporting the whole template bundle.
+
+The font picker includes a Salesforce standard-font section for Helvetica, Times and Courier. Test long unbroken words in the generated PDF. Canvas can wrap them in the editor while the PDF renderer uses different line-breaking rules.
+
+<a id="upload-word"></a>
+
+## Bring a Word document
+
+Turn a Word document you already maintain into a reusable template.
+
+**Before you start:** Save a copy as `.docx`. Keep your original. Choose the Salesforce object you will generate from.
+
+#### 1. Add tags in Word
+
+Replace example values with field tags:
+
+```text
+Customer: {Name}
+Phone: {Phone}
+Prepared on: {Today:MMMM d, yyyy}
+```
+
+These first two tags assume an **Account** template. For an Opportunity, the customer name is usually `{Account.Name}`.
+
+Use ordinary text, headings, and tables. Keep a tag together and type it exactly, including braces. Save the `.docx`.
+
+#### 2. Bring the file into Portwood
+
+1. Open **My Templates → Create New → Bring an Existing Template**.
+2. Enter a name and choose the **Base Object**.
+3. Set **Type** to **Word**.
+4. Choose the default **Output Format**: PDF or Word.
+5. Select a sample record if one is available.
+6. Continue to the data step and include the fields used by your tags.
+7. Upload your `.docx` on the document step and finish the wizard.
+8. Use **Save as New Version** if the editor shows the upload as staged.
+
+#### 3. Check the generated file
+
+Generate a sample using a record with real values. If your default is PDF, check the PDF rather than relying on Word's preview.
+
+**You are done when:** The generated document has the expected values, page breaks, tables, and images.
+
+#### Make later changes
+
+Edit the original Word file, save it, then open the template's **Edit** action. Upload the replacement and click **Save as New Version**.
+
+For PDF output, simple tables and common fonts are easiest to maintain. Use fixed column widths when columns must line up. Avoid building a layout from spaces, floating shapes, or text boxes. If a table looks different, see [Fix a layout or output problem](#troubleshooting).
+
+Files larger than **10 MB** are rejected by the template uploader. Compress large pictures in Word before uploading.
+
+For a full-page Word cover, set the section margins and header/footer distances deliberately. For a cover with artwork at the page edge, Word-to-PDF conversion preserves a distance of zero. Check the cover and first body page for an unwanted extra page.
+
+<a id="import-html"></a>
+
+## Bring a Google Doc or HTML file
+
+Use a Google Docs export or an HTML file as a PDF template.
+
+![Bring an Existing Template is the starting point for importing a document into Portwood.](docs/images/userguide/v3.64/choose-existing.png)
+
+#### From Google Docs
+
+1. Make a copy of your document.
+2. Replace example values with tags, such as `{Name}` and `{Phone}` for an Account template.
+3. Choose **File → Download → Web Page (.html, zipped)**.
+4. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**.
+5. Choose the base object, **Type = HTML**, and PDF output.
+6. Include the fields used in the document.
+7. Choose **Next → Create Template**. In the template editor under **Upload New Version**, select **Choose File** and upload the ZIP with the HTML and images together.
+8. Select **Save as New Version**.
+9. Generate a PDF with your sample record and check the whole document.
+
+![In the HTML template editor, Choose File accepts a Google Docs ZIP, HTML or HTM.](docs/images/userguide/v3.64/upload-html.png)
+
+Portwood extracts the HTML and images from the export. You do not need to upload each exported picture separately.
+
+#### From another HTML source
+
+Upload a `.html`, `.htm`, or HTML ZIP file through the same path. A ZIP should contain the document and the images it references.
+
+Keep a copy of the authoring file. When you re-export from Google Docs, upload the new file as a new version of the existing template.
+
+#### Edit in Portwood
+
+Use the template's **Design** action to open the HTML designer. Its toolbar and panels let you format text, insert tags and tables, choose images, edit the query, and set headers and footers.
+
+Use **Save as New Version** to activate edits. **Download Sample** or **PDF Preview** helps you check the rendered result.
+
+#### Return to the Designer Beta library
+
+When an HTML template is open in the legacy designer, click **Back to Library** to return to the **Designer (Beta)** template picker. This lets you choose another HTML or Canvas template without going back to the main **Your Templates** table.
+
+If the designer has unsaved changes, Portwood opens an **Unsaved changes** confirmation. Choose **OK** to discard the changes and return to the Designer Beta picker. Close or cancel the dialog to keep editing. Use **Save as New Version** before leaving when you want the changes to become the active template version.
+
+#### Why the PDF can look different
+
+Salesforce's PDF renderer supports a smaller set of layout features than a web browser. Plain paragraphs, tables, fixed widths, and common fonts are reliable starting points. Modern web layouts using flexbox or grid can change or disappear.
+
+Always check a generated PDF before sending it. For advanced styling and a reusable authoring prompt, see the [HTML and Word layout reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md).
+
+For a complete body, a separate footer, and the PDF they produce together, open the [print CSS lab](#css-print-lab).
+
+<a id="fillable-pdf"></a>
+
+## Fill an existing PDF form
+
+Fill the fields of an existing PDF form using Salesforce information. This feature is **in testing**.
+
+An existing PDF form is different from a PDF you merely want someone to sign. For signing, use [Send an uploaded PDF for signature](#sign-uploaded-pdf).
+
+#### Map a form
+
+1. Create a template with **Type = PDF** and choose its base object.
+2. Include the Salesforce fields you want to use.
+3. Upload the fillable PDF.
+4. Open **Fillable Fields** after the scan completes.
+5. Give hard-to-read form fields a friendly **Label**, such as **Mailing address**.
+6. For each field, choose its **Data Path** from the template's selected data.
+7. For a checkbox or radio button, check the PDF's **Checked Value** and map an appropriate value.
+8. Click **Save as New Version**.
+9. Generate a sample and inspect every mapped field.
+
+#### Change a mapping later
+
+Edit labels or mappings under **Fillable Fields** and use **Save Mapping**. If you replace the PDF, save it as a new version so its body and mapping are prepared together.
+
+#### Know what to test
+
+Portwood reads actual PDF form fields; it does not recognize a printed blank line as a field. Standard AcroForm PDFs are the intended format. XFA-only, encrypted, or unusual forms may need a different source file.
+
+Generated fields remain editable unless you turn on flattening.
+
+Bulk generation supports these templates as **Individual Files**. Combined-PDF modes are not supported for fillable PDF templates.
+
+#### Flatten the generated PDF
+
+By default, a generated PDF keeps its form fields, so anyone who downloads it can change the Salesforce values. Turn on flattening when the values must stay as Salesforce wrote them.
+
+1. For a new template, click **Bring an Existing Template**, set **Type** to **PDF**, and check **Flatten PDF on generation**.
+2. For an existing template, open **Edit**, go to **Settings** → **Output & Page Setup**, turn on **Flatten PDF on generation**, and click **Save as New Version**.
+3. Generate a sample and open the PDF.
+
+You are done when the values appear on the page and you cannot click into or change any field.
+
+Flattening applies everywhere the template generates: download, preview, save to record, bulk, Flow, and signature documents. The option appears only when **Type** is **PDF**. It is off by default, so existing templates are unchanged until you turn it on.
+
+#### What a flattened PDF looks like
+
+Portwood draws each filled value as plain text where its field was, then removes the form. The field's own border and background color are not drawn for fields Portwood fills. Anything drawn into the PDF's page design stays, including boxes or lines placed behind a field.
+
+If you want only the values with no boxes, draw the boxes as part of each form field — its border and background settings — rather than as shapes on the page. The boxes then show while the PDF is fillable and disappear when it is flattened.
+
+#### Fix flattening problems
+
+- **Generation stops with a message about compressed object streams.** The PDF stores its pages in a compressed form that Portwood cannot rewrite. Upload the same PDF again as a new version, then generate again. Or turn off **Flatten PDF on generation** for this template.
+- **The option is missing.** Check that **Type** is **PDF**. If it still does not appear, you lack edit access to the **Flatten PDF on Generation** field. The **DocGen_Admin** permission set includes it; an admin using a custom permission set must grant access to that field.
+- **A value is missing.** Check that the field is mapped under **Fillable Fields** and that the record has a value. Unmapped fields keep their original appearance.
+
+Try the [unfilled service acceptance form](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/acceptance-form.pdf) with the Account **Name** field. Compare your result with the [flattened sample](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flattened-acceptance.pdf). Both display in a PDF reader. Only the source contains an editable Name widget.
+
+<a id="office-formats"></a>
+
+## Make Excel and PowerPoint files
+
+Use Excel or PowerPoint when the recipient needs a spreadsheet or slide deck. Both formats are currently **Alpha**.
+
+#### Make an Excel template
+
+1. Make a copy of your workbook.
+2. Put a field tag in a cell, such as `{Name}`.
+3. For a related-record table, put the opening and closing loop tags in the same worksheet row:
+
+| Cell | Content                  |
+| ---- | ------------------------ |
+| A2   | `{#Contacts}{FirstName}` |
+| B2   | `{LastName}`             |
+| C2   | `{Email}{/Contacts}`     |
+
+4. Save as `.xlsx` or `.xlsm`.
+5. Create an **Excel** template, select its fields and related list, and upload the file.
+6. Save the version and generate the workbook.
+7. Open it in Excel. Check formulas, shifted rows, formatting, and any macros.
+
+Use one repeating region per row. With several Contacts, the example row expands down; rows below it move down. With no Contacts, the repeating row is removed.
+
+Image tags, shared-asset images, chart-tag images, and rich-text formatting are not supported like they are in Word/PDF output. Choose Word or HTML when those are essential.
+
+Macro-enabled templates retain `.xlsm` output. Microsoft Excel may block macros in downloaded files according to the recipient's security policy. Test the intended delivery process with your administrator.
+
+For a large workbook, run a small batch first and open every worksheet. Check that the expected names appear on the detail sheet as well as the cover. Keep the .xlsm format if the workbook uses macros. If the job reports a size error, reduce its rows or columns and retry.
+
+#### Make a PowerPoint template
+
+1. Add field tags to a copy of a `.pptx` deck.
+2. Create a **PowerPoint** template and choose the base object and data.
+3. Upload, save the version, and generate a sample.
+4. Open the result in PowerPoint and inspect every slide.
+
+Basic fields, parent lookups, formats, and supported loops can be used. Complex slide layouts need testing.
+
+#### Choose the right output
+
+Excel templates produce Excel files; PowerPoint templates produce PowerPoint files. These templates cannot produce a combined PDF in bulk generation. Choose **Individual Files** for bulk Office output.
+
+<a id="ai-authoring"></a>
+
+## Get help from AI
+
+Use AI to help draft or revise an HTML template, then check the result in Portwood.
+
+The downloadable reference includes three complete HTML designs, their sample data, and the working Screen Flow and event subscriber. Start by giving your assistant one design and the change you want to see in its PDF. [Open the design studio](#document-studio)
+
+The current creation wizard offers an existing file or a blank Canvas. AI help is available in the HTML designer; it is not a separate starter-gallery path.
+
+#### Use an external assistant
+
+1. Open an HTML template in **Design**.
+2. Choose **Copy AI Prompt** in the designer toolbar.
+3. Review the prompt before copying it to the assistant your organization allows. The prompt can describe your fields and template.
+4. Describe the document and changes you want.
+5. Bring the returned HTML back into the designer or upload it as a replacement HTML file.
+6. Review any fidelity findings and generate a real sample PDF.
+7. Click **Save as New Version** when the result is ready.
+
+Portwood's PDF engine cannot reproduce every web layout an assistant can invent. Ask for a simple document using tables, standard fonts, and supported PDF styling.
+
+#### Use Generate with Agentforce
+
+Your administrator can install the separate **Portwood Agentforce Extension** in an org with the required Einstein/Prompt Builder features. Once configured, **Generate with Agentforce** can draft or revise the HTML from inside Portwood.
+
+The extension is optional. A normal Portwood install does not require AI features, and installing only the core package does not create them.
+
+For extension installation, permissions, provider setup, and troubleshooting, see [Agentforce setup](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/AGENTFORCE_SETUP.md).
+
+#### Check what AI made
+
+Check field names, opening and closing tags, page size, images, long text, and page breaks. A clean browser preview is only the first check; the generated PDF is the one your reader receives.
+
+#### Give your assistant the right fields and examples
+
+Download the [Portwood authoring and automation context](https://portwood.dev/demos/studio/portwood-authoring-context.md) and attach it to your assistant along with **Copy AI Prompt** from the actual template. The download combines tag syntax, CSS, complete example HTML, Flow contracts and signing recipes. The copied prompt supplies your template's data shape. Add the approved snippet keys, font tags, signer roles, output format and generation entry point you intend to use.
+
+Try this request: “Build a two-page service review. Use the Account and Opportunities fields in my query. Keep the totals together, use our approved handoff snippet, and give me the body and footer separately. Then show how to pass the single signer's returned URL to a Screen Flow.” Check the PDF with zero rows and again with enough rows to cross a page. Test the Flow separately with an authorized practice signer.
+
+<a id="choose-data"></a>
+
+## Choose the information in a document
+
+Tell the template which information it can use. Selecting a field makes it available; placing its tag decides where it prints.
+
+**Example:** An Account brief needs the Account's name, the owner's name, and a table of Contacts.
+
+#### Open the field chooser
+
+- **Canvas:** Click **Data**.
+- **HTML designer:** Open the **Query** panel.
+- **Template configuration:** Open **Query Configuration** and use the visual builder.
+
+![The Canvas Data panel selects a sample Account and lists the fields available to the template](docs/images/userguide/v3.60/choose-data.png)
+
+#### Pick information on the record
+
+Select **Name**, **Phone**, or any other fields you need from the base object. A **base object** is simply the type of record you generate from: Account, Opportunity, Case, or another object.
+
+Use search to find fields. Prefer the controls that insert or copy tags so the field's spelling is exact.
+
+#### Pick information from a linked record
+
+Choose **+ parent lookup** and follow the link. For example, an Opportunity's **Account → Account Name** becomes `{Account.Name}`. An Account's **Owner → Full Name** becomes `{Owner.Name}`.
+
+A linked record supplies one value. Use a related list when there can be many values.
+
+#### Pick a related list
+
+1. Choose **+ related list**.
+2. Select **Contacts**.
+3. Include **First Name**, **Last Name**, **Email**, and **Title**.
+4. Check the list's **Tag name**. Use that name in a repeating table.
+5. Set a sort order if row order matters. For example, sort Contacts by **Last Name**, ascending.
+
+Each related list can have its own filter, sort, and limit. A filter on Contacts changes the Contacts printed in one document. A filter in **Bulk Generation** chooses which Accounts get documents; it serves a different purpose.
+
+#### Test before adding more
+
+Save the template and preview a record with values in the fields you chose. If a value is missing, check the record, field selection, tag spelling, and the generating user's access to that field.
+
+For more complex data, see [Use prepared or custom data](#custom-data). Manual query formats and provider code live in the [query reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/query-config.md).
+
+<a id="repeating-tables"></a>
+
+## Make a table that grows
+
+Make a list that grows automatically: Contacts on an Account, products on an Opportunity, or rows from another related list.
+
+**Before you start:** Add the related list and its fields in [Choose the information in a document](#choose-data).
+
+#### In Canvas
+
+1. Choose the **Table** tool and place a table on the page.
+2. In its properties, choose the related list you want to repeat.
+3. Set the columns and headings.
+4. Give the table a name, such as **Contacts**.
+5. Select a sample record that has several related records.
+6. Turn on **Show sample data** to check the table, then generate a real **Preview**.
+
+If text or totals should sit below the table, set that block to **Follows** this table. Leaving it at a fixed position can let the growing table run into it.
+
+#### In Word
+
+Create a table with a heading row and one example data row. Put the opening tag in the data row's first cell and the closing tag in its last cell:
+
+| Name                                | Title     | Email                |
+| ----------------------------------- | --------- | -------------------- |
+| `{#Contacts}{FirstName} {LastName}` | `{Title}` | `{Email}{/Contacts}` |
+
+Keep both loop tags in the **same row**. Portwood copies that row once per Contact. The column headings stay outside the loop.
+
+Inside the loop, `{FirstName}` means the current Contact's first name. Outside it, a tag refers to the base record.
+
+#### In HTML
+
+Use a real table heading and one repeating body row:
+
+```html
+<table style="width:100%;border-collapse:collapse">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{#Contacts}{FirstName} {LastName}</td>
+            <td>{Email}{/Contacts}</td>
+        </tr>
+    </tbody>
+</table>
+```
+
+#### Add numbers or a total
+
+Inside the repeating row, `{RowNumber}` prints 1, 2, 3, and so on.
+
+Outside the loop, `{COUNT:Contacts}` prints the number of Contacts. A numeric example is `{SUM:OpportunityLineItems.TotalPrice:currency}` for a selected line-item relationship.
+
+#### Check three cases
+
+Preview a record with **no rows**, **a few rows**, and **enough rows for another page**. Empty loops print nothing. Use an inverse section if you want a message instead:
+
+```text
+{^Contacts}No contacts are listed yet.{/Contacts}
+```
+
+Set sorting on the related list if the row order matters. Do not rely on the order you happen to see in an early preview.
+
+<a id="format-values"></a>
+
+## Format dates, amounts, and labels
+
+Keep dates, amounts, labels, and numbers easy to read.
+
+#### Start with a field tag
+
+`{Amount}` prints the field's value. A format after a colon changes how that value looks:
+
+| What you want                     | Tag                        |
+| --------------------------------- | -------------------------- |
+| A readable date                   | `{CloseDate:MMMM d, yyyy}` |
+| A short date                      | `{CloseDate:MM/dd/yyyy}`   |
+| A date in the user's locale       | `{CloseDate:date}`         |
+| A US dollar amount                | `{Amount:currency}`        |
+| Euros                             | `{Amount:currency:EUR}`    |
+| Number with separators            | `{Quantity:number}`        |
+| Two decimal places                | `{Quantity:#,##0.00}`      |
+| Up to two decimal places          | `{Quantity:#,##0.##}`      |
+| Picklist label seen in Salesforce | `{StageName:label}`        |
+| Checkbox as `[X]` or `[ ]`        | `{IsClosed:checkbox}`      |
+| Today's date                      | `{Today:MMMM d, yyyy}`     |
+| Name of the person generating     | `{RunningUser.Name}`       |
+
+These examples assume the fields exist on the relevant record or loop row. Add ordinary fields to the template's selected data. `Today`, `Now`, and the allowed `RunningUser` fields are built in.
+
+For custom number patterns, `0` always prints a digit while `#` prints a digit only when needed. For example, `{Amount:#,##0.##}` prints `100`, `100.1`, or `100.25`; `{Amount:#,##0.00}` always prints two decimal places. Earlier releases padded optional `#` places, so change a pattern ending in `.##` to `.00` if you require fixed decimals.
+
+#### Match the reader's country
+
+Add an explicit locale when the document must use a particular convention:
+
+```text
+{CloseDate:date:en_GB}
+{Amount:currency:EUR:de_DE}
+```
+
+Use `MM` for the month in a date pattern; lowercase `mm` means minutes. `yyyy` is the calendar year.
+
+#### Work with more than one currency
+
+In a multi-currency org, `{Amount:currency:auto}` follows the record's currency. A fixed `:EUR` chooses euro formatting; it does not by itself convert an amount.
+
+When you need conversion, use the supported `:convert` suffix and verify your org's currency rates. For example:
+
+```text
+{Amount:currency:EUR:convert}
+```
+
+Totals across mixed currencies need particular care. Portwood rejects conflicting currencies unless conversion is requested. Conversion uses current static Salesforce currency rates, not dated Advanced Currency Management rates.
+
+See the [merge tag reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/merge-tags.md) for all supported patterns, currencies, locales, and conversion rules.
+
+<a id="conditional-content"></a>
+
+## Show content only when it applies
+
+Show a paragraph only when it applies, such as a discount note, an approval message, or a section that has related records.
+
+#### In Canvas
+
+Select a block and enter its condition under **Show only when**. For example, an Opportunity block can use:
+
+```text
+Amount > 10000
+```
+
+The whole block disappears when the condition is false. Preview one record that matches and one that does not.
+
+Use a **variant group** for alternative blocks that should use the same flow position. Give the alternatives the same group name and conditions that do not overlap.
+
+#### In Word or HTML
+
+Put a conditional section around the words:
+
+```text
+{#IF Amount > 10000}
+This proposal requires manager approval.
+{/IF}
+```
+
+Use an alternative with `{:else}`:
+
+```text
+{#IF StageName = 'Closed Won'}
+Thank you for your business.
+{:else}
+We look forward to working with you.
+{/IF}
+```
+
+Use the field's exact API name. For an Opportunity stage, that is **StageName**. Text comparisons are case-sensitive; copy the stored value exactly.
+
+#### Show a section only when rows exist
+
+```text
+{#IF Contacts.totalSize != 0}
+Your contacts
+{#Contacts}{FirstName} {LastName}
+{/Contacts}
+{/IF}
+```
+
+Include Contacts in the selected data. `.totalSize` lets you check whether the list is empty.
+
+#### Combine conditions
+
+Use `AND`, `OR`, `NOT`, and parentheses when needed:
+
+```text
+{#IF Amount > 10000 AND IsClosed = false}
+Manager review is needed before this deal closes.
+{/IF}
+```
+
+**You are done when:** A matching record shows the section, a nonmatching record hides it, and the surrounding page still looks right.
+
+Every opening section needs the correct closing tag. Copy a working pair before editing a more complicated condition.
+
+<a id="shared-content"></a>
+
+## Reuse terms and HTML snippets
+
+Write a clause once and reuse it in several documents. A snippet can hold both fixed wording and Salesforce merge tags. The same clause can address each customer by name.
+
+#### Create shared content
+
+1. Open **Portwood > Assets > Terms & snippets**.
+2. Select **New shared content**.
+3. Enter a name, optional category, and permanent asset key.
+4. Use **Write** for common formatting, **HTML source** for exact inline styles and tables, or **Preview** to review the rendered section.
+5. Save the content and choose **Copy tag**.
+
+The copied tag looks like this:
+
+    {%snippet:terms-and-conditions}
+
+Insert the tag where the complete section should appear. In HTML or Canvas authoring, use the shared-content insertion control when available. Keep the tag on its own line when the surrounding layout needs a separate paragraph.
+
+#### Put a customer’s name inside a snippet
+
+1. In **Terms & snippets**, create a snippet with the key `guide-service-handoff`. In **HTML source**, paste this paragraph and save it with **Active for document generation** selected.
+
+    ```html
+    <p>After acceptance, our service coordinator will arrange a handoff with <strong>{Name}</strong>.</p>
+    ```
+
+2. In your Account template, include **Account Name** in the selected fields. Paste the snippet’s copied tag where you want the paragraph to appear.
+
+    ```html
+    {%snippet:guide-service-handoff}
+    ```
+
+3. Select a sample Account in the designer and generate its PDF. For **Alder Works**, the last words are **“a handoff with Alder Works.”** You can see them under **Handoff and acceptance** on page four of the [finished service review](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf).
+
+![Preview shows the shared clause with {Name} still visible. Selecting a record when generating the document fills in the name.](docs/images/userguide/v3.64/snippet-record-preview.png)
+
+The snippet editor’s **Preview** shows the HTML formatting. You’ll still see `{Name}` there because the snippet editor has no record selected. The template’s sample record supplies the value when you generate.
+
+**Using a snippet in a list?** Suppose your snippet contains `<p>Hello, {Name}.</p>`. Put its tag inside `{#Contacts}…{/Contacts}` on an Account template and select **Contacts → Name** in the template data. Each greeting uses that Contact’s name. Place the same tag outside the loop to use the Account’s name.
+
+#### Add a signature below a shared clause
+
+Keep the reusable wording and fields like `{Name}` in the snippet. Put the signing fields directly in the **main template**. For example, paste this into the template body where the customer should initial and sign the clause above:
+
+```html
+<div>{%snippet:guide-service-handoff}</div>
+<p>Customer initials</p>
+<p>{@Signature_Customer:1:Initials}</p>
+<p>Customer signature</p>
+<p>{@Signature_Customer:1:Full}</p>
+```
+
+Choose **Customer** as the signer’s role. In a practice request, check that **INITIAL HERE** and **SIGN HERE** both appear under the clause.
+
+Portwood counts signing fields before it inserts the snippet. If the only signing tags are inside the snippet, a default signature and signed date can still appear. Initials and date-picker tags can show up as plain text. If you are moving signing tags into the template, remove the originals from the snippet so the signing field lands in the intended place. [Send a template for signature](#sign-template)
+
+#### Try the clause as a teammate
+
+Generate a practice document as someone who normally uses the template. Check that the clause appears with that record’s details. If another editor will maintain the wording, have them open the same clause and save a practice revision in your sandbox. If Salesforce reports insufficient access to the asset, ask your administrator to check the teammate’s Portwood permission set and access to that asset. [Set up access](#manage-access)
+
+#### Revisions and activation
+
+A shared-content asset uses the latest active revision. Changing only **Active for document generation** updates the asset status without creating another content revision. Editing the name, category, or HTML content creates a new revision when you choose **Save new version**.
+
+Use **Revision history** to inspect an earlier version. **Restore as new revision** copies that version into a new revision while retaining the intervening history. Inactive or missing content is reported during generation instead of being silently omitted.
+
+#### Formatting and fonts
+
+Use HTML body fragments with paragraphs, headings, lists, tables, links, alignment, page breaks, and inline styles. The editor keeps the content inside its frame when switching between Write, HTML source, and Preview. Pasted text keeps its meaningful spacing and paragraph breaks.
+
+Approved custom font tags can be used inside the fragment. PDF preview and generated PDF output use the approved embedded font. Native Word, Excel, and PowerPoint output carries the font family and formatting; recipients need the font installed in their Office application for the same typeface to display.
+
+Images and other reusable assets can be referenced with their normal asset tags. Copy the real image or font tag from Assets rather than typing an unapproved key.
+
+#### Supported templates and output
+
+Shared content is designed for HTML and Canvas templates and is also expanded in supported native Office merge paths. Test the actual output format when the fragment contains complex tables, lists, images, or custom fonts.
+
+PowerPoint templates produce native PPTX files. PDF is not an available output choice for PowerPoint templates; use Word, HTML, or Canvas when the finished document must be PDF.
+
+#### Limits and safety
+
+Snippets are body fragments, not full HTML documents. Scripts, event handlers, external stylesheets, executable CSS, data-URI images, and unsafe URLs are rejected. Add document-wide styles and page settings to the template.
+
+Select every field and relationship the snippet uses in each template where you reuse it.
+
+A snippet can contain another snippet. Portwood detects cycles and stops on a missing or inactive key. The expansion allows up to eight nested levels, 100 distinct keys and 1,000,000 characters after expansion. A saved fragment is limited to 250,000 characters. Use **Revision history → Restore as new revision** to recover the last working text.
+
+![A saved service handoff clause in HTML source mode with its permanent snippet tag](docs/images/userguide/v3.64/shared-clause.png)
+
+<a id="images-and-assets"></a>
+
+## Add logos and pictures
+
+Upload a logo once and reuse it across templates.
+
+#### Add a shared image
+
+1. Open **Portwood → Assets**.
+2. Add an image, give it a clear name, and choose a stable asset key such as `company-logo`.
+3. Upload the image file and save it.
+4. Use the asset's copy or insert controls when placing it in a template.
+
+An asset key is a reusable name. `{%asset:company-logo}` points to that image without tying your template to an org-specific file ID.
+
+#### Put it in a document
+
+- **Canvas:** Choose **Image**, place a block, and choose the asset. Resize it on the page.
+- **HTML designer:** Use the Images/Assets panel to insert it.
+- **Word or hand-authored HTML:** Use an image tag, for example `{%asset:company-logo:160x}`. Leaving one dimension blank preserves the image's proportions.
+
+Keep logos small enough for their intended print size. A very large photograph can increase file size without improving a small printed logo.
+
+#### Use a picture stored on a record
+
+Portwood also supports image fields and attached record images through image merge tags. Use the template's copy-paste tag tools to get the correct form for your data. Include the image field in the query when the tag reads a field.
+
+Use the [image tag reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/merge-tags.md#77-images) for numbered attached images, field images, and exact sizing.
+
+#### Replace a shared logo
+
+Update the asset's image, then generate a document using it. Because templates refer to the key, you do not need to replace the tag in every template. Check headers, footers, and emails too if they use that asset.
+
+#### Deactivate or reactivate an image
+
+Each asset has an **Active / Inactive** status, shown in the asset list. Deactivating an asset stops it from rendering: a template that still uses its tag shows a missing-image placeholder instead of the picture. This is a safe, reversible alternative to deleting.
+
+- To deactivate, open the asset's row menu and choose **Deactivate**.
+- To bring it back, open the row menu again and choose **Activate**. The asset returns to its most recent image version, so any template using the tag renders it again.
+
+Deleting an asset, by contrast, cannot be undone. Prefer Deactivate when you might want the image back.
+
+Email images need publicly accessible links. Document images and email images have different access requirements; see [Brand the signing experience](#brands-and-emails) before putting a private Salesforce file URL in an email.
+
+**You are done when:** The image appears in a real generated PDF at the intended size. An image visible only in the browser preview is not enough.
+
+For images embedded in a Salesforce rich-text value, download and save-to-record both handle full Salesforce File URLs belonging to the generating org. An image pointing to another domain’s Salesforce File download path is omitted. Test the actual File as a reader who can access it.
+
+<a id="page-layout"></a>
+
+## Set paper, headers, and page backgrounds
+
+Set the paper, margins, repeated page content, and page background.
+
+[Give a long document clickable destinations and live page numbers.](#print-navigation)
+
+#### Choose paper and margins
+
+- **Canvas:** Open **Page**. Choose the paper size, orientation, and margins there.
+- **HTML designer:** Use page setup and check any `@page` rules in imported HTML.
+- **Word:** Set page size and margins in Word, then check the generated PDF.
+
+Canvas and HTML can carry their own page rules. Changing a template record's paper setting may not replace a page rule already in its body.
+
+#### Add a header or footer
+
+Use the template's **Header HTML** and **Footer HTML** fields or the designer's **Header/Footer** panel. Put repeating company details in these areas rather than copying them onto each page.
+
+Leave enough margin for the content. An oversized logo can collide with the document even when the logo itself looks fine.
+
+#### Number the pages
+
+Use the supported header/footer tags:
+
+```text
+Page {PageNumber} of {TotalPages}
+```
+
+Keep page-number tags in the Header/Footer HTML fields, where page numbering is supported. They are different from a field such as `{AccountNumber}`.
+
+#### Add a watermark or background
+
+1. Save the template at least once.
+2. Open **Watermark / Background** in the template editor.
+3. Upload a correctly sized image.
+4. Choose **Light**, **Medium**, **Strong**, or **Original** strength.
+5. Generate a PDF and confirm the text remains readable.
+
+For a Letter page, use **816 × 1056 pixels** at 96 DPI. For A4, use **794 × 1123 pixels**; for Legal, **816 × 1344 pixels**.
+
+Use a picture for a text watermark such as DRAFT. Word's text-watermark and rotation settings do not reliably carry into PDF; a pre-rendered image is easier to control.
+
+#### Check more than the first page
+
+Use a record with long text and many table rows. Inspect headers, footers, the last row of a page, blank space, and the last page. In Word, section breaks and different-first-page settings can also affect the PDF.
+
+For troubleshooting widths, AutoFit, and HTML styling, use the [layout reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md).
+
+<a id="charts-and-codes"></a>
+
+## Add charts, QR codes, and barcodes
+
+Add a chart to explain your data, or a QR code or barcode that readers can scan.
+
+#### Make a chart in Canvas
+
+1. Choose **Chart** and click the page.
+2. Choose the related list to summarize, such as **Opportunities** on an Account.
+3. Choose the field to group by, such as **StageName**.
+4. Choose the chart style and size.
+5. Preview a record with several matching related records.
+
+If a chart should move with a growing table, give it a name and use the same **Follows** controls as other Canvas blocks.
+
+#### Add a chart to Word or HTML
+
+Use a chart tag. For example, on an Account template:
+
+```text
+{Chart:Opportunities:StageName:bar:title=Opportunities by stage}
+```
+
+This groups the Account's Opportunities by stage. Use a valid relationship and field for your object. Start with a simple bar chart before adding filters or multiple series.
+
+Chart support depends on the output path. HTML-to-PDF is safest with the supported CSS chart styles: **bar**, **pivot**, **clustered**, and **stacked**. An inline SVG chart visible in an HTML preview can disappear in Salesforce's PDF renderer. Excel output does not embed chart-tag images.
+
+For the complete style and output matrix, use the [chart reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/merge-tags.md#76-charts).
+
+#### Add a QR code or barcode
+
+In Canvas, choose **Code**, place it, then set the code type and value in its properties. A value can come from a field so each generated record gets its own code.
+
+For Word or HTML, use the template's copy-paste tag tools or the [barcode reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/merge-tags.md#78-barcodes--qr-codes). Match the barcode type to the scanner or business process that will read it.
+
+#### Check the result
+
+Generate the actual output format. Confirm chart labels are legible and totals make sense. Scan printed codes at the size people will actually use; a code that scans at full screen can become unreadable when printed too small.
+
+<a id="custom-fonts"></a>
+
+## Use custom PDF fonts
+
+Use your organization's approved font in generated PDFs.
+
+**Before you start:** You need Portwood Admin access or **Manage Portwood Fonts**. You also need a static `.ttf` font and permission to host and embed it.
+
+#### Upload and approve
+
+1. Open **Portwood → Assets → Custom Fonts**.
+2. Choose **Upload font** for one face, or **Bulk upload fonts** for several.
+3. Upload the static TrueType file and confirm its usage rights.
+4. Set a clear font key using lowercase letters, numbers, and hyphens.
+5. Set a unique **font tag API name** for this face, such as `poppins-bold`. Reuse this API name when moving the same face to another environment.
+6. Open the face and generate its **native PDF specimen**.
+7. Check the letters, numbers, accents, symbols, weight, and spacing your documents need.
+8. Confirm you reviewed the specimen, then **Approve** the face.
+
+Only approved faces become available for new selections. Upload regular, bold, and italic faces separately when your documents need them.
+
+![The Custom Fonts workspace explains upload, specimen review, and approval before use](docs/images/userguide/v3.60/custom-fonts.png)
+
+#### Use the font
+
+- **Canvas:** Select the text box and choose the face in **PDF font**.
+- **HTML designer:** Select the face in the font picker.
+- **HTML source:** Copy the face's verified font tag from its detail panel and use it in a quoted inline `style` attribute. API-name tags such as `{%font:poppins-bold}` remain portable across environments.
+- **Imported Word/HTML:** Portwood can match an approved face to the declared family, weight, and style. Check the generated PDF to confirm the match.
+
+#### Replace or stop using a face
+
+Retire a face to remove it from new selections while preserving existing template revisions. Retired faces can be deleted when they are no longer needed. Do not delete one until you have checked the templates that depend on it.
+
+#### If the upload is rejected or the PDF uses another font
+
+Use a static TrueType face. Variable fonts, color fonts, font collections, unsupported Unicode coverage, or malformed files may be rejected. The supported font character map is limited to the Unicode Basic Multilingual Plane.
+
+A font also needs the glyphs your text uses. Preview a document containing those actual characters. If an approved face cannot be loaded, Portwood can continue using a fallback instead of stopping the whole document.
+
+Bulk upload accepts up to **25 individual files** or a ZIP of up to **200 TTF files / 25 MB**. A document can use up to **16 distinct approved faces**.
+
+This feature controls native PDF output and previews. It does not install fonts on a recipient's computer or embed this font registry into native Excel or PowerPoint files.
+
+<a id="add-to-record-page"></a>
+
+## Add Portwood to a record page
+
+Add the Generate and signing tools where your team works.
+
+**Before you start:** You are a Salesforce administrator who can edit and activate Lightning record pages.
+
+#### Add the document runner
+
+1. Open an example record of the right type, such as an Account.
+2. Open Salesforce's **Setup** gear and choose **Edit Page**.
+3. In Lightning App Builder's component list, search for **Portwood Runner**.
+4. Drag it into a region on the page.
+5. Select it and choose which destinations to offer: **Download**, **Save to Record**, and **Save & Download**.
+6. Leave the extra packet and PDF-combining options on if your team needs them.
+7. Click **Save**, then **Activate**. Assign the page to the intended app, profiles, or record types.
+8. Return to the record and refresh it.
+
+**You are done when:** The intended user sees Portwood Runner on that record, can choose a matching template, and can generate a file.
+
+#### Add the signing tool
+
+Follow the same steps, searching for **Portwood Signature Sender**. Place it on the record page where requests should be stored.
+
+#### Make the page simpler
+
+If a team only needs to save documents, turn off the other destinations. The runner hides the destination selector when only one option remains.
+
+Make sure the page also gives users a way to open the record's **Files**. A successful save can be hard to find if the Files related list is absent.
+
+#### If the component does not appear
+
+Check the page's activation assignments, component visibility rules, and the user's Portwood permission set. Editing a page for one app does not necessarily change the page users see in another app.
+
+On mobile, the runner saves to the record. Packet and PDF-combining workflows require desktop download support.
+
+<a id="generate-document"></a>
+
+## Generate a document
+
+Make a document for the Salesforce record you are looking at.
+
+**Before you start:** You have Portwood User or Admin access. Your administrator has [added Portwood Runner](#add-to-record-page), and there is an active template for this record type.
+
+#### Make the document
+
+1. Open the record, such as an Account or Opportunity.
+2. Find **Portwood Runner**.
+3. Choose the template. Use its category filter if the list is long.
+4. Choose where the file should go:
+
+| Destination         | What happens                          |
+| ------------------- | ------------------------------------- |
+| **Download**        | A file downloads to your computer     |
+| **Save to Record**  | A file appears in this record's Files |
+| **Save & Download** | One generation provides both copies   |
+
+5. If an output-format choice is shown, choose the permitted format you need. Otherwise, the template's saved format is used.
+6. Click **Generate** and wait for the result.
+7. Open the file and check the name, important values, and all pages before sharing it.
+
+Your page may show only one destination. Your administrator can hide choices the team does not need.
+
+![The record runner offers the Account Brief template and Save and Download, Download, or Save to Record](docs/images/userguide/v3.60/record-runner.png)
+
+#### Find a saved file
+
+Open the record's **Files** related list. Refresh it if a background generation has just finished. Use the file's preview or download action to open it.
+
+#### When a document takes longer
+
+Records with large related lists can generate in the background. Follow the runner's status message instead of repeatedly clicking Generate. Check the record's Files or the relevant job before starting another copy.
+
+Large native Office files may download first and show a **drag-to-attach** step. Use that uploader when the runner asks for it to finish saving the file to Salesforce.
+
+#### If you cannot find the template
+
+Check that you opened the right type of record. Then ask the template owner to check its active version, Active setting, and visibility rules. A template for Accounts does not automatically appear on Opportunities.
+
+On mobile, the runner uses **Save to Record**. Open the saved file through Salesforce.
+
+<a id="document-packets"></a>
+
+## Combine documents into one PDF
+
+Put several documents into one PDF, or combine PDFs already saved on a record.
+
+**Before you start:** Use a desktop browser. Your administrator must enable the runner's packet or PDF-combining controls.
+
+#### Make a packet from templates
+
+1. Open the Salesforce record and find Portwood Runner.
+2. Choose **Document Packet**.
+3. Move the required templates into the packet list.
+4. Put them in the order you want readers to see them.
+5. If needed, choose the option to include existing PDFs from the record and select those files.
+6. Generate and download the packet.
+7. Open the result and check the document order, page breaks, and completeness.
+
+Use templates that support PDF output. Packet availability depends on the selected templates and the controls enabled on the page.
+
+#### Combine existing PDFs
+
+1. Choose **Combine PDFs** in the runner.
+2. Select at least two PDFs already attached to the record.
+3. Order them.
+4. Combine and download the result.
+
+This does not require a template. It is useful for collecting a finished proposal, terms, and attachments into one file.
+
+#### Add an attachment after a generated document
+
+For a PDF template, use **Combine with existing PDFs on this record** if offered. Choose the PDFs to append, then generate.
+
+Packets and PDF combines are download workflows. If the result also belongs on the record, upload the finished packet to Files.
+
+For a packet that needs signatures, use the [template signing workflow](#sign-template) instead of treating a combined unsigned download as a completed signing request.
+
+Use [Merge PDFs in Flow](#merge-pdfs-flow) to create a Salesforce File from existing file versions and return its IDs to an automation.
+
+<a id="document-buttons"></a>
+
+## Create document and email buttons
+
+Give people a short action such as **Generate Quote**, **Preview Brief**, or **Email Document** on a record.
+
+**Before you start:** A Salesforce administrator needs **Portwood Button Manager** plus the relevant platform metadata permission, such as **Customize Application**. Portwood Admin alone does not expose the Buttons and Send Email management tabs.
+
+#### Create a document button
+
+1. Open **Portwood → Buttons → New Button**.
+2. Choose the object and template.
+3. Choose the label, active setting, optional record types, title, and save-to-record behavior.
+4. Choose **Delivery mode**:
+
+| Mode                   | The user gets                       |
+| ---------------------- | ----------------------------------- |
+| **Download**           | A downloaded file                   |
+| **Preview**            | Salesforce's file preview           |
+| **Preview & Download** | A preview, then an offered download |
+
+5. Save. Configuration can take a few seconds to appear because it is saved as metadata.
+
+#### Put the action on the page
+
+1. In Salesforce Setup, open **Object Manager → your object → Buttons, Links, and Actions**.
+2. Create an action with **Action Type = Lightning Web Component**.
+3. Select the packaged **docGenButton** component.
+4. Add the action to the intended record page's actions or the page layout's Salesforce Mobile and Lightning Experience Actions.
+5. Test as a user who will use it.
+
+Creating a configuration does not place the action on the page. Both parts are required.
+
+For a headless preview action, use **docGenPreviewButton** and an active configuration with Preview delivery. Preview creates a Salesforce File even when the file is not linked to the record.
+
+#### Create an email button
+
+1. Open **Portwood → Send Email → New Send Email Button**.
+2. Configure its object, optional default template, label, and audience.
+3. Place a record action using **docGenSendEmailButton**.
+4. Test its three steps: **Template → Preview → Recipients & message**.
+
+Sending generates the document, saves it to the record, and sends an attachment to the selected addresses. Review the preview and recipients before sending. An email-delivery failure is shown to the user; finding a generated file alone does not prove the email was sent.
+
+For very large related lists, use Portwood Runner or an appropriate background Flow action. The one-click document action uses a synchronous generation path.
+
+In **Recipients & message**, select **None** in the record-email picker to clear that choice and enter the address yourself. The subject is plain text. For a **Preview & Download** document button, close the Salesforce preview and use **Download** in the underlying dialog to retrieve that generated file.
+
+<a id="name-documents"></a>
+
+## Give files useful names
+
+Give generated files useful names so people can find them later.
+
+#### Set the default name
+
+Open the template's settings and fill in **Document Title Format**. For an Account template, try:
+
+```text
+Account Brief - {Name} - {Today:yyyy-MM-dd}
+```
+
+For an Opportunity template, try:
+
+```text
+Quote - {Account.Name} - {Name}
+```
+
+Generate a sample and check the resulting filename. Set a title format when the name matters. The core merge service falls back to the source data’s `Name` when no format resolves; surrounding UI/signing paths can apply their own defaults. A blank format is not a promise of one identical filename across every entry point.
+
+#### What you can include
+
+- Fields from the record, such as `{Name}`.
+- Parent fields, such as `{Account.Name}`.
+- The date, such as `{Today:yyyy-MM-dd}`.
+- Allowed running-user fields, such as `{RunningUser.Name}`.
+
+Title fields are resolved separately, so they do not need to be selected only to support the filename. Body fields still need to be included in the template's data selection.
+
+#### Why a particular file has a different title
+
+A title explicitly passed by a Flow action or button configuration takes precedence over the template's default. Check those settings if changing the template does not change an automation's filename.
+
+Saved versions can also retain their rendering settings. Save and test the intended active version after changing a title format.
+
+A title format can include a Salesforce Custom Label such as `{!$Label.Quote_Title}`. Supply the label API name and check the result as a user with its translation.
+
+<a id="bulk-generation"></a>
+
+## Make documents for many records
+
+Make one document per record without opening every record yourself.
+
+**Before you start:** Check one document first. Use an active template and a filter that selects only the intended records.
+
+#### Try a small run
+
+1. Open **Portwood → Bulk Generation**.
+2. Select the template.
+3. Choose a saved filter or enter a **SOQL Condition**. For the fictional Accounts in this guide:
+
+    ```sql
+    Name IN ('Northstar Bikes', 'Willow and Pine', 'Bluebird Studio')
+    ```
+
+4. Click **Validate Filter** and check how many records match.
+5. Select a **Sample Record** and click **Preview Sample PDF** when available.
+6. Choose the output mode.
+7. Give the job a useful name. Leave **Batch Size = 1** for your first run, especially with images or charts.
+8. Click **Run Bulk Generation**.
+9. Review the job and its files when processing finishes.
+
+Enter the condition that follows the main query's `WHERE`. For an Account template, this example selects households with a Contact in California.
+
+```sql
+RecordType.DeveloperName = 'HH_Account'
+AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
+```
+
+Use your org's record type developer name. Salesforce supports up to two top-level `IN` or `NOT IN` subqueries joined by `AND`. The count also applies the selected template's saved Record Filter.
+
+Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
+
+![The bulk runner has validated the three fictional Accounts and is set to Individual Files](docs/images/userguide/v3.60/bulk-ready.png)
+
+#### Choose the right output
+
+| Mode                      | Use it when…                                           |
+| ------------------------- | ------------------------------------------------------ |
+| **Individual Files**      | Each record needs its own file                         |
+| **Print-Ready Packet**    | You want one PDF covering the selected records         |
+| **Combined + Individual** | You need the individual files and a combined PDF       |
+| **Merge PDFs in Browser** | You want one download from a large set of private PDFs |
+
+Word, HTML, and supported Canvas PDF workflows can be used for PDF documents. Native Excel and PowerPoint output and fillable PDF forms require **Individual Files**. Follow any compatibility message shown for the selected template.
+
+#### Download a large merged PDF
+
+1. Select a PDF template and choose **Merge PDFs in Browser**.
+2. Start the run. Portwood makes a private PDF for each selected record in the background.
+3. Open the completed job from its notification or Recent Jobs, then choose **Download merged PDF**.
+4. Keep the browser open while it assembles and saves the PDF. If the connection drops or the page closes, reopen the same job in the same browser profile to resume.
+
+Use a current desktop browser that supports browser-managed file storage. The mode supports up to 100,000 source records and up to 1 MiB per generated PDF. Each source PDF uses Salesforce File storage. The browser needs space for the merged PDF on the device. If some statements fail, review the job and choose **Retry missing PDFs** when available before downloading.
+
+#### Put the documents in order
+
+Choose **Sort By** and **Direction** before running. This controls processing and the order in the combined PDF. The order of records in a manually prepared list is not a substitute for sorting the job.
+
+#### Print double-sided
+
+For Print-Ready Packet or Combined + Individual, turn on **Duplex Padding** when each document should start on the front of a sheet. Portwood adds a blank page after odd-length documents in the combined packet. Individual files are left unpadded.
+
+Duplex packets have a size estimate based on the sample record. Large images or embedded fonts can reduce how many documents fit in one packet. Split large runs or choose Individual Files when the estimate or job asks for it.
+
+#### Save a filter for next time
+
+Use the bulk runner's save-filter control. Give it a name your team understands, such as **Current customer statements**. Next time, select it instead of typing a condition.
+
+**You are done when:** The success/failure counts match what you expected and a sample of the finished files is correct.
+
+Review [Read job status and recover failures](#job-history) before rerunning a partially successful job.
+
+<a id="job-history"></a>
+
+## Read job status and recover failures
+
+Use job history to see whether a large generation is still working, finished, or needs attention.
+
+Open **Portwood → Bulk Generation** and its job-history area. Open the job to inspect its counts, generated files, and errors. Portwood Jobs in the app navigation is another way to find job records.
+
+| Status                    | What to do                                                          |
+| ------------------------- | ------------------------------------------------------------------- |
+| **Draft**                 | Check whether the job was submitted                                 |
+| **Harvesting**            | Wait while records are collected                                    |
+| **Processing**            | Let the job continue; check progress                                |
+| **Stitching / Merging**   | The engine is assembling large-data fragments or combined PDF parts |
+| **Completed**             | Review the files and counts                                         |
+| **Completed with Errors** | Read the errors and identify which records still need work          |
+| **Failed**                | Read the error before starting another run                          |
+
+![The practice bulk job completed with three successful records and zero errors](docs/images/userguide/v3.60/bulk-completed.png)
+
+#### Check a partially successful job
+
+1. Open the job.
+2. Note its success and failure counts.
+3. Open the error details and identify affected records.
+4. Check whether separate recovery jobs are still running.
+5. Fix the cause or narrow the filter to the records that need another attempt.
+
+Rerunning the original full filter can create additional files for records that already succeeded.
+
+#### When a record has an unusually large related list
+
+Some Individual Files failures are retried automatically through the large-data path. Look for the associated recovery jobs and their results. The original job can still say **Completed with Errors** while those separate jobs finish.
+
+Recovery is capped, and combined-PDF failures are not automatically folded into a new combined packet. Read the job's messages rather than assuming every failed record was recovered.
+
+#### When nothing is moving
+
+Ask your administrator to check Salesforce **Apex Jobs** and **Portwood Error Logs**. Include the job ID, template name, time, and displayed error when reporting a problem. Avoid starting repeated duplicate jobs while the first is queued.
+
+For persisted field/API names and a Flow refresh loop, see [Follow asynchronous jobs](#async-jobs). Friendly progress labels can differ from the stored job state.
+
+<a id="sign-uploaded-pdf"></a>
+
+## Send an uploaded PDF for signature
+
+Send a finished PDF for signature without rebuilding it as a template.
+
+**Before you start:** Open the Salesforce record where the signed file belongs. The page needs **Portwood Signature Sender**. For external recipients, your administrator must [set up external signing](#setup-signatures).
+
+#### 1. Choose the document
+
+1. Click **New signature request**.
+2. Choose **Upload PDF** for a file on your computer, or **Salesforce file** for a PDF on this record.
+3. Select the PDF and continue.
+
+![The signature sender offers Upload PDF, Salesforce file, and Portwood template](docs/images/userguide/v3.60/signature-source.png)
+
+Use an unlocked, unsigned PDF of no more than **2 MB** and **50 pages**. Portwood keeps an original snapshot; choosing an existing Salesforce File does not replace that file.
+
+#### 2. Add the people
+
+Enter each recipient's name and email, or choose a Contact. Add them in the order they should sign.
+
+Uploaded PDFs use **sequential** signing: the second person waits for the first, and so on. You can add up to **10 recipients**.
+
+#### 3. Place the fields
+
+1. In **Assign fields to**, select the recipient.
+2. Choose **Signature**, then click the PDF where that person's signature belongs.
+3. Add **Initials**, **Date signed**, or **Date picker** fields if needed.
+4. Repeat for every recipient.
+5. Use the page controls to inspect every PDF page.
+
+Drag a field to move it. Select it to change **Width** and **Height**, move it with arrow keys, or remove it. Every recipient needs at least one Signature field. Keep all fields inside their pages; the request supports up to **100 fields**.
+
+**Date signed** fills automatically. **Date picker** asks the signer to choose a date.
+
+![PDF preparation shows fields assigned to Jordan Rivera and placed on the document](docs/images/userguide/v3.60/signature-fields.png)
+
+#### 4. Review the request
+
+Click **Review request**. Check the document, assigned people, positions, title, optional Signing Brand, expiration, and email-verification preference.
+
+Choose delivery:
+
+| Delivery                          | What happens                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Preview signing in Salesforce** | Creates an actual practice request whose signing links require Salesforce login. Authenticated signing requires a Portwood site license. This route suppresses invitation, reminder and completion emails. [Signing license guide](#user-licenses) |
+| **Create public signing links**   | Creates external signing links through your configured public site                                                                                                                                                                                 |
+| **Email invitations**             | Sends invitations through your configured site and sender, in signing order                                                                                                                                                                        |
+
+The internal preview is useful for learning in a test org. Completing it still creates a signed file on the record.
+
+![The review step checks document title, brand, expiration, verification, and preview-only delivery](docs/images/userguide/v3.60/signature-review.png)
+
+#### 5. Create or send it
+
+Click **Create preview links**, **Create signing links**, or **Send request** for the selected delivery. Find it under **Recent requests** and follow its progress.
+
+**You are done when:** Everyone has signed and the completed PDF appears on the related record. Keep the original, signed PDF, and audit history together.
+
+#### Leave and come back
+
+Use **Save draft** before leaving preparation. On this record, open **Continue preparing → Resume**. Drafts belong to their creator and this record. Once sent, the original and placements are locked; prepare a new request if they need to change.
+
+<a id="sign-template"></a>
+
+## Send a template for signature
+
+Generate a document from Salesforce information and send it for signature.
+
+**Before you start:** The template is active, includes signature positions, and generates the expected PDF. External delivery needs the [signing-site and email setup](#setup-signatures).
+
+Your team’s licensed senders can send public invitations. Your admin licenses the public site’s guest user once for that site. If the recipient signs while logged in to a portal or Salesforce, your organization needs a site license. [Check who needs a license](#user-licenses)
+
+#### Prepare the template once
+
+In Canvas, add a **Signature** block and configure the role and type. In Word or HTML, reserve space and use a signature tag:
+
+```text
+Customer signature
+{@Signature_Customer:1:Full}
+
+Date signed
+{@Signature_Customer:1:Date}
+```
+
+The role **Customer** must match the signer's role in the request. Keep each signature on its own line or in its own table cell with room around it.
+
+If the agreement uses a shared clause, place the snippet tag in the template, then add each signing field directly below or beside it in the template body. Check the field count when you select the template in Signature Sender. [Copy a clause with initials and a signature](#shared-content)
+
+Use `Initials` for initials and `DatePick` for a date the signer chooses. Use `:inline` as a final suffix when you intentionally want a compact mark instead of the default signature card.
+
+#### Send a request
+
+1. Open the Salesforce record and find **Portwood Signature Sender**.
+2. Click **New signature request → Portwood template**.
+3. Choose the template, or several compatible templates for a packet.
+4. Add each signer from Contacts or enter their name and email.
+5. Match each person's **Role** to the template's signature role.
+6. Choose the signing order.
+7. Check expiration, verification, optional message, and other send settings.
+8. Review and send.
+
+| Order          | Use it when…                                      |
+| -------------- | ------------------------------------------------- |
+| **Single**     | Exactly one person signs                          |
+| **Parallel**   | Everyone can receive an invitation at once        |
+| **Sequential** | One person must finish before the next is invited |
+
+These choices apply to template requests. The uploaded-PDF preparation path uses sequential signing.
+
+#### Send several documents together
+
+A signature packet gives the signer one session for the selected templates. Review the complete packet, including every role and signing spot. Completion produces a combined signed PDF with its completion certificate.
+
+#### Check the first request
+
+In a test org, verify the signer sees the correct values and only their own signing fields. After completion, open the signed PDF and check its marks and certificate.
+
+A normal **Generate** action produces an unsigned document. Completing a signing request is what produces the signed document and signing audit history.
+
+Use [Signer Inputs](#signer-inputs) when the signer must supply values in addition to their signature.
+
+The record-page picker filters on active templates for the current base object. If a template is missing, check its base object and active status before editing the signer roles.
+
+<a id="signer-experience"></a>
+
+## What a signer sees
+
+If a sender gives you a public Portwood signing link, you can review and sign without buying a license or creating a Salesforce account. Use the link addressed to you.
+
+Already on a Salesforce screen with a **Prepare agreement** button? [See how to open, sign and return to that screen](#event-signing-journey).
+
+#### Open the link
+
+The invitation identifies the document. Open your own link; each person has a link assigned to them.
+
+If email verification is required, request the code, check the intended inbox, and enter the code. Some requests pre-fill the email address. If verification is off, the link opens the signing document directly.
+
+#### Review and complete the fields
+
+1. Read the document.
+2. Follow the highlighted signing fields and progress counter.
+3. At a signature or initials field, draw with your mouse/finger or type the value.
+4. Choose **Save** to return to the document or **Save & Next** to continue to the next field when offered.
+5. Complete any requested date fields.
+6. Review the final confirmation, give electronic-signature consent, and submit.
+
+On the signing page you can edit the typed name with ink still on the pad. The drawing takes precedence when ink is present. Clear the pad to use the typed name. If the org or template requires typed signatures, type both signatures and initials.
+
+**Date signed** fields fill automatically. A **Date picker** field needs a date you select.
+
+![The signer can type or draw in the signature dialog before moving to the next field](docs/images/userguide/v3.60/signer-enter-signature.png)
+
+#### After signing
+
+If other people still need to sign, you may see a waiting confirmation. When everyone finishes, Portwood creates the completed file on the related Salesforce record. Depending on the request's delivery settings, completion emails can also carry the finished file.
+
+Active verification and signing screens can use the selected company's branding. The final success and waiting-for-other-signers cards are intentionally plain.
+
+#### If you need to stop
+
+Some signing flows allow you to leave and resume through the same link while it remains valid; verification may be required again. If **Decline** is offered, use it to decline and optionally explain why. Contact the sender if the document or recipient details are wrong.
+
+#### If the link does not work
+
+Ask the sender to check whether it expired, was revoked, was replaced by a resend, or has already been completed. Use the newest link after a resend. On a sequential request, your turn may not have started yet.
+
+The signing viewer redraws visible pages when you zoom. Korean and other non-Latin signer names and dates are supported in the signed PDF and certificate. The decline, waiting and final confirmation cards use a plain layout.
+
+<a id="event-signing-journey"></a>
+
+## Open and sign an agreement from Salesforce
+
+If your team uses a Salesforce screen to collect an agreement, you can prepare it, open your signing page, and return to the same screen to check the result. This example follows one person signing their own service agreement.
+
+Setting this up for your team? [Check licensing for signed-in signers](#user-licenses), then [build the signing experience in Salesforce](#signing-handoff-setup).
+
+#### 1. Prepare your agreement
+
+Open the signing Flow your team put on the record or app page. Check that you’re signed in as the person who should sign, then select **Prepare agreement**.
+
+![Choose Prepare agreement to request the document for the person who is signed in.](docs/images/userguide/v3.64/sign-prepare.png)
+
+#### 2. Open the signing page
+
+Select **Open signing page**. Salesforce is preparing your document in the background. If the screen says preparation is still running, select **Check again**. Stay in this interview so it keeps checking the same request.
+
+![The preparation screen has an Open signing page button in the footer.](docs/images/userguide/v3.64/sign-preparing.png)
+
+When the agreement is ready, the signing site opens in a new tab. If your browser stays on the Flow, select **review and sign your agreement** to open it yourself. Keep the original tab open.
+
+![The original Flow offers a review-and-sign link and a Check signing status button.](docs/images/userguide/v3.64/sign-return.png)
+
+#### 3. Verify your email and sign
+
+If the site asks you to verify your email, enter the email address on your Salesforce user and select **Send Verification Code**. Enter the code from that inbox. In this example the Flow gives you your signing link directly. The verification code is the email to look for. Your team’s signing settings determine whether this step appears.
+
+![The signer enters their email address and selects Send Verification Code.](docs/images/userguide/v3.64/sign-verify.png)
+
+Read the agreement and select **SIGN HERE**. Type or draw your signature as the signing page allows. Choose **Save & Next** to move through the fields. When you have reviewed the completed agreement, read the consent statement and select **Finish & Submit** if you agree.
+
+![The signing dialog lets you review your mark and move to the next field.](docs/images/userguide/v3.60/signer-enter-signature.png)
+
+![The Complete Signing dialog asks for consent before Finish & Submit.](docs/images/userguide/v3.60/signer-consent.png)
+
+Your organization may also ask for initials or a date. [See how to sign a document](#signer-experience)
+
+#### 4. Check whether the signed file is ready
+
+Return to the original Salesforce tab and select **Check signing status**. If you left the signing page before submitting, the screen below is the expected result. Finish in the signing tab. If you closed it, select **Reopen my signing page**, then **Check again**. You return to the same agreement.
+
+If the Flow says the agreement is **signed** and the file is being saved, give it a moment and select **Check again**. Once Portwood saves the final file, the Flow confirms it is ready. [Find the signed PDF and certificate](#manage-signatures)
+
+![Reopen my signing page and Check again take the signer back to the same unsigned agreement.](docs/images/userguide/v3.64/sign-pending.png)
+
+#### Set this up for your team
+
+Start with the [signing receipt and event](#signing-handoff-setup). Then [build the Flow that prepares the request](#signing-events) and [add the navigation button to your screen](#signing-site-handoff). Each walkthrough shows the Salesforce controls to select.
+
+If your buyer must sign a particular approved quote PDF, open **Signature Sender → Salesforce file** on the quote and select that revision. This example creates a new agreement from a template. [Send the approved quote for signature](#cpq-quote)
+
+The practice version is available for admins who want to inspect the finished Flows in their own sandbox. [Download the optional sample](https://portwood.dev/demos/studio/event-signing.zip) · [Watch the signing handoff](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=follow-the-event-into-signing)
+
+<a id="manage-signatures"></a>
+
+## Track, resend, or stop a request
+
+Track a request, replace an expired link, or stop an unsigned request.
+
+#### Find the request
+
+Open the related record and look under **Recent requests** or the sender's previous-request list. Use **Refresh requests** if someone has just completed a step. The Portwood Signature Requests app tab also lists request records.
+
+Open a request to check signer status, delivery information, and its audit records.
+
+![The source record shows a completed practice request with Signed status](docs/images/userguide/v3.60/signature-completed-request.png)
+
+#### Resend
+
+Use **Resend** for an eligible request. Unsigned signers receive new links and a fresh signing window. Their old links stop working, and email verification resets.
+
+Tell the signer to use the newest invitation. Resending does not edit the original document or field placements.
+
+#### Revoke
+
+Use **Revoke** when the remaining people should no longer sign. Review the confirmation first: revocation invalidates the remaining unsigned links.
+
+Revoke can send a branded **Signature Revoked** email to signers who have not signed. The email can be customized under **Portwood → Email Templates**. If the editor is missing that email type, your administrator can [add it after an upgrade](#upgrade-portwood). The built-in notice still sends. For uploaded-PDF requests, the default email title is **Document**.
+
+Completed or cancelled requests do not offer the same resend/revoke actions. If the document needs changing, prepare a new request and stop the old unsigned one where appropriate.
+
+#### Require typed signatures
+
+An administrator can turn on **Allow Typed Signatures Only** in **Portwood → Signatures** for the whole org, or on an individual template. When enabled, signers type signatures and initials; the draw pad and its Clear button are hidden. The org setting still applies when the template setting is off. Both settings are off by default.
+
+#### Set expiration and reminders
+
+An administrator sets the default in **Portwood → Signatures**. A send can override expiration within the supported **1–365 day** range. A later change to the org default does not rewrite the signing window on a request already sent.
+
+Reminders use hour offsets such as `24, 72, 168`. They go to pending signers while the request remains valid, subject to the configured scheduled job and email setup.
+
+#### Signing in person
+
+Portwood Admin users can use **Sign In Person** when it is offered for a pending signer. Confirm the identity-check attestation only after doing that check. The bypass is recorded in the audit history.
+
+#### Find the completed file
+
+Open **Files** on the related record and inspect the signed PDF. Guided signing adds the marks and a **Certificate of Completion** with signer and verification information. The verification link supports checking the received file against the recorded document hash.
+
+An image merged into an ordinary document is not a completed Portwood signing request and does not create the same signing audit trail.
+
+On **Recent requests**, **Resend** and **Revoke** appear beside **View** for **Sent** and **In Progress**. Revocation still takes effect if no Org-Wide Email Address is configured. Check email status before assuming anyone received the notice. Declined recipients can also receive it if they have not signed.
+
+<a id="setup-signatures"></a>
+
+## Set up external signing
+
+Set up the public signing page and email sender before inviting external recipients.
+
+**Before you start:** You are a Salesforce administrator with authority to configure a Salesforce Site or Experience Cloud site and the organization's email settings.
+
+**Choose the signing route.** For public links under per-user licensing, cover the signing site’s guest user with a Portwood license. Each customer opens their own link and needs no individual seat. If customers, partners or employees sign while logged in, arrange a **Portwood site license**. It also covers the public guest user. [Compare signing licenses and request a quote](#user-licenses)
+
+#### 1. Open the checklist
+
+Go to **Portwood → Signatures**. The **Setup Status** checklist shows what is configured and what still needs attention.
+
+![Signature Settings in a fresh org shows the missing site, email sender, and guest permission assignment](docs/images/userguide/v3.60/signature-settings.png)
+
+#### 2. Configure the signing site
+
+Follow the complete [Salesforce Site walkthrough](#site-salesforce), or use [an existing Experience Cloud site](#site-experience-cloud). The steps below are the overview.
+
+1. Create or choose the active Salesforce Site or supported Experience Cloud site.
+2. Add the packaged signing Visualforce pages to the site's enabled pages, including **DocGenSignature**, **DocGenSignaturePdf**, **DocGenVerify**, and **DocGenSign**.
+3. In Portwood's **Signature Site URL**, enter the site's base URL.
+4. For an Experience Cloud site, remove a trailing **`/s`** from the URL.
+
+Use the base site address, not an individual signing page or someone's signing token.
+
+#### 3. Give the site's guest user access
+
+For a classic Salesforce Site:
+
+1. Open **Setup → Sites → your site**.
+2. Click **Public Access Settings**.
+3. Open **View Users**, then the site's guest user.
+4. Under per-user licensing, check **Managed Packages** for **Portwood** on the guest user. If needed, use **Assign Licenses** to assign an available license. With a site license the guest is already covered.
+5. Under **Permission Set Assignments**, assign **Portwood Guest Signature**.
+
+For Experience Cloud, find that site's guest user through its administration/profile controls and assign the same packaged set.
+
+Experience Cloud also needs **Administration → Preferences → Let guest users view asset files, library files, and CMS content available to the site**. Without it, the public PDF preview can say **Document unavailable**.
+
+#### 4. Configure the sender
+
+Use [Configure signing email and verification](#site-email) for the sender, deliverability, and test checklist.
+
+1. In Salesforce Setup, create and verify the intended **Organization-Wide Email Address**.
+2. Make it available to the profiles required by the signing workflow; the guest completion path needs an eligible sender.
+3. Complete your sending-domain authentication and Salesforce email-deliverability setup.
+4. Return to **Portwood → Signatures** and select the address under **Send Emails From**.
+5. Save and **Re-check Setup**.
+
+PIN emails need a working sender even if you distribute signing links yourself. Check the request's **Email Status** when an email fails to arrive.
+
+#### 5. Set the defaults
+
+Choose expiration, reminders, email verification, email pre-fill, and whether Decline is available. Verification settings can be inherited or overridden on templates and individual sends; check what the actual send will use.
+
+#### 6. Test the public path
+
+Create a test request for an inbox you control. Open the public link in a private browser window that is not signed into Salesforce. Verify the code email, document preview, signing, completion, and saved file.
+
+**You are done when:** An external test signer can complete the full path and the request shows the expected delivery and completion state. A green setup checklist is useful, but it does not replace this test.
+
+<a id="brands-and-emails"></a>
+
+## Brand the signing experience
+
+Use the right company name, logo, color, and sender throughout a signing request.
+
+#### Create a brand
+
+1. Open **Portwood → Brands → Add Brand**.
+2. Enter an internal **Brand name**.
+3. Set its **Company name**, **Brand color**, and **Footer text**.
+4. Choose **Send emails from** if this brand uses its own verified Organization-Wide Email Address.
+5. Choose a logo URL or shared Asset file.
+6. Leave it Active and save.
+
+An inactive brand is not available for new selections; existing assignments fall back to the org default while it is inactive.
+
+![The brand editor sets the internal name, displayed company, sender, logo, footer, and color](docs/images/userguide/v3.60/brand-editor.png)
+
+#### Use it on a template or uploaded PDF
+
+Set the template's **Sending Brand**. For an uploaded-PDF request, choose **Signing Brand** on the review step.
+
+Brand settings are reused. To change a document's actual logo or content, edit the document template as well; a signing brand is not a replacement for the document body.
+
+#### Change the signing emails
+
+1. Open **Email Templates**.
+2. Choose the email type, such as **Signature Request** or **Email Verification Code**.
+3. Leave **Brand = Shared / Default** for shared wording, or pick a brand for an override.
+4. Edit the subject and body.
+5. Review the live sample and use **Send Test** to an inbox you control before using it with recipients.
+
+There are seven email types: request, reminder, verification code, signer completed, all signatures complete, signer declined, and completion confirmation.
+
+![The signature email editor shows the selected email, reusable tokens, branding controls, and live preview](docs/images/userguide/v3.60/email-templates.png)
+
+#### Keep the signing controls
+
+The default **Portwood layout** adds the branded frame around your body. **Full custom HTML** gives you the complete layout.
+
+Keep the required link or code tokens when customizing. `{ActionButton}` creates a signing button; `{VerificationCode}` creates the PIN block. If you replace a widget with custom wording, preserve the underlying `{SignatureUrl}` or `{Pin}` token as appropriate for that email type.
+
+Email images need absolute, publicly reachable URLs. Shared-asset email images require Salesforce Content Deliveries/Public Links support. An internal Salesforce file URL that works for you can be broken in a recipient's inbox.
+
+#### Know which settings win
+
+For visual wording and styling, a saved **email type + brand** override is most specific, then the brand identity, then org defaults, then built-in defaults. Sender selection uses the brand sender when eligible, otherwise the org sender.
+
+Automated reminder emails currently use the org-wide identity rather than the selected brand. Check reminders separately when operating several brands.
+
+The active signing and verification experience follows the selected brand. Final success and waiting confirmations remain plain.
+
+The complete [email-token and custom-button reference](#email-tokens) lists the available values for each email type and shows how to replace a widget while preserving its link or verification code.
+
+<a id="flow-generate"></a>
+
+## Make a document with Flow
+
+Let a Salesforce Flow make a document when a business event happens.
+
+**Before you start:** You know Flow Builder and have a tested template. Give the template a stable **API Name**, such as `Opportunity_Summary`, and confirm the Flow's running context can access the required data.
+
+If your data comes from a JSON file or another Flow, [build the illustrated Generate PDF button](#document-studio).
+
+#### Make a summary when a deal is won
+
+1. Create an after-save, record-triggered Flow on **Opportunity**.
+2. Set entry conditions so it runs when the record **first changes to Closed Won**, rather than on every later edit to a won deal.
+3. Put document work on an appropriate asynchronous path when required by the rendering method and your transaction design.
+4. Select **+** and search for **Generate Document**. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Give the action a label.
+
+![The Add to Flow search can return several Generate Document actions. Open the Portwood action for the supported document formats.](docs/images/userguide/v3.64/find-generate.png)
+
+5. For a record-triggered summary, set these inputs.
+
+| Input                      | Example                                                     |
+| -------------------------- | ----------------------------------------------------------- |
+| **Template API Name**      | `Opportunity_Summary` — use your template's actual API Name |
+| **Record ID**              | `{!$Record.Id}`                                             |
+| **Save to Record**         | `True`                                                      |
+| **Document Title**         | An optional title you build from the record                 |
+| **Output Format Override** | Leave blank for the template's default                      |
+
+6. Store **Success**, **Error Message**, **Content Document ID**, and **Content Version ID** outputs.
+7. Add a Decision: continue only when **Success = True**.
+8. Connect the action's fault path to your Flow's error handling too.
+9. Debug with a test Opportunity, then activate after checking the saved document.
+
+**You are done when:** One qualifying change creates the intended file, and an unrelated later edit does not create another copy.
+
+#### Email the generated file
+
+Use the returned **Content Version ID** with the supported attachment input of Salesforce's Send Email action. Verify the attachment ID type expected by that action. Preview and test with an inbox you control before enabling customer delivery.
+
+**Save to Record = False** avoids linking the file to the source record; the Generate Document action still creates a standalone Salesforce File. It is not a storage-free PDF action.
+
+#### When the data can be large
+
+**Generate Document (Auto Giant Query)** can choose a background path for supported large Word datasets. It takes a **Template ID** and **Record ID**. Check **Is Giant Query**: if true, follow **Job ID** and wait for completion; otherwise use the returned file IDs.
+
+That action's background route requires a supported V3 query and is Word-only. For other large formats, use the runner or a suitable bulk workflow. A successful job submission does not mean its file is ready yet.
+
+<a id="flow-bulk"></a>
+
+## Schedule a bulk run with Flow
+
+Schedule a document run instead of starting it by hand.
+
+**Before you start:** Test the template and filter in [Bulk Generation](#bulk-generation). A Salesforce administrator should design the schedule and Flow error handling.
+
+#### Configure the action
+
+1. Create the automation that should launch the run, such as one scheduled Flow.
+2. Add **Generate Bulk Documents** from Portwood.
+3. Set **Template API Name** or **Template ID**.
+4. Supply a **WHERE Condition** or a **Record IDs** collection.
+5. Set the job label, output options, batch size, and sort order.
+
+Example inputs for the downloadable Account Brief template:
+
+| Input                          | Example                                          |
+| ------------------------------ | ------------------------------------------------ |
+| **Template API Name**          | `KB_Account_Brief`                               |
+| **WHERE Condition**            | `Name IN ('Northstar Bikes', 'Willow and Pine')` |
+| **Sort Order**                 | `Name ASC`                                       |
+| **Job Label**                  | `Practice account briefs`                        |
+| **Combined PDF Only**          | `False`                                          |
+| **Also Keep Individual Files** | `True`                                           |
+| **Batch Size**                 | `1`                                              |
+
+Use your own filter for real work. **Sort Order** contains field names and direction, without the words `ORDER BY`.
+
+#### Avoid launching the same run repeatedly
+
+If a scheduled Flow starts once per matching record, adding a bulk action that already queries all records can launch the entire run many times. Design one launch per intended batch, or pass the intended record IDs with a deliberate batching strategy.
+
+#### Follow the result
+
+Store **Success**, **Error Message**, and **Job ID**. Add a Decision for an unsuccessful response and a fault connector for an unexpected action failure.
+
+The action submits background work and returns. Follow the job in Portwood job history; do not email a completion notice just because submission returned successfully.
+
+When producing a combined PDF for double-sided printing, the action's **Duplex Padding** input applies the same behavior as the bulk UI.
+
+#### Offer a browser download from Flow
+
+Set **Merge PDFs in Browser** to **True** and leave **Duplex Padding** off. Store **Job ID** and **Merged PDF Download URL** from the result. The URL opens the authenticated download page for the job. The job and private PDFs belong to the Flow running user. Start the job in the user context intended to receive the download. Give that user the link after the job is ready so they can open it in a browser, assemble the pages, and save the PDF. The other bulk output settings apply to the existing server-side modes.
+
+<a id="flow-signatures"></a>
+
+## Create signing requests with Flow
+
+Create a signing request automatically when a record is ready for approval or acceptance.
+
+**Before you start:** Test the template, signature roles, public signing path, and email sender manually. This article is for a Flow builder.
+
+#### 1. Prepare the signer resources
+
+Create a single **Apex-Defined** variable using the packaged **DocGenSigner** class and a collection variable of the same type.
+
+In **Manager → New Resource → Variable**, name the first variable `Person` and the collection `People`. On the canvas, select **+ → Assignment** and fill in the signer’s fields.
+
+| Field         | Example                                             |
+| ------------- | --------------------------------------------------- |
+| **name**      | Your Contact's full name                            |
+| **email**     | Your Contact's email                                |
+| **role**      | `Customer`, matching `{@Signature_Customer:1:Full}` |
+| **contactId** | The Contact ID, when available                      |
+
+In the final assignment row select **People → Add → Person**. Repeat for additional people. This example gets the signer from a User. For a Contact, choose that Contact’s name and email instead.
+
+![The final Assignment row adds the populated signer to the People collection.](docs/images/userguide/v3.64/assign-signer.png)
+
+#### 2. Create the request
+
+Select **+**, search for **Create Signature Request**, and choose the Portwood action. Set its inputs.
+
+| Input                                    | What to supply                                     |
+| ---------------------------------------- | -------------------------------------------------- |
+| **Template API Name** or **Template Id** | The tested template                                |
+| **Related Record Id**                    | The record where the signed file belongs           |
+| **Signers**                              | Your DocGenSigner collection                       |
+| **Signing Order**                        | `Single`, `Parallel`, or `Sequential`              |
+| **Send Branded Emails**                  | Leave on when Portwood should send the invitations |
+
+Set expiration, message, and verification overrides only when your process needs them.
+
+Store **Signature Request Id**, **Signer URLs**, **Email Status**, **Success**, and **Error Message**. Connect the **fault path**: invalid signature inputs can fault the interview before outputs are returned.
+
+#### 3. Let the request finish the document
+
+Follow the request's status. Once everyone signs, the signing workflow creates the completed PDF and certificate. Do not add a separate Generate Document action expecting it to supply the signed version; that can create an extra unsigned file.
+
+#### Sign inside the Flow screen
+
+Use the **Portwood: Sign in Flow** screen component when the signer is already signed in to Salesforce or to your Experience Cloud site and should sign without leaving the Flow. **Signing as an authenticated user requires a Portwood site license**, including when employees sign inside Salesforce or customers sign inside a portal. For a public recipient, send the private signing link through the licensed site guest user. [Get a site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9)
+
+1. Add **Portwood: Create Signature Request** as described above. Set **Send Branded Emails** to `False` when the person signs right away in the Flow.
+2. Add a **Screen** element. From the **Custom** components, drag **Portwood: Sign in Flow** onto it.
+3. Set **Signer URLs (collection)** to the action's **Signer URLs** output. The component signs for the first link, so use this for a single-signer request. For several signers, loop over **Signer URLs** and set **Signer URL** to the current item instead.
+4. After the screen, add a **Decision** on the component's outputs.
+
+| Output               | Meaning                                             |
+| -------------------- | --------------------------------------------------- |
+| **Signed**           | True once this signer's signature is recorded       |
+| **Declined**         | True if the signer declined; the Flow continues     |
+| **Request complete** | True when every signer on the request has signed    |
+| **Signer status**    | The signer's status, such as `Signed` or `Declined` |
+| **Error message**    | Why signing could not proceed, if it could not      |
+
+![The signer selects SIGN HERE directly on the service acceptance document inside the Flow.](docs/images/userguide/v3.64/embedded-sign.png)
+
+The signer clicks **SIGN HERE** on the document, draws or types their signature in the dialog that opens over the document, and chooses **Save & Next** to move to the next field. After the last field, they tick the consent box in **Complete Signing** and choose **Finish & Submit**. The Flow moves to the next screen as soon as the signature is recorded. Turn on **Wait for the user to select Next after signing** to let the signer select **Next** themselves.
+
+For an Experience Cloud member, give access to the site page and to run this specific Screen Flow through their profile or permission set. Assign **Portwood Portal Signer** for the embedded signing component. An internal non-admin using **Portwood User** also needs **Portwood Portal Signer** for that component. Open the page as an intended signer and check that the Flow reaches the document. [Salesforce instructions for access to a specific Flow](https://help.salesforce.com/s/articleView?id=platform.flow_distribute_security.htm&language=en_US&type=5)
+
+The signature is saved the same way as on the signing page, with the same audit record, document hash, Certificate of Completion, and completion emails. You are done when your test Flow reaches the screen after signing and the signed PDF appears on the related record.
+
+If the screen says the document can't be signed here, the request is a prepared uploaded PDF or the document is too large; use the returned signing link for those requests.
+
+#### In-session signing
+
+A screen Flow can direct a signer to their returned signing URL. This keeps signing inside Portwood's audited signing surface. On a sequential request, signer URLs are returned in signer order; capture the first URL with a loop/assignment if the first person signs immediately.
+
+The **Send Branded Emails = False** input suppresses the initial invitations. On sequential requests it does not suppress every later signer's automatic invitation. Choose one deliberate delivery approach to avoid duplicate invitations.
+
+Legacy custom-signature actions do not accept modern v3 signer tokens. Use the returned Portwood signing link for current requests; see the [automation reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/automation.md) for compatibility and advanced options.
+
+Use [Collect signer answers](#signer-inputs) for `{?key}` fields, optional certificate entries, and single-signer record writeback.
+
+For a signing-site link that keeps the interview open, follow [Open the signing site from a Screen Flow](#signing-site-handoff). To start a request from approval or act on completion, see [Platform event recipes](#signing-events).
+
+<a id="custom-data"></a>
+
+## Use prepared or custom data
+
+Use information your Flow or developer has prepared instead of querying a normal Salesforce record.
+
+Most templates should start with the visual field chooser. Use a custom-data path when the document needs calculated structures, API results, or a deliberately prepared dataset.
+
+#### Pass JSON from a Flow
+
+Create a template using **Data Source = JSON Data (from Flow)** and provide sample data for authoring. In **Generate Document**, set **JSON Data** to the text your Flow prepares.
+
+A small example:
+
+```json
+{
+    "Name": "Northstar Bikes",
+    "Total": 240,
+    "Items": {
+        "records": [{ "Description": "Workshop", "Quantity": 2, "Price": 120 }]
+    }
+}
+```
+
+The template can use `{Name}`, `{Total:currency}`, and a repeating `{#Items}…{/Items}` section.
+
+Supplying JSON bypasses the normal data query. Portwood does not create those Salesforce records for you. If the result should attach to a record, provide its **Record ID** and **Save to Record = True** as well.
+
+#### Use an Apex data provider
+
+A developer can implement **DocGenDataProvider** and bind the template to that class. The provider returns the values and lists the document needs.
+
+Your developer is responsible for the provider's data access, filtering, errors, and any external integrations. The core document-generation path does not automatically make a provider's callouts or data handling safe or storage-free.
+
+The [query and provider reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/query-config.md) includes the interface, configuration, examples, and execution constraints.
+
+#### Test the shape, not just one example
+
+Try empty lists, missing optional values, many rows, long text, and errors from the source system. Keep authoring sample data representative and free of sensitive customer information.
+
+<a id="template-versions"></a>
+
+## Save changes and return to an earlier version
+
+Keep a working template while making improvements, and return to an earlier design when needed.
+
+#### Save a new version
+
+- **Canvas:** Click **Save**.
+- **HTML designer or uploaded file:** Click **Save as New Version** after changing the document.
+
+The active version is the saved copy used for generation. A newly uploaded file can be staged in the editor without being active yet.
+
+#### Change a template safely
+
+1. Open **Your Templates**.
+2. Use the row's **Show actions → Clone**.
+3. Rename the copy, for example **Account Brief - Review**.
+4. Edit and generate a sample from the copy.
+5. Check a short record, a long record, and one with missing optional information.
+6. Activate the copy when it is ready, and deactivate the old template if it should no longer be offered.
+
+A clone starts **Inactive** and is not the object's Default. This keeps an unfinished copy out of the everyday picker.
+
+#### Return to an earlier version
+
+Open the template's **Versions** area and activate the earlier version. Canvas also has an active-version picker in its toolbar.
+
+Generate again after changing the active version. Reopen Edit Template Configuration and check the restored query, base object, output format, title format, page setup and header/footer. Each new legacy-designer HTML version stores its own body File. Switching versions reloads the selected body and uses additional Salesforce File storage.
+
+#### Remove versions you no longer need
+
+Use **Delete** beside a non-active version in **Versions**. Check that you no longer need its design before confirming. Activate a different version first if you need to remove the current one.
+
+#### Change the template type
+
+Changing Word to HTML, for example, also requires a body file in the new format. Upload it and **Save as New Version**. Changing only the Type field cannot convert the old document for you.
+
+In the legacy designer, **Back to Library** returns to the Designer (Beta) picker. When the unsaved-changes prompt appears, **OK** discards your edits. Cancel to keep editing.
+
+<a id="organize-templates"></a>
+
+## Organize and limit template choices
+
+Help people find the right template and keep unfinished ones out of their way.
+
+#### Use clear names and categories
+
+In a template's settings, set **Category** to a useful group such as **Quotes**, **Customer letters**, or **Certificates**.
+
+Set **Default** for the template most people should choose on that object. Use **Sort Order** to arrange templates; lower numbers appear earlier.
+
+Give variants names that explain the result, such as **Quote - PDF** and **Quote - Editable Word**.
+
+#### Hide a work in progress
+
+Turn **Active** off. The template stays editable in My Templates but disappears from generation pickers. Turn it back on after checking the finished output.
+
+#### Offer a template only when it applies
+
+In **Visibility & Sort**, use:
+
+| Setting                      | Example                                                       |
+| ---------------------------- | ------------------------------------------------------------- |
+| **Required Permission Sets** | Offer a template to people with the sales-team permission set |
+| **Specific Record Ids**      | Offer it only on selected test records                        |
+| **Record Filter**            | Offer it only when `StageName = 'Closed Won'`                 |
+
+List permission-set API names exactly. When several permission sets are listed, having at least one matches that setting. When you combine different visibility settings, they must all match.
+
+#### Understand visibility and data access
+
+The packaged **Portwood User** permission set gives read access to all template records. The visibility settings control the template choices users are offered; they do not hide the existence of those template records from someone with View All.
+
+Merged record and field access still matters. If template definitions themselves must be private, ask your administrator to design a custom permission set and sharing approach without the packaged template View All grant.
+
+**You are done when:** A test user sees the intended choices on the intended record, and does not see unfinished or inapplicable ones in the picker.
+
+<a id="move-templates"></a>
+
+## Move a template between orgs
+
+Move a working template from a sandbox to production, or share it with another Portwood org.
+
+To copy your whole Portwood setup between sandboxes or scratch orgs in one step, see [Migrate your Portwood setup between orgs](#migrate-configuration).
+
+#### Export from the first org
+
+1. Open **My Templates → Your Templates**.
+2. Find the template and choose **Show actions → Export**.
+3. Keep the downloaded `.docgen.json` file.
+
+The bundle includes the active version and its document, template settings, supported inline images, watermark, and saved queries. Older version history stays in the original org.
+
+#### Import into the other org
+
+1. Make sure a compatible Portwood version is installed.
+2. Open **My Templates → Your Templates → Import Template**.
+3. Select the `.docgen.json` bundle.
+4. Open the imported template and review its settings.
+5. Choose a sample record from the destination org.
+6. Generate and review a real document before offering it to users.
+
+#### Check what differs between orgs
+
+- Custom objects, fields, and related lists must exist in the destination.
+- A record ID from the old org does not identify the same record in the new one.
+- Review audience permission-set names, record filters, and specific-record restrictions.
+- Recheck sending brands, approved custom fonts, external signing setup, and any separately managed shared assets or provider classes. Do not assume every dependency is in a template bundle.
+- The **API Name** is preserved unless the destination already has a template using that key. In that case, resolve the conflict before connecting automation.
+
+#### Give automation a stable name
+
+Set the template's **API Name** to a unique value such as `Account_Brief`. Use it in supported Flow actions and Portwood buttons so you do not have to replace a template record ID after moving between orgs.
+
+**You are done when:** The imported template generates correctly in the destination and its users and automations can find the intended template.
+
+<a id="migrate-configuration"></a>
+
+## Migrate your Portwood setup between orgs
+
+Copy your Portwood setup — templates, brands, fonts, snippets, shared images, email templates, and signing settings — from one org to another with a single command. Use it to rebuild a sandbox or scratch org, or to keep two non-production orgs in step. To move one template by hand instead, see [Move a template between orgs](#move-templates).
+
+This is a draft tool. The command writes only between sandboxes and scratch orgs; it refuses a production org. That check is in the command, not in your org — see **Who can use the migration API** below.
+
+#### Before you start
+
+You need:
+
+- **Node.js 20 or later** and the **Salesforce CLI** (`sf`) on your computer. Windows PowerShell, Command Prompt, Git Bash, macOS, and Linux are supported.
+- A checkout of the Portwood repository. The command lives in `scripts/migration`.
+- The same Portwood version in both orgs.
+- Both orgs logged in to the CLI under an alias, for example `source-org` and `target-org`.
+- **Portwood Admin** and **Portwood Configuration Migration** assigned to your user in both orgs. Font imports also need **Manage Portwood Fonts**, which Portwood Admin includes.
+
+```sh
+sf org assign permset --name portwoodglobal__DocGen_Admin --name portwoodglobal__DocGen_Migration --target-org source-org
+sf org assign permset --name portwoodglobal__DocGen_Admin --name portwoodglobal__DocGen_Migration --target-org target-org
+```
+
+#### Who can use the migration API
+
+The command talks to Portwood through a REST API in your org. The API accepts a request only from a signed-in, non-guest user who has the **Migrate Portwood Configuration** custom permission.
+
+Assigning **Portwood Configuration Migration** is one way to grant that permission, but not the only one. When Portwood is installed, Salesforce also grants the package's custom permissions to profiles:
+
+- **Install for Admins Only** — the System Administrator profile gets it.
+- **Install for All Users** — most profiles get it.
+
+What protects your data is that every API request runs with the caller's own object and field access. A user can read or change only the Portwood records they could already see or edit in Salesforce; users without Portwood access get nothing.
+
+The API itself does not check whether the org is a sandbox. Someone calling it directly, without the command, can write to a production org, within their own access. If you want to limit who can call it, remove the **Migrate Portwood Configuration** custom permission from profiles in Setup and grant it only through the permission set.
+
+#### Install the command
+
+Run these once, from the repository root (the folder that contains `sfdx-project.json`):
+
+```sh
+npm ci --prefix scripts/migration
+sf plugins link scripts/migration
+```
+
+Check it worked with `sf portwood migrate --help`. If `sf plugins link` reports **plugin is invalid**, you are in the wrong folder — move to the repository root and try again.
+
+#### Preview the move with a dry run
+
+```sh
+sf portwood migrate --source-org source-org --target-org target-org --dry-run
+```
+
+A dry run reads both orgs and writes nothing. It prints a report with one line per item and a **status**:
+
+| Status                        | What it means                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `create`                      | The item is new and will be copied.                                          |
+| `conflict`                    | The destination already has an item with the same key but different content. |
+| `missing-key`                 | The item has no API name or key, so it cannot be matched. Give it one first. |
+| `ambiguous-key`               | More than one item shares the key. Rename one so each key is unique.         |
+| `manual-mapping`              | A setting refers to something specific to the org. Map it before applying.   |
+| `target-resource-unavailable` | The destination's Portwood version does not have this kind of item.          |
+
+Each item also lists warnings, such as record IDs that need mapping.
+
+#### Map values that belong to one org
+
+Record IDs, sender addresses, and site URLs differ between orgs. Put the destination's values in a JSON file, keyed by the item's key from the dry run (keep its case):
+
+```json
+{
+    "templates": {
+        "Account_Quote": {
+            "testRecordId": null,
+            "specificRecordIds": "001000000000001AAA",
+            "requiredPermissionSets": "Portwood_Quote_User",
+            "recordFilter": "Type = 'Customer'"
+        }
+    },
+    "brands": {
+        "Retail": { "owaId": "0D2000000000001CAA", "logoUrl": null }
+    },
+    "fonts": {
+        "quote-sans-regular": { "hostingRightsConfirmed": true }
+    },
+    "settings": {
+        "replace": true,
+        "signingSiteUrl": "https://example.my.salesforce-sites.com",
+        "owaId": "0D2000000000001CAA",
+        "logoUrl": null
+    }
+}
+```
+
+The values above are examples. Use IDs and URLs from the destination org. Keep mapping files and reports private; they contain Salesforce IDs.
+
+#### Apply the move
+
+```sh
+sf portwood migrate --source-org source-org --target-org target-org --mappings mappings.json
+```
+
+1. The command checks every source item before writing anything.
+2. It copies shared images, fonts, snippets, brands, email templates, templates, and signing settings, in that order, and points each template at the matching destination brand.
+3. Each item is written in its own transaction. If one fails, the command stops and reports what it already copied.
+4. Fix the reported problem and run the same command again. Items that already match are reused, not duplicated.
+
+Useful options:
+
+- `--only templates` copies one kind of item. Repeat it for several kinds (`templates`, `snippets`, `assets`, `brands`, `emailTemplates`, `settings`, `fonts`). Copy or map what a template depends on first.
+- `--conflict skip` leaves a differing destination item in place instead of stopping. The default, `stop`, halts at the first conflict.
+
+#### Approve migrated fonts
+
+New fonts arrive in the destination as **Staged**, with their original file and license details. Open **Portwood Assets** in the destination, review and approve each font, then run the command again. Templates that use a font wait until it is approved.
+
+#### What is not copied
+
+- Version history, generated documents, past signature requests, and audit evidence stay in the source org.
+- Salesforce site setup, sender verification, permission-set assignments, custom provider code, and per-user settings.
+- A new AI provider or prompt. Set `settings.leaveAiUnchanged` to keep the destination's AI setup.
+
+Files over 10,000,000 bytes (fonts over 9,000,000 bytes) are not copied. HTML and Canvas templates travel in a bundle limited to about 1.5 MB.
+
+#### If something goes wrong
+
+- **Salesforce CLI request failed** — run `sf org list` and confirm both aliases are connected. The message now includes the underlying reason.
+- **The command takes several minutes** — the dry run starts the Salesforce CLI once per object it reads, so allow a few minutes per org, especially on Windows.
+- **It refuses to write** — one of the orgs is production. Use a sandbox or scratch org.
+- **A font job is still running or a temporary file was left behind** — the report lists its job or File ID. Keep the report and check that item before running again.
+
+**You are done when:** The dry run shows no unexpected conflicts, the apply finishes without errors, and a migrated template generates correctly from a record in the destination org.
+
+<a id="manage-access"></a>
+
+## Give people the right access
+
+Start with the person’s job. Confirm [who needs a Portwood license](#user-licenses), then give them the permissions for the work they do.
+
+| What the person does                                 | Permission set to assign                                                                                             |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Builds templates or configures Portwood              | **Portwood Admin**                                                                                                   |
+| Generates documents or sends signature requests      | **Portwood User**                                                                                                    |
+| Serves public signing links as the site’s guest user | **Portwood Guest Signature**, on that site's licensed guest user                                                     |
+| Signs inside a Screen Flow using a portal login      | **Portwood Portal Signer**, with a Portwood site license and Salesforce access to the portal, page and specific Flow |
+| Signs inside a Screen Flow as an internal non-admin  | **Portwood User** plus **Portwood Portal Signer** for the embedded component, with a Portwood site license           |
+| Configures document and email buttons                | **Portwood Button Manager** plus the required Salesforce metadata permission                                         |
+
+In **Setup → Permission Sets**, open the set, choose **Manage Assignments → Add Assignments**, and select the intended users. Public guests can sign through their invitation. The old **Portwood Guest Runner (deprecated)** permission set grants no access. Document generation from a portal record requires a signed-in user with access to the generator. [Set up external signing](#setup-signatures)
+
+#### A user cannot open Portwood
+
+Check **Installed Packages → Portwood** for license coverage. On the user’s record, check their permission set, Salesforce user license and access to the app or page. Refresh the session after an access change.
+
+#### A user can open Portwood but sees no template
+
+Check the record's object, template Active setting, active version, audience settings, and record filter. [Template organization](#organize-templates) explains these controls.
+
+The packaged User permission set includes template View All. Manual template sharing is not normally required with current versions. Custom permission sets without that grant may behave differently.
+
+#### A user sees the template but data is missing
+
+Check access to the source record, related records, and selected fields. Template visibility is separate from permission to read the information merged into it.
+
+#### You added your own fields to Portwood objects
+
+Manage field access through an appropriate subscriber permission set. Decide which administrators, internal users, and guest paths need each field. Test each affected role. Managed permission sets are package-owned; add your own grants rather than assuming a new subscriber field is automatically covered.
+
+<a id="upgrade-portwood"></a>
+
+## Upgrade without losing your way
+
+Keep templates and workflows working when you install a new release.
+
+**Before you start:** Read the [changelog](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/CHANGELOG.md), note your installed version in **Setup → Installed Packages**, and test in a sandbox.
+
+If you already hold a free production site license, your existing installed version can continue under that agreement. Moving to a paid release requires paid licensing. If you started on a free version in a sandbox, ask Portwood to confirm your production options. [Sandbox and production licensing](https://portwood.dev/pricing#sandbox-to-production)
+
+#### Before upgrading
+
+1. Export important templates and keep their authoring files.
+2. Record the template API Names used by buttons and Flows.
+3. Choose a small set of representative documents: simple, long, image-heavy, bulk, and signed.
+4. Check that Portwood permission sets are assigned only to supported users.
+5. Install the new release in the test environment and run those examples.
+
+#### Check picklists in an older installation
+
+Salesforce may not add newer managed-package picklist values during an upgrade.
+
+If a type is missing, open **Setup → Object Manager → Portwood Template → Fields & Relationships → Type**. Confirm these values exist and are active:
+
+```text
+Word
+PowerPoint
+Excel
+HTML
+PDF
+Canvas
+```
+
+Add a missing value with its exact spelling and check record-type availability. Repeat on **Portwood Template Version**. Both objects matter. Fresh installs receive the current values; upgraded older orgs can need this repair.
+
+If your automation uses **Signing Order = Single**, also confirm **Single** exists on Portwood Signature Request's Signing Order picklist.
+
+If scripts create versions without setting Type, check whether **Word** is still an old picklist default on Portwood Template Version. Set Type explicitly in automation; remove a stale default deliberately if needed.
+
+#### After upgrading
+
+- Generate and inspect the representative documents.
+- Open and save a test copy in each designer you use.
+- Check button and Flow entry points as their intended users.
+- Run a small bulk job and inspect its files.
+- Test public signing and email delivery with a controlled recipient.
+- Confirm custom fonts, shared images, and brand behavior.
+
+Do not change the active production template just to test a new design. Use a clone and switch it on after review.
+
+#### Customize the revoked-request email
+
+When upgrading from 3.61 or earlier, check **Object Manager → Portwood Email Template → Fields & Relationships → Type**. Add the picklist API value `Signature_Revoked` if you want to customize the revoked notice and it is missing. The default notice can still send.
+
+<a id="limits"></a>
+
+## File and format limits
+
+Choose a format and run size that fit the document. Test representative data before a large run.
+
+| Item                                       | Practical limit or behavior                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Uploaded template file                     | Uploader limit: **10 MB**; compress large pictures                                                       |
+| PDF prepared for uploaded-document signing | **2 MB**, **50 pages**, **10 recipients**, **100 fields**                                                |
+| Sign in a Screen Flow                      | Authenticated users only; prepared uploaded PDFs and oversized signing documents use the signing link    |
+| Flatten a fillable PDF                     | Standard AcroForm fields; some PDFs with compressed page object streams need a new template version      |
+| Configuration migration                    | Draft CLI for sandboxes/scratch orgs; template bundles about **1.5 MB**, files **10 MB**, fonts **9 MB** |
+| PDF/HTML/Canvas output                     | PDF; browser preview and final PDF can differ                                                            |
+| Word template output                       | Word or PDF                                                                                              |
+| PowerPoint / Excel template output         | Native Office file; no conversion to PDF                                                                 |
+| Bulk native Office or fillable PDF form    | Use **Individual Files**                                                                                 |
+| Large native Office save                   | May require downloading and then using the shown drag-to-attach uploader                                 |
+| Duplex combined packet                     | Size-dependent estimate; split the run or use Individual Files if it exceeds the available budget        |
+| Custom fonts per document                  | Up to **16 distinct approved faces**                                                                     |
+
+#### Large data is not the same as a large file
+
+A few rows containing large pictures or rich text can cost more memory than thousands of short rows. Keep data selection focused and use sensible image dimensions.
+
+Portwood has background paths and browser assembly for supported scenarios, but they do not make every format unlimited. Flow and Apex do not have the browser assembly available to an interactive runner.
+
+#### Features to test particularly carefully
+
+- Canvas is **Beta**.
+- Fillable PDF templates are **in testing**.
+- Excel and PowerPoint templates are **Alpha**.
+- Modern web CSS and inline SVG do not have the same support in Salesforce's PDF renderer as in a browser.
+- Built-in PDF fonts do not cover every character. Use a supported, approved face and test the actual text.
+
+Start with a small run and increase it only after inspecting output and job results. Use [job history](#job-history) and [document troubleshooting](#fix-document) when a size-related error appears.
+
+The **Merge PDFs** Flow action has a separate 2–100 source limit and combined input budgets of 384 KiB synchronous or 768 KiB asynchronous, subject to available heap. [Merge PDFs in Flow](#merge-pdfs-flow)
+
+<a id="merge-tags"></a>
+
+## Find the right merge tag
+
+A merge tag is a small instruction inside braces. Portwood replaces `{Name}` with a name, repeats a row for `{#Contacts}`, or draws a chart for `{Chart:...}`. You can build a useful document with just fields and a loop; the rest are here when you need them.
+
+#### Salesforce Custom Labels
+
+You can place a Salesforce Custom Label directly in a template:
+
+```text
+{!$Label.Your_Label_Name}
+```
+
+Portwood resolves it when the document is generated and uses the running user's Salesforce language. Subscriber-org labels use the form above; namespaced labels can use `{!$Label.namespace.Label_Name}`.
+
+#### Find the tags for your own Salesforce data
+
+1. Open your template and its **Data** or query-builder controls.
+2. Select the base record, fields, parent fields, and related lists the document needs.
+3. Copy the exact field path or relationship alias into the template.
+4. Pick a sample record that actually has those values and related records.
+5. Preview, then generate the final output format.
+
+There is no single fixed list of every Salesforce field tag. Your org supplies standard fields, custom fields, namespaced fields, and relationship names. Query selection supplies the values. A typed tag alone does not add its field to the query. A custom provider or JSON input supplies its own map keys instead.
+
+![Data controls show fields selected for the sample Account](docs/images/userguide/v3.60/choose-data.png)
+
+#### Tag directory
+
+| I want to…                                                                 | Start with                                                           | Full instructions                                          |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Print a field or a parent record value                                     | `{Name}`, `{Account.Name}`                                           | [Fields and formatting](#tag-fields)                       |
+| Format money, numbers, dates, percent, checkbox, or picklist labels        | `{Amount:currency}`, `{CloseDate:MMMM d, yyyy}`, `{StageName:label}` | [Fields and formatting](#tag-fields)                       |
+| Print a Salesforce Custom Label in the running user's language             | `{!$Label.Payment_Terms}`                                            | This article's Custom Labels section                       |
+| Print today's date, the current time, or the person preparing the document | `{Today}`, `{Now}`, `{RunningUser.Name}`                             | [Built-in and user tags](#tag-fields)                      |
+| Repeat one row per related record                                          | `{#Contacts}…{/Contacts}`                                            | [Loops](#tag-loops)                                        |
+| Number rows, group by a field, or use root data from inside a loop         | `{RowNumber}`, `{#GroupBy … by …}`, `{~Root}…{/Root}`                | [Grouping and scope](#tag-loops)                           |
+| Show optional content or one of two messages                               | `{#IF Amount > 10000}…{:else}…{/IF}`                                 | [Conditions](#tag-conditions)                              |
+| Count or total related records                                             | `{COUNT:Contacts}`, `{SUM:Opportunities.Amount:currency}`            | [Totals](#tag-totals)                                      |
+| Add a chart                                                                | `{Chart:Opportunities:StageName:donut}`                              | [Charts and options](#tag-charts)                          |
+| Add an image, asset, barcode, or QR code                                   | `{%LogoUrl}`, `{%asset:company-logo}`, `{*Website:qr:200}`           | [Images and codes](#tag-media)                             |
+| Insert a reusable formatted HTML section                                   | `{%snippet:terms-and-conditions}`                                    | [Shared content](#shared-content)                          |
+| Place a signature or initials for a role                                   | `{@Signature_Buyer}`, `{@Signature_Buyer:1:Initials}`                | [Signature tags](#tag-signatures)                          |
+| Print classic approvals                                                    | `{#Approvals}…{/Approvals}`                                          | [Approval history](#tag-approvals)                         |
+| Repeat a Word table header                                                 | `{RepeatHeader}` in the header row                                   | [Repeating table headers](#repeat-table-headers)           |
+| Number PDF pages                                                           | `{PageNumber}`, `{TotalPages}` in Header/Footer HTML                 | [Page headers and footers](#running-headers-footers)       |
+| Collect an answer from the signer                                          | `{?poNumber}`, `{?poNumber\|N/A}`                                    | [Signer inputs and writeback](#signer-inputs)              |
+| Customize a signing email                                                  | `{SignerName}`, `{SignatureUrl}`, `{VerificationCode}`               | [Email tokens by type](#email-tokens)                      |
+| Use an approved custom PDF font                                            | `{%font:api-name}` or `{%font:asset-key:revision}` inside `style`    | [Font tags](#tag-media) and [font approval](#custom-fonts) |
+
+#### Check the output path
+
+| Output                | What to check before you commit to it                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| HTML or Canvas to PDF | CSS 2.1 and paged rendering, table growth, actual page breaks, fonts, images, header/footer margins |
+| Word to Word          | Keep each tag together; use real table rows for repeated records; check the finished DOCX in Word   |
+| Word to PDF           | Word layout is converted; inspect widths, headers, section breaks, and the resulting PDF            |
+| Excel                 | Native XLSX output; chart-image tags are currently unsupported; test loop placement in the workbook |
+| PowerPoint            | Native PPTX output; PDF output is unsupported; inspect the populated slides                         |
+| Fillable PDF          | Map actual form fields; this is a separate field-mapping workflow, not an HTML layout engine        |
+
+See [Choose a template format](#choose-format) and the [chart output matrix](#tag-charts) for more detail.
+
+#### When a tag is blank or remains on the page
+
+Check its spelling and case, confirm its field is selected, confirm its current loop scope, and check the sample record. A missing value can legitimately be empty. An unclosed brace or mismatched block can stop generation. If you need literal braces in HTML prose, use `&#123;` and `&#125;`.
+
+Email-template tokens such as `{SignerName}` belong to the signing email editor. They are a separate token list; use [Signing email tokens](#email-tokens) for the complete list.
+
+<a id="tag-fields"></a>
+
+## Fields, dates, currency, and user tags
+
+Print a value and make it readable. These tags work with fields selected for the template, or keys supplied by your own data provider.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Field merge
+
+```
+{FieldName}
+{!FieldName}              Salesforce-style prefix — treated identically to {FieldName}
+{Account.Name}            Parent lookup
+{Owner.Profile.Name}      Multi-level lookup (any depth)
+```
+
+Null/missing fields render as empty string — no error, no placeholder.
+
+Tag names are case-sensitive, and there's **no escape or comment syntax** — any `{…}` pair is treated as a tag (an unknown name resolves to empty string, so `{like this}` silently disappears), and an unclosed `{` fails the merge with a "Malformed merge tag" error. If a document needs literal braces: in HTML templates use the entities `&#123;` and `&#125;`; in Word templates avoid brace-wrapped prose.
+
+#### Format specifiers
+
+Append `:format` to a field tag.
+
+#### Date formatting
+
+```
+{CloseDate:MM/dd/yyyy}          Java SimpleDateFormat pattern
+{CloseDate:MMMM d, yyyy}        April 17, 2026
+{CloseDate:date}                User's locale default
+{CloseDate:date:de_DE}          17.04.2026 (German)
+{CloseDate:date:ja_JP}          2026/04/17 (Japanese)
+{CloseDate:date:en_GB}          17/04/2026 (British)
+```
+
+Locale defaults: `en_US` → `MM/dd/yyyy`; `en_GB/AU/NZ/IE/IN` → `dd/MM/yyyy`; `de_*`, `ru_*`, `pl_*`, `cs_*`, `hu_*`, `tr_*` → `dd.MM.yyyy`; `fr_*`, `es_*`, `it_*`, `pt_*` → `dd/MM/yyyy`; `nl_*` → `dd-MM-yyyy`; `ja_*` → `yyyy/MM/dd`; `zh_*` and Nordic → `yyyy-MM-dd`; `ko_*` → `yyyy. MM. dd`.
+
+#### Currency formatting
+
+```
+{Amount:currency}               $500,000.00 (US default)
+{Amount:currency:EUR}           €500,000.00
+{Amount:currency:EUR:de_DE}     500.000,00 € (German formatting)
+{Amount:currency:JPY}           ¥500000 (no decimals)
+{Amount:currency:GBP}           £500,000.00
+```
+
+Supported currencies: USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS, ISK, VND.
+
+Zero-decimal currencies (JPY, KRW, CLP, VND, HUF, ISK, TWD) format without decimals automatically.
+
+##### Auto-detecting the currency from the record
+
+Use `:currency:auto` when the symbol should follow the **record's own currency** rather than a fixed ISO code — ideal for multi-currency orgs.
+
+```
+{Amount:currency:auto}                       Reads the standard CurrencyIsoCode field
+{Amount:currency:auto=CustomerCurrency__c}   Reads a named currency field (e.g. an ERP field)
+{Amount:currency:auto:en_GB}                 auto + an explicit locale for separators/placement
+{Amount:currency:auto=CustomerCurrency__c:de_DE}
+```
+
+How it works and what to know:
+
+- **The source field must hold an ISO 4217 code** (`GBP`, `USD`, `EUR`, …) — its value is matched against the supported-currency list above.
+- **List the source field in your template's Query Config.** Portwood builds its query from the Query Config (it does not scan the template body), so a field referenced only inside `:currency:auto=...` must be added to the Query Config like any other merge field. The standard `CurrencyIsoCode` is added automatically in multi-currency orgs, so bare `:currency:auto` works without listing it.
+- **Safe fallback:** if the source field is missing, blank, or not a recognized ISO code, the tag falls back to the default `$` format — it never errors or prints a raw code.
+- **Bare `:currency` is unchanged** — it always emits `$`. Auto-detection is strictly opt-in via `:auto`.
+- **Aggregates** support it too: `{SUM:Lines.Amount:currency:auto=CustomerCurrency__c}` uses the **parent** record's currency for the symbol.
+
+##### Totalling across currencies
+
+In a multi-currency org, the rows behind an aggregate can each carry their own currency. Adding them together and stamping one symbol on the result produces a number that looks authoritative and is meaningless — so Portwood won't do it silently.
+
+```
+{SUM:Lines.Amount:currency:EUR}            Mixed-currency rows → generation fails with a clear error
+{SUM:Lines.Amount:currency:EUR:convert}    Every row converted to EUR first, then summed
+{SUM:Lines.Amount:currency:auto:convert}   Converts into the parent record's own currency
+{SUM:Lines.Amount:currency:EUR:de_DE:convert}   convert always goes last, after any locale
+```
+
+What to know:
+
+- **The guard only fires when there's a real conflict** — two or more different currency codes among the rows being aggregated. One currency, or rows with no currency code at all, behave exactly as they always have.
+- **Append `:convert` to any aggregate** (`SUM`, `AVG`, `MIN`, `MAX`) to convert first. `MIN`/`MAX` compare converted amounts, so the smallest _number_ isn't mistaken for the smallest _amount_.
+- **Rates come from Setup → Manage Currencies** (`CurrencyType`), pivoting through your corporate currency. If a rate is missing, the tag fails with an actionable message rather than quietly returning an unconverted number.
+- **Advanced Currency Management dated rates are not used** — conversion applies your current static rate. See issue #273.
+- **Single-currency orgs are entirely unaffected.** None of this engages.
+- **Without `:convert`, nothing converts.** `{SUM:Lines.Amount:currency:EUR}` over EUR-only rows formats them as euros; it does not translate other currencies into euros.
+- **Beyond aggregates: `:convert` works on a plain currency field too (v3.57+).** `{Amount:currency:EUR:convert}` converts the record's own amount from its `CurrencyIsoCode` into the target ISO before formatting, and composes with locale (`:EUR:de_DE:convert`) and `auto`. A record with no source currency passes through unconverted; a missing rate raises the same "add it under Manage Currencies" error as above.
+
+#### Number formatting
+
+```
+{Quantity:number}               1,234 (US separators)
+{Quantity:number:de_DE}         1.234 (German — dot-as-thousands)
+{Quantity:number:fr_FR}         1 234 (French — space-as-thousands)
+{Quantity:#,##0}                Custom pattern — always US separators
+{Quantity:#,##0.00}             1,234.56
+{Quantity:0,000}                Custom pattern with leading zeros
+```
+
+#### Percent formatting
+
+```
+{Rate:percent}                  15.5%
+{Rate:percent:de_DE}            15,5 %
+```
+
+#### Checkbox formatting
+
+```
+{IsActive:checkbox}             [X] when true, [ ] when false
+```
+
+Uses ASCII box-drawing characters — works in any font.
+
+#### Picklist label formatting
+
+```
+{Status__c}                     Stored API value
+{Status__c:label}               User-facing picklist label
+```
+
+Use `:label` when a picklist stores integration-friendly API codes but the document should show the label users see in Salesforce.
+
+#### Built-in date/time tags
+
+Two special merge tags resolve to the current date/time without needing a formula field. They accept the same format suffixes as any date field:
+
+```
+{Today}                         2026-04-20 00:00:00 (bare tag carries a midnight time — add a format suffix for a clean date)
+{Today:MM/dd/yyyy}              04/20/2026
+{Today:MMMM d, yyyy}            April 20, 2026
+{Today:date}                    Running user's locale default
+{Today:date:de_DE}              20.04.2026 (German)
+{Now}                           2026-04-20 14:30:00 (current DateTime)
+{Now:yyyy-MM-dd HH:mm}          2026-04-20 14:30
+{Now:date:ja_JP}                2026/04/20 (Now formatted as Japanese date)
+```
+
+Case-insensitive for the keyword itself (`{today}` works). Works in sync, giant-query, bulk, and signature-stamped documents. All format suffixes from §7.2 apply.
+
+#### Running user tags (Prepared by:)
+
+`{RunningUser.X}` resolves against the **executing user's** record (whoever clicks Generate, runs the Flow, or owns the bulk job). No configuration — works on every template, every record, every output format.
+
+```
+Prepared by: {RunningUser.Name}
+Email:       {RunningUser.Email}
+Title:       {RunningUser.Title} · {RunningUser.Department}
+Phone:       {RunningUser.Phone}
+```
+
+**Allowlist** — these are the only User fields exposed (other field names resolve to empty by design, so signed templates can't be edited to leak arbitrary User columns):
+
+| Group     | Fields                                                              |
+| --------- | ------------------------------------------------------------------- |
+| Identity  | `Id`, `Name`, `FirstName`, `LastName`, `Email`, `Username`, `Alias` |
+| Title/org | `Title`, `Department`, `CompanyName`, `EmployeeNumber`              |
+| Contact   | `Phone`, `MobilePhone`, `Extension`, `Fax`                          |
+| Address   | `Street`, `City`, `State`, `PostalCode`, `Country`                  |
+| Locale    | `TimeZoneSidKey`, `LocaleSidKey`, `LanguageLocaleKey`               |
+
+Case-insensitive for the namespace (`{runninguser.name}` works). Format suffixes from §7.2 apply: `{RunningUser.Phone}`, `{RunningUser.Name:!}` (no formatter needed for strings — most useful for date-typed extensions).
+
+Works in sync generation, bulk runs, giant-query PDFs (headers/footers/title blocks), Flow-triggered docs, and HTML templates. The User row is queried **once per transaction** and cached, so a 60K-row PDF with `{RunningUser.Name}` in the header costs one extra SOQL total.
+
+#### Checkmarks & symbols (PDF-safe)
+
+Salesforce's PDF engine (Flying Saucer) only ships with four fonts (Helvetica, Times, Courier, Arial Unicode MS) and does not render arbitrary Wingdings or Symbol glyphs. Approved custom static TrueType faces are supported through **Assets → Custom Fonts**. Most "decorative" Word symbols (Wingdings checkboxes, custom dingbats) silently render as a blank box.
+
+Portwood handles this for you in two ways:
+
+1. **Word checkbox glyphs** (Insert → Symbol → Wingdings 0xFE / 0xA8, or Word content-control checkboxes) are auto-translated to their Unicode equivalents at PDF render time.
+2. **Unicode symbols** typed directly in Word, Google Docs, Notion, or any HTML template are auto-wrapped in an Arial Unicode MS span so they render instead of dropping to tofu.
+
+#### Copy-paste symbol palette
+
+These all render reliably in PDF and DOCX. Highlight + copy any of them into your template:
+
+**Checkboxes**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ☐ | Empty checkbox | U+2610 |
+| ☑ | Checked checkbox | U+2611 |
+| ☒ | Crossed checkbox | U+2612 |
+
+**Checks & crosses**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ✓ | Check mark | U+2713 |
+| ✔ | Heavy check mark | U+2714 |
+| ✗ | Ballot X | U+2717 |
+| ✘ | Heavy ballot X | U+2718 |
+
+**Bullets & arrows**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| • | Bullet | U+2022 |
+| ▪ | Black square | U+25AA |
+| ▶ | Right-pointing triangle | U+25B6 |
+| ► | Right-pointing pointer | U+25BA |
+| → | Right arrow | U+2192 |
+| ← | Left arrow | U+2190 |
+| ↑ | Up arrow | U+2191 |
+| ↓ | Down arrow | U+2193 |
+| ⇒ | Heavy right arrow | U+21D2 |
+
+**Stars & rating**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ★ | Filled star | U+2605 |
+| ☆ | Empty star | U+2606 |
+| ♥ | Heart | U+2665 |
+| ♦ | Diamond | U+2666 |
+
+**Punctuation & misc**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| § | Section | U+00A7 |
+| ¶ | Pilcrow | U+00B6 |
+| † | Dagger | U+2020 |
+| ‡ | Double dagger | U+2021 |
+| … | Ellipsis | U+2026 |
+| — | Em dash | U+2014 |
+| – | En dash | U+2013 |
+| © | Copyright | U+00A9 |
+| ® | Registered | U+00AE |
+| ™ | Trademark | U+2122 |
+| ° | Degree | U+00B0 |
+| ± | Plus-minus | U+00B1 |
+| × | Multiplication | U+00D7 |
+| ÷ | Division | U+00F7 |
+
+#### Conditional checkbox pattern
+
+Combine the checkbox glyphs with `{Field:checkbox}`, or use `{#IF}` with `{:else}` to render dynamic checked/unchecked state from a Salesforce checkbox field:
+
+```
+Approved: {#IF IsApproved}☑{:else}☐{/IF}
+```
+
+Or in tabular form for surveys / inspection forms (the inverse section `{^Field}` works too):
+
+| Item             | Status                                                              |
+| ---------------- | ------------------------------------------------------------------- |
+| Pre-flight check | {#IF Preflight_Complete\_\_c}☑{:else}☐{/IF}                         |
+| Safety briefing  | {#IF Safety_Done\_\_c}☑{/IF}{^Safety_Done\_\_c}☐{/Safety_Done\_\_c} |
+
+> There is no `{#IFNOT}` tag — use `{:else}` inside an `{#IF}`, or the inverse section `{^Field}…{/Field}` (§7.4).
+
+#### What does NOT work
+
+- **Wingdings / Webdings glyphs** other than checkboxes — Flying Saucer can't render them at all. Portwood translates the common checkbox/check codepoints (Wingdings F0A8, F0FE, F0FD, F0FB, F0FC, F0A2; Wingdings 2 F050–F053, F0A3, F0A4); anything else falls back to a neutral □ placeholder.
+- **Emoji** (😀 🎉 etc.) — out of Arial Unicode MS coverage, render as tofu in PDF. Use the Unicode symbols above instead.
+- **Unapproved or unsupported fonts** — use an approved static TrueType face for PDF, or native DOCX output where the recipient has the font installed. See [custom fonts](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#custom-fonts).
+
+<a id="tag-loops"></a>
+
+## Loops, row numbers, grouping, and scope
+
+A loop repeats content for each record. Start with a two-row example, then add nesting or grouping once the simple version works.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Loops
+
+Repeat a block for each child record.
+
+```
+{#Contacts}
+  {FirstName} {LastName} — {Email}
+{/Contacts}
+```
+
+**Container auto-expansion.** If the loop tags sit inside a table row or a bulleted/numbered list paragraph, Portwood detects it and repeats the **entire row/paragraph** instead of just the inner content. This is how invoice line-item tables work — drop `{#OpportunityLineItems}` and `{/OpportunityLineItems}` anywhere inside the row and every line item gets its own row automatically.
+
+**Repeating the column header (`{RepeatHeader}`).** Add the text `{RepeatHeader}` anywhere inside the header row (the row with your column labels) to mark it as a repeating header. Portwood strips the marker and groups that row as the table's `<thead>`, which reprints at the top of the table and at each section break in very large (giant-query) documents. Place it once, in the header row only:
+
+```
+| {RepeatHeader}Short Code | Cost to send | Cost to receive |
+| {#ShortCodes} {Code} | {Send} | {Receive} {/ShortCodes} |
+```
+
+This works in **Word (`.docx`) templates**; **HTML templates** use a native `<thead>…</thead>`. _(For large datasets that use the giant-query path, re-save the template once after adding `{RepeatHeader}` so the change is captured.)_
+
+> **Note on per-page repetition.** The PDF engine (Flying Saucer) does not reliably reprint a header on _every_ page of a large bordered table — so on multi-page tables the header repeats per section, not strictly per page. (Portwood previously attempted true per-page repeat via the engine's `-fs-table-paginate`, but that caused severe mis-pagination on real templates with running headers/footers and was removed.)
+
+Nested loops are supported:
+
+```
+{#Opportunities}
+  Opp: {Name}
+  {#OpportunityLineItems}
+    · {Product2.Name} × {Quantity}
+  {/OpportunityLineItems}
+{/Opportunities}
+```
+
+Empty loops (null or empty child list) render nothing — no error.
+
+**Numbering the rows — `{RowNumber}`.** Inside any loop, `{RowNumber}` is the row's position, starting at **1**:
+
+```
+| # | Product | Qty |
+| {#OpportunityLineItems}{RowNumber} | {Product2.Name} | {Quantity}{/OpportunityLineItems} |
+```
+
+- **Counts rendered rows**, so it reflects whatever the Query Config's `WHERE`/`ORDER BY`/`LIMIT` actually returned — not the record's position in the database.
+- **Nested loops each count their own rows.** An inner `{RowNumber}` restarts at 1 for every parent row, and the outer number is intact again after the inner loop closes.
+- **Counts continuously through very large tables.** A 30,000-row giant-query table numbers 1…30,000 straight through, not per page or per batch.
+- **Restarts per group** inside a `{#GroupBy}` block — each group's table numbers from 1.
+- Verified in Word and HTML templates across single, bulk and giant-query generation. PowerPoint and Excel loops run through the same engine and should behave identically, but that combination hasn't been exercised end-to-end.
+- Outside a loop it isn't a tag and resolves to nothing.
+- If a record happens to have a field literally named `RowNumber`, the counter wins inside the loop body.
+
+**Group into a table (or block) per value — `{#GroupBy}` (v3.42+).** When you want one table per _type_ / _category_ / _status_ — and you don't want to hand-write a separate loop for every value — group a child relationship by a field and repeat the block once per distinct value:
+
+```
+{#GroupBy OpportunityLineItems by Product2.Family}
+  <h3>{GroupName}</h3>
+  <table>
+    {#OpportunityLineItems}
+      <tr><td>{Product2.Name}</td><td>{TotalPrice:currency}</td></tr>
+    {/OpportunityLineItems}
+    <tr><td>Subtotal</td><td>{SUM:OpportunityLineItems.TotalPrice:currency}</td></tr>
+  </table>
+{/GroupBy}
+```
+
+- `{#GroupBy <Relationship> by <Field>}` repeats its whole block once per **distinct value** of `<Field>` among the relationship's records. 50 distinct values → 50 tables, automatically — no need to know the values in advance.
+- Groups render in **first-seen order**, so add `ORDER BY <Field>` to that relationship in the Query Config to control (e.g. alphabetize) group order.
+- `<Field>` may be a **dot-path** on the child (e.g. `Product2.Family`, `Owner.Name`).
+- Inside the block: **`{GroupName}`** is the group's value (use it as the header); the inner **`{#<Relationship>}…{/<Relationship>}`** loops only that group's members; and **`{SUM|COUNT|AVG|MIN|MAX:<Relationship>.Field}`** aggregate just that group.
+- Works identically in Word and HTML templates. An empty/absent relationship renders nothing.
+
+**Reaching parent-level data from inside a loop — `{~Label}`.** A tag inside a loop normally only sees the current row's own data — a merge tag or `{#ChartBucket}` that depends on a **different**, sibling relationship on the parent record resolves to nothing. Wrap that content in `{~Label}…{/Label}` to resolve it against the top-level record instead, no matter how deeply nested the tag itself is:
+
+```
+{#Contacts}
+  {LastName}:
+  {~Pipeline}{#ChartBucket:Opportunities:StageName}{key_label} {percent}%{/ChartBucket}{/Pipeline}
+{/Contacts}
+```
+
+- `Label` is a free-form match key, not a relationship name — it only pairs the tag with its closing `{/Label}`. Pick one that's unique across the whole template; a `{~Offices}` and an unrelated `{#Offices}` sharing the same label text can miscount each other's nesting depth.
+- Works at any nesting depth, including inside another `{~Label}` block.
+- Composes with `{#ChartBucket}` — a chart wrapped in `{~Label}` resolves against the parent record even when the whole block sits inside an unrelated loop.
+- **Not supported inside a giant-query loop** (a relationship over the 2,000-row threshold) — using it there fails generation immediately with a clear error instead of silently rendering blank.
+
+<a id="tag-conditions"></a>
+
+## Conditions and alternative content
+
+Use a condition when part of your document should appear only for certain records. Always test both outcomes and an empty value.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Conditionals
+
+#### Boolean conditional
+
+```
+{#IsActive}
+  Account is active.
+{/IsActive}
+
+{#IsActive}
+  Active.
+{:else}
+  Inactive.
+{/IsActive}
+```
+
+Truthy values: Boolean `true`, non-empty lists, any non-null non-false non-empty-string value.
+
+#### Inverse conditional
+
+Show when falsy. Opposite of `{#Field}`.
+
+```
+{^Closed__c}
+  Still open.
+{/Closed__c}
+
+{^IsActive}
+  Inactive.
+{:else}
+  Active.
+{/IsActive}
+```
+
+#### IF comparison expressions
+
+Supports `>`, `<`, `>=`, `<=`, `=` (or `==`), `!=`. Values can be field refs, quoted strings, or numbers.
+
+```
+{#IF Amount > 100000}
+  Large deal — requires approval.
+{/IF}
+
+{#IF StageName = 'Closed Won'}
+  Congratulations!
+{:else}
+  Keep pushing.
+{/IF}
+
+{#IF Priority != 'Low'}
+  Escalate this case.
+{/IF}
+```
+
+String comparisons are case-sensitive.
+
+#### AND / OR / NOT
+
+Combine comparisons with boolean operators. Both word-form (`AND`, `OR`, `NOT` — case-insensitive) and symbolic form (`&&`, `||`, `!`) work. Parentheses control precedence.
+
+```
+{#IF Amount > 100000 AND Stage = 'Negotiation/Review'}
+  Large deal in negotiation — escalate.
+{/IF}
+
+{#IF Stage = 'Closed Won' OR Stage = 'Closed - Pending Funding'}
+  Pipeline closed.
+{/IF}
+
+{#IF NOT IsPrivate__c}
+  Public record.
+{/IF}
+```
+
+Default precedence (highest first): `NOT` → comparisons → `AND` → `OR`. Use parens to override:
+
+```
+{#IF (Amount > 100000 OR Strategic__c) AND IsClosed = false}
+  Large or strategic, still open.
+{/IF}
+```
+
+Arbitrarily long chains and grouping work:
+
+```
+{#IF (Region = 'NA') OR (Region = 'EU' AND Tier__c = 'Gold') OR (Strategic__c)}
+  Eligible for premium support.
+{/IF}
+```
+
+Quoted strings are opaque — `AND` / `OR` inside quotes is treated as part of the string, not as an operator.
+
+#### Nested IF blocks
+
+`{#IF}…{/IF}` blocks can be nested arbitrarily deep. Common pattern: an outer IF gates a whole section, inner IFs gate sub-sections within it.
+
+```
+{#IF Work_Tasks__r.totalSize != 0}
+  WORK TASKS
+  …table with Work Tasks loop…
+  {#IF Work_Task_Step_Count__c != 0}
+    …Steps table with Steps loop…
+  {/IF}
+{/IF}
+```
+
+`Rel.totalSize` returns 0 (not null) when the child relationship is empty, so `{#IF Rel.totalSize != 0}` is the canonical "render this section if there are rows" check.
+
+<a id="tag-totals"></a>
+
+## Counts, sums, averages, minimums, and maximums
+
+Summarize the records that are actually available to the template. Filtering a query changes the input to the total.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Aggregates
+
+Grand totals across a child relationship. Works in sync and giant-query paths.
+
+```
+{COUNT:OpportunityLineItems}                          1000
+{COUNT:OpportunityLineItems:number}                   1,000
+{SUM:OpportunityLineItems.TotalPrice}                 50000
+{SUM:OpportunityLineItems.TotalPrice:currency}        $50,000.00
+{SUM:Lines.Amount:currency:EUR:de_DE}                 50.000,00 €
+{AVG:OrderItems.UnitPrice:currency}                   $127.50
+{MIN:Quotes.Amount:currency}                          $100.00
+{MAX:Deals.Amount:currency:GBP}                       £999,999.00
+{SUM:Lines.Amount:currency:auto=CustomerCurrency__c}  uses the parent record's currency
+```
+
+All five functions support any format suffix (`currency`, `number`, `percent`, custom patterns), including `currency:auto` (see [Auto-detecting the currency from the record](#auto-detecting-the-currency-from-the-record)).
+
+**Aggregate fields don't need to be rendered columns** — you can aggregate `UnitPrice` even if your loop table only shows `Product2.Name` and `Quantity`. The resolver validates field names against the child object's schema.
+
+<a id="tag-charts"></a>
+
+## Charts and every chart modifier
+
+Start with a one-line chart, then add only the options you need. Chart rendering depends on the output format and the way the document is generated; use the matrix below before building a large report.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Charts
+
+Render **nine chart styles** inline in your generated documents — bar, column, pie, donut, pivot, stacked, clustered, line, and area. Charts use a prepared PNG image on supported paths, with browser rendering for interactive work and an Apex rasterizer for server work. HTML can also use CSS chart blocks or opt-in browser-only SVG. Excel output does not embed chart-tag images. Test the exact entry point you intend to use:
+
+| Output             | How charts get there                                                  |
+| ------------------ | --------------------------------------------------------------------- |
+| HTML → browser     | `<img src="/sfc/servlet.shepherd/version/download/CV_ID">`            |
+| HTML → PDF         | Same `<img>` — Flying Saucer (`Blob.toPdf`) fetches it server-side    |
+| Word `.docx`       | `<w:drawing>` referencing a PNG embedded in `word/media/`             |
+| Word → PDF         | Word → HTML → PDF chain; the embedded PNG flows through transparently |
+| PowerPoint `.pptx` | `<p:pic>` referencing a PNG in `ppt/media/`                           |
+| Excel `.xlsx`      | (Coming in a follow-up release)                                       |
+
+**Zero external callouts.** The chart engine is 100% native Apex — same constraint that makes Portwood suitable for AppExchange security review and managed-package customers. Charts work in Flow actions, batch jobs, Queueables, and Apex tests as well as the runner LWC.
+
+**Two authoring paths:**
+
+1. **`{Chart:relationship:field:style:opts}`** — one-line tag. The engine resolves bucket data via SOQL aggregate (constant cost regardless of row count), rasterizes to PNG, embeds the image. Works on supported Word, HTML/PDF, Canvas, and PowerPoint paths; Excel image embedding is not supported. **This is the canonical path — use it for 95% of cases.**
+2. **`{#ChartBucket:relationship:field}…{/ChartBucket}`** — hand-authored loop. You write the chart HTML body yourself with `{key}` / `{count}` / `{percent}` placeholders. Use only when you need a custom layout the engine doesn't ship (e.g., embedded sparklines inside a table cell).
+
+#### One-line `{Chart:...}` blocks
+
+A single tag that expands into a complete chart image at render time. **Tag syntax:**
+
+```
+{Chart:RELATIONSHIP:FIELD:STYLE:OPTS}
+```
+
+| Position       | Required | Meaning                                                |
+| -------------- | -------- | ------------------------------------------------------ |
+| `RELATIONSHIP` | yes      | Child relationship name on the parent record (one-hop) |
+| `FIELD`        | yes      | Field on the child to group by                         |
+| `STYLE`        | no       | One of nine styles (default: `bar`)                    |
+| `OPTS`         | no       | `key=value&key=value` modifiers                        |
+
+**All nine styles:**
+
+| Style       | Visual                                                                       | Cross-tab? | Best for                                                 |
+| ----------- | ---------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
+| `bar`       | Horizontal bar per bucket, label left, count+% right                         | no         | One question, one dimension. Long category labels.       |
+| `column`    | Vertical bar per bucket, labels under, % above                               | no         | One question, one dimension. Short labels.               |
+| `pie`       | Pie chart with right-side legend showing count + %                           | no         | "Share of total" framing, ≤8 slices                      |
+| `donut`     | Pie with a center hole, same legend                                          | no         | Same as pie, lighter visual weight                       |
+| `pivot`     | Cross-tab table — rows = buckets, cols = `groupBy` values + Total            | required   | Numeric matrix readout. CSS-bar path (HTML-friendly).    |
+| `stacked`   | Horizontal stacked bar — one row per bucket, segments by `groupBy`           | required   | "How does each row break down across the 2nd dimension?" |
+| `clustered` | Vertical clustered bars — one cluster per bucket, mini-bar per col           | required   | Side-by-side comparison across the 2nd dimension         |
+| `line`      | Polyline through (bucket index, count). Multi-series when `groupBy` present. | optional   | Trend / ordering matters. Single or multi-series.        |
+| `area`      | Line chart with semi-transparent fill below each series                      | optional   | Trend + accumulated volume                               |
+
+**Worked examples** (against the canonical Commute Survey Demo — 425 responses, 6 modes, 2 locations):
+
+```
+{Chart:Survey_Responses__r:Selected_Answer__c:bar:title=Commute Mode Distribution}
+{Chart:Survey_Responses__r:Selected_Answer__c:column:title=Commute Mode (Vertical)}
+{Chart:Survey_Responses__r:Selected_Answer__c:pie:title=Commute Mode Share}
+{Chart:Survey_Responses__r:Selected_Answer__c:donut:title=Commute Mode Share (Donut)}
+{Chart:Survey_Responses__r:Selected_Answer__c:stacked:groupBy=Location__c&colSort=8000 Marina,3260 Bayshore&title=Location Mix per Mode}
+{Chart:Survey_Responses__r:Selected_Answer__c:clustered:groupBy=Location__c&colSort=8000 Marina,3260 Bayshore&title=Mode by Location Comparison}
+{Chart:Survey_Responses__r:Selected_Answer__c:line:groupBy=Location__c&colSort=8000 Marina,3260 Bayshore&title=Commute Trend by Location}
+{Chart:Survey_Responses__r:Selected_Answer__c:area:groupBy=Location__c&colSort=8000 Marina,3260 Bayshore&title=Commute Volume by Location}
+{Chart:Survey_Responses__r:Selected_Answer__c:pivot:groupBy=Location__c&colSort=8000 Marina,3260 Bayshore&title=Mode by Location (Table)}
+```
+
+#### Complete modifier reference
+
+Modifiers come after the style, joined with `&`. **Order doesn't matter.** Values containing `&` or `=` are not supported (use `where=` for SOQL with operators — see below).
+
+| Modifier      | Applies to                        | Example                                                  | What it does                                                                                                                                                                                                                                                                                                           |
+| ------------- | --------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title=`      | all styles                        | `title=How satisfied are you with your role?`            | Chart header text drawn above the chart. Becomes the `<img alt="…">` attribute on the HTML side.                                                                                                                                                                                                                       |
+| `width=`      | all styles                        | `width=420`                                              | Logical-pixel width of the chart. Defaults: 540 (stacked/clustered), 500 (bar/column/line/area), 360 (pie/donut). Word/PDF downsample bigger PNGs for free AA.                                                                                                                                                         |
+| `height=`     | all styles                        | `height=240`                                             | Logical-pixel height. Defaults vary per style (see source); bar auto-grows by bucket count.                                                                                                                                                                                                                            |
+| `fontSize=`   | all styles                        | `fontSize=16`                                            | Axis-label size in pixels. Default 12; titles and other text scale with it, keeping their proportions. Raise it when the chart lands in a small frame. On a Canvas chart use the **Label size** box rather than writing the tag. Honoured by all three renderers — browser, Word/PowerPoint, and HTML-to-PDF. (v3.56+) |
+| `where=`      | all styles                        | `where=Survey_Question__r.Display_Order__c=1`            | SOQL fragment appended to the chart's `WHERE`. Identifier-only, sanitized through the same keyword blocklist as Query Builder. Forces server-side aggregation.                                                                                                                                                         |
+| `groupBy=`    | stacked/clustered/pivot/line/area | `groupBy=Department__c`                                  | Cross-tab dimension. **Required** for `stacked`/`clustered`/`pivot`; **optional** for `line`/`area` (omit → single-series). Field on the same child object as `FIELD`.                                                                                                                                                 |
+| `colSort=`    | stacked/clustered/pivot/line/area | `colSort=Engineering,Sales,Marketing,Support,Operations` | Author-controlled column ordering. Named values appear first in this order; remaining values alpha-sorted; synthetic `Total` always last (pivot path only).                                                                                                                                                            |
+| `colors=`     | all styles                        | `colors=#1e40af,#b91c1c,#16a34a`                         | Override the default 8-color palette. Cycles by row/series index. Each color is `#hex` (6 chars).                                                                                                                                                                                                                      |
+| `split=`      | all (bucket-shape only)           | `split=;`                                                | Multi-select delimiter. Each respondent's pick contributes to every value they selected. Percentages sum to >100% by design.                                                                                                                                                                                           |
+| `scale=`      | all (raster path only)            | `scale=2`                                                | Supersample multiplier. Default 1 for stacked/clustered/line/area, 2 for bar/column/pie/donut. Larger = sharper PNG but slower; 4 is the practical ceiling.                                                                                                                                                            |
+| `htmlRender=` | HTML browser preview              | `htmlRender=svg`                                         | (HTML only, opt-in.) Inline `<svg>` instead of `<img>`. **Browser-only — Flying Saucer drops SVG**. Prepared PNG images work in browser and PDF; without image preparation, supported CSS chart styles are the fallback.                                                                                               |
+
+**Composability:** every modifier composes with every other modifier where it makes sense:
+
+```
+{Chart:Survey_Responses__r:Mode__c:stacked:groupBy=Location__c&colSort=Marina,Bayshore&colors=#1e40af,#b91c1c&where=CreatedDate=THIS_YEAR&title=Modes by Office, 2026}
+```
+
+**Inside a relationship loop**, the chart's relationship resolves against the iterating record:
+
+```html
+{#Survey_Questions__r}
+<h2>Q{Display_Order__c}: {Question_Text__c}</h2>
+{Chart:Survey_Responses__r:Selected_Answer__c:bar} {/Survey_Questions__r}
+```
+
+Here `Survey_Question__c.Survey_Responses__r` is the child relationship from Question (not from the outer Survey). One chart per question, no `where=` needed.
+
+> **If chart labels come out too small, raise `fontSize=`.** Label sizes are in canvas
+> pixels, so how big they look in the finished document depends on how far the image is
+> scaled to fit its frame.
+>
+> On a **Canvas** template that is straightforward: the chart block renders at its own
+> size, so the 12px default prints at about 9pt whatever size the block is. Set **Label
+> size** in the chart properties to change it.
+>
+> On a **PowerPoint or Word** template the image is stretched to fit the shape you drew,
+> and `width=` does not change that — a chart squeezed into a 3-inch shape has small
+> labels however many pixels it was rendered at. Raising `width=` sharpens the picture
+> while making the text smaller relative to the frame, which is the opposite of what
+> most people expect. `fontSize=` is the knob: adjust it until it reads well at the size
+> the shape actually is.
+
+**Error handling.** Malformed tags render an inline error block in HTML output (red border, monospace tag dump) and a `[Chart error: …]` text placeholder in Word — you see the problem at first preview rather than chasing a silent miss. Errors include the original tag verbatim so you can diff it against a working sample.
+
+#### Output-format matrix — what flows where
+
+The chart engine can emit prepared PNGs, HTML CSS chart blocks, or opt-in browser-only inline SVG. The result depends on the calling path and whether chart images were prepared. The runner LWC, Flow actions, batch jobs, and the Apex `generate*` entry points all orchestrate chart preparation automatically — **you do not call `prepareChartImages` in your template; just write the tags.**
+
+| Template Type | Output           | Image format                                  | Engine path                                                                                   |
+| ------------- | ---------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| HTML          | HTML download    | `<img>` referencing CV URL                    | Browser fetches the CV via lightning subdomain                                                |
+| HTML          | PDF              | `<img>` referencing CV URL                    | Flying Saucer's `Blob.toPdf` fetches the CV server-side (relative URL — managed-package safe) |
+| HTML          | Browser preview  | `<img>` (default) OR inline `<svg>` (opt-in)  | Lightning UI / Experience Cloud render natively                                               |
+| Word          | DOCX             | PNG embedded in `word/media/`                 | LWC orchestrates: SVG → canvas → PNG → CV → client-side ZIP assembly fetches CV bytes         |
+| Word          | PDF              | PNG embedded in `word/media/`, then converted | Same DOCX assembly, then DocGenHtmlRenderer → `Blob.toPdf`                                    |
+| Word          | Sample PDF       | PNG embedded                                  | Same path                                                                                     |
+| PowerPoint    | PPTX             | PNG in `ppt/media/` via `<p:pic>`             | Server-side OOXML embed, or client-side Chart.js on the giant-query path (below)              |
+| Excel         | XLSX             | Chart-tag image embedding is not supported    | Use a supported Word/PDF or PowerPoint output when chart images are required                  |
+| Canvas        | PDF              | `<img>` referencing CV URL                    | Chart block previews live via Chart.js; the tag renders like any other HTML chart             |
+| Flow / batch  | any of the above | PNG via pure-Apex rasterizer                  | `DocGenChartImageController.prepareChartImagesServerSide` — no browser canvas, no callouts    |
+
+#### Charts on large datasets — client-side rendering (v3.55+)
+
+The pure-Apex rasterizer runs inside a synchronous transaction, and both the chart data and
+the rendered PNGs have to fit in a 6 MB Apex heap. On a record with thousands of child rows
+that is not a limit you can tune around — a PowerPoint or Excel template over a few thousand
+child records used to fail outright with _"too large for sync PowerPoint/Excel output"_.
+
+For PowerPoint and Excel, Portwood now takes the same route it has always taken for Word:
+**the browser does the work.** The runner pages the child records down in chunks, aggregates
+each page into buckets as it arrives, and renders the finished chart with **Chart.js** on a
+real `<canvas>` before embedding the PNG. Nothing large is ever held in Apex at once, so the
+heap ceiling stops being the constraint — verified against 30,000 child records.
+
+You do not opt in and you do not change your tags. Write `{Chart:...}` exactly as documented
+above; the runner picks the path. What you should know:
+
+- **It needs a browser.** Flow, batch and Apex entry points still use the server-side
+  rasterizer, which is why the heap guidance in [§14.8](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#148-template--output-size-guidance)
+  still applies to unattended generation.
+- **Non-groupable fields are refused with a message.** A Long Text Area cannot be used in a
+  SOQL `GROUP BY`, and attempting it throws an uncatchable platform exception — so Portwood
+  checks the field first and tells you, rather than letting the transaction die. Group by a
+  Text, Picklist, Number, Date or Checkbox field instead.
+- **Charts still render on the Canvas artboard** while you design, using the same library.
+
+**Cleanup.** Each generated chart produces a transient `docgen_chart_*` ContentVersion. The runner cleans them up after the document downloads/saves. A daily orphan reaper (`DocGenChartCleanupSchedulable`) sweeps stragglers (failures or browser-closed-mid-flow).
+
+#### LLM authoring prompt — copy this to generate a template
+
+Paste the block below into Claude / GPT / Gemini with one substitution: `${MY_DATA_DESCRIPTION}` should describe your child relationship name, the dimension field you want bucketed, and (optionally) the cross-tab field plus its expected values. The LLM will produce a complete HTML template you can upload.
+
+```text
+You are writing a Portwood HTML template that renders 8 chart styles using Portwood's
+{Chart:...} tag syntax. Portwood is a native Salesforce 2GP package; the template is a single
+HTML file uploaded as a ContentVersion against a DocGen_Template__c with Type__c='HTML'.
+
+Hard constraints (Flying Saucer PDF engine, CSS 2.1 + small CSS 3 subset):
+- Use <table>/<tr>/<td> for layout OR <div> with display:table/table-row/table-cell.
+- Do NOT use: flex, grid, gap, linear-gradient, calc(), CSS variables. Silently ignored.
+- Do NOT use <svg> for charts — Flying Saucer drops it. {Chart:...} emits <img> by default.
+- Wrap @page in a <style> at the top. Do not also set Page_Size__c / Page_Orientation__c /
+  Custom_Margins__c on the template if the source HTML declares @page.
+
+Chart tag syntax: {Chart:RELATIONSHIP:FIELD:STYLE:OPTS}
+  - RELATIONSHIP: child relationship name on the parent record (e.g. Survey_Responses__r)
+  - FIELD: field on the child to bucket by (e.g. Selected_Answer__c)
+  - STYLE: bar, column, pie, donut, pivot, stacked, clustered, line, area
+  - OPTS: key=value&key=value (any order). All optional unless noted.
+
+Available modifiers:
+  - title=...                — chart header text, becomes img alt text
+  - width=N  height=N        — logical pixels (defaults: 500x ~by-style)
+  - where=SOQL_FRAGMENT      — appended to chart's WHERE. Identifier-only.
+  - groupBy=FIELD            — cross-tab dimension. REQUIRED for stacked/clustered/pivot;
+                               optional for line/area (omit → single-series).
+  - colSort=val1,val2,...    — author-controlled column order. Required when groupBy is used.
+  - colors=#hex,#hex,...     — palette override, cycles by row/series index
+  - split=DELIM              — multi-select picklist delimiter (sums to >100% by design)
+  - scale=N                  — PNG supersample (default 1-2). 4 max.
+
+Required output:
+1. A single self-contained HTML file (<!DOCTYPE html>...</html>) with inline <style>.
+2. A title row with {Name} of the parent record.
+3. Eight H2 sections — one per chart style. Each section:
+   - H2 heading numbered and named (e.g. "5. Stacked (cross-tab)")
+   - A one-line description of when to use this style
+   - The {Chart:...} tag itself, wrapped in <div class="chart">
+   - <h2 class="page-break"> on sections 2-8 so each chart gets its own page
+4. A footer line acknowledging "Portwood Chart Engine — pure-Apex PNG rasterization".
+
+Data shape — ${MY_DATA_DESCRIPTION}
+(Example: "Survey__c parent. Child relationship Survey_Responses__r. Bucket by Selected_Answer__c.
+Cross-tab dimension Location__c with values 8000 Marina, 3260 Bayshore.")
+
+Use the bucket field for bar/column/pie/donut single-dimension styles. Use the cross-tab field
+in groupBy for stacked/clustered/line/area/pivot. ColSort must match the cross-tab values.
+
+Return the complete HTML file, ready to upload as a Portwood HTML template. No commentary.
+```
+
+#### Reference templates
+
+A ready-to-upload showcase ships in `docs/`:
+
+- **`docs/ChartEngineShowcase.html`** — all 8 chart styles against the Commute Survey Demo (Selected_Answer**c bucketed by Location**c). Upload as `Type=HTML`, set `Base_Object_API__c=Survey__c`, set `Query_Config__c=Survey_Questions__r` (omit `Survey_Responses__r` — see §7.6.5 for why).
+- **`docs/ChartEngineShowcase.docx`** — same template, Word format. Same chart tags, drops directly into the Word body as plain text.
+- **`docs/SurveyChartExample.html`** — per-question single-dimension chart pattern (one chart per question via outer `{#Survey_Questions__r}` loop).
+- **`docs/CommuteSurveyExample.html`** — full composition of all five chart modifiers using the `<div>` table-row layout.
+
+The showcase HTML is short enough to read end-to-end. Highly recommended starting point if you're authoring a template from scratch.
+
+#### Resolution paths — `Query_Config__c` setup
+
+How you configure `Query_Config__c` determines whether your charts work at 30K rows, 300K rows, or fail. The engine picks one of four resolution paths automatically:
+
+1. **In-memory** — the child collection is already loaded into the data map (small relationship, eagerly queried), no `where=` / `groupBy=` used. Aggregation runs in Apex. Fastest path, zero extra SOQL.
+2. **SOQL fallback (recommended for >2000 rows)** — the relationship is **NOT** in `Query_Config__c`, OR `where=` / `groupBy=` is present. The engine issues one `GROUP BY` aggregate. **Constant cost regardless of row count.**
+3. **Parent-level** — chart sits outside any loop (header/summary). Same in-memory / SOQL behavior as above.
+4. **Giant-query parent** — chart targets a relationship in giant-query templates (>2000 rows under the "giant" child). Same modifiers, same shape, server-side aggregation.
+
+**Author's rule of thumb — applies to the chart's target relationship specifically:**
+
+> ✅ **DON'T pre-load the relationship the chart aggregates.** Leave it out of `Query_Config__c` (or omit it from any nested subquery). The chart aggregates it server-side at constant cost.
+>
+> ✅ **DO pre-load the relationship the chart's parent loop iterates.** If the chart sits inside `{#Survey_Questions__r}`, the **Questions** subquery is still required — but it must NOT include a nested `(SELECT … FROM Survey_Responses__r)` underneath it.
+>
+> ❌ **DON'T pre-load the chart's target AND also chart against it at >2000 rows** — that triggers the giant-query path looking for a traditional loop body that isn't there.
+
+The engine throws an actionable error pointing you to the fix when this misconfiguration is detected.
+
+**Worked example — Survey with 30K responses, per-question chart inside a Question loop:**
+
+```
+Name, (SELECT Id, Question_Text__c, Display_Order__c FROM Survey_Questions__r ORDER BY Display_Order__c ASC)
+```
+
+- `Name` loads onto the Survey for the title bar.
+- The `Survey_Questions__r` subquery loads each Question's Id, prompt, and order — needed because the template iterates `{#Survey_Questions__r}`.
+- **`Id` in the question subquery is required** — the chart's SOQL fallback uses each question's Id as the parent record to scope its `GROUP BY` aggregate.
+- **No nested `(SELECT … FROM Survey_Responses__r)`** — that's what keeps responses out of Apex heap and lets the chart's server-side aggregate handle them at constant cost.
+
+The per-question chart tag inside the loop runs against each question's Id automatically. CPU stays under 500ms and SOQL queries stay under 10 regardless of whether the survey has 425 responses or 30,000.
+
+**Subquery syntax note (V1 Query Config):** the V1 flat-string format uses standard SOQL-style subqueries — `(SELECT field1, field2 FROM RelationshipName)`. Bare `RelationshipName(field1,field2)` does NOT parse and silently drops the relationship.
+
+#### Security — FLS, sharing, and SOQL injection
+
+Charts run with **`AccessLevel.USER_MODE`** — Salesforce enforces object permissions, field-level security, sharing rules, and record-level access at the database layer. A user without read access to the child object or grouped field sees empty buckets (catch with `{:else}`), never a leaked aggregate.
+
+The chart resolver **validates every dynamic identifier** (relationship, child object, group field, lookup field, `groupBy` column) against `Schema.SObjectType.fields.getMap()` and `Schema.SObjectType.fields.ChildRelationship` before interpolation, and **sanitizes `where=` fragments** through the same keyword blocklist that protects Query Builder. SOQL injection is structurally impossible — identifiers are checked, values are bound.
+
+#### Governor budget
+
+Portwood caps chart aggregates at **50 SOQL queries per transaction** (static budget inside `DocGenChartBucketResolver`). When the budget is exhausted, remaining charts render a single sentinel bucket labeled `"Chart limit reached"` — they never silently render as empty. Re-author the template to consolidate charts (or use a pivot instead of N single-dimension charts) if you hit the ceiling.
+
+Per-chart CPU budget is tracked too — the rasterizer auto-tunes `scale=` defaults so an 8-chart document fits comfortably in the 10-second synchronous Apex limit.
+
+#### Hand-authored `{#ChartBucket:...}` loops
+
+When you want a custom layout the `{Chart:...}` engine doesn't ship (e.g., a chart inside a Word table cell, or a sparkline next to a text column), drop down to the underlying section tag. The aggregation is identical — same modifiers, same body fields, same SOQL fallback at scale.
+
+**Basic syntax:**
+
+```html
+{#ChartBucket:Survey_Responses__r:Selected_Answer__c}
+<tr>
+    <td>{key_label}</td>
+    <td><div style="background:{color};width:{percent}%;height:14px;"></div></td>
+    <td>{count} ({percent}%)</td>
+</tr>
+{/ChartBucket}
+```
+
+Buckets sort **descending by count**, alpha by key for ties. Null/blank values collapse into a single bucket labeled `"Not Specified"`.
+
+**Body fields:**
+
+| Tag             | Type    | What it returns                                                                  |
+| --------------- | ------- | -------------------------------------------------------------------------------- |
+| `{key}`         | String  | Raw group value (HTML-escaped)                                                   |
+| `{key_label}`   | String  | Picklist label if available, else `{key}`; `"Not Specified"` for blanks          |
+| `{count}`       | Integer | Records in this bucket                                                           |
+| `{percent}`     | Decimal | Percent of total, 1 decimal place (use directly as `width:{percent}%`)           |
+| `{percent_int}` | Integer | Rounded integer percent                                                          |
+| `{max_percent}` | Decimal | Percent normalized so the largest bucket = 100 (for "longest bar = full" charts) |
+| `{index}`       | Integer | 1-based bucket index                                                             |
+| `{color}`       | String  | Cycled palette color, `#hex` form (override with `colors=` modifier)             |
+| `{color_hex}`   | String  | Same color without the leading `#` — for Word `w:shd w:fill` attributes          |
+
+Empty bucket lists render the body zero times. Add `{:else}No responses yet.` before the closing `{/ChartBucket}` for a fallback (`{:else}` splits the branch — it has no closing tag of its own).
+
+**Modifiers** (pass as a third colon segment using `key=value&key=value`):
+
+| Modifier   | Example                                              | What it does                                                                                                                             |
+| ---------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `colors=`  | `colors=#1e40af,#b91c1c,#16a34a`                     | Override the default 8-color palette; cycles by row index.                                                                               |
+| `where=`   | `where=Mode__c='Drive Alone' AND Reasons__c != null` | SOQL fragment appended to the chart's WHERE. Forces server-side aggregation.                                                             |
+| `split=;`  | `split=;`                                            | Treat the field as multi-select (semicolon-separated).                                                                                   |
+| `groupBy=` | `groupBy=Location__c`                                | Cross-tab pivot. Each bucket exposes a `cols` sub-list — iterate with `{#cols}{key}={count} ({percent}%){/cols}`. Total column appended. |
+| `colSort=` | `colSort=8000 Marina,3260 Bayshore`                  | (Pairs with `groupBy=`.) Column ordering.                                                                                                |
+
+**Pivot tables (`groupBy=`).** The body becomes a row containing another loop, `{#cols}`. Each col is one value of the `groupBy` field plus a final `Total` column:
+
+```html
+<div class="row">
+    <div class="cell">{key_label}</div>
+    {#cols}
+    <div class="cell">{count} ({percent}%)</div>
+    {/cols}
+</div>
+```
+
+Inside `{#cols}` you get the standard bucket fields (`{key}` / `{key_label}` / `{count}` / `{percent}` / `{percent_int}` / `{color}` / `{color_hex}` / `{index}`) plus two pivot-only fields:
+
+- `{percent_of_row}` — Decimal — this cell's count as a percent of its row's total.
+- `{percent_of_row_int}` — Integer — same, rounded.
+
+Use these when you want each row's segments to sum to 100% (stacked-bar composition) rather than each cell's value as a percent of the overall total.
+
+**Layout gotcha for pivot bodies:** Portwood's HTML container auto-expansion reacts to nested loops by duplicating the nearest open `<tr>`. If you put `{#cols}` directly inside `<tr>`, every column gets a whole row. **Use `<div>` + `display:table-row` + `display:table-cell` for pivot bodies, not `<tr>`/`<td>`.** See `docs/CommuteSurveyExample.html` for the canonical pattern.
+
+#### CSS 2.1 reminders (PDF output)
+
+Because Flying Saucer renders PDFs as CSS 2.1:
+
+- ✅ `<table>` + `<tr>` + `<td>` for non-pivot charts
+- ✅ `<div>` with `display: table` / `table-row` / `table-cell` for pivot charts
+- ✅ Solid `background:#hex;` for bar fills (`{color}` returns `#hex` strings)
+- ❌ `flex`, `grid`, `gap`, `linear-gradient(...)`, `calc(...)` — silently ignored, layout collapses
+- ❌ CSS variables — `var(--brand)` is dropped
+
+For DOCX output, an HTML-authored chart template still renders the same way; Word treats the chart `<div>` blocks as styled boxes.
+
+#### Word templates — supported as of v1.92
+
+The `{Chart:...}` PNG-via-CV pipeline (shipped this release) made Word a **peer of HTML** for chart output. All 9 styles render correctly in `.docx` output. The legacy "Word doesn't do pivot/stacked/clustered" caveat is **no longer in effect**.
+
+What's supported in Word today:
+
+- ✅ All 9 styles via `{Chart:...}` tags
+- ✅ All five modifiers (`colors=`, `where=`, `split=`, `groupBy=`, `colSort=`)
+- ✅ Outer record loops driving page-per-iteration layout (page-breaks via `<w:pageBreakBefore/>`)
+- ✅ Hand-authored `{#ChartBucket:...}` simple-bar pattern (legacy)
+
+What's still Word-specific:
+
+- Hand-authored cross-tab `{#ChartBucket}` with `{#cols}` inside `<w:tr>` — **still hits the row auto-expansion limitation.** Use `{Chart:...:stacked}` or `{Chart:...:clustered}` instead, which generate PNGs server-side and embed them via `<w:drawing>`.
+
+Reference Word template: `docs/ChartEngineShowcase.docx` (all 8 chart styles, one per page). Open in Word to see how the `{Chart:...}` tags drop in as plain paragraph text. The engine handles every conversion downstream.
+
+<a id="tag-media"></a>
+
+## Images, assets, codes, rich text, and backgrounds
+
+These tags place visual content in your document. A working image URL or valid asset key is part of the input, just as a selected field is part of a text tag.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Images
+
+**Option 1 — record-attached (easiest).** `{%Image:N}` renders the Nth oldest image attached to the current record. No ContentVersion ID field, no query-builder setup — drag a photo onto the record in Files and the tag picks it up. Filters to PNG/JPG/GIF/BMP/TIFF/SVG automatically (non-image attachments are skipped).
+
+```
+{%Image:1}                First image attached to the record, natural size
+{%Image:1:200}            Max 200px in either dimension (preserves aspect)
+{%Image:1:200x200}        Explicit 200px × 200px
+{%Image:1:400x}           400px wide, auto height
+{%Image:1:x150}           Auto width, 150px tall
+{%Image:2}, {%Image:3}    Second, third, … attached image
+```
+
+Inside a `{#Relationship}` loop, `{%Image:N}` scopes to the iterating record's images — ideal for inspection reports, real estate listings, product catalogs. Out-of-range indexes render empty silently.
+
+**Option 2 — image field (advanced).** When you need to pick a specific image that isn't the Nth attachment, store the ContentVersion ID (starts with `068`) in a text field and reference it:
+
+```
+{%ImageField}                   Embed an image from a rich text field or Files
+{%LogoImage:200x100}            Width × height in pixels (see §7.7.2 for sizing in PDF)
+```
+
+Handles multiple sources automatically:
+
+- Rich text HTML `<img src="data:...">` — decoded and embedded
+- Raw base64 strings (100+ chars) — decoded and embedded
+- ContentVersion IDs (18-char, starts with `068`) — looked up and fetched
+- Salesforce file URLs (`/sfc/servlet.shepherd/...`) — resolved to blob
+- HTTPS URLs — embedded as URL references for PDF rendering
+
+**PDF path (special behavior).** For ContentVersion IDs, the PDF pipeline skips blob loading entirely — it uses relative Salesforce URLs (`/sfc/servlet.shepherd/version/download/<cvId>`) and `Blob.toPdf()` fetches them natively via the VF rendering engine. This is what enables unlimited images in PDFs without heap pressure.
+
+**Image size limits.** PDFs with attached images are limited to roughly **30MB of total image content** for reliable Save-to-Record. Above that threshold, the save operation will error out (Salesforce platform limits on the ContentVersion insert path). If you need to include more images than this threshold allows, use **Download** instead of Save-to-Record — downloads work at a higher ceiling because they don't go through the same save pipeline. A typical inspection report with 20–30 phone photos fits within the 30MB ceiling; 50+ high-resolution photos may need to be downloaded and attached manually.
+
+#### Shared assets (`{%asset:<key>}`)
+
+Use a **shared asset** when the same image — a logo, a footer band, a letterhead — appears in many templates and you want to update it in one place. Instead of pasting the same image (or its file ID) into every template, you reference the asset by a short, stable key. When you upload a new version of the asset, **every template that uses its tag picks up the new image automatically** — no template edits.
+
+**Set one up** from the **Command Hub → Assets** tab: give the asset a friendly name (e.g. "Primary Footer"), choose its **tag key** (a short, human-readable handle such as `footer`, suggested from the name and checked for availability as you type), upload an image, and copy its merge tag. The key is **permanent** — renaming the asset later never changes the key, so templates keep working — and it is case-insensitive (`{%asset:Footer}` and `{%asset:footer}` are the same asset).
+
+**Finding assets in a growing library (v3.30+).** The Assets tab shows a **thumbnail preview** of each asset's current image, and a **search box** filters the list live by name, tag key, merge tag, or category. Assets can carry an optional free-text **Category** ("Logos", "Footers", "Backgrounds" — any label you like, set when creating the asset or later via the row's **Edit** action); once at least one asset is categorized, a **category dropdown** appears next to the search box, including an _Uncategorized_ bucket. Categories are purely organizational — they never affect how the merge tag resolves.
+
+```
+{%asset:footer}            Latest version of the asset whose key is "footer"
+{%asset:companylogo}       (any key you chose when creating the asset)
+{%asset:companylogo:200x100}   Fixed 200×100 px
+{%asset:companylogo:600x}      Fixed 600 px wide, height auto (keeps aspect)
+{%asset:companylogo:x80}       Fixed 80 px tall, width auto
+```
+
+> **Assets in email templates (v3.32+):** the same `{%asset:<key>}` tag works inside **signature email templates** (Command Hub → Email Templates) — there it resolves to the asset's **public image URL** instead of embedding the image, so you write and size your own markup: `<img src="{%asset:footer-banner}" style="height:40px"/>`. This is the easiest way to host email images in Salesforce Files: reference any asset in your email HTML, and replacing the asset's image later updates every email automatically. Size suffixes are ignored in emails (use CSS); saving or previewing the template publishes the referenced assets so recipients' email clients can load them. See §10.14.
+
+A size token must contain an `x` (the width × height separator); a bare number with no `x` is ignored. **Pixels (`px`, or a bare number) and percentages (`50%x`) are the supported units** — see **§7.7.2** for exactly what works in HTML → PDF (and the named-unit / max-width limits to be aware of).
+
+- Resolves to the asset's **latest** uploaded version every time a document is generated, so an updated logo flows through to all referencing templates at once.
+- Works across **Word, HTML, PDF, and PowerPoint** output, in the document body and in headers/footers — including very large datasets.
+- **Cross-user by design:** an asset one administrator creates renders correctly in documents other users generate.
+- **Deactivate** an asset (rather than deleting it) to retire it without losing history. A tag that points at a deactivated or unknown key renders a small `[missing asset: <key>]` placeholder so you notice it in review — it never breaks document generation.
+
+**What the tag produces.** The tag resolves to the asset's current image and then flows through Portwood's normal image pipeline, so it behaves like an inline image native to each format. You place the tag **where you want the image to appear** — you do not wrap it in your own `<img>` or pass it to a `src`; the tag _is_ the image.
+
+| Output                          | What `{%asset:key}` becomes                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTML / PDF (HTML template)**  | An `<img src="/sfc/servlet.shepherd/version/download/…">` element. The relative URL is fetched at render — exactly what the PDF engine (Flying Saucer) needs; no absolute URLs or data URIs required. A size token on the tag (`:300x`, `:200x100`, `:50%x`) is honored precisely; with no token the image renders at its natural size (capped to `max-width:100%`). See **§7.7.2** for the supported units and limits. |
+| **Word (`.docx`)**              | The image bytes are **embedded** directly in the document. The `.docx` is self-contained and shows the image offline.                                                                                                                                                                                                                                                                                                   |
+| **PDF (Word template)**         | Referenced by relative URL via the zero-heap path, so large images don't exhaust heap on big jobs.                                                                                                                                                                                                                                                                                                                      |
+| **PowerPoint (`.pptx`)**        | Embedded as a picture shape on the slide.                                                                                                                                                                                                                                                                                                                                                                               |
+| **Excel (`.xlsx`)**             | Image assets are **not** rendered in Excel output in v1 — the tag is removed cleanly (no error).                                                                                                                                                                                                                                                                                                                        |
+| **Large datasets (>2000 rows)** | Tags in headers, footers, and grand-summary areas resolve the same way (the high-volume rendering path emits the same `<img>`).                                                                                                                                                                                                                                                                                         |
+
+**Permissions:** administrators (Portwood Admin) create and manage assets; standard Portwood users get read-only access, which is all that is needed to generate documents that reference them.
+
+This article covers shared **image** assets. Shared fonts and reusable HTML sections have their own workflows: [Upload and approve a custom font](#custom-fonts) and [Reuse terms and HTML snippets](#shared-content). A snippet is a versioned body fragment, not an image asset.
+
+#### Sizing images in HTML → PDF
+
+The size token on any image tag — `{%Image:N:…}`, `{%ImageField:…}`, `{%asset:key:…}` — controls the rendered size in **HTML-template → PDF** output. (As of **v3.26** these are honored precisely; earlier versions could collapse every size of the same image to one.) The rules below are specific to the PDF engine (Flying Saucer); Word/DOCX output is more flexible because Word does its own layout.
+
+**Supported units: pixels and percent only.**
+
+| Token         | Result                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `:300x100`    | 300 px wide × 100 px tall (exact — may stretch off-aspect)                                     |
+| `:300x`       | 300 px wide, height **auto** (keeps aspect)                                                    |
+| `:x100`       | 100 px tall, width **auto** (keeps aspect)                                                     |
+| `:50%x`       | 50% of the page content width, height auto                                                     |
+| `:300` (bare) | `{%Image:N}` only → 300 px wide; on `{%Field}`/`{%asset}` a bare number with no `x` is ignored |
+
+A blank side means **auto** (aspect-preserving): `{%LogoImage:100x}` is the same as 100 px wide with auto height. Pixels map to physical size at **96 DPI** (so `:96x` ≈ 1 inch wide, `:288x` ≈ 3 inches).
+
+**Named units are not parsed.** `in`, `pt`, `cm`, `mm`, `pc` (e.g. `:3inx`, `:x25mm`) are silently ignored and the image falls back to natural size. Convert to pixels at 96 DPI:
+
+| 1 in  | 1 cm    | 1 mm    | 1 pt    | 1 pc  |
+| ----- | ------- | ------- | ------- | ----- |
+| 96 px | 37.8 px | 3.78 px | 1.33 px | 16 px |
+
+So `:3inx` → `:288x`, `:x25mm` → `:x95`.
+
+**`max-width` / `max-height` are _not_ honored in PDF.** Flying Saucer applies only an explicit `width`/`height` to these images — a CSS `max-width`, `max-height`, or a "max size" token is ignored and the image renders at its natural size. There is no "cap large, leave small alone" sizing in PDF.
+
+- **Fitting a row of mismatched logos** (partner firms upload very different dimensions): give them all a **uniform width**, `{%Firm__r.Logo__c:200x}`. Each renders 200 px wide with proportional height — small logos scale up, large scale down, none distorted. (Avoid a fixed `:200x80` box for logos — it stretches them off-aspect.)
+
+**Hand-authored `<img>` tags (advanced).** If you write your own `<img src="/sfc/servlet.shepherd/version/download/068…">` instead of a `{%}` tag, you control the CSS directly, but two caveats apply:
+
+1. Only `width`/`height` take effect — `max-width` does not (same engine limit as above).
+2. The renderer computes one rendered size **per image URL** and reuses it. If you reference the **same** file at two different sizes, both come out the same. Add a throwaway query parameter to make each distinct (`…/068…?n=1`, `…/068…?n=2`). Portwood's `{%}` tags do this automatically, so prefer the tag unless you specifically need raw markup. (A grid of _different_ logos — different files — isn't affected.)
+
+#### Barcodes & QR codes
+
+```
+{*OrderNumber}                  Code 128 barcode (default)
+{*TrackingId:code128}           Explicit type
+{*SKU:code128:300x80}           300×80 px
+{*ProductCode:code39:300x80}    Code 39 barcode
+{*ProductCode:qr}               QR code
+{*URL:qr:200}                   200px QR code
+```
+
+Print Code 128 (the default), Code 39 (`code39`), or a QR code (`qr`). Use Code 39 for uppercase inventory labels compatible with that scanner format. We generated `KIT-123` in both one-dimensional formats and decoded both from the finished PDF. Print the identifier beneath the code as a fallback. [Try a scannable work order](#service-sheet)
+
+QR codes are generated natively in Salesforce with Level Q error correction and support values up to 600 characters. For printed or mailed documents, short URLs or tokens under 120 characters are recommended for 1 inch square QR codes.
+
+#### Rich text fields
+
+When a field value contains HTML (`<p>`, `<div>`, `<br>`, `<b>`, `<i>`, `<u>`, `<strong>`, `<em>`, `<span>`, `<img>`, `<a>`), Portwood preserves the formatting in the output — paragraphs, line breaks, bold/italic/underline, hyperlinks, and embedded images all carry through. Works in **Word templates** (DOCX or PDF output) and **HTML templates** (PDF output). PowerPoint strips HTML to plain text.
+
+**Inline images in rich text** (the kind you paste directly into a Rich Text Area field) render across all three target formats — Word→PDF, Word→DOCX, and HTML→PDF — when you generate from the runner on a record page. Behind the scenes Portwood handles three flavors of image source automatically:
+
+- **Lightning inline images** (`/servlet/rtaImage?...&refid=…`) — refids that resolve to a `ContentVersion` (068/069 prefix) are rewritten to relative `/sfc/servlet.shepherd/…` URLs. `0EM` Lightning ContentReference refids aren't queryable, so they keep their absolute `*.file.force.com` URL — works in authenticated server-side rendering, but not in environments that lack reach to the file subdomain.
+- **Inline data URIs** (`<img src="data:image/...">`) — DOCX and Word→PDF embed them; HTML→PDF drops them (Flying Saucer's `Blob.toPdf` can't decode data URIs).
+- **Hosted Salesforce file URLs** (`/sfc/servlet.shepherd/...`) — pass through to all targets.
+
+A few caveats:
+
+- The **Generate Sample** button in the template builder doesn't render inline rich-text images — they show as broken placeholders. Test the real output via the runner instead.
+- For pixel-perfect images, use the `{%Image:N}` tag with an attached File rather than inline rich text — DOCX image quality is slightly lossy when sourced from rich-text inline images.
+- Inline-image rotation isn't preserved. Rotate the source before pasting.
+- **Pre-size images before pasting.** Lightning's rich text editor doesn't write `width=`/`height=`/`style=` to the HTML it stores — even when you drag-resize the image in the editor, the displayed size never makes it into the saved markup. (In Chrome, drag-resize is disabled outright; Firefox lets you drag but the resize still doesn't persist.) Portwood falls back to a 4-inch default for DOCX output and to natural pixel dimensions for PDF output, so a phone photo pasted at 4000×3000 will render correctly in DOCX but bleed off the page in PDF. The reliable fix is to **resize the image to your intended dimensions in an editor BEFORE pasting** — once it's in the rich text field, the size is locked to whatever the source pixels were. For pixel-precise sizing across both formats, prefer `{%Image:N}` with `:WxH` (§7.7).
+
+Plain multiline (long text, textarea) fields work too — newlines in the field value render as proper line breaks in the output across all three targets. No manual `<br>` needed.
+
+#### Watermarks / page backgrounds (PDF output)
+
+Two ways to add a full-page watermark or background image to your PDF output:
+
+**Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output. A **Watermark strength** control (Light 15% / Medium 30% / Strong 50% / Original) fades the image — the opacity is baked into the stored PNG because Flying Saucer has no CSS opacity, and Portwood keeps the unfaded original so changing the strength after upload re-fades from it rather than compounding. The new setting applies immediately and survives a page reload (v3.57+).
+
+**Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
+
+- **Scale must be set to 100%.** Word's "Auto", "50%", etc. scale settings are ignored by the PDF renderer — only the source image's pixel dimensions matter.
+- **Washout must be OFF.** Leave the Washout checkbox unchecked. To get a faded look, pre-fade the image in an editor (~15–20% opacity over white) BEFORE inserting in Word.
+- **No rotation.** Word's 315° diagonal default isn't honored. If you need a rotated watermark, save the image pre-rotated as a PNG.
+
+Both options use the same rendering pipeline — `@page { background-image: url(...) }` extending edge-to-edge across the full page bleed.
+
+**Pre-resize your watermark image to the page dimensions at 96 DPI** (the resolution Flying Saucer renders at — NOT the standard 72 DPI you might assume from PDF specs):
+
+| Page size            | Pixels at 96 DPI  |
+| -------------------- | ----------------- |
+| Letter (8.5 × 11 in) | **816 × 1056 px** |
+| A4 (8.27 × 11.69 in) | **794 × 1123 px** |
+| Legal (8.5 × 14 in)  | **816 × 1344 px** |
+
+Other limitations (apply to both options):
+
+- **Text watermarks** ("DRAFT", "CONFIDENTIAL" via Word's text watermark option) are not supported. Use a picture watermark with the text rendered into a PNG.
+- **DOCX output preserves whatever Word would render natively** — these constraints only apply to PDF output.
+
+#### Approved PDF font tags
+
+Use the stable `{%font:api-name}` form for portable templates. Set the API name on the approved face and reuse it when importing that face into another environment. Existing `{%font:asset-key:revision}` tags remain supported for backward compatibility.
+
+Use `{%font:asset-key:revision}` only inside a quoted inline `style` attribute, as a complete style declaration. Copy the real tag from the approved face in **Assets → Custom Fonts**; the revision pins the exact face instead of choosing a mutable latest font.
+
+```html
+<!-- Illustrative key/revision only: replace with the tag copied from your approved face. -->
+<p style="{%font:brand-body:0123456789abcdef};font-size:12pt;color:#193b57;">Prepared for {Name}</p>
+```
+
+Use one font tag per element. Do not write `font-family:{%font:…}` or combine it with another font-family/weight/style override; the tag supplies those declarations. You can add font size, color, and other non-font-face styling. The face must have passed native PDF review; a missing, ambiguous, or unapproved revision can fail validation. Test retired/deleted font dependencies before changing them.
+
+For page furniture, use [CSS page-counter spans](#running-headers-footers) rather than putting a font tag and literal page-number tokens in the same header/footer. This registry controls native PDF rendering, not a recipient's Office font installation. See [Upload and approve a custom font](#custom-fonts).
+
+<a id="tag-signatures"></a>
+
+## Signature tags and variable signer blocks
+
+Signature tags reserve places for named signing roles. A role in the template must match the role supplied when you create the signing request.
+
+Write signing tags directly in the template body. Portwood finds these positions before it expands shared snippets. Place the reusable wording beside the signing tags as shown in [Reuse terms and HTML snippets](#shared-content).
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Signatures
+
+See [§10](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#10-e-signatures-v3) for the full signature feature. Tag syntax:
+
+```
+{@Signature_Buyer}                  v2 — typed full signature (default)
+{@Signature_Buyer:1:Full}           v3 — role=Buyer, order=1, type=Full signature
+{@Signature_Buyer:1:Initials}       v3 — initials
+{@Signature_Buyer:1:Date}           v3 — auto-filled signed date
+{@Signature_Buyer:1:DatePick}       v3 — user-chosen date
+{@Signature_Loan_Officer:2:Full}    Role names with underscores for multi-word
+{@Signature_Buyer:1:Full:inline}    v3 — compact in-place mark, no stamp card (tight layouts)
+```
+
+- **Role**: any string (Buyer, Seller, Witness, Loan_Officer, etc.). Underscores become spaces in the UI.
+- **Order**: sequence number per-role (optional, defaults to 1). Used for sequential signing and multi-placement per signer.
+- **Type**: `Full` | `Initials` | `Date` | `DatePick` (optional, defaults to `Full`).
+- **Style** (optional): add `:inline` as a final suffix (e.g. `{@Signature_Buyer:1:Full:inline}`, `{@Signature_Buyer:1:Date:inline}`) to render a **compact in-place mark** instead of the stamp card. See [§10.7.2](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md#1072-stamp-card-vs-inline--how-a-signature-renders).
+
+Pre-signing, tags are preserved in the output (not replaced). Post-signing, each tag position carries the signer's mark as a **stamp card** — drawn ink or typed name in a signature font, with a "Signed by X · date" caption (see §10.10). Date tags stamp the signed date as text.
+
+#### Signature loop block — `{#Signatures}` (variable signer count)
+
+Role tags above pin each signer to a **fixed spot** — perfect when you know the parties (Buyer + Seller). But when the **number of signers varies** (a quote signed by one person today, three next week), you'd otherwise need a separate template per count, and any unused role tag leaks as literal text.
+
+The `{#Signatures}` loop block solves this: author **one** signature layout and it repeats **once per signer**, for any count, wherever you place it in the document.
+
+```
+{#Signatures}
+  ______________________________
+  {Name}
+  Electronically signed on {SignedDate}
+  {Role} · {Email}
+{/Signatures}
+```
+
+Per-row fields available inside the block:
+
+| Field              | Value                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| `{Name}`           | The name the signer typed at signing (their e-signature); the invited name if none was captured |
+| `{RegisteredName}` | The name the signer was invited under                                                           |
+| `{Role}`           | The signer's role (defaults to `Signer`)                                                        |
+| `{Email}`          | The signer's email                                                                              |
+| `{SignedDate}`     | The date they signed (blank before signing)                                                     |
+| `{Status}`         | `Pending` before signing, `Signed` after                                                        |
+
+**Styling is yours.** The block is plain template content, so style `{Name}` however you like — an approved custom PDF face for a handwritten look, a bordered box, a two-column table of signers, etc. (HTML templates have full CSS control within the Flying Saucer CSS 2.1 subset; Word templates can style the line too.)
+
+Notes:
+
+- For a variable number of signers, put the `{#Signatures}` block in the main template body and leave out fixed-role tags. If the template includes both, the sender uses the fixed positions and the loop can stay empty.
+- **Where it applies.** The loop is populated by the snapshot/PDF-viewer signing flow (the flow that re-renders the document from a send-time data snapshot and attaches the completed PDF + certificate to the record). Before signing, the block previews the invited signers with a `Pending` status; on completion it shows each signer's typed signature and signed date.
+- The `{#Signatures}` directory loop exposes the signer's typed name and signing details as text; it does not insert a drawn-signature image into that list. Drawn signatures remain supported through the template's guided signature placement fields.
+
+<a id="tag-approvals"></a>
+
+## Print classic approval history
+
+Use this built-in relationship for classic Salesforce approval history. Check the output against a record with an actual approval submission.
+
+**Before you start:** Choose the fields and relationships in [Choose information](#choose-data). For an orientation and the format checklist, open [Find the right merge tag](#merge-tags).
+
+#### Classic Approvals related list — `{#Approvals}` (v1.92+)
+
+Render the host record's Salesforce **Classic Approvals** process history (submission, every approval/rejection step) directly in a generated document. Common use cases: Purchase Orders showing every approver up the chain in the final PDF, NDAs stamped with each signatory's role + timestamp, change-management forms with the approval audit trail rendered alongside the form data.
+
+Include the standalone word `Approvals` in the template query configuration. Portwood reads classic approval instances and steps for the host record and exposes the rows as `Approvals`.
+
+Example Query_Config\_\_c entry:
+
+```
+Name, Status__c, Amount__c, Approvals
+```
+
+Example template body:
+
+```
+{#Approvals}
+{ActorName} ({ActorTitle}) — {StepStatus} — {CreatedDate:MM/dd/yyyy h:mm a}
+Comments: {Comments}
+
+{/Approvals}
+```
+
+**Fields available inside the loop:**
+
+| Field               | Source                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ActorName`         | `Step.Actor.Name` — who actually took the action                                                       |
+| `ActorTitle`        | `Step.Actor.Title` — title on the User who acted                                                       |
+| `ActorEmail`        | `Step.Actor.Email`                                                                                     |
+| `OriginalActorName` | `Step.OriginalActor.Name` — useful when an approval was reassigned (delegated to)                      |
+| `StepStatus`        | `Started`, `Approved`, `Rejected`, `Removed`, `NoResponse` — see Salesforce docs for the full list     |
+| `Comments`          | Approver's comments (empty string when omitted)                                                        |
+| `CreatedDate`       | When the step occurred — works with the standard `{CreatedDate:MM/dd/yyyy}` format specifiers (§7.2)   |
+| `ProcessStatus`     | The parent `ProcessInstance.Status` — the overall outcome of the approval process this step belongs to |
+| `SubmittedByName`   | Who originally submitted for approval (constant within one ProcessInstance)                            |
+| `SubmittedByTitle`  | Submitter's User.Title                                                                                 |
+
+**Sorting.** Steps are sorted earliest-first within each ProcessInstance, and ProcessInstances are sorted earliest-first. So a record that was submitted, rejected, then resubmitted and approved produces the steps in chronological order across both submissions.
+
+**What's not included (yet).** Only steps that have been _acted on_ appear — pending approval items (`ProcessInstanceWorkitem`) are not in the list. If you need "still awaiting approver X", that's a separate query. Flow-based approval orchestration is a different object model and out of scope; this tag covers the Classic Approvals process only.
+
+**Cost.** One extra SOQL query per generation when the token is present. Templates that don't reference `Approvals` in Query_Config\_\_c skip the query entirely — no overhead.
+
+<a id="repeat-table-headers"></a>
+
+## Repeat table headers across PDF pages
+
+Keep the column labels close to the rows they describe. There are two levels to this: mark the header correctly, then decide whether your HTML layout needs the PDF engine's optional pagination rule.
+
+**Before you start:** You have a working repeated table. Make a copy of the template and prepare enough rows to fill at least three pages.
+
+#### For Word templates
+
+Put `{RepeatHeader}` once in the row containing the column labels. Keep the data-loop tags in the data row. Portwood removes the marker and turns the marked row into a table header during conversion.
+
+```text
+| {RepeatHeader}Name | Email |
+| {#Contacts}{Name}  | {Email}{/Contacts} |
+```
+
+For giant-query documents, save the template again after adding the marker so the prepared sections capture it. This marker identifies the header; it does not guarantee perfect per-page pagination in every PDF layout.
+
+#### For HTML templates
+
+Use a real `<thead>` for labels and `<tbody>` for the repeated row. Keep both loop markers inside cells; text placed directly between table rows can be moved by an HTML editor or parser.
+
+```html
+<table class="directory">
+    <thead>
+        <tr>
+            <th>No.</th>
+            <th>Name</th>
+            <th>Email</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{#Contacts}{RowNumber}</td>
+            <td>{Name}</td>
+            <td>{Email}{/Contacts}</td>
+        </tr>
+    </tbody>
+</table>
+```
+
+```css
+.directory {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    page-break-inside: auto;
+}
+.directory thead {
+    display: table-header-group;
+}
+.directory tr {
+    page-break-inside: avoid;
+}
+.directory th,
+.directory td {
+    border: 0.5px solid #808080;
+    padding: 5px 6px;
+}
+```
+
+Start with the header shown above. If the labels appear on the first page only, add the pagination rule below and generate the same document again.
+
+#### Opt in to per-page table pagination
+
+For a controlled HTML template, add this engine-specific rule:
+
+```css
+.directory {
+    -fs-table-paginate: paginate;
+}
+```
+
+With that rule, the downloadable lab printed all 90 rows across four pages, repeated the column header on every page, and retained the two-line page-count footer. Inspect the second page below.
+
+![Page two of the real 90-row lab shows repeated column labels and a two-line Page 2 of 4 footer](docs/images/userguide/v3.60/repeating-header-result.png)
+
+Portwood does not apply this rule to every template. Earlier layouts suffered mis-pagination with running page headers/footers and large bordered tables. Treat it as a template-specific choice: test long cells, wrapping rows, running headers, different page sizes, and the actual single, bulk, or giant-query entry point. A row taller than a page cannot be kept together simply by asking CSS to avoid a break.
+
+#### Try the exact lab
+
+Use the [HTML body](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/repeating-header-lab.html) and [Footer HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/two-line-footer.html). The lab uses prepared `Name` and `Contacts.records` data; it does not require 90 real Contacts in your org. For normal Account queries, select the Contact fields and use the matching relationship alias.
+
+**You are done when:** Every row appears once, labels repeat where needed, and no row or footer overlaps on any page.
+
+The semantic-table approach was adapted from a [Portwood Community example](https://portwoodcommunity.slack.com/archives/C0AQS3BJG6L/p1790805020706859). Try the rule with your own longest table and compare it with the [multi-page service schedule](#css-print-lab).
+
+<a id="running-headers-footers"></a>
+
+## Build rich headers and two-line page footers
+
+Use a simple page-number tag for a simple footer. Use CSS counters when you need page numbers alongside multiple formatted lines, logos, or other HTML.
+
+#### The simple footer
+
+In **Footer HTML**, enter:
+
+```html
+Page {PageNumber} of {TotalPages}
+```
+
+In the current engine, literal `{PageNumber}` or `{TotalPages}` in a header/footer selects a text-based page-margin path. The engine converts that HTML to text, so separate lines, images, and rich formatting can flatten. That explains a footer that looks right in the editor but loses its layout in the PDF.
+
+#### The rich footer
+
+1. Put these rules inside the main template body's `<head><style>…</style></head>`.
+2. Put the following HTML in the template's **Footer HTML** field.
+3. Keep literal `{PageNumber}` and `{TotalPages}` out of that header/footer.
+4. Save a new active version and generate a multi-page PDF.
+
+```css
+.pw-page-number:before {
+    content: counter(page);
+}
+.pw-total-pages:before {
+    content: counter(pages);
+}
+```
+
+```html
+<div style="text-align:center;font-family:Helvetica,Arial,sans-serif;line-height:1.3;">
+    <div style="font-size:9pt;">Page <span class="pw-page-number"></span> of <span class="pw-total-pages"></span></div>
+    <div style="font-size:7pt;color:#7d7d7d;">Northstar Bikes | 317-555-0142 | hello@example.com</div>
+</div>
+```
+
+With this setup, Portwood repeats your formatted footer and CSS supplies the page numbers. Generate a document long enough to cross a page. Keep both footer lines visible and check that `Page 1 of 4` advances all the way to `Page 4 of 4` in a four-page file.
+
+#### Make room for it
+
+Set enough top/bottom margin for the actual logo, line height, and number of lines. Choose one owner for page size and margins. Imported `@page` rules, the designer's page setup, and header/footer controls can otherwise compete.
+
+Keep counters in page furniture. These are PDF layout counters, not record fields or row numbers. A packet assembled from separately rendered PDFs can retain numbering from each original document; test whether that meets your requirement for the final packet.
+
+#### When something still looks wrong
+
+| Symptom                               | Check                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| Everything becomes one line           | Remove literal page-number tags from that header/footer and use counter spans    |
+| Footer overlaps the body              | Increase the bottom margin and reduce oversized content                          |
+| Page number is blank                  | Keep the CSS in the main body stylesheet; verify exact class names and final PDF |
+| Custom font and literal counters fail | Use running HTML plus CSS counters and test the approved font specimen           |
+| Header image is missing               | Confirm image access and dimensions in the actual render path                    |
+
+This recipe adapts Dave's [two-line footer answer in Portwood Community](https://portwoodcommunity.slack.com/archives/C0B37JT11RA/p1792162191491549). You can compare the layout with the [finished service schedule](#css-print-lab).
+
+<a id="grouped-reports"></a>
+
+## Build grouped reports without broken table markup
+
+Use one dataset and `{#GroupBy}` when the categories can change. Use deliberately filtered query aliases when each section has a different data-selection rule.
+
+[Build nested bundle tables from a priced quote.](#cpq-quote)
+
+#### One table per stage
+
+Select Opportunities with `Name`, `StageName`, and `Amount`. Sort by `StageName` if you want groups in stage order. This HTML wraps a complete table in the group and keeps the row loop inside its cells:
+
+```html
+<div>{#GroupBy Opportunities by StageName}</div>
+<h2>{GroupName}</h2>
+<table style="width:100%;border-collapse:collapse;">
+    <thead>
+        <tr>
+            <th>Opportunity</th>
+            <th>Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{#Opportunities}{Name}</td>
+            <td>{Amount:currency}{/Opportunities}</td>
+        </tr>
+    </tbody>
+</table>
+<p>Stage total: {SUM:Opportunities.Amount:currency}</p>
+<div>{/GroupBy}</div>
+<p>All stages: {SUM:Opportunities.Amount:currency}</p>
+```
+
+Inside the group, the Opportunities relationship contains that group's members. Outside it, the total sees the whole available relationship. `{RowNumber}` restarts within each group's row loop.
+
+#### A different alias is not a filter
+
+Renaming `{#QuoteLineItems}` to `{#Purchase}` does not select purchase items. `Purchase` must exist in Query Config or the supplied data. Either configure two filtered aliases, use a prepared provider, or keep the real relationship and apply conditions to its rows. A conditional display does not automatically change an aggregate over the unfiltered relationship.
+
+#### Keep table HTML valid
+
+Do not place naked loop/IF text directly between `<table>`, `<tbody>`, and `<tr>`. Browsers can move that text outside the table before Portwood processes it. Keep row-loop markers in cells, and place group markers outside complete tables. After switching between visual editing and HTML, inspect the saved markup and preview again.
+
+#### Respect scope
+
+Within a Contact loop, `{Name}` means the Contact's Name. To print the root Account's Name, use a uniquely named root block such as `{~AccountHeading}{Name}{/AccountHeading}`. Root-scope blocks are unsupported inside giant-query loops; use a prepared layout/data structure for that case.
+
+Test zero, one, and several groups, blank category values, and long labels. Compare group totals with a trusted Salesforce report before sharing the document.
+
+<a id="engine-tuning"></a>
+
+## Tune a demanding document
+
+Start with the smallest document that proves the business result. Add data, graphics, and styling in stages so you can tell which change creates a problem.
+
+#### Pick the path for the job
+
+| Job                                                  | Starting point                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| One normal record, interactive download              | Record-page Runner                                           |
+| Many parent records                                  | Bulk Generation or Generate Bulk Documents Flow action       |
+| One parent with a very large child list              | Auto Giant Query / the supported giant-query path            |
+| Computed or external data already prepared           | JSON data or `DocGenDataProvider`; own the access checks     |
+| A PDF Blob for another process, without a saved File | Global `DocGenService.generatePdfBlob…`                      |
+| A packet of Portwood-native PDF parts in Apex        | Global `DocGenPdfMerger`, within its supported PDF structure |
+
+Giant-query generation is asynchronous once it crosses the engine's large-relationship threshold. Follow the returned job rather than expecting an immediate File Id. It is different from bulk generation across many parent records.
+
+#### Make the data smaller before making the heap larger
+
+Select only used fields, filter relationships, order them deliberately, and set justified limits. Avoid huge rich-text fields and full-resolution images when the document prints a small thumbnail. A query limit changes the document's data and totals; disclose intended truncation to the reader rather than quietly hiding rows.
+
+Use standard retrieval when it fits. When you supply JSON or an Apex map, Portwood cannot know whether your code was allowed to retrieve each value; enforce sharing, object access, and field access in the caller/provider.
+
+#### Work with transaction boundaries
+
+Do not assume a rendering API can run synchronously from a trigger or after arbitrary DML. Queue the document work into a fresh transaction and test the exact Flow/Apex entry point. Bulk rendering, chart preparation, file saves, and merging all consume resources. A method accepting a list does not promise unlimited work in one transaction.
+
+Keep durable job outcomes and retries in your own process. Avoid retrying after an uncertain success without checking for the existing File/request; duplicate retries can create duplicate documents or invitations.
+
+#### Use the PDF engine's strengths
+
+Use tables for aligned print layouts, fixed units for controlled dimensions, simple borders, and a supported font. The renderer follows a CSS 2.1/paged model; browser flex/grid layouts, shadows, rounded corners, and JavaScript are not a reliable PDF design foundation. Use a pre-rendered image when a visual effect cannot be represented by the print engine.
+
+For precise Word conversion, fix table widths and AutoFit rather than repeatedly changing the PDF's margins. The [layout reference](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md) includes the width traps and a constrained HTML-authoring prompt.
+
+#### Diagnose one variable at a time
+
+1. Confirm the template, active version, record, output type, and running user.
+2. Reduce to one field and one related row.
+3. Add the original query selection, then loops and totals.
+4. Add images, then charts, then page furniture.
+5. Reintroduce the failing data volume last.
+6. Compare preview, record Runner, and the actual automation path; they can prepare assets differently.
+
+For a release, keep small, empty, long-text, many-row, multi-page, and representative image cases. Inspect the final files, not only the designer preview. A screenshot captures a symptom; the template version, query, data shape, and execution path make it reproducible.
+
+<a id="apex-generation"></a>
+
+## Generate documents from your own Apex
+
+Use `portwoodglobal.DocGenService` from subscriber Apex. Start with the method that matches the result your process needs.
+
+#### Choose the method
+
+| Result you need                           | Global method                                                                 | Result                                                     |
+| ----------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| A File on the source record               | `generateDocument(templateId, recordId)`                                      | `ContentDocumentId`                                        |
+| An explicit compatible output type        | `generateDocument(templateId, recordId, outputFormatOverride)`                | `ContentDocumentId`                                        |
+| A saved File with a chosen title          | `generateDocument(templateId, recordId, outputFormatOverride, documentTitle)` | `ContentDocumentId`                                        |
+| A different attachment target             | Add `attachmentRecordId` as the fifth argument                                | `ContentDocumentId`; null target creates a standalone File |
+| PDF bytes without a saved File            | `generatePdfBlob(templateId, recordId)`                                       | Map with `blob` and `title`                                |
+| A saved File from an already prepared map | `generateDocumentFromData(templateId, recordId, data)`                        | `ContentDocumentId`                                        |
+| PDF bytes from a prepared map             | `generatePdfBlobFromData(templateId, data)`                                   | Map with `blob` and `title`                                |
+| Prepared data with record context         | `generatePdfBlobFromData(templateId, recordId, data)`                         | Map with `blob` and `title`                                |
+| Prepared data, output type, and File save | `generateAndSaveFromData(templateId, recordId, data, outputFormatOverride)`   | `ContentDocumentId`                                        |
+
+`generateAndSaveFromData` also accepts a fifth `documentTitle` and a sixth `fileAttachmentTarget`. The second argument remains required. Passing a null sixth argument creates a standalone File; use a Blob method if you want no File at all.
+
+#### Generate after the business transaction
+
+A trigger or Flow can change records and then queue the document work. The worker gets a fresh transaction. Rendering is subject to platform transaction rules; do not paste a synchronous PDF call directly into a trigger and assume it is supported there.
+
+The downloadable [KBGenerateAccountBrief class](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/apex/KBGenerateAccountBrief.cls) was deployed and executed in the fresh subscriber org. It looks up the template by its stable API Name and calls the global generation service from a Queueable implementing `Database.AllowsCallouts`.
+
+```apex
+// Run in your process after deciding this Account needs a document.
+System.enqueueJob(new KBGenerateAccountBrief(accountId));
+```
+
+The example uses `KB_Account_Brief`, the [worked example](#example-library). Replace that stable key with your own template API Name. For a real deployment, add job outcome reporting, retries with duplicate protection, access checks appropriate to the caller, and tests for the business trigger.
+
+#### Return bytes to another process
+
+```apex
+Map<String, Object> result = portwoodglobal.DocGenService.generatePdfBlob(templateId, accountId);
+Blob pdf = (Blob) result.get('blob');
+String title = (String) result.get('title');
+// Your code can attach the bytes to an email or pass them to another system.
+// This Portwood method does not itself send an email or create a File.
+```
+
+Read all inputs before rendering; keep preceding DML out of the render transaction. Test the exact document, image, and chart path you will use. Large outputs still consume Apex heap even when you do not save a File.
+
+#### Handle access and failures deliberately
+
+The standard retrieval path uses user-mode queries. A prepared map skips the source-record retrieval; template, file, font, and other supporting queries can still consume SOQL budget. Prepared maps and custom providers bypass that retrieval, so caller code must enforce access on the data it supplies. `with sharing` alone does not enforce field access.
+
+Catch `portwoodglobal.DocGenException` for Portwood validation failures, and handle other platform/transaction failures in your job framework. Log safe identifiers and the failure reason; do not write entire documents, signing URLs, or sensitive merged values into logs.
+
+The package's `DocGenController` and `DocGenBulkController` are internal UI controllers, not exported subscriber APIs. `@AuraEnabled` does not make a public controller global. Call the exported service/actions or your own authorized wrapper.
+
+<a id="apex-data-provider"></a>
+
+## Build a custom Apex data provider
+
+A provider prepares the dataset before Portwood merges it. Use one for calculated values, deliberately shaped reports, or data that the visual query builder cannot express.
+
+#### 1. Implement both required methods
+
+```apex
+global interface DocGenDataProvider {
+    Map<String, Object> getData(Id recordId);
+    List<String> getFieldNames();
+}
+```
+
+Your class implements `portwoodglobal.DocGenDataProvider`; expose both methods as global. `getData()` supplies values and `getFieldNames()` supplies the authoring field list. The old one-method example was incomplete.
+
+Use the complete [KBAccountProvider class](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/apex/KBAccountProvider.cls) and its [metadata file](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/apex/KBAccountProvider.cls-meta.xml). It uses `with sharing` and `WITH USER_MODE`, selects standard Account/Contact fields, limits the Contact query to 100, and implements both methods. The ContactCount is the count of those returned rows, not a claim to count unlimited Contacts.
+
+#### 2. Understand the data shape
+
+```apex
+Map<String, Object> data = new Map<String, Object>{
+    'Name' => 'Northstar Bikes',
+    'Owner' => new Map<String, Object>{'Name' => 'Practice Owner'},
+    'Contacts' => new Map<String, Object>{
+        'records' => new List<Object>{
+            new Map<String, Object>{'Name' => 'Avery Chen', 'Email' => 'avery@example.com'}
+        }
+    }
+};
+```
+
+| Data                              | Template                                |
+| --------------------------------- | --------------------------------------- |
+| Root scalar                       | `{Name}`                                |
+| Nested map                        | `{Owner.Name}`                          |
+| Relationship wrapper with records | `{#Contacts}{Name}: {Email}{/Contacts}` |
+
+Inside the loop, `Name` is the Contact's key. Include parent paths and list field paths in `getFieldNames()` so an author can discover them. Keep shape and casing stable as your provider evolves.
+
+#### 3. Bind the template
+
+Choose **Apex Class (Data Provider)** as its data source and enter `KBAccountProvider`, or set the equivalent Query Config:
+
+```json
+{ "v": 4, "provider": "KBAccountProvider" }
+```
+
+Save and activate a version, select a valid sample Account, and preview. In the example, the preview returned Northstar Bikes and two Contacts. With your own sample record, compare the Account name and Contact rows with the record in Salesforce.
+
+#### 4. Test your own boundary cases
+
+Test an inaccessible record/field, no related rows, null values, many rows, and the intended Flow/bulk path. Keep data selection separate from layout so a template change does not silently widen access. A provider is responsible for sharing, object/field permissions, and any external integration policy.
+
+#### Use a map without a provider
+
+If your calling process already has the data, use `generatePdfBlobFromData` or `generateAndSaveFromData`. The same root/map/records shape applies. You do not need to insert temporary Salesforce records just to merge calculated values.
+
+<a id="apex-actions"></a>
+
+## Call Flow actions and signing APIs from Apex
+
+The global action classes can be called by subscriber Apex as well as Flow. Build their published request types and inspect the returned result for every input.
+
+#### Action directory
+
+| Class and entry point                                                 | Use                                                            | Result to follow                                      |
+| --------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------- |
+| `DocGenFlowAction.generateDocument(List<Request>)`                    | Normal document generation, optional JSON data and save target | Success/error, ContentDocumentId and ContentVersionId |
+| `DocGenGiantQueryFlowAction.generateDocument(List<Request>)`          | Automatic small/giant path selection                           | Immediate File or jobId plus isGiantQuery             |
+| `DocGenBulkFlowAction.generateBulkDocuments(List<Request>)`           | Many parent records                                            | jobId and success/error                               |
+| `DocGenSignatureFlowAction.generate(List<Request>)`                   | Create a current signing request                               | Request Id, ordered signer links and success/error    |
+| `DocGenFieldWritebackService.writeBackFields(List<WritebackRequest>)` | Retry completed-request signer-field writeback                 | Inspect resulting record fields/errors                |
+
+See the generated [global declarations](#apex-surface) for every published DTO field, and the task articles for the meaning of the Flow inputs.
+
+#### Generate through a request object
+
+```apex
+portwoodglobal.DocGenFlowAction.Request input = new portwoodglobal.DocGenFlowAction.Request();
+input.templateApiName = 'KB_Account_Brief';
+input.recordId = accountId;
+input.saveToRecord = true;
+List<portwoodglobal.DocGenFlowAction.Response> results =
+    portwoodglobal.DocGenFlowAction.generateDocument(
+        new List<portwoodglobal.DocGenFlowAction.Request>{input});
+if (!results[0].success) {
+    System.debug(LoggingLevel.ERROR, results[0].errorMessage);
+}
+```
+
+Run rendering in a supported fresh transaction. A list input is a contract shape, not permission to render an unlimited number of PDFs in one transaction.
+
+The Generate Document request above was compiled and executed against the installed subscriber package; it returned success and a File Id.
+
+#### Build current signers
+
+```apex
+portwoodglobal.DocGenSigner signer = new portwoodglobal.DocGenSigner();
+signer.name = 'Jordan Rivera';
+signer.email = 'jordan@example.com'; // replace with an intended recipient you control for testing
+signer.role = 'Customer'; // matches {@Signature_Customer} in the practice template
+portwoodglobal.DocGenSignatureFlowAction.Request input =
+    new portwoodglobal.DocGenSignatureFlowAction.Request();
+input.templateApiName = 'KB_Signing_Practice';
+input.relatedRecordId = accountId;
+input.signerRecords = new List<portwoodglobal.DocGenSigner>{signer};
+input.signingOrder = 'Single';
+input.sendEmails = false;
+input.requireEmailVerification = false; // deliberate no-code test; choose your real policy
+List<portwoodglobal.DocGenSignatureFlowAction.Result> results =
+    portwoodglobal.DocGenSignatureFlowAction.generate(
+        new List<portwoodglobal.DocGenSignatureFlowAction.Request>{input});
+// Check success/errorMessage before consuming signatureRequestId or signerUrls.
+```
+
+Configure the public [signing site](#setup-signatures) first. Setting `sendEmails=false` suppresses invitation delivery; it is not the internal authenticated-preview mode and does not remove the need for email infrastructure if verification is enabled. Signing URLs are credentials: deliver them only to their intended recipients.
+
+The signing request shape was also compiled and executed in the subscriber org with invitations and verification disabled. Its link loaded the PDF and both placements in a clean guest browser. That test did not submit the public request or exercise email delivery.
+
+#### Avoid legacy-token traps
+
+`DocGenSignaturePdfFlowAction.send` is deprecated; use Create Signature Request for new integrations. `DocGenSignatureValidator` can validate both modern signer tokens and legacy request tokens. `DocGenSignatureSubmitter` and `DocGenSignatureFinalizer` only submit/finalize the legacy request-token workflow; successful validation does not make those actions compatible with a modern token. Do not use the submitter/finalizer to inject a captured signature into a current v3 signer token; that is unsupported.
+
+Use `DocGenSigner` for the signer collection. The older nested Signer type and parallel legacy lists remain published for compatibility, but the standalone type is the usable choice for new Flow authoring.
+
+`DocGenSignaturePreparationController` also has global methods for the authenticated uploaded-PDF preparation UI: context, PDF selection/upload, draft load/save/send. They enforce record/draft ownership and expected revisions. This UI-oriented JSON/revision workflow is more coupled than the service/action APIs; use the packaged sender unless you intentionally own that full preparation experience.
+
+<a id="apex-utilities"></a>
+
+## Use PDF, email, and cleanup helpers
+
+These global helpers support specific jobs. Read the input limits before putting one into your process.
+
+#### Merge PDF files in order
+
+```apex
+Blob packet = portwoodglobal.DocGenPdfMerger.mergePdfs(
+    new List<Blob>{firstPdf, secondPdf}, true);
+Integer pages = portwoodglobal.DocGenPdfMerger.pageCount(packet);
+```
+
+`mergePdfCvs(List<Id>, Boolean)` accepts ContentVersion Ids and loads parts incrementally. Passing `true` adds a blank page after every odd-length part, including the last part. Two one-page parts therefore produce four pages. The blank pages carry no page number; the content pages retain numbering baked into their original render.
+
+The native merger handles standard uploaded PDFs, including supported compressed object and cross-reference streams. Ordinary AcroForm values are kept under separate field names for each source. Encrypted, signed, XFA and scripted forms are rejected. Catch `DocGenPdfMerger.DocGenPdfMergeException` for unsupported inputs. For exact file-version inputs and a saved File output, use [Merge PDFs in Flow](#merge-pdfs-flow).
+
+To check duplex padding, merge two one-page PDFs. The result should have four pages, with the two originals on pages one and three.
+
+#### Render a branded email without sending it
+
+```apex
+Map<String, String> tokens = new Map<String, String>{
+    'SignerName' => 'Jordan Rivera', 'DocumentTitle' => 'Practice document',
+    'SignatureUrl' => 'https://example.com/practice'
+};
+portwoodglobal.DocGenEmailTemplateService.RenderedEmail email =
+    portwoodglobal.DocGenEmailTemplateService.render(
+        portwoodglobal.DocGenEmailTemplateService.TYPE_REQUEST, tokens);
+String subject = email.subject;
+String html = email.htmlBody;
+String plainText = email.plainBody;
+```
+
+Overloads add `messageOverride`, then `brandId`. `renderSubject(String, Map<String,String>)` resolves subject tokens. Rendering does not send an email, create a request, or authorize a signing URL. Use the appropriate email type/token contract and a real request's URL when building an actual notification.
+
+The rendered subject and body were checked in the fresh org. No email was sent by this rendering test.
+
+#### Schedule transient chart/PDF-part cleanup
+
+```apex
+System.schedule('Portwood transient cleanup', '0 0 * * * ?',
+    new portwoodglobal.DocGenChartCvReaper());
+```
+
+Inspect Scheduled Jobs first so you do not add duplicate schedules. `reap()` is also exported and returns the number cleaned. The current helper targets old, orphan transient `chart_`/`pdfpart_` files, with age/job-state checks and a bounded batch. It is not a general Salesforce Files retention policy.
+
+`DocGenEmailTemplateInstall` is the package install handler; `seedDefaults()` is an exported setup utility. Normal document generation does not require calling the install handler yourself.
+
+#### Add native AI authoring
+
+`DocGenAiProvider` requires `isAvailable()`, `getName()`, and `generateHtml(String)`. The optional Agentforce extension exports `DocGenEinsteinProvider`. Use [Agentforce setup](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/AGENTFORCE_SETUP.md) for entitlement and configuration. The native provider contract uses Einstein/ConnectApi and explicitly excludes HTTP-callout providers. Return a complete HTML document and handle unavailable configuration through `isAvailable()`.
+
+<a id="apex-surface"></a>
+
+## All exported global Apex declarations
+
+This inventory is generated from the same source checkout as the guide. It includes core global types, nested request/result types and fields, interface methods, and the optional Agentforce extension. It gives you an exact place to check an overload or DTO field while using the worked integration articles.
+
+**Before you start:** Use the `portwoodglobal` namespace for core types in subscriber Apex. The optional extension requires its own installation/setup. Published legacy members remain in this list; their presence does not make them the preferred API for new work. Read the [action compatibility notes](#apex-actions) and [utility limits](#apex-utilities).
+
+A source update that changes an exported declaration makes the generated guide stale until it is rebuilt. Review the related integration article and test your subscriber code against the new released package before marking the next release reviewed.
+
+#### DocGenAiProvider
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenAiProvider.cls)
+
+```apex
+global interface DocGenAiProvider
+Boolean isAvailable()
+String getName()
+String generateHtml(String prompt)
+```
+
+#### DocGenBulkFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenBulkFlowAction.cls)
+
+```apex
+global with sharing class DocGenBulkFlowAction
+global class Request
+global Id templateId
+global String templateApiName
+global String queryCondition
+global List<String> recordIds
+global String sortOrder
+global String jobLabel
+global Boolean combinedPdfOnly
+global Boolean keepIndividualFiles
+global Boolean browserMerge
+global Boolean duplexPadding
+global Integer batchSize
+global class Response
+global Id jobId
+global String downloadUrl
+global String errorMessage
+global Boolean success
+global static List<Response> generateBulkDocuments(List<Request> requests)
+```
+
+#### DocGenBulkPdfDownloadController
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenBulkPdfDownloadController.cls)
+
+```apex
+global with sharing class DocGenBulkPdfDownloadController
+global static Object describe(String jobId)
+global static Object getManifestPage(String jobId, String revisionKey, Integer afterOrdinal)
+global static List<String> getSources(String jobId, String revisionKey, List<Integer> ordinals)
+```
+
+#### DocGenChartCvReaper
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenChartCvReaper.cls)
+
+```apex
+global with sharing class DocGenChartCvReaper implements Schedulable
+global void execute(SchedulableContext ctx)
+global static Integer reap()
+```
+
+#### DocGenDataProvider
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenDataProvider.cls)
+
+```apex
+global interface DocGenDataProvider
+Map<String, Object> getData(Id recordId)
+List<String> getFieldNames()
+```
+
+#### DocGenEmailTemplateInstall
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenEmailTemplateInstall.cls)
+
+```apex
+global with sharing class DocGenEmailTemplateInstall implements InstallHandler
+global void onInstall(InstallContext context)
+global static Integer seedDefaults()
+```
+
+#### DocGenEmailTemplateService
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenEmailTemplateService.cls)
+
+```apex
+global with sharing class DocGenEmailTemplateService
+global static final String TYPE_REQUEST = 'Signature_Request'
+global static final String TYPE_REMINDER = 'Signature_Reminder'
+global static final String TYPE_PIN = 'Verification_PIN'
+global static final String TYPE_SIGNER_COMPLETED = 'Signer_Completed'
+global static final String TYPE_ALL_SIGNED = 'All_Signed'
+global static final String TYPE_DECLINED = 'Signer_Declined'
+global static final String TYPE_REVOKED = 'Signature_Revoked'
+global static final String TYPE_COMPLETION = 'Completion_Confirmation'
+global static final List<String> ALL_TYPES = new List<String>
+global static final String MODE_MANAGED = 'Managed'
+global static final String MODE_FULL_HTML = 'Full_Html'
+global class RenderedEmail
+global String subject
+global String htmlBody
+global String plainBody
+global static RenderedEmail render(String type, Map<String, String> tokens)
+global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride)
+global static RenderedEmail render(String type, Map<String, String> tokens, String messageOverride, Id brandId)
+global static String renderSubject(String subjectTemplate, Map<String, String> tokens)
+```
+
+#### DocGenException
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenException.cls)
+
+```apex
+global with sharing class DocGenException extends Exception
+```
+
+#### DocGenFieldWritebackService
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenFieldWritebackService.cls)
+
+```apex
+global without sharing class DocGenFieldWritebackService
+global class WritebackRequest
+global String requestId
+global WritebackRequest()
+global static void writeBackFields(List<WritebackRequest> requests)
+```
+
+#### DocGenFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenFlowAction.cls)
+
+```apex
+global with sharing class DocGenFlowAction
+global class Request
+global Id templateId
+global String templateApiName
+global Id recordId
+global Boolean saveToRecord
+global String documentTitle
+global String outputFormatOverride
+global String jsonData
+global class Response
+global Id contentDocumentId
+global Id contentVersionId
+global String errorMessage
+global Boolean success
+global static List<Response> generateDocument(List<Request> requests)
+```
+
+#### DocGenGiantQueryFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenGiantQueryFlowAction.cls)
+
+```apex
+global with sharing class DocGenGiantQueryFlowAction
+global class Request
+global Id templateId
+global Id recordId
+global Boolean saveToRecord
+global class Response
+global Id contentDocumentId
+global Id contentVersionId
+global Id jobId
+global Boolean isGiantQuery
+global String errorMessage
+global Boolean success
+global static List<Response> generateDocument(List<Request> requests)
+```
+
+#### DocGenMigrationRest
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenMigrationRest.cls)
+
+```apex
+global with sharing class DocGenMigrationRest
+global static void readConfiguration()
+global static void createConfiguration()
+global static void discardStage()
+```
+
+#### DocGenPdfMergeFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenPdfMergeFlowAction.cls)
+
+```apex
+global with sharing class DocGenPdfMergeFlowAction
+global class Request
+global List<String> contentVersionIds
+global String contentVersionIdsText
+global String documentTitle
+global Id relatedRecordId
+global Boolean padOddDocuments
+global class Response
+global Id contentVersionId
+global Id contentDocumentId
+global Boolean success
+global String errorMessage
+global static List<Response> mergePdfs(List<Request> requests)
+```
+
+#### DocGenPdfMerger
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenPdfMerger.cls)
+
+```apex
+global with sharing class DocGenPdfMerger
+global class DocGenPdfMergeException extends Exception
+global static Blob mergePdfs(List<Blob> pdfs, Boolean padOddDocuments)
+global static Blob mergePdfCvs(List<Id> partCvIds, Boolean padOddDocuments)
+global static Integer pageCount(Blob pdf)
+```
+
+#### DocGenService
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenService.cls)
+
+```apex
+global with sharing class DocGenService
+global static Map<String, Object> generatePdfBlob(Id templateId, Id recordId)
+global static Id generateDocument(Id templateId, Id recordId)
+global static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride)
+global static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride, String documentTitle)
+global static Id generateDocument( Id templateId, Id recordId, String outputFormatOverride, String documentTitle, Id attachmentRecordId )
+global static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData)
+global static Map<String, Object> generatePdfBlobFromData( Id templateId, Id recordId, Map<String, Object> preloadedRecordData )
+global static Map<String, Object> generatePdfBlobFromData(Id templateId, Map<String, Object> dataMap)
+global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride )
+global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride, String documentTitle )
+global static Id generateAndSaveFromData( Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride, String documentTitle, Id fileAttachmentTarget )
+```
+
+#### DocGenSignatureFinalizer
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignatureFinalizer.cls)
+
+```apex
+global without sharing class DocGenSignatureFinalizer
+global class FinalizeRequest
+global String token
+global String base64Image
+global static void finalizeSignature(List<FinalizeRequest> requests)
+```
+
+#### DocGenSignatureFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignatureFlowAction.cls)
+
+```apex
+global with sharing class DocGenSignatureFlowAction
+global class Signer
+global Signer()
+global String name
+global String email
+global String role
+global Id contactId
+global class Request
+global Id templateId
+global String templateApiName
+global Id relatedRecordId
+global List<Signer> signers
+global List<DocGenSigner> signerRecords
+global List<String> signerNames
+global List<String> signerEmails
+global List<String> signerRoles
+global List<String> signerContactIds
+global Boolean sendEmails
+global String signingOrder
+global String emailMessage
+global String emailSubject
+global Boolean requireEmailVerification
+global Boolean prefillSignerEmail
+global Integer expirationDays
+global class Result
+global Id signatureRequestId
+global List<String> signerUrls
+global List<String> signerNames
+global List<String> signerEmails
+global List<String> signerRoles
+global String emailStatus
+global Boolean success
+global String errorMessage
+global static List<Result> generate(List<Request> requests)
+```
+
+#### DocGenSignaturePdfFlowAction
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignaturePdfFlowAction.cls)
+
+```apex
+global with sharing class DocGenSignaturePdfFlowAction
+global class Request
+global Id templateId
+global Id contentVersionId
+global Id relatedRecordId
+global List<DocGenSigner> signerRecords
+global String signingOrder
+global String documentTitleFormat
+global class Result
+global Id signatureRequestId
+global List<String> signerUrls
+global List<String> signerNames
+global List<String> signerEmails
+global List<String> signerRoles
+global Boolean success
+global String errorMessage
+global static List<Result> send(List<Request> requests)
+```
+
+#### DocGenSignaturePreparationController
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignaturePreparationController.cls)
+
+```apex
+global with sharing class DocGenSignaturePreparationController
+global static List<Contact> searchContacts(Id recordId, String search)
+global static Map<String, Object> getContext(Id recordId)
+global static Map<String, Object> uploadPdf(Id recordId, String fileName, String base64Pdf)
+global static Map<String, Object> selectPdf(Id recordId, Id contentVersionId)
+global static Map<String, Object> loadDraft(Id recordId, Id draftId)
+global static Integer saveDraft(Id recordId, Id draftId, Integer expectedRevision, String configJson)
+global static Map<String, Object> sendDraft(Id recordId, Id draftId, Integer expectedRevision, String configJson)
+```
+
+#### DocGenSignatureSubmitter
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignatureSubmitter.cls)
+
+```apex
+global without sharing class DocGenSignatureSubmitter
+global class FlowInput
+global String token
+global String signatureData
+global class FlowOutput
+global Boolean isSuccess
+global String errorMessage
+global static List<FlowOutput> submitSignature(List<FlowInput> inputs)
+```
+
+#### DocGenSignatureValidator
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSignatureValidator.cls)
+
+```apex
+global without sharing class DocGenSignatureValidator
+global class FlowInput
+global String token
+global class FlowOutput
+global Boolean isValid
+global String errorMessage
+global String signerName
+global String documentTitle
+global String documentUrl
+global static List<FlowOutput> validateToken(List<FlowInput> inputs)
+```
+
+#### DocGenSigner
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenSigner.cls)
+
+```apex
+global class DocGenSigner
+global DocGenSigner()
+global String name
+global String email
+global String role
+global Id contactId
+```
+
+#### DocGenEinsteinProvider
+
+Optional Agentforce extension · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/agentforce-ext/main/default/classes/DocGenEinsteinProvider.cls)
+
+```apex
+global with sharing class DocGenEinsteinProvider implements DocGenAiProvider
+global String getName()
+global Boolean isAvailable()
+global String generateHtml(String prompt)
+global class DocGenAiException extends Exception
+```
+
+<a id="site-salesforce"></a>
+
+## Create the Salesforce signing site
+
+A Salesforce Site gives external recipients a public doorway to the signing experience. Each recipient opens their own signing link without a Salesforce login or an individual Portwood license. Your site’s guest user needs Portwood license coverage.
+
+**Before you start:** Install Portwood and use a Salesforce administrator account. This walkthrough uses **Salesforce Sites**. If your organization already uses Experience Cloud, follow [the Experience Cloud route](#site-experience-cloud) instead.
+
+#### 1. Open Sites
+
+1. Open the gear menu and choose **Setup**.
+2. Type **Sites** in Quick Find.
+3. Open **Sites** under **Sites and Domains**.
+4. If this org has no Salesforce Sites domain, register the intended available domain using Salesforce's on-screen process. Domain selection belongs to your organization's site plan; check it before registering.
+5. Click **New**.
+
+In the fresh scratch org, Salesforce had already provisioned a Sites domain. A new production org can show a domain-registration step first. Salesforce describes these controls in [Manage Salesforce Sites](https://help.salesforce.com/s/articleView?id=platform.sites_managing_sites.htm&language=en_US&type=5).
+
+#### 2. Name and activate the site
+
+| Field                      | Example or choice                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Site Label                 | Portwood Signing                                                                                       |
+| Site Name                  | Portwood_Signing; check the generated value                                                            |
+| Site Contact               | The internal user responsible for this site                                                            |
+| Default Record Owner       | An appropriate active internal user                                                                    |
+| Default Web Address        | A short unused path such as `sign`                                                                     |
+| Active                     | Selected                                                                                               |
+| Active Site Home Page      | Use the lookup to choose `portwoodglobal.DocGenSignature`, or your organization's neutral landing page |
+| Clickjack Protection Level | Leave the recommended same-origin protection for this standalone signing site                          |
+
+Use the home-page lookup rather than guessing its API spelling. Managed pages appear with the namespace, and typed lookup values can fail to resolve. The home page does not replace the complete signing URL generated for each request.
+
+Save. On **Site Details**, copy the HTTPS domain plus the site's path from **Custom URLs**. For example:
+
+```text
+https://your-domain.my.salesforce-sites.com/sign
+```
+
+Your domain will differ. The example is a base address, not a signing link.
+
+![A newly created Salesforce Site shows its active state, home page, and Custom URLs](docs/images/userguide/v3.60/site-details.png)
+
+#### 3. Enable the packaged public pages
+
+1. On Site Details, find **Site Visualforce Pages** and click **Edit**.
+2. Move these pages into **Enabled Visualforce Pages**:
+    - `portwoodglobal.DocGenSignature`
+    - `portwoodglobal.DocGenSignaturePdf`
+    - `portwoodglobal.DocGenVerify`
+    - `portwoodglobal.DocGenSign`
+3. Save.
+
+The home page may already be enabled. `DocGenSignaturePrepare` is the authenticated preparation UI used by your internal senders; it is not one of the public pages to add for this setup.
+
+![The enabled-page list includes all four packaged public signing pages](docs/images/userguide/v3.60/site-enabled-pages.png)
+
+Salesforce documents the available/enabled list in [Assign Visualforce Pages to a Site](https://help.salesforce.com/s/articleView?id=platform.sites_site_pages.htm&language=en_US&type=5).
+
+#### 4. Give this site's guest user the packaged permission set
+
+Each site has its own guest user. Assigning a permission set to yourself or a different site's guest will not complete this step.
+
+1. Return to Site Details and click **Public Access Settings**.
+2. On the guest profile, click **View Users**.
+3. Open the user named for this site, such as **Portwood Signing Site Guest User**.
+4. With per-user licensing, find **Managed Packages** on this guest user. Assign an available **Portwood** license if it is missing. A Portwood site license already covers the guest. [See the license assignment screens](#user-licenses)
+5. In **Permission Set Assignments**, click **Edit Assignments**. Move **Portwood Guest Signature** to **Enabled Permission Sets** and save.
+
+![Portwood Guest Signature is selected for this site's guest user](docs/images/userguide/v3.60/site-guest-permission.png)
+
+Use the packaged permission set as the starting point. Do not grant a guest the Admin permission set or broad Account/Contact access to make signing work. The signing pipeline uses the specific request/link and packaged access controls.
+
+#### 5. Tell Portwood where the site lives
+
+1. Open the **Portwood** app and its **Signatures** workspace.
+2. Paste the base address into **Signature Site URL**, including your site's path such as `/sign`.
+3. Save the setting and click **Re-check Setup**.
+4. Follow [Configure signing email](#site-email) for the sender and verification delivery.
+
+Do not include `/apex/…`, a token, or a single recipient's signing link in the base setting.
+
+#### 6. Prove the public path
+
+Create a practice request and open its generated signing link in a private browser window signed out of Salesforce. Check document preview, required fields, consent, submission, request status, and the saved completed file. Once email is configured, repeat with verification enabled and an inbox you control.
+
+![The practice document and its signature/date fields load in a clean public guest browser](docs/images/userguide/v3.60/site-public-preview.png)
+
+**You are done when:** The intended public signer can finish the full request. A green setup checklist is a configuration check, not a substitute for this test.
+
+<a id="site-experience-cloud"></a>
+
+## Use an Experience Cloud signing site
+
+Use this route when your organization wants signing served through an Experience Cloud site. The standalone [Salesforce Site walkthrough](#site-salesforce) is the simpler starting point when you do not need a wider portal.
+
+**Before you start:** Your administrator owns an active Experience Cloud site, its domain, and its guest-access policy. Experience templates and administrative screens vary; follow Salesforce's [Create an Experience Cloud Site](https://help.salesforce.com/s/articleView?id=networks_creating.htm&language=en_US&type=5) for the site's initial creation and publication.
+
+#### Decide how customers will sign
+
+| What happens in your community or portal                                            | What you need                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A customer opens a private invitation link without logging in to the portal         | With per-user licensing, assign a Portwood license to this site’s Salesforce guest user. Public recipients need no individual seat. Assign **Portwood Guest Signature** to the guest user.                                     |
+| A customer or partner logs in and signs as a member, including inside a Screen Flow | **Authenticated signing requires a Portwood site license.** Give the member Salesforce access to this site, its signing page and the specific Screen Flow. For the embedded signing screen, assign **Portwood Portal Signer**. |
+| The portal offers both routes                                                       | The org’s site license covers the members and the guest user. Configure the guest and member permissions for their respective signing routes.                                                                                  |
+
+For a members-only experience, arrange the site license and test the Flow as a customer or partner. [Request an enterprise site-license quote](https://calendar.app.google/HJLhcSFRFDoqxXEM9) · [Add the signing screen to a Flow](#flow-signatures)
+
+The steps below configure **public signing links** on an Experience Cloud site.
+
+#### 1. Open the site's administration
+
+In **Setup → Digital Experiences → All Sites**, open the site's **Workspaces** and administration controls. Confirm that the site is active/published and that the external domain works while signed out.
+
+#### 2. Enable the packaged public pages
+
+Find this site's guest profile/public access settings. In its **Enabled Visualforce Page Access**, enable the packaged pages `DocGenSignature`, `DocGenSignaturePdf`, `DocGenVerify`, and `DocGenSign` in the `portwoodglobal` namespace.
+
+On the guest profile, open **Assigned Users** or **View Users**, then select the site’s guest user. For per-user licensing, confirm **Portwood** under **Managed Packages** on that record. Assign **Portwood Guest Signature** under **Permission Set Assignments**. [Find and license the right user](#user-licenses)
+
+#### 3. Allow the public document preview
+
+In the site's **Administration → Preferences**, enable:
+
+**Let guest users view asset files, library files, and CMS content available to the site**.
+
+Without this, the signing shell can load while the PDF says **Document unavailable**. This preference is not a reason to make unrelated Salesforce Files public; verify the actual signing document's token-controlled preview.
+
+#### 4. Enter the correct base address
+
+In **Portwood → Signatures → Signature Site URL**, use the site's base address with its site path, but remove a trailing `/s`.
+
+| Browser's portal address                  | Portwood base setting                   |
+| ----------------------------------------- | --------------------------------------- |
+| `https://example.my.site.com/customers/s` | `https://example.my.site.com/customers` |
+
+Do not append a Visualforce page or signer token. Save and **Re-check Setup**.
+
+#### 5. Test outside your admin session
+
+Use a practice request and a private browser. Confirm the generated link, PDF preview, signing, and saved output. Then test verification and completion delivery using [Configure signing email](#site-email).
+
+If a link opens **Invalid Page**, first check the `/s` suffix, enabled Visualforce pages, active site, and base path. If the page loads but the PDF is unavailable, check the guest content preference and packaged guest permission set.
+
+This route was reviewed against the current signing URL logic and existing configuration guidance. The fresh-org hands-on setup used Salesforce Sites; it did not provision every Experience template.
+
+<a id="site-email"></a>
+
+## Configure signing email and verification
+
+The public page and the email sender are separate parts of signing setup. A working page does not prove that invitations or verification codes can be delivered.
+
+**Before you start:** Use an administrator account and a real sender/inbox controlled by your organization. Domain authentication can require your email or DNS administrator.
+
+#### 1. Create the sender address
+
+1. In **Setup**, search for **Organization-Wide Addresses**.
+2. Add the intended display name and email address.
+3. Make it available to the profiles required by the signing workflow, including the guest completion path where applicable.
+4. Open Salesforce's verification message in that inbox and complete verification.
+5. Confirm the address is verified and eligible before selecting it in Portwood.
+
+A brand can have its own sender, but that address also needs to be verified and usable. An address that an admin can select is not proof that every runtime path can use it.
+
+#### 2. Complete Salesforce email prerequisites
+
+Check **Setup → Deliverability** and the org's sending-domain verification/authentication requirements. Use your organization's approved sender domain, DKIM and other domain records as required by Salesforce and your email setup. Sandbox/scratch delivery restrictions and unverified domains can prevent mail even when the Portwood settings look complete.
+
+Use Salesforce's current [Organization-Wide Addresses documentation](https://help.salesforce.com/s/articleView?id=sf.emailadmin_manage_orgwide_email_addresses.htm&language=en_US&type=5) and [requirements for sending email](https://help.salesforce.com/s/articleView?id=xcloud.security_email_verification_requirements.htm&language=en_US&type=5) for the platform controls.
+
+#### 3. Select it in Portwood
+
+1. Open **Portwood → Signatures**.
+2. Choose the verified address in **Send Emails From**.
+3. Save and click **Re-check Setup**.
+4. Set the default email verification, pre-fill, expiration, and reminder choices.
+5. Open [Brands and Email Templates](#brands-and-emails) if you want different identities or wording.
+
+Check the actual template and send review: template/request overrides can change whether a code is required. Suppressing branded invitations does not suppress required PIN verification emails.
+
+#### 4. Test each delivery separately
+
+| Test               | Check                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| Invitation         | Right sender, subject, brand, recipient, and working link                                        |
+| Verification code  | Code arrives in the expected inbox and unlocks the request                                       |
+| Sequential signing | Only the currently eligible signer gets the appropriate invitation                               |
+| Reminder           | Schedule and sender match your intended operation; reminders currently use the org-wide identity |
+| Completion         | Expected recipients receive completion and can access the intended result                        |
+
+Use an inbox you control and a practice document. Open the signing link outside your Salesforce session. Check spam/quarantine and the request's **Email Status** when delivery fails; an already-sent status cannot guarantee that an external mail system placed the message in an inbox.
+
+#### Keep a repeatable setup check
+
+When changing domains, site URLs, guest users, brands, senders, or verification policy, run the public test again. Record which part failed: link, PDF preview, code delivery, signing, file save, or completion delivery. That makes support much faster than a general “signing does not work.”
+
+The fresh knowledgebase org deliberately used no production sender. Site/public signing and email rendering can be tested separately, but actual invitation/PIN/reminder/completion delivery still requires a verified sender and a controlled inbox.
+
+<a id="signer-inputs"></a>
+
+## Collect signer answers and write them back
+
+Ask a signer for a PO number, selected date, acknowledgement, or other information while they sign. These are signer inputs, separate from the Salesforce fields merged when the request is created.
+
+#### Configure an input
+
+1. Open the template editor and choose **Signer Inputs**.
+2. Click **Add Field**.
+3. Set the **Label** and **Type**: text, number, date, checkbox, or picklist. Supply choices for a picklist.
+4. Choose **Required** if the signer must answer.
+5. Copy the generated **Merge Tag**. Its stable key uses letters, numbers, and underscores.
+6. Choose **On Certificate** if the answer should appear on the completion certificate.
+7. To update Salesforce after signing, select a suitable **Mapped Field** on the related record and enable **Write Back**.
+8. Save the intended version and test a practice signing request.
+
+#### Place the answer
+
+```text
+{?poNumber}
+{?poNumber|N/A}
+```
+
+The second form supplies a fallback when no answer is available. Use the key copied from the editor; typing a new key into the document does not create an input. Reserve its own line or table cell for the value so it has room to render without overprinting a static label.
+
+The signer fills these fields during signing. Answers can appear in the finished document and, when configured, on the certificate. This feature is separate from mapping an uploaded PDF's AcroForm fields or manually placing signature spots in the uploaded-PDF preparation screen.
+
+#### Understand writeback
+
+Writeback runs after the completed signed PDF is saved. It updates only fields explicitly mapped and enabled in the template configuration. The guest does not receive general permission to edit the related Account, Opportunity, or other base record.
+
+**Writeback supports single-signer requests.** With several signers, answers are captured and attributed on the certificate, but record writeback is skipped because there is no unambiguous single answer for a shared field. Do not design a multi-signer packet expecting the last answer to overwrite Salesforce.
+
+Field access, supported value conversion, and validation rules still apply. A failed record update is logged; it does not undo a completed signing request. Check the related record and **Portwood Signature Audits** for writeback failures rather than treating a Signed status as proof of a successful field update.
+
+#### Retry a failed update
+
+Correct the mapped field, permissions, or validation issue first. The global **Write Back Signer Form Fields** action accepts only the completed request Id and re-derives the allowed fields from its configuration. It does not accept arbitrary field/value instructions from the guest.
+
+```apex
+portwoodglobal.DocGenFieldWritebackService.WritebackRequest retry =
+    new portwoodglobal.DocGenFieldWritebackService.WritebackRequest();
+retry.requestId = completedRequestId;
+portwoodglobal.DocGenFieldWritebackService.writeBackFields(
+    new List<portwoodglobal.DocGenFieldWritebackService.WritebackRequest>{retry});
+```
+
+The action returns no success DTO and logs failures instead of throwing them back into signing. Verify the target value and audit after a retry. Test an optional blank answer, required answer, invalid value, inaccessible field, validation-rule failure, and multi-signer request before enabling this in a business process.
+
+<a id="email-tokens"></a>
+
+## Signing email tokens and custom buttons
+
+Signing-email tokens belong to the **Email Templates** editor. They are not the document's Salesforce field-query syntax. Their values are supplied by the type of email being sent.
+
+#### Choose the email before choosing a token
+
+Open **Portwood → Email Templates**, pick the **Brand**, then the email type. The editor offers these insertable tokens for each type:
+
+| Email                     | Editor tokens                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signature Request         | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
+| Signature Reminder        | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{ActionButton}`, `{DocumentInfo}`, `{SecurityNote}`, `{SignatureUrl}`, `{ExpirationHours}`, `{LogoUrl}` |
+| Email Verification Code   | `{VerificationCode}`, `{Pin}`, `{ExpirationMinutes}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                      |
+| Signer Completed          | `{SignerName}`, `{RoleName}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                               |
+| All Signatures Complete   | `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                                             |
+| Signer Declined           | `{SignerName}`, `{RoleName}`, `{Message}`, `{RequestId}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                  |
+| Signature Request Revoked | `{SignerName}`, `{SenderName}`, `{CompanyName}`, `{DocumentTitle}`, `{RoleName}`, `{Message}`, `{RequestId}`, `{LogoUrl}`                                                                               |
+| Completion Confirmation   | `{SignerName}`, `{DocumentTitle}`, `{CompanyName}`, `{LogoUrl}`                                                                                                                                         |
+
+`{CompanyName}`, `{BrandColor}`, and `{LogoUrl}` are resolved through branding. `{Message}` is supplied by the send/template message when that email supports it. Missing or unknown ordinary tokens resolve to empty; a value visible in a generic sample preview is not proof that a production sender supplies it for every email type. In particular, do not assume `{DocumentTitle}` is supplied to every sender-notification type.
+
+Values in HTML bodies are HTML-escaped. Shared assets use the separate `{%asset:asset-key}` syntax to resolve to a public image URL. In an email, write the `<img>` yourself; document asset tags use a different image-embedding path.
+
+#### Upgraded from an earlier version? Add the Signature Request Revoked type
+
+The **Signature Request Revoked** email goes to signers who had not signed when a request is revoked. If this email type is missing from the editor after an upgrade, the built-in notice still sends. An administrator can [add the missing email type](#upgrade-portwood) to customize the wording.
+
+To customize the revoke email in an upgraded org:
+
+1. In Setup, open **Object Manager → Email Template → Fields & Relationships → Type**.
+2. Under **Values**, add a value with the API name `Signature_Revoked` and the label `Signature Request Revoked (to signers)`. The API name must match exactly.
+3. Open **Portwood → Email Templates**, choose **Signature Request Revoked**, edit it, and save.
+
+Every other email type can be customized without this step.
+
+#### Understand the widgets
+
+| Widget               | Creates                               | Raw values to use for your own design |
+| -------------------- | ------------------------------------- | ------------------------------------- |
+| `{ActionButton}`     | Branded Review & Sign button          | `{SignatureUrl}`                      |
+| `{DocumentInfo}`     | Document/role callout                 | `{DocumentTitle}`, `{RoleName}`       |
+| `{SecurityNote}`     | Expiry note and fallback signing link | `{SignatureUrl}`, `{ExpirationHours}` |
+| `{VerificationCode}` | Large verification-code block         | `{Pin}`, `{ExpirationMinutes}`        |
+
+The widget's wording and inline styles are generated. A surrounding wrapper can change spacing, but it does not reliably rename or recolor the widget itself in email clients. Replace the widget with your own HTML when you need different wording. Keep the matching raw tokens so the real link or code is still present.
+
+#### Example: a button with your own label
+
+Use **Full custom HTML** when you want the entire email layout under your control:
+
+```html
+<table role="presentation" cellpadding="0" cellspacing="0">
+    <tr>
+        <td style="background:#193b57;padding:14px 28px;">
+            <a href="{SignatureUrl}" style="color:#ffffff;text-decoration:none;font-weight:bold;">
+                Review your proposal
+            </a>
+        </td>
+    </tr>
+</table>
+<p>This link expires in {ExpirationHours} hours.</p>
+<p>If the button does not work, open <a href="{SignatureUrl}">{SignatureUrl}</a>.</p>
+```
+
+Use this on a request/reminder email that carries a signing URL. A custom verification email instead needs `{Pin}` and `{ExpirationMinutes}`. Never replace the real URL with the website homepage or a sample link from the preview.
+
+#### Message and subject precedence
+
+For supported single-template sends, the send-time custom message wins, then the template's **Default Email Message**, then the generic email wording. A send-time custom subject can also override that send's saved subject. Check packet/bulk sends separately; they use their saved email configuration.
+
+Choose the email type and brand, inspect the live preview, then use **Send Test** to an inbox you control before customer delivery. Public image access and a verified eligible sender remain necessary. The global `DocGenEmailTemplateService.render()` helper renders content; it does not send or invent request-specific tokens.
+
+<a id="async-jobs"></a>
+
+## Follow asynchronous jobs from Flow or Apex
+
+An accepted background job is not a finished document. Store the returned **Job ID** and wait for the job's terminal state before using a File or telling someone generation is complete.
+
+#### Read the actual job record
+
+In subscriber Apex and Flow, use **Portwood Job** (`portwoodglobal__DocGen_Job__c`) with the access granted to the running user. These are useful API fields:
+
+| Field                                                                | Meaning                                       |
+| -------------------------------------------------------------------- | --------------------------------------------- |
+| `portwoodglobal__Status__c`                                          | Persisted job state                           |
+| `portwoodglobal__Total_Records__c`                                   | Intended record count                         |
+| `portwoodglobal__Success_Count__c`, `portwoodglobal__Error_Count__c` | Outcome counts                                |
+| `portwoodglobal__Error_Log__c`                                       | Recorded error details                        |
+| `portwoodglobal__Merged_PDF_CV__c`                                   | Combined output ContentVersion, when produced |
+
+```apex
+portwoodglobal__DocGen_Job__c job = [
+    SELECT portwoodglobal__Status__c, portwoodglobal__Success_Count__c,
+        portwoodglobal__Error_Count__c, portwoodglobal__Merged_PDF_CV__c,
+        portwoodglobal__Error_Log__c
+    FROM portwoodglobal__DocGen_Job__c
+    WHERE Id = :jobId WITH USER_MODE LIMIT 1
+];
+```
+
+`DocGenBulkController.getJobStatus()` is a package-internal UI endpoint, not a subscriber Apex API. Use the job record or your own authorized wrapper around its query.
+
+#### Distinguish persisted states from screen labels
+
+**Draft**, **Harvesting**, **Processing**, **Stitching**, and **Merging** describe preparation or work still in progress. **Completed**, **Completed with Errors**, and **Failed** are terminal outcomes; inspect counts and logs before deciding whether your business process succeeded. Some screens can use friendlier progress labels; do not build a status comparison against a word that is not actually stored on the record.
+
+A completed individual-file run may have no combined output Id. Giant-query recovery can launch separate child jobs; the original batch's terminal status does not mean every recovery child has finished.
+
+#### Refresh in a screen Flow
+
+1. **Get Records** for the returned Job ID.
+2. Use a **Decision** for Completed, Completed with Errors, and Failed.
+3. For a nonterminal state, show a **Screen** containing the status and a **Refresh** navigation choice.
+4. Connect the refresh route back to Get Records so it re-reads the job.
+5. Provide an exit choice; the user does not need to keep a browser open for the job to run.
+
+Do not create a tight Get Records/Decision loop with no screen or asynchronous boundary. It repeats in one transaction and can consume the query limit without giving the background job time to finish.
+
+Screen Flows do not support a Wait element. For unattended processing, choose an automation pattern compatible with its Flow type, such as a record-triggered Flow on the job's completion update, or an autolaunched Flow with a supported Wait configuration. A record-triggered Flow does not simply gain a generic Wait element; check Salesforce's [Flow types](https://help.salesforce.com/s/articleView?id=sf.flow_concepts_type.htm&language=en_US&type=5) and [Wait considerations](https://help.salesforce.com/s/articleView?id=platform.flow_considerations_design_pause.htm&language=en_US&type=5).
+
+#### Handle partial success and recovery
+
+For supported Individual Files runs, oversized records can be queued for giant-query recovery. The current batch caps automatic recovery at **100 records** and records any overflow for manual handling. A combined packet is not automatically reconstructed from recovery results. Confirm the correct parent/child job outputs before retrying failed records; rerunning the whole original filter can duplicate successful Files.
+
+<a id="query-config"></a>
+
+## Query configuration formats and aliases
+
+V1, V2, and V3 describe Salesforce record queries. V4 binds a custom provider or the special Flow JSON source. Use the visual V3 builder for new record-query templates unless a specific integration needs a different format.
+
+#### V1 — Legacy flat string
+
+Plain field/subquery selection string. Use V3 when you need a richer tree or explicit child configuration.
+
+```
+Name, Industry, (SELECT FirstName, LastName FROM Contacts)
+```
+
+Detected when the config does NOT start with `{`.
+
+#### V2 — JSON flat (junction support)
+
+Adds junction-object support for many-to-many (e.g., Account ↔ Contact via AccountContactRelation).
+
+```json
+{
+    "v": 2,
+    "baseObject": "Opportunity",
+    "baseFields": ["Name"],
+    "parentFields": ["Account.Name"],
+    "children": [{ "rel": "OpportunityLineItems", "fields": ["Name"] }],
+    "junctions": [
+        {
+            "junctionRel": "OpportunityContactRoles",
+            "targetObject": "Contact",
+            "targetIdField": "ContactId",
+            "targetFields": ["FirstName"]
+        }
+    ]
+}
+```
+
+#### V3 — Query tree (multi-object, any depth)
+
+Preferred. Tree of nodes — each node is one SOQL query, stitched into the parent's data map via `lookupField`.
+
+```json
+{
+    "v": 3,
+    "root": "Account",
+    "nodes": [
+        {
+            "id": "n0",
+            "object": "Account",
+            "fields": ["Name"],
+            "parentFields": ["Owner.Name"],
+            "parentNode": null,
+            "lookupField": null,
+            "relationshipName": null
+        },
+        {
+            "id": "n1",
+            "object": "Contact",
+            "fields": ["FirstName"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Contacts"
+        },
+        {
+            "id": "n2",
+            "object": "Opportunity",
+            "fields": ["Name", "Amount"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Opportunities"
+        },
+        {
+            "id": "n3",
+            "object": "OpportunityLineItem",
+            "fields": ["Quantity"],
+            "parentFields": ["Product2.Name"],
+            "parentNode": "n2",
+            "lookupField": "OpportunityId",
+            "relationshipName": "OpportunityLineItems"
+        }
+    ]
+}
+```
+
+#### Using the visual builder
+
+The visual query builder walks your schema like a tree: start from the base object, tick fields (blue pills), climb into **+ parent lookup**, and expand **+ related list** child sections — each child with its own Tag name, Filter (WHERE), Sort by, and Limit. It writes a V3 config. As of v3.37 the same builder appears everywhere a query gets built: **Edit Template → Query Configuration**, the **designer's Query panel**, and the **Generate-with-AI** step.
+
+**Multi-hop parent traversal (v1.97+).** On any object's `parentFields` panel, expand a lookup and the builder now recurses into the parent's lookup tree — for example, on an Opportunity tab, expand `Account` → `Parent` → `Owner` → pick `Name`, and the resulting merge tag is `{Account.Parent.Owner.Name}`. The recursion is capped at 5 hops to keep schema-load latency bounded. Each hop loads its target object's fields lazily on expand. Use this when the data you need lives more than one lookup away from the base object and you don't want to compose `parentFields` paths by hand.
+
+For direct JSON editing or V1 legacy configs, toggle **Manual Query** mode and the older `docGenQueryBuilder` appears.
+
+#### Per-child filters, order by, limit
+
+Each V3 child node supports:
+
+- `fields`: scalar fields to SELECT
+- `parentFields`: dotted lookup fields (e.g., `Product2.Name`)
+- `where`: optional `WHERE` clause (sanitized for SOQL injection)
+- `orderBy`: optional `ORDER BY` (sanitized)
+- `limit`: optional `LIMIT`
+
+Applies to both sync and giant-query paths.
+
+#### Apex Data Provider (V4 — class-backed templates)
+
+When the data you need to render isn't an SObject — external API responses, computed totals, cross-object aggregations, anything SOQL can't reach — implement the `portwoodglobal.DocGenDataProvider` interface in your org and bind a template to that class. The merge engine calls your class at render time and uses whatever Map you return.
+
+##### Step 1 — write the provider class in your org
+
+```apex
+/** Subscriber-side example. Deploy to your org after installing Portwood. */
+global with sharing class KBAccountProvider implements portwoodglobal.DocGenDataProvider {
+    global Map<String, Object> getData(Id recordId) {
+        Account account = [
+            SELECT Name, Industry, Phone
+            FROM Account
+            WHERE Id = :recordId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        List<Object> contacts = new List<Object>();
+        for (Contact contact : [
+            SELECT Name, Email, Title
+            FROM Contact
+            WHERE AccountId = :recordId
+            WITH USER_MODE
+            ORDER BY Name
+            LIMIT 100
+        ]) {
+            contacts.add(
+                new Map<String, Object>{ 'Name' => contact.Name, 'Email' => contact.Email, 'Title' => contact.Title }
+            );
+        }
+        return new Map<String, Object>{
+            'Name' => account.Name,
+            'Industry' => account.Industry,
+            'Phone' => account.Phone,
+            'ContactCount' => contacts.size(),
+            'Contacts' => new Map<String, Object>{ 'records' => contacts }
+        };
+    }
+    global List<String> getFieldNames() {
+        return new List<String>{
+            'Name',
+            'Industry',
+            'Phone',
+            'ContactCount',
+            'Contacts.Name',
+            'Contacts.Email',
+            'Contacts.Title'
+        };
+    }
+}
+```
+
+The sample deliberately returns at most 100 Contacts; its count reflects those returned rows. For a minimal deployed-and-executed example, use [KBAccountProvider](#apex-data-provider).
+
+Two methods are required, both `global`. `getData` returns a `Map<String, Object>`; `getFieldNames` returns the list of merge tags shown in the wizard.
+
+The interface lives in the managed package — reference it with the full namespace: `portwoodglobal.DocGenDataProvider`.
+
+##### Step 2 — bind a template to the class
+
+In the Portwood app → New Template:
+
+1. **Step 1 — Data Source**: pick **Apex Class (Data Provider)** instead of Salesforce Record.
+2. **Data Provider Class**: search for your class name (e.g., `KBAccountProvider`). The picker filters to classes implementing `portwoodglobal.DocGenDataProvider`. Select yours.
+3. The wizard validates the class, calls `getFieldNames()`, and displays the available merge tags.
+4. **Step 2** lands directly on the connected-provider view. Compose your template body using the merge tags as you would for any other template.
+5. **Step 3** — review and save.
+
+Behind the scenes the template's `Query_Config__c` becomes `{"v":4,"provider":"KBAccountProvider"}`. You can also flip an existing SOQL-backed template to v4 from the **Edit modal → Query Configuration → Use Apex data provider** link.
+
+##### Step 3 — generate
+
+Same as any template. The Portwood app's Generate button, the **Generate Document** Flow action, the Apex `DocGenService.generateDocument()` API — all of them detect the v4 binding automatically and call your class.
+
+```apex
+// From Apex — exactly the same call shape as a SOQL-backed template
+Id contentDocId = portwoodglobal.DocGenService.generateDocument(templateId, accountId, null);
+```
+
+##### Common patterns
+
+- **External callout**: do the callout in `getData`, parse the response, return the parsed Map. Bear in mind callouts subject to governor limits and DML-before-callout rules.
+- **Cross-object aggregations**: query whatever you need, build aggregates in Apex, expose them as merge tags.
+- **Custom Metadata-driven**: read Custom Metadata Type records to resolve the data shape dynamically.
+- **Standalone (no recordId)**: ignore the `recordId` parameter and return data assembled from elsewhere. Useful for "render a report for the current user" templates.
+
+If you don't want template-side binding at all — the data is already in a Flow variable or an Apex wrapper — use **runtime data injection** instead: the **Generate Document** Flow action accepts a `JSON Data` invocable variable, and `DocGenService.generatePdfBlobFromData(templateId, dataMap)` accepts an Apex Map directly. Same merge engine, same tags, no class to write.
+
+##### 6.6.1 JSON Data (from Flow) — template authoring mode
+
+When a template will _only_ ever receive its data from a Flow via `DocGenFlowAction.jsonData`, pick **JSON Data (from Flow)** as the Data Source in Step 1. The wizard then skips the Base Object picker, the SOQL query builder, and the Apex Provider class picker — there's nothing to configure between naming the template and uploading the document.
+
+Behind the scenes the template stores `Base_Object_API__c = 'FlowJsonData'` (a sentinel value) and `Query_Config__c = {"v":4,"source":"flowJsonData"}`. The sentinel keeps the template invisible to the standard record-page Generate-Document launcher (whose query is `WHERE Base_Object_API__c = :objectApiName`) — JSON Data templates are intentionally Flow-only. To invoke one, pass `jsonData` into the **Generate Document** Flow action; the merge engine resolves `{Field}`, `{Parent.Field}`, and `{#Items}…{/Items}` against your JSON shape just like any other template.
+
+---
+
+<a id="recipe-library"></a>
+
+## Recipes from a first letter to a signed packet
+
+Build a client service packet in stages. The first exercise needs one Account and permission to create an HTML template. For the later exercises, use a sandbox where you can manage templates, run a Screen Flow and inspect its records. Use fictional records and signers for practice.
+
+[Explore finished quotes, renewal briefs and scannable work orders in the design studio.](#document-studio) For a signing example, [see the buttons the signer uses](#event-signing-journey) or [build the experience in Salesforce](#signing-handoff-setup).
+
+| Start with                                      | Build this                                                                                                                                               | Check your result                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| One Account                                     | [A one-field welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.html) | The PDF heading contains the Account name.                                                  |
+| Related Opportunities                           | [A paginated service schedule](#css-print-lab)                                                                                                           | The column labels repeat and the final line appears once.                                   |
+| Shared language                                 | [A versioned handoff clause](#shared-content)                                                                                                            | Two templates using the same key pick up the new active text.                               |
+| A fillable PDF                                  | [A fixed acceptance form](#fillable-pdf)                                                                                                                 | The account name is visible and the flattened output has no editable widget.                |
+| Two existing Salesforce Files                   | [An ordered PDF packet](#merge-pdfs-flow)                                                                                                                | Both source documents appear in order in a new File.                                        |
+| A signed-in customer                            | [Acceptance inside a Screen Flow](#flow-signatures)                                                                                                      | The Flow advances after the component confirms the outcome.                                 |
+| A signer using the signing site                 | [A navigation link in a Screen Flow](#signing-site-handoff)                                                                                              | The intended signer opens the site and the interview can check the request again.           |
+| Approval or signing activity in another process | [An event-driven signature workflow](#signing-events)                                                                                                    | One approval produces one request and a completed agreement produces one downstream action. |
+
+#### Generate the one-field letter
+
+1. Download the letter above using GitHub's **Download raw file**. In Portwood, choose **New Template → Bring an Existing Template**. Choose **Salesforce Record (SOQL)**, **Account**, and **HTML**.
+2. Select **Name** in the data picker and upload the HTML body. Save the template and select an Account you can read.
+3. Generate the PDF. A record named **Alder Works** should produce **Welcome, Alder Works**. Try a second account before moving on.
+
+![The generated welcome letter shows the Account name where the template had {Name}.](docs/images/userguide/v3.64/welcome-letter.png)
+
+The whole binding is `<h1>Welcome, {Name}</h1>`. HTML controls how the heading looks. The query supplies the value. Adding a field in just one of those places leaves part of the job unfinished.
+
+For smaller pieces to copy into your own design, including barcodes, headers, totals and signature lines, use the [HTML recipe collection](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/html-recipes.md). For a document with your own fields, start from the [AI authoring workflow](#ai-authoring).
+
+Compare your result with the [finished welcome letter](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/account-letter.pdf). To practice merging, pair it with the [flattened service acceptance PDF](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/flattened-acceptance.pdf).
+
+<a id="document-studio"></a>
+
+## Start with a finished design
+
+Start with a file someone actually needs. Open one of these finished PDFs, try its links or scan its equipment labels, then take the HTML and data into your own org.
+
+| Build this                                                                    | Try this in the finished file                                                                    | Make it your own                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [Commercial proposal](https://portwood.dev/demos/studio/field-quote.pdf)      | Click **Harbor reserve** on the cover. Find the battery options, then jump back to the contents. | [Nested pricing tables](#cpq-quote) · [Contents, links and watermarks](#print-navigation) |
+| [Renewal decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) | Read the recommendation, then find the team whose adoption is bringing the account below target. | [Design a brief that changes with the data](#renewal-decision)                            |
+| [Field-service sheet](https://portwood.dev/demos/studio/service-sheet.pdf)    | Scan either equipment card. Its QR code contains the asset identifier printed directly below it. | [Make a scannable service sheet](#service-sheet)                                          |
+
+A signer can also move from a Salesforce Screen Flow to a document prepared in the background. [Build the event-driven signing handoff](#event-signing-journey).
+
+[Watch the studio chapters](https://portwood.dev/demos/portwood-3.64-demo.html?chapter=give-the-buyer-a-contents-page) to follow a buyer into the quote, a technician to the work order, and a signer through the Flow.
+
+#### Run a design someone has already set up
+
+Open **Guide · Try a document design** from the page your admin provided. An admin can also open it from **Setup → Flows** and select **Debug**. Leave rollback mode off if you want to keep the generated file.
+
+Choose **Renewal decision brief**, then **Generate PDF**. The practice Flow includes fictional customer data. Try another design after you finish the first.
+
+![Choose one of the three designs and select Generate PDF.](docs/images/userguide/v3.64/sample-select.png)
+
+On the next screen select **Open your generated PDF in Salesforce Files**. In the renewal brief, look for the recommendation to **Book an adoption review**. If a design fails, check that its template is active and its API name matches the table below.
+
+![After generation, the screen links directly to the new Salesforce File.](docs/images/userguide/v3.64/sample-file.png)
+
+#### Put one design in your own sandbox
+
+You can build the same experience from the Salesforce screens. [Download the design files](https://portwood.dev/demos/studio/document-studio.zip), unzip them, and pick one matching HTML and JSON pair. The HTML is the layout. The JSON contains the sample customer and figures. Start with `renewal-brief.html` and `renewal-brief.json`. The file ending in `-reading.html` is the already-filled reading copy.
+
+1. In **Portwood → My Templates**, select **New Template → Bring an Existing Template**. Enter a name people will recognize. In **API Name**, use the matching value below if you also want the included practice Flow to find it.
+2. Under **Data Source**, select **JSON Data (from Flow)**. Set **Type** to **HTML** and **Output Format** to **PDF**. Select **Next → Create Template**.
+
+![Select JSON Data (from Flow) when the Flow supplies the customer and figures.](docs/images/userguide/v3.64/choose-json.png)
+
+![With HTML as the template type and PDF as the output, the document’s print styling comes from the uploaded HTML.](docs/images/userguide/v3.64/html-output.png)
+
+| Design                 | HTML and JSON filenames start with | API name used by the practice Flow |
+| ---------------------- | ---------------------------------- | ---------------------------------- |
+| Commercial proposal    | `field-quote`                      | `Guide364_Studio_field_quote`      |
+| Renewal decision brief | `renewal-brief`                    | `Guide364_Studio_renewal_brief`    |
+| Field-service sheet    | `service-sheet`                    | `Guide364_Studio_service_sheet`    |
+
+3. The template editor opens. Under **Upload New Version**, select **Choose File**, choose the template HTML and select **Save as New Version**. In **Your Templates**, check that the version is active. Keep its API name for the next step.
+
+![Choose File accepts a template HTML file or a Google Docs web-page ZIP.](docs/images/userguide/v3.64/upload-html.png)
+
+#### Build a button that generates your design
+
+1. In **Setup → Flows**, select **New Flow → Screen Flow**. Select **+ → Screen**, add **Display Text** with a short invitation to generate the design, and change the screen’s **Next** button label to **Generate PDF**.
+2. Open **Toolbox → Manager → New Resource**. Choose **Text Template**, give it the API name `SampleData`, and select **View as Plain Text**. Open the matching JSON file in a text editor, copy its entire contents into the body and select **Done**.
+3. Under the first screen, select **+**. Search **Generate Document**. Some orgs offer several actions with that name. Choose the Portwood action whose description starts **Generates a document (PDF, DOCX, PPTX, XLSX)**. Its inputs include both **JSON Data** and **Template API Name**. Give the action a label such as **Make the renewal brief**.
+4. Paste the active template’s API name into **Template API Name**, select **SampleData** for **JSON Data**, enter **PDF** for **Output Format Override**, and set **Save to Record** to **False**. You can leave **Record ID** blank for this standalone sample. The working three-design example below calls its JSON resource **Payload**.
+
+![The Portwood action takes the JSON text resource, PDF output and the Save to Record choice.](docs/images/userguide/v3.64/generate-json.png)
+
+5. After the action add a **Decision**. For success, select the action’s **Success** output and compare it to **True**. On that branch add a **Screen** with **Display Text** telling the person to open **Files → Owned by Me** and look for the new PDF. On the default branch, display the action’s **Error Message**. Connect the action’s **fault** path to a screen that displays the **Fault Message**.
+6. **Save** the Flow and select **Debug**. Leave rollback mode off, select **Generate PDF**, then open the new File in Salesforce. Compare its recommendation and figures with the finished example. To attach a real document to a record, pass that record’s ID and turn **Save to Record** on. [Generate a document from a record-triggered Flow](#flow-generate)
+
+For real orders, supply the same data shape from your own records or an Apex data provider. The sample keys are names you and the HTML share. [Choose a data source](#custom-data)
+
+#### Brief your AI like a designer
+
+Give the assistant your data shape, the sample HTML, and a change you can recognize in the finished document. For the proposal, try this request.
+
+> Adapt the proposal for a purchasing manager. Keep the quoted net prices, currency and section IDs. Give optional services their own panel, keep one-time charges separate from monthly charges, and make the contents links follow their sections even when pricing spills onto another page. Return one HTML file and tell me which three things to check in the PDF.
+
+For a renewal brief, describe what should happen when usage is missing. For a work order, specify the actual identifier a technician should scan. Open the generated file and try that task before you save the new template version. [Download the AI authoring reference](https://portwood.dev/demos/studio/portwood-authoring-context.md)
+
+#### Give readers a text edition
+
+Each sample also has an HTML reading copy with a document language, headings, labeled prices or usage figures, and the equipment identifiers in text. These are filled examples you can open in a browser or use with a screen reader. [Read the proposal](https://portwood.dev/demos/studio/field-quote-reading.html) · [Read the renewal brief](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Read the work order](https://portwood.dev/demos/studio/service-sheet-reading.html)
+
+The three generated PDFs contain selectable text and lack PDF structure tags and document-language metadata. If your customer requires a tagged PDF, check the exported file’s tags, language, reading order, link names and table headers with your accessibility tools, and test the file with their assistive technology. Share the text edition alongside the visual copy.
+
+<a id="print-navigation"></a>
+
+## Build a linked contents page and a draft watermark
+
+Give the reader shortcuts through a long PDF. In the finished proposal, every entry on the cover links to the named section. The dotted leaders end in the current page number. The draft copy also carries its quote number on every page.
+
+[Open the finished proposal](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The actual proposal cover with a linked table of contents, dot leaders, quoted amounts and a draft mark](docs/images/userguide/v3.64/quote-contents.png)
+
+#### Create an entry and its destination
+
+Put this link on the contents page. Give the section heading the matching ID. Keep the ID unique across the document.
+
+```html
+<div class="contents"><a href="#pricing">Configured pricing</a></div>
+<h2 id="pricing">Configured pricing</h2>
+<a href="#contents">Return to contents</a>
+```
+
+Give your contents heading `id="contents"` for the return trip. For repeated sections, use a short permanent key for each item. The sample uses `href="#bundle-{Key}"` in the contents and `id="bundle-{Key}"` on the matching bundle. Two products can have the same display name and still need different keys. Gate an optional entry and its destination with the same condition.
+
+#### Let the renderer calculate the page
+
+```css
+.contents a {
+    display: block;
+    text-decoration: none;
+}
+.contents a:after {
+    content: leader('.') target-counter(attr(href), page);
+}
+.section {
+    page-break-before: always;
+}
+```
+
+The link supplies the destination. The CSS adds the dotted line and the page where that destination actually landed. In the supplied PDF, **Commercial terms** is on page 4. We added 42 component lines and generated again. The terms moved to page 7 and the contents entry and link moved with them. This is a contents page inside the PDF. Open the downloaded file in a PDF reader to test a jump in each direction.
+
+#### Print a watermark from HTML
+
+For review copies, put a fixed element near the start of the body. Bind the optional block to a Boolean and print a record-specific value in the mark.
+
+```html
+{#IsDraft}
+<div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
+{/IsDraft}
+```
+
+```css
+.stamp {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    font: bold 9pt Helvetica;
+    letter-spacing: 1pt;
+    color: #674329;
+    border: 1pt solid #c19a72;
+    padding: 3pt 7pt;
+    background: #fff8ea;
+}
+```
+
+The proposal puts the stamp at the bottom of the printable area and its folio in the bottom page margin. `IsDraft: true` printed the stamp on all four pages. With `false`, the longer release copy had no draft stamp. Reserve that corner so the mark has room when a table grows. For diagonal artwork or a full-bleed letterhead, upload a pre-sized image under **Watermark / Background**. [Use page artwork](#page-layout)
+
+#### Add running folios
+
+```css
+@page {
+    size: Letter;
+    margin: 0.65in 0.72in 0.85in;
+    @bottom-right {
+        content: counter(page) ' / ' counter(pages);
+    }
+}
+```
+
+The sample supplies its own page CSS and leaves Portwood’s separate Header HTML and Footer HTML empty. If your existing template already has a branded footer, use its [running footer recipe](#running-headers-footers) and choose one place to draw the page number.
+
+To try this with your own data, start with [Generate a studio sample](#document-studio).
+
+<a id="cpq-quote"></a>
+
+## Build a quote with nested bundle pricing
+
+A buyer needs to see which options belong to each configured product and what they cost. This quote gives each bundle an outer table, then prints the components in a smaller table inside it. A separately priced inspection stays beside the Harbor bundle and out of the order total.
+
+[Open the example quote](https://portwood.dev/demos/studio/field-quote.pdf) · [Read the text edition](https://portwood.dev/demos/studio/field-quote-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json)
+
+![The generated pricing schedule with two bundles, nested component tables, separate subtotals and an optional service](docs/images/userguide/v3.64/quote-pricing.png)
+
+#### Bring the quote into the right shape
+
+Use your quoting system’s approved, already-priced values. For each bundle, supply its key and display name. Put included lines under its `Components.records` and unselected optional offers under `AddOns.records`. Include `totalSize` so an empty options list suppresses its panel. The [sample data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/field-quote.json) shows each collection in full.
+
+| The buyer sees     | What your Flow or provider supplies                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration      | One bundle per parent line, in selling order, with a stable key for the contents link.                                                          |
+| Included items     | Each child of that parent, with SKU, description, quantity, list unit price, discount and the net line total.                                   |
+| Options            | Separately quoted extras. A selected option that is already included in the bundle price should have one place in your total.                   |
+| Commercial summary | Currency, approved one-time net, recurring price per billing period and payment installments. Keep internal cost and margin out of the payload. |
+
+For Salesforce CPQ, save the priced quote first. Start with its lines and inspect the **Required By** relationship to identify an option’s parent. A quote line group is a presentation grouping and can contain several independent bundles. Confirm how your org prices bundled options, prorates subscriptions and rounds line totals. The sample works without installing CPQ. Map your org’s prices into the sample shape. [Salesforce’s Required By field](https://help.salesforce.com/s/articleView?id=000382714&language=en_US&type=1) · [Generate from prepared data](#custom-data)
+
+#### Nest the component table
+
+Paste the full example to keep the styling. The short version below shows where to open and close both loops.
+
+```html
+{#Bundles}
+<table class="bundle">
+    <tr>
+        <td><h3 id="bundle-{Key}">{Name}</h3></td>
+    </tr>
+    <tr>
+        <td>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Components}{Description}</td>
+                        <td>{Net:#,##0.00}{/Components}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+        </td>
+    </tr>
+</table>
+{/Bundles}
+```
+
+The outer loop wraps the entire bundle table. The inner loop opens and closes in the component row, so that row repeats inside its own bundle. Put the subtotal outside the component row while the bundle is still in scope. Keep short component rows together and let long bundles flow over the page. For large schedules, inspect the continuation page and its header. [Repeating table headings](#repeat-table-headers)
+
+#### Reconcile the order before sharing
+
+In the sample, Atlas totals **6,540.00** and Harbor totals **4,130.00**. The cover shows **USD 10,670.00 one time** and **USD 120.00 per month**. The **450.00** optional inspection is separate. On the last page, the three one-time installments add back to **10,670.00**. If your CPQ parent already carries the price of its children, print the parent net as the bundle subtotal. Summing the parent and those same included children would charge twice.
+
+Try a bundle with no options, a second bundle with its own components, and one bundle big enough to cross a page. Then follow the cover links to both configurations. [Try the sample in Salesforce](#document-studio)
+
+#### Send this exact quote for signature
+
+1. Once the quote is approved, generate the final PDF with `IsDraft` set to `false`. In the Portwood **Generate Document** action, pass the approved **Quote record ID**, the priced **JSON Data**, and **Save to Record = True**. Give the file a recognizable title with the quote number and revision.
+2. On that quote, open **Files** and check the PDF and amount. In **Portwood Signature Sender**, choose **New signature request → Salesforce file**, then select that exact revision. Assign a signature field to each recipient, review the pages and send. [Prepare a finished PDF for signature](#sign-uploaded-pdf)
+3. Open the request to check its status and retrieve the signed PDF and certificate. The event-driven Screen Flow prepares its own receipt-backed agreement. Use the Salesforce File route above when the buyer must sign the exact approved pricing PDF. [Find the signed file](#manage-signatures) · [Build the event-driven handoff](#event-signing-journey)
+
+<a id="renewal-decision"></a>
+
+## Design a renewal brief that recommends a next step
+
+An account owner wants to know what to do before a renewal meeting. This one-page PDF starts with a recommendation, backs it with the account’s contract and usage figures, and shows which team needs attention.
+
+[Open the decision brief](https://portwood.dev/demos/studio/renewal-brief.pdf) · [Read the text edition](https://portwood.dev/demos/studio/renewal-brief-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/renewal-brief.json)
+
+![Renewal decision brief showing the account recommendation, contract value, service cases and team adoption bars](docs/images/userguide/v3.64/renewal-decision.png)
+
+#### Make the decision before you write the headline
+
+The sample’s teams have **72 active seats out of 100 licensed**. The account target is **80%**, so the recommendation is **Book an adoption review**. Calculate the overall rate from the total seats. An unweighted average of the team percentages gives a different answer.
+
+Have the Flow or provider supply `HasUsage`, `AtTarget`, `Adoption` and `Threshold` together. Set `HasUsage` to false for a missing reporting period or a zero denominator. Set `AtTarget` from the data source’s comparison of the measured rate and the account’s agreed threshold. Keep that logic where the business rule lives.
+
+| Input state                         | What the reader sees                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Usage is available and below target | **Book an adoption review**, with the agreed threshold and the team breakdown. |
+| Usage meets or exceeds target       | **Prepare renewal terms**, with the same underlying measurements.              |
+| No usable measurement               | **Request usage data** and an **Unknown** metric. The team chart is omitted.   |
+
+#### Print a bar the reader can check
+
+The bar is ordinary HTML. The data supplies a numeric percentage between 0 and 100. Give the track a fixed height and print the value alongside it so the document still makes sense in grayscale.
+
+```html
+<tr>
+    <td>{#Teams}{Name}</td>
+    <td>{Active} / {Licensed}</td>
+    <td>
+        {Percent}%
+        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
+        {/Teams}
+    </td>
+</tr>
+```
+
+The sample uses the same printed width for every track. Test 0, 50 and 100 before adding more teams. If your metric can exceed 100%, decide how you want to label it and bound the display width in the data.
+
+#### Adapt the story
+
+Try the supplied **72%**, then change the data to **84%**, `AtTarget` to true and the team counts to match. Finally set `HasUsage` to false. Generate all three files. The headline, metric band and chart should agree. The same pattern works for a project health report, a grant milestone or an account statement. [Run the example](#document-studio)
+
+<a id="service-sheet"></a>
+
+## Print a scannable field-service work order
+
+A technician needs to find the right machine, see the checks for that unit and bring a short receipt back to the office. This printable work order gives each asset a QR code, a readable identifier, a checklist and room for the as-found reading.
+
+[Open the service sheet](https://portwood.dev/demos/studio/service-sheet.pdf) · [Read the text edition](https://portwood.dev/demos/studio/service-sheet-reading.html) · [Download the design files](https://portwood.dev/demos/studio/document-studio.zip)
+
+[View HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.html) · [View data](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/document-studio/service-sheet.json)
+
+![Printable work order with two separate equipment cards, scannable asset codes and a detachable desk receipt](docs/images/userguide/v3.64/work-order.png)
+
+#### Put the identifier in two places
+
+Inside the `Equipment` loop, the sample prints `{*Code:qr:105}` and the plain value `{Code}` below it. The first code decodes to **AW-P17-201** for the circulation pump. The second is **AW-S08-414** for the flow sensor. Someone with a damaged label can type the printed value. These codes carry text and work offline. To open an asset page, supply an authorized HTTPS destination as the code value and test it as the intended user. [QR codes, images and barcodes](#charts-and-codes)
+
+#### Keep each machine with its checks
+
+The outer `{#Equipment}` block repeats the whole card. Inside the card a smaller `{#Checks}` loop repeats one task at a time. A short card uses `page-break-inside: avoid` so its code, title and checks travel together. If one machine has enough checks to fill a page, allow the checklist to continue and repeat a small identification band on the following sheet.
+
+The printed squares and ruled lines are for handwriting. For a form that someone fills electronically, use the [fillable PDF workflow](#fillable-pdf). The lower desk receipt has its own work-order number, so the office can match it to the job after it is detached.
+
+#### Check one physical copy
+
+Print at actual size on the paper the crew will carry. Scan each code and compare the result with the printed identifier. Leave white space around it, and confirm there is room to write the reading and initials. For a new customer, update the work-order JSON and generate the same HTML again. [Run the sample](#document-studio)
+
+<a id="css-print-lab"></a>
+
+## Design an advanced document with print CSS
+
+Build a service schedule that can grow from two rows to several pages and still leave a clean acceptance page. This lab uses Account as the parent and Opportunities as the child relationship. All estimates in the example use a single currency.
+
+[Add a working contents page and a conditional draft watermark.](#print-navigation)
+
+#### Assemble the example
+
+1. In **Assets → Terms & Snippets**, create an active snippet with the key `guide-service-handoff`. Paste the [handoff fragment](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/handoff-fragment.html) in **HTML source** and save it.
+2. Create an Account HTML template. Select Account **Name** and the child **Opportunities** relationship with **Name** and **Amount**. Give the child rows a stable sort order.
+3. Upload the [service review HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.html). Paste the [two-line footer](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/footer.html) into **Footer HTML**. Save a new version.
+4. Generate once for a short schedule and again with enough rows to cross a page. Compare the last row on each page with the first row on the next. Use [the rendered sample](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/service-review.pdf) as a visual reference.
+
+#### Establish the printable area
+
+Letter is 8.5 inches wide. Side margins of 0.65 inches leave 7.2 inches for the table. Reserve space vertically for the footer. Choose one place to control paper and margins. With this example the HTML owns the page setup.
+
+```css
+@page {
+    size: Letter portrait;
+    margin: 0.7in 0.65in 0.85in;
+}
+.ledger {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+.ledger td {
+    padding: 6pt 7pt;
+    vertical-align: top;
+}
+```
+
+A two-cell masthead gives the account team a solid band on every first page. Set the band color on the cells. Use points for text, percentages for column widths, and right alignment for money. Keep the estimate column wide enough for your largest formatted value.
+
+#### Keep a long schedule readable
+
+```css
+.ledger {
+    -fs-table-paginate: paginate;
+}
+.ledger thead {
+    display: table-header-group;
+}
+.ledger tr {
+    page-break-inside: avoid;
+}
+h2 {
+    page-break-after: avoid;
+}
+.appendix {
+    page-break-before: always;
+}
+```
+
+Put real headings in a `thead`. Inside the data row, open `{#Opportunities}` in the first cell and close it in the last. Put `{RowNumber}` inside that row and the aggregate outside it. Use `page-break-inside: avoid` on individual rows or a short totals panel. Applying it to the entire table asks the renderer to keep many pages of content together. A single row taller than a page needs a different layout.
+
+![Page two of the generated schedule repeats the column headings and continues the original row numbering.](docs/images/userguide/v3.64/schedule-continuation.png)
+
+The appendix starts on a fresh page. Compare a zero-row account with a long schedule. If you want to omit an empty schedule, gate the heading and table together with `{#IF Opportunities.totalSize != 0}` and `{/IF}`.
+
+#### Choose how the footer is drawn
+
+The main stylesheet supplies `content: counter(page)` and `counter(pages)` on the two footer spans. The footer field supplies the HTML. This keeps a second line of text and its styling together with the counter. For a single line, enter `Page {PageNumber} of {TotalPages}` in Footer HTML. Check the last page after changing a margin or font. [Running headers and footers](#running-headers-footers)
+
+#### Extend the design
+
+| Design request                       | Technique to try                                                                                                                                 | Inspect in the PDF                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Full-page stationery                 | Upload page-sized artwork in **Watermark / Background**. Choose **Original** for opaque artwork. Use a 816 × 1056 px image for Letter at 96 DPI. | Artwork reaches the edges while the body stays inside its margins. [Page layout](#page-layout) |
+| Branded headings                     | Apply the approved face's copied font tag inside a quoted inline style. Test each weight and script with real text.                              | Compare the glyphs and line breaks. [Custom fonts](#custom-fonts)                              |
+| Side-by-side summary cards           | Build one table row with separately colored cells. Use solid hex fills, cell padding and a narrow gutter cell.                                   | Both cards fit at their longest values.                                                        |
+| Rounded badges, a gradient or a seal | Put that artwork in a sized image asset. Keep changing text in adjacent HTML.                                                                    | Edges stay crisp at actual print size. [Images and assets](#images-and-assets)                 |
+| A very long unbroken reference       | Insert break opportunities in the source value or give the identifier its own line.                                                              | Long strings fit without overwriting the next cell.                                            |
+| Charts inside a report               | Use a prepared chart image on paths that supply one. For portable HTML-to-PDF use a CSS bar or pivot table.                                      | Generate from the intended button, Flow or bulk path. [Chart modifiers](#tag-charts)           |
+
+The [CSS capability probes, measured comparisons and layout rewrites](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/template-layout.md) cover selectors, transparency, box shadows, image sizing and Word table widths. Use [grouped reports](#grouped-reports) to add one table per service category.
+
+#### Build the executive version
+
+For a portfolio review, select **StageName** as well as **Name** and **Amount** on the child Opportunities. Upload the [portfolio brief](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/portfolio-brief.html). Its cover combines a two-cell metric band, a chart grouped by stage and a conditional review note. The next page uses `{#GroupBy Opportunities by StageName}` to make one table per stage. The nested Opportunities loop numbers the lines within that group and the sum inside the group prints its subtotal.
+
+In the [sandbox-rendered portfolio PDF](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/portfolio-brief.pdf), six engagements total **41,900.00**. The three subtotals are **11,000.00**, **19,900.00** and **11,000.00**. Compare them with the cover total before reusing the layout with your own data.
+
+<a id="merge-pdfs-flow"></a>
+
+## Merge Salesforce Files in Flow
+
+Combine an approval letter and a schedule already stored in Salesforce Files. This Flow action creates a new File and returns its IDs, so a later step can attach it to a record or offer it to the user.
+
+1. In a sandbox, open the bundled **Portwood: PDF Merge Demo** in Flow Builder. It ships as a draft. Debug it with two small unsigned PDFs you can read.
+2. Supply **Content Version IDs** as an ordered Text collection, or **Content Version IDs (Text)** as a single value separated by spaces, commas, semicolons or line breaks. Choose one input. Use exact version IDs beginning with `068`. A document ID beginning with `069` identifies the file across revisions and cannot select the source revision.
+3. Set **Document Title**. Set **Related Record ID** to link the new File there. Leave it blank for a standalone File.
+4. Turn on **Pad Odd Documents** for duplex printing. Every odd-length source gets a trailing blank, including the last source. Repeating an ID repeats that PDF.
+5. Branch on **Success**. Keep **Content Version ID** for that output revision and **Content Document ID** to open or link the File. Display **Error Message** on failure and connect a fault path.
+
+![In the PDF Merge Demo, enter a name for the new File and select Add blank pages for double-sided printing.](docs/images/userguide/v3.64/merge-duplex.png)
+
+One one-page letter followed by one two-page schedule produces three pages normally, or four with padding. Flip through the result and verify the first page of the schedule comes after the blank.
+
+The action accepts 2–100 source versions and checks their combined input size before reading them. The budget is at most 384 KiB synchronously and 768 KiB asynchronously. Available Apex heap can lower it. Each repeated input counts again. Encrypted or signed PDFs, XFA, and scripted/calculation forms are rejected. For a signed agreement, assemble its final contents before requesting signatures.
+
+For an interactive desktop download, see [Document packets](#document-packets).
+
+The [sandbox-generated duplex packet](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/acceptance/duplex-packet.pdf) uses two one-page sources. The welcome letter is on page 1, the flattened acceptance form is on page 3, and pages 2 and 4 are blank.
+
+If the input box in the bundled demo shows only a comma, its two sample Files are missing or unavailable to you. You can have your own Flow look up each **Content Version** with **Get Records**. Match **Content Document ID** to the File you selected and **Is Latest** to **True**, then use that version’s **Id** in your ordered list.
+
+For a familiar first run, use the downloaded sample letter and acceptance form from the [recipe library](#recipe-library). Upload the two PDFs to Files and use their version IDs in the sample Flow.
+
+<a id="signing-site-handoff"></a>
+
+## Open the signing site from a Screen Flow
+
+Give a signed-in person a button that opens their own Portwood signing page. They can return to the same Flow to check the signed file. This walkthrough uses the [background Flow that prepares the agreement](#signing-events). [See the screens as a signer](#event-signing-journey)
+
+For a members-only portal or employee signing experience, authenticated signing requires a **Portwood site license**. If the button opens a public signing page, configure that site’s guest user as well. [Plan signing access and request a quote](#user-licenses)
+
+#### 1. Put a Prepare agreement button on the screen
+
+In **Setup → Flows → New Flow**, select **Screen Flow**. Under **Start**, select **+ → Screen**. Drag **Display Text** onto it and enter a short explanation of the agreement. In the screen’s footer settings, give the **Next** button the label **Prepare agreement**.
+
+Below that screen, add **Create Records**. Choose **Manually** for setting field values and select the **Guide Sign Requested** object. Add **Receipt key** and choose **Running Flow Interview → InterviewGuid** as its value. This identifies this interview if the person checks back several times.
+
+![Create Records publishes Guide Sign Requested with Receipt key set to the running Flow’s InterviewGuid.](docs/images/userguide/v3.64/publish-event.png)
+
+Add a second **Screen** immediately after it. Enter **The request is being prepared** and label its Next button **Open signing page**. Reaching this screen commits the platform event so the background Flow can start. Label the Flow and save a draft. In **Auto-Layout**, your first few steps should read from top to bottom like this.
+
+![The screen, the event and the second screen are separate steps before Read my receipt.](docs/images/userguide/v3.64/screen-path.png)
+
+#### 2. Find the right person’s link
+
+After the second screen add **Get Records** on **Guide Signing Receipt**. Set **Condition Requirements** to **All Conditions Are Met (AND)**. Match **Receipt key** to **Running Flow Interview → InterviewGuid** and **Owner ID** to **Running User → Id**. Store the first matching record. In the pictured example this element is labeled **Read my receipt**.
+
+![Get Records looks for both the interview’s receipt key and the signed-in user’s owner ID.](docs/images/userguide/v3.64/read-receipt.png)
+
+Add a **Decision**. A receipt is ready when **Preparation status = Ready**, its **Private signing URL** has a value and **Handoff link expires** is in the future. For an empty result or a receipt still preparing, show a **Check again** screen and connect it back to **Get Records**. For a failed or expired receipt, show a message and a contact for help.
+
+#### 3. Open the signing site with Salesforce’s standard action
+
+On the ready branch select **+**. In **Search Elements** type **Open a Page** and choose the navigation action. You can also open the **Action** picker and search there.
+
+![Searching the plus menu for Open a Page brings up the navigation action.](docs/images/userguide/v3.64/find-navigation.png)
+
+Give it the label **Open the signing page**. In **Page Type**, select **External Web Page**. For **URL**, use the resource picker to select **Guide Signing Receipt from Read my receipt → Private signing URL**. For **Where to Open the Page**, select **New Browser Tab**. Salesforce provides this action in Flow API 67 and later. [Salesforce Open a Page action](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5)
+
+![The three navigation settings show External Web Page, the receipt’s private signing URL, and New Browser Tab.](docs/images/userguide/v3.64/open-signing-page.png)
+
+If the URL picker says the field is unavailable, check the **Read** permission on **Private signing URL** for the person using Flow Builder, reopen the Flow and reselect the field.
+
+If this Screen Flow creates the request directly, pass its single **Signer URLs** item as the URL. Scope the link to the intended signer. For an internal coordinator who needs the staff view, choose **Salesforce Record Page**, the saved signature request ID, the Portwood Signature Request object and **View**. Signing takes place at the person’s private web link.
+
+#### 4. Let the person return and check the file
+
+After the action add a **Screen** with **Display Text**. Type **review and sign your agreement**, select those words, and use the link control to insert the same signer URL resource. Connect the action’s fault path to this screen as well. A person whose browser blocks the new tab can still choose the link. Set the Next button label to **Check signing status**.
+
+Then **Get Records** on **Portwood Signature Request** using the saved **Signature request ID**. On a **Decision**, show success when **Status = Signed** and **Protected Signed Content Document Id** is populated. Give **Signed** requests that are still saving their file a separate screen with **Check again**. For a declined or cancelled request, or one past its signing expiry, show a stopped screen. Send an unreadable request to your help screen.
+
+On the **still needs a signature** screen, add a **Checkbox** labeled **Reopen my signing page** and a **Check again** footer button. Add a Decision after that screen. When the box is checked, connect it back to **Read my receipt** so the Flow checks this person’s ownership, link and expiry before opening the same agreement. Otherwise connect it to the request-status lookup. Both paths reuse the initial request.
+
+#### 5. Give your team a place to open the Flow
+
+1. In **Flow Builder**, save the Screen Flow with a recognizable label such as **Guide · Request and open an agreement**. Activate the cleanup and background Flows first, then activate the Screen Flow. An active Screen Flow appears in the Lightning page’s Flow picker.
+2. For a dedicated page, open **Setup → Lightning App Builder → New → App Page**. Select **Next**, label the page **Service agreements**, choose **Next → One Region → Done**. To use an existing record page instead, open a record and choose the gear menu’s **Edit Page**.
+3. Under **Components**, search for **Flow**. Drag the standard **Flow** component into the page region. Select it on the canvas and use the **Flow** dropdown in the properties panel to pick your Screen Flow.
+
+![In Lightning App Builder, the Components pane is on the left, the Flow sits on the page in the middle, and its settings are on the right.](docs/images/userguide/v3.64/host-palette.png)
+
+![The Flow dropdown has Guide · Request and open an agreement selected.](docs/images/userguide/v3.64/host-selected.png)
+
+4. Select **Save → Activate**, or **Activation** on an already-saved page. For an app page, choose which users can see its tab and add it to your team’s Lightning app under **Lightning Experience**. For a record page, select the app, record type and profile assignment your signers use. [Salesforce app page activation](https://help.salesforce.com/s/articleView?id=platform.lightning_page_getting_into_salesforce1.htm&language=en_US&type=5)
+5. As a practice signer, open the assigned app, select **Service agreements**, and choose **Prepare agreement**. If you used a record page, open that record in the assigned app. Open the signing page, close that tab before signing, then check the status and try **Reopen my signing page**. You should get the same agreement. [See the signer’s screens](#event-signing-journey)
+
+If everyone should stay on the same page throughout, [place the signing component inside the Flow](#flow-signatures). Admins can also [download the optional working project](https://portwood.dev/demos/studio/event-signing.zip).
+
+<a id="signing-handoff-setup"></a>
+
+## Set up a signing receipt and event
+
+To let someone wait for a signing link in a Salesforce screen, give the screen and the background Flow a private place to meet. In this example a **Guide Signing Receipt** remembers which request belongs to the person. A **Guide Sign Requested** event tells the background Flow to start preparing it. Set these up once in a sandbox.
+
+This example starts with a signed-in person. For a portal or employee signing rollout, arrange a **Portwood site license**. It also covers the guest user if the Flow opens a public signing page. [Check signing licenses and request a quote](#user-licenses)
+
+#### 1. Make the receipt in Object Manager
+
+1. Open **Setup → Object Manager → Create → Custom Object**. Enter **Guide Signing Receipt** for the label and **Guide Signing Receipts** for the plural. Use `Guide_Sign_Receipt` for **Object Name** to match this example. For the record name, use **Receipt number**, choose **Auto Number** and enter `HANDOFF-{00000}` as the display format. Save.
+2. In **Fields & Relationships**, select **New** for each row below. Use these field names if you want to match the pictured example. Salesforce adds the `__c` suffix.
+
+| Field label          | Field name        | Type and setting                                                                         |
+| -------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| Receipt key          | `Receipt_Key`     | Text, 100 characters. Select **Unique** and treat uppercase and lowercase as duplicates. |
+| Preparation status   | `Stage`           | Text, 24 characters. The Flow uses **Preparing**, **Ready** and **Failed**.              |
+| Signature request ID | `Request_Id`      | Text, 18 characters. Holds the Portwood request ID.                                      |
+| Private signing URL  | `Signer_URL`      | Long Text Area, 4,096 characters. Holds this signer’s personal link temporarily.         |
+| Handoff link expires | `Link_Expires_At` | Date/Time. The screen checks this before opening the link.                               |
+
+![In Object Manager, the receipt fields include the private signing URL and a unique receipt key.](docs/images/userguide/v3.64/receipt-setup.png)
+
+3. In **Setup → Sharing Settings**, set the receipt object’s default access to **Private**. In a permission set, give participants **Read** on the receipt and the fields above. The background Flow creates and updates receipts. Restrict access to the signing URL when you review role hierarchy, sharing rules and administrative access. Open **Manage Assignments → Add Assignment** on the permission set and assign it to the people who run this screen. Give the person **Run Flows** and access to the screen Flow if your org restricts individual Flows.
+
+#### 2. Create the platform event
+
+1. In Setup’s **Quick Find**, enter **Platform Events**. Open it and select **New Platform Event**. Set the label to **Guide Sign Requested** and use `Guide_Sign_Requested` for the object name.
+2. Set **Publish Behavior** to **Publish After Commit** and save. Under **Custom Fields & Relationships**, choose **New → Text**. Use **Receipt key**, field name `Receipt_Key`, length **100**. The event carries only this key.
+
+![The platform event definition shows Guide Sign Requested and Publish After Commit.](docs/images/userguide/v3.64/event-definition.png)
+
+3. In the participant’s permission set, grant **Read** and **Create** on this event, and **Read** and **Edit** on its **Receipt key** field. Give the Flow’s execution user access to the records, template and Portwood action it uses. Test as a person who will actually sign.
+
+#### 3. Give Portwood an agreement to prepare
+
+In **Portwood → My Templates → New Template**, choose **Bring an Existing Template**, **Salesforce Record (SOQL)** and **HTML**. Select **Guide Signing Receipt** as the base object and add **Name** to the selected fields. Set **API Name** to `Guide_Event_Acceptance` and **Output Format** to **PDF**. Select **Next → Create Template**. Under **Upload New Version**, select **Choose File** and upload the [practice agreement HTML](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/knowledgebase/examples/event-signing/acceptance.html), or use your own HTML agreement. Select **Save as New Version** and confirm the template is active.
+
+Put the **Customer** signature field directly in the main template body. Confirm your org’s signing site works with a practice request. [Prepare a signable template](#sign-template) · [Set up external signing](#setup-signatures)
+
+Now [build the background Flow that prepares an agreement](#signing-events). If your team already has an approval event and a private tracking record, map their fields to the same roles when you follow that walkthrough.
+
+<a id="signing-events"></a>
+
+## Prepare a signature request when a platform event arrives
+
+Build the background half of a signing experience. When someone chooses **Prepare agreement** on the screen, this Flow creates one Portwood request and puts their personal signing link on their private receipt. Start with the [receipt, event and signable template](#signing-handoff-setup).
+
+#### 1. Start a Flow when the request arrives
+
+In **Setup → Flows**, select **New Flow**. In **New Automation**, choose **Platform Event—Triggered Flow**. In **Choose Platform Event**, search for and select **Guide Sign Requested**. If you return to the canvas, select **Start → Edit** to see the chosen event.
+
+![Choose Platform Event—Triggered Flow for the background work. Screen Flow is the separate choice for the person’s interview.](docs/images/userguide/v3.64/flow-type-choice.png)
+
+![Choose Platform Event is set to Guide Sign Requested.](docs/images/userguide/v3.64/trigger-event.png)
+
+Under **Start**, select **+ → Get Records**. Find the first **Guide Signing Receipt** where **Receipt key** equals **Triggering Guide Sign Requested → Receipt key**. Add a **Decision**. When a receipt already exists, end that path. On the other path, use **Create Records** to create a receipt with the event’s key, **Preparation status = Preparing** and **Owner ID = the event’s Created By ID**. Keep the new record’s ID. The unique key also prevents two simultaneous deliveries from creating two receipts.
+
+#### 2. Tell Portwood who is signing
+
+Use **Get Records** to find the **User** whose **Id** equals the event’s **Created By ID**. In **Manager → New Resource → Variable**, create a variable named `Person`, choose **Apex-Defined**, and select the packaged **DocGenSigner** class. Create a second variable named `People` with the same type and select **Allow multiple values (collection)**.
+
+Add an **Assignment**. Set `Person.name` to the User’s **Full Name**, `Person.email` to the User’s **Email**, and `Person.role` to **Customer**, matching the template. In the last row select `People`, change the operator to **Add**, and select `Person`.
+
+![The Assignment sets the signer’s name, email and Customer role, then adds Person to the People collection.](docs/images/userguide/v3.64/assign-signer.png)
+
+#### 3. Create the signature request
+
+Select **+** and search for **Create Signature Request**. Choose the Portwood action. For **Related Record Id**, select the receipt you just created. Enter these inputs for a person who will open the site from the same interview.
+
+| In the action          | Choose this value                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Signers                | `People`                                                                                        |
+| Signing Order          | `Single`                                                                                        |
+| Template API Name      | `Guide_Event_Acceptance`                                                                        |
+| Send Branded Emails    | `False`. The screen supplies the initial invitation.                                            |
+| Link Expiration (Days) | `1` for this practice agreement. Leave the signer verification policy to your template and org. |
+
+![The signing action uses People, Single, and the API name of the active agreement template.](docs/images/userguide/v3.64/signer-inputs.png)
+
+#### 4. Put the result on the receipt
+
+Use a **Decision** to check the action’s **Success** output. On success, use a **Loop** over **Signer URLs**. This example has one signer. Inside the loop, assign the current item to a Text variable named `SignerLink`. After the loop, confirm the link is populated.
+
+Use **Update Records** on the receipt you just created. Set **Signature request ID** to the action’s **Signature Request Id**, **Private signing URL** to `SignerLink`, **Preparation status** to `Ready`, and **Handoff link expires** to a Date/Time formula containing `NOW() + 1`. On an action fault, unsuccessful result, or missing link, update the receipt to **Failed** and keep any returned request ID for investigation.
+
+![The receipt update saves the expiry, Portwood request ID, private signer link and Ready status.](docs/images/userguide/v3.64/receipt-fields.png)
+
+To clear the temporary URL, add a separate record-triggered Flow on the receipt. Run it after save when a receipt first meets **Preparation status = Ready**. Under **Start → Add Scheduled Paths**, use **1 Day After** the record-triggering event. On that path, use **Update Records** to clear **Private signing URL** on the triggering receipt. The practice agreement and the local expiry both use one day. The screen also checks expiry immediately before navigation. Save both Flows. If Salesforce asks for a **Default Workflow User** when you activate the scheduled cleanup, set it in **Setup → Process Automation Settings**. Activate the cleanup and background Flows in your sandbox. Next, [build the screen that opens the signing site](#signing-site-handoff).
+
+#### If a manager’s approval starts the process
+
+Use the approved agreement and version as the unique key. Find the authorized customer on the approved record. The publishing user in this case is the manager, while the invitation belongs to the customer. For multiple signers, route each person’s own link to them.
+
+Test one approval twice and check that it produces one request. In a parallel two-person test, let the second person sign first. Fulfillment should still be waiting.
+
+#### Tell the service team when the signed file is ready
+
+1. Create a **Record-Triggered Flow** on **Portwood Signature Request**. In **Start**, select **A record is created or updated** and **Actions and Related Records**.
+2. Under **All Conditions Are Met**, set **Status** to **Signed** and **Protected Signed Content Document Id → Is Null** to **False**. For updates, choose **Only when a record is updated to meet the condition requirements**. A signer can finish before the protected File is ready.
+3. On that path, create the team’s follow-up task on the related business record, or pass the signed File ID to your delivery step. If another system can retry delivery, use the request ID as its unique reference. Try opening the finished File as someone on the receiving team.
+
+For a separate notification each time a person signs, a **Platform Event–Triggered Flow** can listen to **Portwood Signature PDF** where the package emits it. Look up the request and the event’s signer. Use the request’s final status and File for fulfillment across signing methods. [Approval and fulfillment field map](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/docs/reference/signature-event-recipe.md)
+
+## account-letter.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>Account letter</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.8in;
+            }
+            body {
+                font:
+                    12pt Helvetica,
+                    sans-serif;
+                color: #203849;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Welcome, {Name}</h1>
+        <p>We will use this account name on your service documents.</p>
+    </body>
+</html>
+```
+
+## service-review.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>Service review</title>
+        <style>
+            @page {
+                size: Letter portrait;
+                margin: 0.7in 0.65in 0.85in;
+            }
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 10pt;
+                color: #193b46;
+            }
+            h1 {
+                font-family: Times, serif;
+                font-size: 34pt;
+                font-weight: normal;
+                margin: 8pt 0 18pt;
+            }
+            h2 {
+                font-size: 17pt;
+                page-break-after: avoid;
+            }
+            .mast,
+            .ledger {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            .mast td {
+                padding: 9pt;
+                background-color: #154d50;
+                color: white;
+                font-weight: bold;
+            }
+            .right {
+                text-align: right;
+            }
+            .lede {
+                font-size: 13pt;
+                line-height: 1.45;
+            }
+            .ledger {
+                -fs-table-paginate: paginate;
+                page-break-inside: auto;
+            }
+            .ledger thead {
+                display: table-header-group;
+            }
+            .ledger tr {
+                page-break-inside: avoid;
+            }
+            .ledger td,
+            .ledger th {
+                padding: 6pt 7pt;
+                border-bottom: 0.6pt solid #bdcfca;
+                vertical-align: top;
+            }
+            .ledger th {
+                text-align: left;
+                color: #ffffff;
+                background-color: #154d50;
+            }
+            .ledger .amount {
+                text-align: right;
+                white-space: nowrap;
+            }
+            .summary {
+                border-top: 2pt solid #ad7848;
+                margin-top: 14pt;
+                padding: 9pt 0;
+                page-break-inside: avoid;
+            }
+            .appendix {
+                page-break-before: always;
+            }
+            .page-no:before {
+                content: counter(page);
+            }
+            .page-count:before {
+                content: counter(pages);
+            }
+        </style>
+    </head>
+    <body>
+        <table class="mast">
+            <tr>
+                <td>CLIENT SERVICES</td>
+                <td class="right">ACCOUNT REVIEW</td>
+            </tr>
+        </table>
+        <h1>{Name}</h1>
+        <p class="lede">
+            Here is the work planned for your account. Use the reference number when discussing a service line.
+        </p>
+        <h2>Service schedule</h2>
+        <table class="ledger">
+            <thead>
+                <tr>
+                    <th style="width: 12%">Ref.</th>
+                    <th style="width: 61%">Service line</th>
+                    <th class="amount" style="width: 27%">Estimate</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Opportunities}{RowNumber}</td>
+                    <td>{Name}</td>
+                    <td class="amount">{Amount:#,##0.##}{/Opportunities}</td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="summary">Combined estimate &nbsp; <strong>{SUM:Opportunities.Amount:#,##0.00}</strong></p>
+        <div class="appendix">
+            <h2>Handoff and acceptance</h2>
+            <p>
+                Review the schedule with your account team. Reference numbers match the order in the service schedule.
+            </p>
+            <div>{%snippet:guide-service-handoff}</div>
+        </div>
+    </body>
+</html>
+```
+
+## footer.html
+
+```html
+<div style="font: 8pt Helvetica, sans-serif; text-align: center; color: #456568;">
+    <div>Client services &middot; Service review</div>
+    <div>Page <span class="page-no"></span> of <span class="page-count"></span></div>
+</div>
+```
+
+## handoff-fragment.html
+
+```html
+<p style="border-left: 3pt solid #ad7848; padding: 8pt 12pt; background-color: #f0f5f2;">
+    After acceptance, our service coordinator will arrange a handoff with <strong>{Name}</strong>.
+</p>
+```
+
+## portfolio-brief.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>Portfolio review</title>
+        <style>
+            @page {
+                size: Letter portrait;
+                margin: 0.65in;
+            }
+            body {
+                font:
+                    10pt Helvetica,
+                    sans-serif;
+                color: #183a41;
+            }
+            .band {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            .cover {
+                color: #ffffff;
+                background-color: #183e40;
+                padding: 25pt 24pt 33pt;
+            }
+            .folio {
+                font-size: 9pt;
+                letter-spacing: 1pt;
+            }
+            h1 {
+                font:
+                    34pt Times,
+                    serif;
+                margin: 14pt 0 8pt;
+            }
+            h2 {
+                font:
+                    19pt Times,
+                    serif;
+                margin: 19pt 0 5pt;
+                page-break-after: avoid;
+            }
+            .metric {
+                width: 50%;
+                background-color: #e6efeb;
+                padding: 13pt;
+                vertical-align: top;
+            }
+            .metric strong {
+                display: block;
+                font-size: 21pt;
+                margin-top: 5pt;
+            }
+            .rule {
+                border-top: 3pt solid #aa794b;
+            }
+            .ledger {
+                width: 100%;
+                border-collapse: collapse;
+                -fs-table-paginate: paginate;
+            }
+            .ledger th,
+            .ledger td {
+                padding: 7pt 6pt;
+                border-bottom: 0.7pt solid #c5d3cf;
+                text-align: left;
+            }
+            .ledger th {
+                background-color: #e6efeb;
+            }
+            .ledger thead {
+                display: table-header-group;
+            }
+            .ledger tr {
+                page-break-inside: avoid;
+            }
+            .ledger .number {
+                text-align: right;
+            }
+            .briefing {
+                page-break-before: always;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="cover">
+            <div class="folio">CLIENT SERVICES &nbsp; / &nbsp; PORTFOLIO REVIEW</div>
+            <h1>{Name}</h1>
+            <p>Engagements by stage and the value of work under review.</p>
+        </div>
+        <table class="band">
+            <tr>
+                <td class="metric">Engagements<strong>{COUNT:Opportunities}</strong></td>
+                <td class="metric">Combined estimate<strong>{SUM:Opportunities.Amount:#,##0.00}</strong></td>
+            </tr>
+        </table>
+        <h2>Stage distribution</h2>
+        {Chart:Opportunities:StageName:bar}
+        <h2>Review note</h2>
+        <p class="rule">
+            {#IF Opportunities.totalSize != 0}The following schedule groups engagements by stage. Reference numbers
+            restart in each group.{:else}There are no engagements in the selected data.{/IF}
+        </p>
+        <div class="briefing">
+            <div class="folio">ACCOUNT DETAIL</div>
+            {#GroupBy Opportunities by StageName}
+            <h2>{GroupName}</h2>
+            <table class="ledger">
+                <thead>
+                    <tr>
+                        <th>Ref.</th>
+                        <th>Engagement</th>
+                        <th class="number">Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Opportunities}{RowNumber}</td>
+                        <td>{Name}</td>
+                        <td class="number">{Amount:#,##0.00}{/Opportunities}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>Stage subtotal &nbsp; <strong>{SUM:Opportunities.Amount:#,##0.00}</strong></p>
+            {/GroupBy}
+        </div>
+    </body>
+</html>
+```
+
+## field-quote.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Field station renewal</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.65in 0.72in 0.85in;
+                @bottom-left {
+                    content: 'Morrow Field Systems   /   Commercial proposal';
+                    font: 8pt Helvetica;
+                    color: #516069;
+                }
+                @bottom-right {
+                    content: counter(page) '  /  ' counter(pages);
+                    font: 9pt Helvetica;
+                    color: #193c43;
+                }
+            }
+            body {
+                margin: 0;
+                color: #1a3036;
+                font:
+                    10.5pt/1.4 Helvetica,
+                    sans-serif;
+            }
+            h1,
+            h2 {
+                font-family: Times, serif;
+                font-weight: normal;
+            }
+            h1 {
+                font-size: 42pt;
+                line-height: 1.02;
+                margin: 14pt 0 8pt;
+            }
+            h2 {
+                font-size: 29pt;
+                margin: 6pt 0 14pt;
+                page-break-after: avoid;
+            }
+            h3 {
+                font-size: 13pt;
+                margin: 3pt 0;
+            }
+            a {
+                color: #14555b;
+            }
+            .mast {
+                width: 100%;
+                border-collapse: collapse;
+                border-bottom: 2.5pt solid #db915c;
+            }
+            .mast td {
+                padding: 4pt 0 8pt;
+                color: #17454a;
+                font-weight: bold;
+            }
+            .right {
+                text-align: right;
+            }
+            .edition {
+                font-size: 8pt;
+                letter-spacing: 1pt;
+                color: #3a6468;
+                font-weight: bold;
+            }
+            .hero {
+                padding: 27pt 24pt;
+                background: #193e44;
+                color: #ffffff;
+                margin: 17pt 0;
+            }
+            .hero p {
+                margin: 8pt 0 0;
+            }
+            .hero .edition {
+                color: #f3bb8e;
+            }
+            .summary,
+            .bundle,
+            .lines {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .summary td {
+                width: 50%;
+                padding: 13pt 10pt;
+                border-top: 1pt solid #537673;
+                background: #e8efea;
+                vertical-align: top;
+            }
+            .metric {
+                display: block;
+                font:
+                    21pt Times,
+                    serif;
+            }
+            .contents {
+                width: 95%;
+                margin: 18pt 0;
+            }
+            .contents a {
+                display: block;
+                text-decoration: none;
+                line-height: 1.6;
+            }
+            .contents a:after {
+                content: leader('.') target-counter(attr(href), page);
+            }
+            .contents .child {
+                padding-left: 17pt;
+                font-size: 9pt;
+            }
+            .section {
+                page-break-before: always;
+            }
+            .stamp {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                font: bold 9pt Helvetica;
+                letter-spacing: 1pt;
+                color: #674329;
+                border: 1pt solid #c19a72;
+                padding: 3pt 7pt;
+                background: #fff8ea;
+            }
+            .jump {
+                font-size: 8pt;
+                margin: 6pt 0 14pt;
+            }
+            .bundle {
+                margin: 10pt 0 13pt;
+            }
+            .bundle-head {
+                background: #24545a;
+                color: white;
+                padding: 8pt;
+            }
+            .bundle-head h3 {
+                margin: 0;
+            }
+            .bundle-body {
+                border: 1pt solid #b8c6be;
+                padding: 7pt;
+            }
+            .lines {
+                font-size: 8.5pt;
+                table-layout: fixed;
+                -fs-table-paginate: paginate;
+            }
+            .lines th,
+            .lines td {
+                padding: 4pt 3pt;
+                border-bottom: 0.5pt solid #c7d0cb;
+            }
+            .lines th {
+                text-align: left;
+                color: #315956;
+                background: #eff3ef;
+            }
+            .lines .num {
+                text-align: right;
+            }
+            .lines tr {
+                page-break-inside: avoid;
+            }
+            .sub {
+                text-align: right;
+                font-weight: bold;
+                margin: 6pt 0 0;
+            }
+            .note {
+                padding: 8pt 11pt;
+                border-left: 3pt solid #cd8950;
+                background: #fcf3e6;
+            }
+            .term {
+                border-top: 1pt solid #c4ccc7;
+                padding-top: 8pt;
+            }
+        </style>
+    </head>
+    <body>
+        {#IsDraft}
+        <div class="stamp">DRAFT PRICING · {QuoteNumber}</div>
+        {/IsDraft}
+        <table class="mast">
+            <tr>
+                <td>Morrow Field Systems</td>
+                <td class="right">{QuoteNumber}</td>
+            </tr>
+        </table>
+        <div class="hero">
+            <div class="edition">COMMERCIAL PROPOSAL</div>
+            <h1>{Subject}</h1>
+            <p>Prepared for <strong>{Client}</strong> · {Sponsor}</p>
+        </div>
+        <table class="summary">
+            <tr>
+                <td>One-time investment<span class="metric">{Currency} {OneTime:#,##0.00}</span></td>
+                <td>Monthly support<span class="metric">{Currency} {Monthly:#,##0.00}</span></td>
+            </tr>
+        </table>
+        <h2 id="contents" style="margin-top:20pt;">Inside this proposal</h2>
+        <div class="contents">
+            <a href="#scope">Scope of work</a>
+            <a href="#pricing">Configured pricing</a>
+            {#Bundles}<a class="child" href="#bundle-{Key}">{Name}</a>{/Bundles}
+            <a href="#terms">Commercial terms</a>
+        </div>
+        <p>Issued {Issued} · Valid through {ValidUntil}</p>
+        <div class="section">
+            <p class="edition">DELIVERY</p>
+            <h2 id="scope">Scope of work</h2>
+            <p>Review what each configuration delivers, then follow its link to inspect quantities and prices.</p>
+            {#Bundles}
+            <div class="term">
+                <h3>{Name}</h3>
+                <p>{Use}</p>
+                <p><a href="#bundle-{Key}">See this configuration and its price</a></p>
+            </div>
+            {/Bundles}
+            <h3>Delivery checkpoints</h3>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th style="width:27%;">When / who</th>
+                        <th>Milestone and acceptance check</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{#Milestones}<b>{Window}</b><br />{Owner}</td>
+                        <td><b>{Phase}</b><br />{Check}{/Milestones}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="jump"><a href="#contents">Return to contents</a></p>
+        </div>
+        <div class="section">
+            <p class="edition">CONFIGURATION SCHEDULE</p>
+            <h2 id="pricing">Configured pricing</h2>
+            <p>
+                All prices in {Currency}. The net column includes the listed discount. Optional services are priced
+                separately.
+            </p>
+            {#IF Bundles.totalSize = 0}
+            <p class="note">
+                No configured bundles are included in this draft. Ask the account team for the priced configuration.
+            </p>
+            {/IF} {#Bundles}
+            <table class="bundle">
+                <tr>
+                    <td class="bundle-head"><h3 id="bundle-{Key}">{Name}</h3></td>
+                </tr>
+                <tr>
+                    <td class="bundle-body">
+                        <table class="lines">
+                            <thead>
+                                <tr>
+                                    <th style="width:45%;">Component / SKU</th>
+                                    <th class="num" style="width:8%;">Qty</th>
+                                    <th class="num" style="width:18%;">List each</th>
+                                    <th class="num" style="width:11%;">Disc.</th>
+                                    <th class="num" style="width:18%;">Net</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>{#Components}<b>{Sku}</b><br />{Description}</td>
+                                    <td class="num">{Qty}</td>
+                                    <td class="num">{ListPrice:#,##0.00}</td>
+                                    <td class="num">{Discount}%</td>
+                                    <td class="num">{Net:#,##0.00}{/Components}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="sub">Bundle subtotal · {SUM:Components.Net:#,##0.00}</p>
+                        <p class="sub">Monthly support · {Monthly:#,##0.00}</p>
+                    </td>
+                </tr>
+            </table>
+            {#IF AddOns.totalSize > 0}
+            <div class="note">
+                <b>Optional service for {Name}</b>{#AddOns}
+                <p>{Description} · {Net:#,##0.00}</p>
+                {/AddOns}
+            </div>
+            {/IF} {/Bundles}
+            <p class="jump"><a href="#contents">Return to contents</a></p>
+        </div>
+        <div class="section">
+            <p class="edition">PURCHASE REVIEW</p>
+            <h2 id="terms">Commercial terms</h2>
+            <div class="term">
+                <h3>Order value</h3>
+                <p>
+                    The one-time configuration totals {Currency} {OneTime:#,##0.00}. Monthly support is {Currency}
+                    {Monthly:#,##0.00}. Optional services require separate approval.
+                </p>
+            </div>
+            <div class="term">
+                <h3>Payment schedule</h3>
+                <p>Installments apply to the one-time investment.</p>
+                <table class="lines">
+                    <thead>
+                        <tr>
+                            <th>Milestone</th>
+                            <th class="num">Share</th>
+                            <th class="num">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{#Payments}{Due}</td>
+                            <td class="num">{Share}%</td>
+                            <td class="num">{Amount:#,##0.00}{/Payments}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="term">
+                <h3>Offer window</h3>
+                <p>Reference {QuoteNumber} when approving this proposal through {ValidUntil}.</p>
+            </div>
+            <div class="term">
+                <h3>Handoff</h3>
+                <p>Confirm access to the work areas with the service coordinator before scheduling installation.</p>
+            </div>
+            <p class="jump">
+                <a href="#pricing">Review itemized pricing</a> · <a href="#contents">Return to contents</a>
+            </p>
+        </div>
+    </body>
+</html>
+```
+
+## field-quote.json
+
+```json
+{
+    "Client": "Alder Works",
+    "QuoteNumber": "Q-2048",
+    "Subject": "Field station renewal",
+    "Issued": "20 November 2026",
+    "ValidUntil": "20 December 2026",
+    "IsDraft": true,
+    "Currency": "USD",
+    "Sponsor": "Facilities Operations",
+    "Bundles": {
+        "totalSize": 2,
+        "records": [
+            {
+                "Key": "atlas",
+                "Name": "Atlas station",
+                "Use": "At each receiving bay, capture the equipment reading before dispatch.",
+                "Components": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Sku": "AT-210",
+                            "Description": "Field station with sealed enclosure",
+                            "Qty": 2,
+                            "ListPrice": 3125,
+                            "Discount": 12,
+                            "Net": 5500.0
+                        },
+                        {
+                            "Sku": "AT-041",
+                            "Description": "Mount and cable harness",
+                            "Qty": 2,
+                            "ListPrice": 95,
+                            "Discount": 0,
+                            "Net": 190.0
+                        },
+                        {
+                            "Sku": "SV-106",
+                            "Description": "Commissioning and operator training",
+                            "Qty": 1,
+                            "ListPrice": 850,
+                            "Discount": 0,
+                            "Net": 850.0
+                        }
+                    ]
+                },
+                "AddOns": {
+                    "totalSize": 0,
+                    "records": []
+                },
+                "OneTimeNet": 6540.0,
+                "Monthly": 60
+            },
+            {
+                "Key": "harbor",
+                "Name": "Harbor reserve",
+                "Use": "Keep one station online while the site supply is being serviced.",
+                "Components": {
+                    "totalSize": 2,
+                    "records": [
+                        {
+                            "Sku": "HB-310",
+                            "Description": "Power cabinet with changeover relay",
+                            "Qty": 1,
+                            "ListPrice": 3750,
+                            "Discount": 8,
+                            "Net": 3450.0
+                        },
+                        {
+                            "Sku": "HB-014",
+                            "Description": "Reserve battery module",
+                            "Qty": 2,
+                            "ListPrice": 340,
+                            "Discount": 0,
+                            "Net": 680.0
+                        }
+                    ]
+                },
+                "AddOns": {
+                    "totalSize": 1,
+                    "records": [
+                        {
+                            "Sku": "SV-208",
+                            "Description": "Annual on-site readiness inspection",
+                            "Qty": 1,
+                            "ListPrice": 450,
+                            "Discount": 0,
+                            "Net": 450.0
+                        }
+                    ]
+                },
+                "OneTimeNet": 4130.0,
+                "Monthly": 60
+            }
+        ]
+    },
+    "OneTime": 10670.0,
+    "Monthly": 120,
+    "AddOnNet": 450,
+    "Milestones": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Phase": "Site survey",
+                "Owner": "Facilities lead",
+                "Window": "Week 1",
+                "Check": "Site access, power and mounting positions confirmed."
+            },
+            {
+                "Phase": "Installation",
+                "Owner": "Field engineering",
+                "Window": "Weeks 2–3",
+                "Check": "Each station commissioned against the equipment list."
+            },
+            {
+                "Phase": "Acceptance",
+                "Owner": "Operations sponsor",
+                "Window": "Week 4",
+                "Check": "Training and handoff checklist acknowledged."
+            }
+        ]
+    },
+    "Payments": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Due": "At order",
+                "Share": 30,
+                "Amount": 3201
+            },
+            {
+                "Due": "After commissioning",
+                "Share": 40,
+                "Amount": 4268
+            },
+            {
+                "Due": "On acceptance",
+                "Share": 30,
+                "Amount": 3201
+            }
+        ]
+    }
+}
+```
+
+## renewal-brief.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Renewal review</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.75in;
+                @bottom-right {
+                    content: 'ACCOUNT REVIEW   /   ' counter(page);
+                    font: 8pt Helvetica;
+                    color: #46586c;
+                }
+            }
+            body {
+                margin: 0;
+                font:
+                    10.5pt/1.4 Helvetica,
+                    sans-serif;
+                color: #242c46;
+            }
+            h1,
+            h2 {
+                font:
+                    normal 36pt/1.05 Times,
+                    serif;
+                margin: 9pt 0;
+            }
+            h2 {
+                font-size: 20pt;
+                margin: 16pt 0 7pt;
+            }
+            .mast {
+                width: 100%;
+                border-bottom: 2pt solid #a38768;
+            }
+            .mast td {
+                padding: 0 0 6pt;
+                font-weight: bold;
+                font-size: 9pt;
+            }
+            .right {
+                text-align: right;
+            }
+            .kicker {
+                color: #5c6175;
+                font-size: 8pt;
+                letter-spacing: 1.1pt;
+                font-weight: bold;
+                margin: 22pt 0 4pt;
+            }
+            .decision {
+                padding: 11pt 14pt;
+                border-left: 4pt solid #996a48;
+                background: #f6eee4;
+                margin: 14pt 0;
+            }
+            .ontrack {
+                border-left-color: #476f65;
+                background: #eaf0ea;
+            }
+            .decision b {
+                display: block;
+                font-size: 14pt;
+            }
+            .metrics,
+            .teams {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .metrics td {
+                width: 33.33%;
+                padding: 8pt;
+                vertical-align: top;
+                background: #343855;
+                color: #fff;
+                border-right: 1pt solid white;
+            }
+            .value {
+                display: block;
+                font:
+                    19pt Times,
+                    serif;
+                padding-top: 3pt;
+            }
+            .teams th,
+            .teams td {
+                padding: 6pt 3pt;
+                border-bottom: 0.6pt solid #c9cbd5;
+                text-align: left;
+            }
+            .scale {
+                display: block;
+                background: #e5e7ee;
+                height: 6pt;
+                margin: 3pt 0;
+            }
+            .fill {
+                display: block;
+                height: 6pt;
+                background: #6a7094;
+            }
+            .footnote {
+                font-size: 9pt;
+                color: #575f73;
+            }
+        </style>
+    </head>
+    <body>
+        <table class="mast">
+            <tr>
+                <td>Client services</td>
+                <td class="right">{ReviewPeriod}</td>
+            </tr>
+        </table>
+        <p class="kicker">RENEWAL DECISION</p>
+        <h1>{Client}</h1>
+        <p>{PlanName} · Renewal on {RenewalDate}</p>
+        {#IF HasUsage = true} {#AtTarget}
+        <div class="decision ontrack">
+            <b>Prepare renewal terms</b>Active usage meets the agreed {Threshold}% threshold. Confirm scope with the
+            sponsor before sending the renewal.
+        </div>
+        {:else}
+        <div class="decision">
+            <b>Book an adoption review</b>Active usage is below the agreed {Threshold}% threshold. Ask the sponsor which
+            team needs help before proposing renewal terms.
+        </div>
+        {/AtTarget} {:else}
+        <div class="decision">
+            <b>Request usage data</b>Usage is unavailable for this period. Check the measurement window before making a
+            renewal recommendation.
+        </div>
+        {/IF}
+        <table class="metrics">
+            <tr>
+                <td>Annual contract<span class="value">USD {AnnualNet:#,##0}</span></td>
+                <td>Active usage<span class="value">{#IF HasUsage = true}{Adoption}%{:else}Unknown{/IF}</span></td>
+                <td>Open service cases<span class="value">{OpenCases}</span></td>
+            </tr>
+        </table>
+        {#IF HasUsage = true}
+        <h2>Where adoption differs</h2>
+        <p>Active seats as a share of licensed seats, by team. The percentage is printed beside every bar.</p>
+        <table class="teams">
+            <thead>
+                <tr>
+                    <th>Team</th>
+                    <th>Active / licensed</th>
+                    <th style="width:42%;">Adoption</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{#Teams}{Name}</td>
+                    <td>{Active} / {Licensed}</td>
+                    <td>
+                        {Percent}%
+                        <div class="scale"><div class="fill" style="width:{Percent}%;"></div></div>
+                        {/Teams}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="footnote">
+            Account adoption uses total active seats divided by total licensed seats. Last period: {PriorAdoption}%.
+        </p>
+        {/IF}
+        <h2>For the account owner</h2>
+        {#IF OpenCases > 0}
+        <p>
+            Review the {OpenCases} open service cases with the support lead. The oldest has been open for {DaysOpen}
+            days.
+        </p>
+        {:else}
+        <p>The service queue is clear. Confirm the renewal scope and decision date with the sponsor.</p>
+        {/IF}
+    </body>
+</html>
+```
+
+## renewal-brief.json
+
+```json
+{
+    "Client": "Sable Harbor Cooperative",
+    "ReviewPeriod": "October 2026",
+    "RenewalDate": "31 January 2027",
+    "AnnualNet": 86400,
+    "DaysOpen": 18,
+    "Threshold": 80,
+    "HasUsage": true,
+    "Adoption": 72,
+    "PriorAdoption": 61,
+    "OpenCases": 2,
+    "PlanName": "Operations Plus",
+    "Teams": {
+        "totalSize": 3,
+        "records": [
+            {
+                "Name": "Dispatch",
+                "Active": 33,
+                "Licensed": 40,
+                "Percent": 83
+            },
+            {
+                "Name": "Field service",
+                "Active": 24,
+                "Licensed": 40,
+                "Percent": 60
+            },
+            {
+                "Name": "Finance",
+                "Active": 15,
+                "Licensed": 20,
+                "Percent": 75
+            }
+        ]
+    },
+    "AtTarget": false
+}
+```
+
+## service-sheet.html
+
+```html
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Field service sheet</title>
+        <style>
+            @page {
+                size: Letter;
+                margin: 0.65in;
+                @bottom-left {
+                    content: 'MAINTENANCE COPY';
+                    font: bold 8pt Helvetica;
+                    color: #454c3c;
+                }
+                @bottom-right {
+                    content: counter(page) ' / ' counter(pages);
+                    font: 8pt Helvetica;
+                }
+            }
+            body {
+                margin: 0;
+                font:
+                    10.5pt/1.3 Helvetica,
+                    sans-serif;
+                color: #232b25;
+            }
+            .mast {
+                background: #334838;
+                color: white;
+                padding: 14pt 16pt;
+                border-top: 4pt solid #c4a646;
+            }
+            .mast p {
+                margin: 0 0 4pt;
+                font-size: 9pt;
+            }
+            h1 {
+                margin: 0;
+                font:
+                    normal 27pt Times,
+                    serif;
+            }
+            h2 {
+                margin: 0 0 3pt;
+                font:
+                    normal 18pt Times,
+                    serif;
+            }
+            .info,
+            .tag {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .info td {
+                width: 33.33%;
+                padding: 7pt 5pt;
+                border-bottom: 0.6pt solid #b4bba9;
+            }
+            .asset {
+                page-break-inside: avoid;
+                border: 1pt solid #aeb7a3;
+                margin-top: 11pt;
+                padding: 8pt;
+            }
+            .tag td {
+                vertical-align: top;
+            }
+            .identity {
+                width: 73%;
+            }
+            .scan {
+                width: 27%;
+                text-align: center;
+            }
+            .code {
+                font-family: Courier, monospace;
+                font-weight: bold;
+                font-size: 10pt;
+            }
+            .checklist {
+                margin: 5pt 0;
+                border-collapse: collapse;
+            }
+            .checklist td {
+                padding: 2.5pt 0;
+            }
+            .box {
+                display: inline-block;
+                width: 8pt;
+                height: 8pt;
+                border: 0.9pt solid #52624c;
+                margin-right: 7pt;
+            }
+            .tear {
+                border-top: 1.1pt dashed #697561;
+                margin-top: 14pt;
+                padding-top: 7pt;
+            }
+            .tear p {
+                margin: 5pt 0;
+            }
+            .line {
+                display: inline-block;
+                width: 1.5in;
+                border-bottom: 0.8pt solid #404c3e;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="mast">
+            <p>FIELD SERVICES · WORK ORDER {WorkOrder}</p>
+            <h1>{Site}</h1>
+        </div>
+        <table class="info">
+            <tr>
+                <td><strong>Visit</strong><br />{Visit}</td>
+                <td><strong>Technician</strong><br />{Technician}</td>
+                <td><strong>Equipment</strong><br />{COUNT:Equipment} units</td>
+            </tr>
+        </table>
+        {#Equipment}
+        <div class="asset">
+            <table class="tag">
+                <tr>
+                    <td class="identity">
+                        <h2>{Name}</h2>
+                        <p>{Location}</p>
+                        <table class="checklist">
+                            <tbody>
+                                <tr>
+                                    <td>{#Checks}<span class="box"></span></td>
+                                    <td>{Task}{/Checks}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>As-found reading <span class="line"></span></p>
+                    </td>
+                    <td class="scan">{*Code:qr:105}<br /><span class="code">{Code}</span></td>
+                </tr>
+            </table>
+        </div>
+        {/Equipment}
+        <div class="tear">
+            <strong>Desk receipt · {WorkOrder}</strong>
+            <p>{Handoff}</p>
+            <p>Technician initials <span class="line"></span> &nbsp; Date <span class="line"></span></p>
+        </div>
+    </body>
+</html>
+```
+
+## service-sheet.json
+
+```json
+{
+    "Site": "North pier workshop",
+    "WorkOrder": "WO-1842",
+    "Visit": "24 November 2026",
+    "Technician": "Morgan Lee",
+    "Handoff": "Return the signed paper checklist to the maintenance desk.",
+    "Equipment": {
+        "totalSize": 2,
+        "records": [
+            {
+                "Code": "AW-P17-201",
+                "Name": "Circulation pump",
+                "Location": "Bay 2 · supply manifold",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Check motor guard and isolation label"
+                        },
+                        {
+                            "Task": "Record cold-start pressure"
+                        },
+                        {
+                            "Task": "Inspect the coupling for movement"
+                        }
+                    ]
+                }
+            },
+            {
+                "Code": "AW-S08-414",
+                "Name": "Flow sensor",
+                "Location": "Bay 2 · return line",
+                "Checks": {
+                    "totalSize": 3,
+                    "records": [
+                        {
+                            "Task": "Match the serial number to the register"
+                        },
+                        {
+                            "Task": "Record instrument reading at idle"
+                        },
+                        {
+                            "Task": "Return the enclosure cover"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
+```
+
+# Request an agreement and open it from a Screen Flow
+
+This subscriber project lets one signed-in person prepare and open a practice agreement. The screen publishes a platform event. A second Flow creates the Portwood request and writes the result to a private receipt. The same screen interview reads that receipt and uses Salesforce’s standard **Open a Page** action to open the signer’s URL. A third Flow clears that URL after the handoff window.
+
+[See the signer’s screens](https://portwood.dev/guide#event-signing-journey) or [build it step by step in Salesforce Setup](https://portwood.dev/guide#signing-handoff-setup).
+
+This sample starts with a signed-in user. Authenticated signing for employees or portal members requires a Portwood site license. A public signing page also needs its guest user configured. [Plan licenses and request a quote](https://portwood.dev/guide#user-licenses).
+
+## Install this optional project in a sandbox
+
+1. Use a sandbox with Portwood installed and a configured Salesforce Site or Experience Cloud signing page. The signer and Flow execution users need the Portwood permissions and record access appropriate to their roles. The source uses Salesforce Flow API 68 and the managed `portwoodglobal` namespace.
+2. From this project’s directory, deploy the sample objects, permission set and three **Draft** Flows. Substitute your sandbox alias in the command.
+    ```bash
+    sf project deploy start --source-dir force-app --target-org YOUR_SANDBOX
+    ```
+3. In Portwood, create an **HTML** template using **Salesforce Record (SOQL)**. Choose **Guide Signing Receipt** as the base object and select its **Name** field (the receipt number). Upload `acceptance.html`, give the template the exact API name `Guide_Event_Acceptance`, and save and activate it. The template puts the **Customer** signing tags directly in the body. This sample signs the receipt-backed agreement. To sign an already-generated quote PDF, use Portwood’s uploaded-PDF preparation route.
+4. Assign **Guide Signing Handoff** to your test signer. Grant **Run Flows** and access to **Guide · Request and open an agreement** if your org restricts flow access. Keep the receipt object private. Limit users with administrative, hierarchy or sharing-rule access to its signer-link field. The included permission set gives users read access to receipts and permission to publish this event. The background Flow writes receipts.
+5. In Flow Builder, activate **Guide · Clear expired signing link**, **Guide · Prepare the agreement**, then **Guide · Request and open an agreement**. Use a supported Lightning host, for example the standard Flow component on a Lightning app page. Test with the person who will actually use the interview. Configure the org’s **Default Workflow User** if Salesforce prompts for one when you activate the scheduled cleanup.
+6. Choose **Prepare agreement**, then **Open signing page**. If preparation is still pending, choose **Check again** in the same interview. The site link is for the publishing user only. After returning, use **Check signing status**. If the signer closed the signing tab, **Reopen my signing page → Check again** rechecks the private receipt and opens the same request. After signing, the Flow can report that the final file is still being saved. The finished path requires both the signed status and the protected signed File ID.
+
+## Follow the fields
+
+| Element             | Mapping                                                                                                                                                                                                                                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Publish             | Create `Guide_Sign_Requested__e` with `Receipt_Key__c = $Flow.InterviewGuid`. The event uses **Publish After Commit**. The next Screen commits the publication.                                                                                                                                                                                    |
+| Claim               | Create a private `Guide_Sign_Receipt__c` with unique `Receipt_Key__c`, `Stage__c = Preparing` and `OwnerId = $Record.CreatedById`. Existing keys exit the subscriber. The database’s unique constraint also prevents a concurrent duplicate from creating a second request. A concurrent duplicate-key fault can appear in failed Flow interviews. |
+| Identify the signer | Read the publishing User’s name and email. Set the **DocGenSigner** role to **Customer**. Pass that one signer to **Portwood: Create Signature Request** with **Single** signing order, **Send Branded Emails = False** and one day of validity. The verification policy comes from the template and org.                                          |
+| Store the outcome   | On success store `Request_Id__c`, the single returned URL, its handoff expiry and **Ready**. Mark a failed or unsuccessful request **Failed** so the interview can show a recoverable explanation. Investigate that receipt before initiating another submission.                                                                                  |
+| Read the result     | Filter by the interview key **and** signed-in owner. **Open a Page** receives `pageType = WebPage` and `webPageUrl = Receipt.Signer_URL__c`. The handoff screen also has a link. Rechecking reads the existing receipt.                                                                                                                            |
+| Clear the link      | A scheduled path clears `Signer_URL__c` approximately one day after the receipt becomes ready. The interview separately checks `Link_Expires_At__c` before opening it. Keep platform-event payloads, analytics, recordings and logs free of signing URLs.                                                                                          |
+| Confirm completion  | Read `portwoodglobal__DocGen_Signature_Request__c` using the stored request ID. Read the protected File through Salesforce’s normal access rules.                                                                                                                                                                                                  |
+
+The retry key covers one interview. For repeat approvals across interviews, use a unique business key tied to the approved proposal and version. A business process with multiple signers also needs per-signer authorization for each handoff. The separate approval-event recipe in the guide covers those changes.
+
+[Open a Page action](https://help.salesforce.com/s/articleView?id=platform.flow_ref_elements_actions_open_a_page.htm&language=en_US&type=5) · [Platform-event-triggered Flows](https://developer.salesforce.com/docs/platform/platform-events/guide/platform-events-subscribe-flow.html)
+
+## Guide_Open_Agreement.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <actionCalls>
+        <name>Open_Signing_Page</name>
+        <label>Open the signing page</label>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
+        <actionName>flowruntime:openAPage</actionName>
+        <actionType>lwcComponent</actionType>
+        <connector>
+            <targetReference>Handoff</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Handoff</targetReference>
+        </faultConnector>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>pageType</name>
+            <value>
+                <stringValue>WebPage</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>webPageUrl</name>
+            <value>
+                <elementReference>Receipt.Signer_URL__c</elementReference>
+            </value>
+        </inputParameters>
+        <nameSegment>flowruntime:openAPage</nameSegment>
+    </actionCalls>
+    <decisions>
+        <name>Ready</name>
+        <label>Is the agreement ready?</label>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
+        <defaultConnector>
+            <targetReference>Waiting</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Prepared_Receipt</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Ready</stringValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Receipt.Signer_URL__c</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Receipt.Link_Expires_At__c</leftValueReference>
+                <operator>GreaterThan</operator>
+                <rightValue>
+                    <elementReference>$Flow.CurrentDateTime</elementReference>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Open_Signing_Page</targetReference>
+            </connector>
+            <label>Ready for this signer</label>
+        </rules>
+        <rules>
+            <name>Error</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Failed</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Preparation failed</label>
+        </rules>
+        <rules>
+            <name>Expired</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Receipt.Stage__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Ready</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Handoff expired</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Outcome</name>
+        <label>Check the signed document</label>
+        <locationX>480</locationX>
+        <locationY>1369</locationY>
+        <defaultConnector>
+            <targetReference>Pending</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Done</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Signed</stringValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Protected_Signed_Content_Document_Id__c</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Complete</targetReference>
+            </connector>
+            <label>Signed file available</label>
+        </rules>
+        <rules>
+            <name>Making_File</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Signed</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Finalizing</targetReference>
+            </connector>
+            <label>Signed and saving the file</label>
+        </rules>
+        <rules>
+            <name>Declined</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Declined</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Declined</label>
+        </rules>
+        <rules>
+            <name>Revoked</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Status__c</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>Cancelled</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Cancelled</label>
+        </rules>
+        <rules>
+            <name>Timed_Out</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.portwoodglobal__Expires_At__c</leftValueReference>
+                <operator>LessThan</operator>
+                <rightValue>
+                    <elementReference>$Flow.CurrentDateTime</elementReference>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Stopped</targetReference>
+            </connector>
+            <label>Expired</label>
+        </rules>
+        <rules>
+            <name>No_Visible_Request</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Request.Id</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Problem</targetReference>
+            </connector>
+            <label>Request unavailable</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Check_Again</name>
+        <label>Reopen the signing page?</label>
+        <locationX>205</locationX>
+        <locationY>1659</locationY>
+        <defaultConnector>
+            <targetReference>Request</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Check signing status</defaultConnectorLabel>
+        <rules>
+            <name>Reopen</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>ReopenPage</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Receipt</targetReference>
+            </connector>
+            <label>Recheck my receipt and open</label>
+        </rules>
+    </decisions>
+    <interviewLabel>Guide · Request and open an agreement {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Request and open an agreement</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>Flow</processType>
+    <recordCreates>
+        <name>Publish</name>
+        <label>Publish the preparation event</label>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
+        <connector>
+            <targetReference>Preparing</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <inputAssignments>
+            <field>Receipt_Key__c</field>
+            <value>
+                <elementReference>$Flow.InterviewGuid</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Requested__e</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordCreates>
+    <recordLookups>
+        <name>Receipt</name>
+        <label>Read my receipt</label>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Ready</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Receipt_Key__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Flow.InterviewGuid</elementReference>
+            </value>
+        </filters>
+        <filters>
+            <field>OwnerId</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$User.Id</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordLookups>
+        <name>Request</name>
+        <label>Check the request</label>
+        <locationX>480</locationX>
+        <locationY>1224</locationY>
+        <assignNullValuesIfNoRecordsFound>true</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Outcome</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Problem</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Receipt.Request_Id__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>portwoodglobal__DocGen_Signature_Request__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <screens>
+        <name>Confirm</name>
+        <label>Prepare an agreement</label>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Publish</targetReference>
+        </connector>
+        <fields>
+            <name>Confirm_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Prepare an acceptance agreement for yourself using your signed-in identity.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Prepare agreement</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Preparing</name>
+        <label>Preparing your agreement</label>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Receipt</targetReference>
+        </connector>
+        <fields>
+            <name>Preparing_Instructions</name>
+            <fieldText
+            >&lt;p&gt;The request is being prepared. Continue to look for your signing page.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Open signing page</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Waiting</name>
+        <label>Waiting for the agreement</label>
+        <locationX>205</locationX>
+        <locationY>789</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Receipt</targetReference>
+        </connector>
+        <fields>
+            <name>Waiting_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Preparation is still running. Check the same request again in a moment.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Handoff</name>
+        <label>Review and sign</label>
+        <locationX>480</locationX>
+        <locationY>1079</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Request</targetReference>
+        </connector>
+        <fields>
+            <name>Handoff_Instructions</name>
+            <fieldText
+            >&lt;p&gt;If the signing page did not open, &lt;a href="{!Receipt.Signer_URL__c}" target="_blank"&gt;review and sign your agreement&lt;/a&gt;. Return here to check its status.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check signing status</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Pending</name>
+        <label>Agreement still needs a signature</label>
+        <locationX>205</locationX>
+        <locationY>1369</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Check_Again</targetReference>
+        </connector>
+        <fields>
+            <name>Pending_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Your agreement still needs a signature. Finish in the signing tab. If you closed it, select the box below and choose Check again.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <fields>
+            <name>ReopenPage</name>
+            <dataType>Boolean</dataType>
+            <defaultValue>
+                <booleanValue>false</booleanValue>
+            </defaultValue>
+            <fieldText>Reopen my signing page</fieldText>
+            <fieldType>InputField</fieldType>
+            <isRequired>true</isRequired>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Finalizing</name>
+        <label>Saving the signed file</label>
+        <locationX>1030</locationX>
+        <locationY>1514</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Request</targetReference>
+        </connector>
+        <fields>
+            <name>Finalizing_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Your agreement is signed. Portwood is saving the final file. Choose Check again in a moment.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <nextOrFinishButtonLabel>Check again</nextOrFinishButtonLabel>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Problem</name>
+        <label>Agreement unavailable</label>
+        <locationX>1030</locationX>
+        <locationY>789</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Problem_Instructions</name>
+            <fieldText
+            >&lt;p&gt;Ask your administrator to check the receipt, the template and your access.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Complete</name>
+        <label>Signed file ready</label>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Complete_Instructions</name>
+            <fieldText>&lt;p&gt;The request is signed and the protected File is ready.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Stopped</name>
+        <label>Signing has stopped</label>
+        <locationX>755</locationX>
+        <locationY>1514</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Stopped_Instructions</name>
+            <fieldText
+            >&lt;p&gt;This request is no longer available for signing. Contact the sender.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <start>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
+        <connector>
+            <targetReference>Confirm</targetReference>
+        </connector>
+    </start>
+    <status>Draft</status>
+</Flow>
+```
+
+## Guide_Prepare_Agreement.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <actionCalls>
+        <name>Prepare</name>
+        <label>Create signature request</label>
+        <locationX>480</locationX>
+        <locationY>934</locationY>
+        <actionName>portwoodglobal__DocGenSignatureFlowAction</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Prepared</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </faultConnector>
+        <inputParameters>
+            <name>templateApiName</name>
+            <value>
+                <stringValue>Guide_Event_Acceptance</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>relatedRecordId</name>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>signerRecords</name>
+            <value>
+                <elementReference>People</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>signingOrder</name>
+            <value>
+                <stringValue>Single</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>sendEmails</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>prefillSignerEmail</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>expirationDays</name>
+            <value>
+                <numberValue>1</numberValue>
+            </value>
+        </inputParameters>
+        <outputParameters>
+            <assignToReference>RequestId</assignToReference>
+            <name>signatureRequestId</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>Links</assignToReference>
+            <name>signerUrls</name>
+        </outputParameters>
+        <outputParameters>
+            <assignToReference>PreparedOk</assignToReference>
+            <name>success</name>
+        </outputParameters>
+        <storeOutputAutomatically>false</storeOutputAutomatically>
+    </actionCalls>
+    <assignments>
+        <name>Identify</name>
+        <label>Use the publishing user</label>
+        <locationX>480</locationX>
+        <locationY>789</locationY>
+        <assignmentItems>
+            <assignToReference>Person.name</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Publisher.Name</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Person.email</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Publisher.Email</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Person.role</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>Customer</stringValue>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>People</assignToReference>
+            <operator>Add</operator>
+            <value>
+                <elementReference>Person</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Prepare</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
+        <name>Capture_Link</name>
+        <label>Store the single signer link</label>
+        <locationX>205</locationX>
+        <locationY>1369</locationY>
+        <assignmentItems>
+            <assignToReference>SignerLink</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>Each_Link</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Each_Link</targetReference>
+        </connector>
+    </assignments>
+    <decisions>
+        <name>New_Receipt</name>
+        <label>Check for a replay</label>
+        <locationX>480</locationX>
+        <locationY>354</locationY>
+        <defaultConnector>
+            <targetReference>Claim</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Seen</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Prior.Id</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <label>Already prepared or preparing</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Prepared</name>
+        <label>Did Portwood create the request?</label>
+        <locationX>480</locationX>
+        <locationY>1079</locationY>
+        <defaultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Have_Request</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>PreparedOk</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>RequestId</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Each_Link</targetReference>
+            </connector>
+            <label>Request created</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <name>Has_Link</name>
+        <label>Check the result link</label>
+        <locationX>480</locationX>
+        <locationY>1514</locationY>
+        <defaultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Otherwise</defaultConnectorLabel>
+        <rules>
+            <name>Link_Ready</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>SignerLink</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Set_Ready</targetReference>
+            </connector>
+            <label>Link returned</label>
+        </rules>
+    </decisions>
+    <formulas>
+        <name>Expires</name>
+        <dataType>DateTime</dataType>
+        <expression>NOW() + 1</expression>
+    </formulas>
+    <interviewLabel>Guide · Prepare the agreement {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Prepare the agreement</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>AutoLaunchedFlow</processType>
+    <loops>
+        <name>Each_Link</name>
+        <label>Read the signer URL</label>
+        <locationX>480</locationX>
+        <locationY>1224</locationY>
+        <collectionReference>Links</collectionReference>
+        <iterationOrder>Asc</iterationOrder>
+        <nextValueConnector>
+            <targetReference>Capture_Link</targetReference>
+        </nextValueConnector>
+        <noMoreValuesConnector>
+            <targetReference>Has_Link</targetReference>
+        </noMoreValuesConnector>
+    </loops>
+    <recordCreates>
+        <name>Claim</name>
+        <label>Claim this interview once</label>
+        <locationX>480</locationX>
+        <locationY>499</locationY>
+        <connector>
+            <targetReference>Publisher</targetReference>
+        </connector>
+        <inputAssignments>
+            <field>OwnerId</field>
+            <value>
+                <elementReference>$Record.CreatedById</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Receipt_Key__c</field>
+            <value>
+                <elementReference>$Record.Receipt_Key__c</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Preparing</stringValue>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordCreates>
+    <recordLookups>
+        <name>Prior</name>
+        <label>Find an existing receipt</label>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>New_Receipt</targetReference>
+        </connector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Receipt_Key__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.Receipt_Key__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Guide_Sign_Receipt__c</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordLookups>
+        <name>Publisher</name>
+        <label>Find the person who started the interview</label>
+        <locationX>480</locationX>
+        <locationY>644</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Identify</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Set_Failed</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.CreatedById</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>User</object>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <recordUpdates>
+        <name>Set_Ready</name>
+        <label>Make the link available</label>
+        <locationX>480</locationX>
+        <locationY>1659</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Ready</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Request_Id__c</field>
+            <value>
+                <elementReference>RequestId</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Signer_URL__c</field>
+            <value>
+                <elementReference>SignerLink</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Link_Expires_At__c</field>
+            <value>
+                <elementReference>Expires</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <recordUpdates>
+        <name>Set_Failed</name>
+        <label>Record the preparation problem</label>
+        <locationX>1030</locationX>
+        <locationY>1224</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Claim</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Stage__c</field>
+            <value>
+                <stringValue>Failed</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Request_Id__c</field>
+            <value>
+                <elementReference>RequestId</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <start>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
+        <connector>
+            <targetReference>Prior</targetReference>
+        </connector>
+        <object>Guide_Sign_Requested__e</object>
+        <triggerType>PlatformEvent</triggerType>
+    </start>
+    <status>Draft</status>
+    <variables>
+        <name>Person</name>
+        <apexClass>portwoodglobal__DocGenSigner</apexClass>
+        <dataType>Apex</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>People</name>
+        <apexClass>portwoodglobal__DocGenSigner</apexClass>
+        <dataType>Apex</dataType>
+        <isCollection>true</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>RequestId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Links</name>
+        <dataType>String</dataType>
+        <isCollection>true</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>SignerLink</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>PreparedOk</name>
+        <dataType>Boolean</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
+```
+
+## Guide_Clear_Handoff_Link.flow-meta.xml
+
+```xml
+<?xml version='1.0' encoding='UTF-8' ?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <interviewLabel>Guide · Clear expired signing link {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Guide · Clear expired signing link</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>AutoLaunchedFlow</processType>
+    <recordUpdates>
+        <name>Clear_Link</name>
+        <label>Clear the expired private URL</label>
+        <locationX>480</locationX>
+        <locationY>209</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.Id</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Signer_URL__c</field>
+            <value>
+                <elementReference>ClearedURL</elementReference>
+            </value>
+        </inputAssignments>
+        <object>Guide_Sign_Receipt__c</object>
+    </recordUpdates>
+    <start>
+        <locationX>480</locationX>
+        <locationY>64</locationY>
+        <doesRequireRecordChangedToMeetCriteria>true</doesRequireRecordChangedToMeetCriteria>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Stage__c</field>
+            <operator>EqualTo</operator>
+            <value>
+                <stringValue>Ready</stringValue>
+            </value>
+        </filters>
+        <object>Guide_Sign_Receipt__c</object>
+        <recordTriggerType>CreateAndUpdate</recordTriggerType>
+        <scheduledPaths>
+            <name>Expired</name>
+            <connector>
+                <targetReference>Clear_Link</targetReference>
+            </connector>
+            <label>Handoff expired</label>
+            <offsetNumber>1</offsetNumber>
+            <offsetUnit>Days</offsetUnit>
+            <timeSource>RecordTriggerEvent</timeSource>
+        </scheduledPaths>
+        <triggerType>RecordAfterSave</triggerType>
+    </start>
+    <status>Draft</status>
+    <variables>
+        <name>ClearedURL</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
+```
