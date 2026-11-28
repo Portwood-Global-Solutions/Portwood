@@ -738,8 +738,7 @@
                                         <strong>Pick your images</strong>
                                     </div>
                                     <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_xx-small">
-                                        Tick the shared assets this document should use — the prompt tells the AI how to
-                                        place each one.
+                                        Choose which images the assistant may use. It can leave out any or all of them.
                                     </p>
                                     <template if:true={hasWizardAssets}>
                                         <div class="dg-ai-assetlist">
@@ -758,7 +757,9 @@
                                                             alt={asset.name}
                                                         />
                                                     </template>
-                                                    <span class="dg-qf-label">{asset.name}</span>
+                                                    <span class="dg-qf-label" title={asset.description}
+                                                        >{asset.name}</span
+                                                    >
                                                     <span class="dg-qf-api">{asset.mergeTag}</span>
                                                 </label>
                                             </template>
@@ -798,8 +799,8 @@
                                         ></lightning-button>
                                     </div>
                                     <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_x-small">
-                                        Paste it into Claude, ChatGPT, Gemini, or Copilot. It carries your fields,
-                                        images, description, and the PDF engine's layout rules.
+                                        Paste it into your AI assistant and type your brief at the end. Attach a PDF,
+                                        screenshot, or Word document to use as a reference.
                                     </p>
                                     <pre class="dg-ai-prompt">{aiAuthoringPrompt}</pre>
 
@@ -1802,7 +1803,7 @@
                                     <button
                                         class="dg-fmt-btn dg-panel-btn dg-tb-chip"
                                         onclick={handleCopyEditAiPrompt}
-                                        title="Ready-to-paste prompt (your fields + tag syntax + PDF layout rules) for Claude / ChatGPT / Gemini / Copilot."
+                                        title="Copy fields, approved fonts and shared assets. Attach an example document in your AI assistant to recreate its layout."
                                     >
                                         Copy AI Prompt
                                     </button>
@@ -5351,7 +5352,7 @@
                                                 label="Copy AI Prompt"
                                                 icon-name="utility:copy"
                                                 onclick={handleCopyEditAiPrompt}
-                                                title="Copies a ready-to-paste prompt (your fields + Portwood tag syntax + PDF layout rules) for Claude / ChatGPT / Gemini / Copilot. Paste the returned HTML into the designer."
+                                                title="Copy fields, approved fonts and shared assets. Attach an example in your AI assistant, then paste the returned HTML here."
                                                 class="slds-var-m-left_x-small"
                                             >
                                             </lightning-button>

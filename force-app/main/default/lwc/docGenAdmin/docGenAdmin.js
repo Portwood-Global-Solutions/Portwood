@@ -8,6 +8,7 @@ import LightningConfirm from 'lightning/confirm';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
+import getAuthoringFonts from '@salesforce/apex/DocGenFontController.getAuthoringFonts';
 import getFontFaces from '@salesforce/apex/DocGenFontController.getFontFaces';
 import { loadFontFace } from 'c/docGenFontLoader';
 import {
@@ -99,6 +100,7 @@ import searchDataProviders from '@salesforce/apex/DocGenController.searchDataPro
 import getHtmlTemplateBody from '@salesforce/apex/DocGenController.getHtmlTemplateBody';
 import getConvertedHtmlSnapshot from '@salesforce/apex/DocGenController.getConvertedHtmlSnapshot';
 import listHtmlTemplateImages from '@salesforce/apex/DocGenController.listHtmlTemplateImages';
+import getSnippets from '@salesforce/apex/DocGenSnippetController.getSnippets';
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
 import createAsset from '@salesforce/apex/DocGenController.createAsset';
 import addAssetVersion from '@salesforce/apex/DocGenController.addAssetVersion';
@@ -2189,7 +2191,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     if (!(this.newTemplateQuery || '').trim()) {
                         this.newTemplateQuery = await this._buildDefaultQueryConfig(this.newTemplateObject);
                     }
-                    await this._loadWizardAssets();
+                    await this._loadAiResources();
                 } finally {
                     this.isAutoCreating = false;
                 }
@@ -2198,7 +2200,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 return;
             }
             if (this.isAuthoringAi && this.dataSourceMode === 'flow') {
-                await this._loadWizardAssets();
+                await this._loadAiResources();
                 this.currentWizardStep = 'ai';
                 return;
             }
@@ -2284,6 +2286,9 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 name: a.name,
                 assetKey: a.assetKey,
                 assetType: a.assetType,
+                availableForPrompt: a.isActive === true && a.versionNumber != null,
+                category: a.category,
+                description: a.description,
                 mergeTag: a.mergeTag || '{%asset:' + a.assetKey + '}',
                 previewUrl: a.latestVersionCvId ? '/sfc/servlet.shepherd/version/download/' + a.latestVersionCvId : null
             }));
@@ -2294,13 +2299,15 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                 }
             }
             this._imagifyAssetPills();
+            return true;
         } catch (e) {
             this.wizardAssets = [];
+            return false;
         }
     }
 
     get hasWizardAssets() {
-        return (this.wizardAssets || []).length > 0;
+        return this.promptImages.length > 0;
     }
 
     /** Paste step is "3" after the assets step, "2" when there are no assets yet. */
@@ -2310,7 +2317,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
 
     get aiAssetRows() {
         const sel = this.aiSelectedAssetIds;
-        return (this.wizardAssets || []).map((a) => ({
+        return this.promptImages.map((a) => ({
             ...a,
             selected: sel === null ? true : sel.includes(a.id)
         }));
@@ -2825,14 +2832,45 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return this.isCreatingHtmlPdf && this.isAuthoringFile;
     }
 
+    // Read catalog metadata for the clipboard. Font binaries, file URLs and snippet HTML stay in Salesforce.
+    aiFontFaces = [];
+    aiSnippets = [];
+    _aiResourceRequest;
+    _aiResourcesReady = false;
+
+    _loadAiResources() {
+        if (this._aiResourceRequest) return this._aiResourceRequest;
+        this._aiResourcesReady = false;
+        this._aiResourceRequest = Promise.allSettled([getAuthoringFonts(), this._loadWizardAssets(), getSnippets()])
+            .then(([fonts, images, snippets]) => {
+                this.aiFontFaces = fonts.status === 'fulfilled' ? fonts.value || [] : [];
+                this.aiSnippets =
+                    snippets.status === 'fulfilled'
+                        ? (snippets.value || []).filter((row) => row.isActive && row.mergeTag)
+                        : [];
+                this._aiResourcesReady =
+                    fonts.status === 'fulfilled' && images.value === true && snippets.status === 'fulfilled';
+            })
+            .finally(() => {
+                this._aiResourceRequest = null;
+            });
+        return this._aiResourceRequest;
+    }
+
+    get promptImages() {
+        return (this.wizardAssets || []).filter((asset) => asset.availableForPrompt);
+    }
+
     get aiAuthoringPrompt() {
         const shape = extractQueryShape(this.newTemplateQuery, this.newTemplateObject);
         const sel = this.aiSelectedAssetIds;
-        const assets = sel === null ? this.wizardAssets : (this.wizardAssets || []).filter((a) => sel.includes(a.id));
+        const assets = sel === null ? this.promptImages : this.promptImages.filter((a) => sel.includes(a.id));
         return buildAiPrompt(shape, {
             dataSourceMode: this.dataSourceMode,
             providerFields: (this.providerFields || []).map((f) => f.name || f),
             assets,
+            fonts: this.aiFontFaces,
+            snippets: this.aiSnippets,
             docDescription: this.aiDocDescription,
             // #248 — field types let the model pick its own format suffixes
             // ({Amount:currency}, {CloseDate:MMMM d, yyyy}) instead of emitting bare
@@ -2842,11 +2880,19 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
     }
 
     get editAiPrompt() {
+        return this._buildDesignerAiPrompt();
+    }
+
+    _buildDesignerAiPrompt(task = {}) {
         const shape = extractQueryShape(this.editTemplateQuery, this.editTemplateObject);
         return buildAiPrompt(shape, {
             dataSourceMode: this.editTemplateObject === 'FlowJsonData' ? 'flow' : 'record',
             providerFields: (this.providerFields || []).map((f) => f.name || f),
-            fieldTypes: this._buildFieldTypeMap(this.designerQueryMeta)
+            fieldTypes: this._buildFieldTypeMap(this.designerQueryMeta),
+            assets: this.promptImages,
+            fonts: this.aiFontFaces,
+            snippets: this.aiSnippets,
+            ...task
         });
     }
 
@@ -2976,11 +3022,13 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.newTemplateQuery = res.query;
     }
 
-    handleCopyAiPrompt() {
+    async handleCopyAiPrompt() {
+        if (!this._aiResourcesReady) await this._loadAiResources();
         this._copyToClipboard(this.aiAuthoringPrompt, 'AI prompt copied — paste it into your AI assistant.');
     }
 
-    handleCopyEditAiPrompt() {
+    async handleCopyEditAiPrompt() {
+        if (!this._aiResourcesReady) await this._loadAiResources();
         this._copyToClipboard(this.editAiPrompt, 'AI prompt copied — paste it into your AI assistant.');
     }
 
@@ -3122,6 +3170,7 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         try {
             // aiAuthoringPrompt is the SAME prompt the Copy Prompt button hands
             // out — fields, assets, description, tag syntax, engine constraints.
+            if (!this._aiResourcesReady) await this._loadAiResources();
             const res = await generateBodyPreview({ prompt: this.aiAuthoringPrompt });
             const html = res.html || '';
 
@@ -3226,11 +3275,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
                     'Could not read the template off the canvas, so there is nothing to edit. Switch to Source view and try again, or use "Start over from scratch".'
                 );
             }
-            const shape = extractQueryShape(this.editTemplateQuery, this.editTemplateObject);
-            const prompt = buildAiPrompt(shape, {
-                dataSourceMode: this.editTemplateObject === 'FlowJsonData' ? 'flow' : 'record',
-                providerFields: (this.providerFields || []).map((f) => f.name || f),
-                fieldTypes: this._buildFieldTypeMap(this.designerQueryMeta),
+            if (!this._aiResourcesReady) await this._loadAiResources();
+            const prompt = this._buildDesignerAiPrompt({
                 docDescription: description,
                 mode: editing ? 'edit' : 'create',
                 currentBody
@@ -3302,36 +3348,6 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         }
     }
 
-    _copyToClipboard(text, successMsg) {
-        const fallback = () => {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            let ok = false;
-            try {
-                ok = document.execCommand('copy');
-            } catch (e) {
-                ok = false;
-            }
-            document.body.removeChild(ta);
-            if (ok) {
-                this.showToast('Copied', successMsg, 'success');
-            } else {
-                this.showToast('Copy failed', 'Select the prompt text and copy it manually.', 'warning');
-            }
-        };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(
-                () => this.showToast('Copied', successMsg, 'success'),
-                () => fallback()
-            );
-        } else {
-            fallback();
-        }
-    }
     handleOutputFormatChange(event) {
         this.newTemplateOutputFormat = event.detail.value;
     }
@@ -4553,23 +4569,28 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         return tokens;
     }
 
-    _copyToClipboard(text) {
-        if (navigator.clipboard && window.isSecureContext) {
-            return navigator.clipboard.writeText(text);
-        }
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-9999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
+    async _copyToClipboard(text, successMsg) {
         try {
-            document.execCommand('copy');
-        } finally {
-            document.body.removeChild(textArea);
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                const area = document.createElement('textarea');
+                area.value = text;
+                area.style.position = 'fixed';
+                area.style.left = '-9999px';
+                document.body.appendChild(area);
+                try {
+                    area.select();
+                    if (!document.execCommand('copy')) throw new Error('Copy unavailable');
+                } finally {
+                    area.remove();
+                }
+            }
+            if (successMsg) this.showToast('Copied', successMsg, 'success');
+        } catch (error) {
+            if (!successMsg) throw error;
+            this.showToast('Copy failed', 'Clipboard access was unavailable.', 'warning');
         }
-        return Promise.resolve();
     }
 
     handleTitleFormatChange(event) {
@@ -14453,8 +14474,8 @@ export default class DocGenAdmin extends NavigationMixin(LightningElement) {
         this.showTagPanel = true;
         this.showImagePanel = true;
         await this._loadBodyIntoEditor();
-        // Asset library feeds the Images panel + slash menu + tag pills.
-        this._loadWizardAssets();
+        // Preload before the toolbar copy gesture, including the metadata used in the prompt.
+        this._loadAiResources();
         // Not awaited — the toolbar button appears when the answer arrives, and
         // an org without Einstein just never shows it.
         this._refreshAgentforceAvailability();
