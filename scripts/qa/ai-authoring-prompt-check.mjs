@@ -118,7 +118,11 @@ assert.match(copied, /Example Sans \(700, italic\).*\{%font:example-bold-italic\
 assert.match(copied, /style="\{%font:example-bold-italic\}; font-size:12pt"/);
 assert.match(copied, /\{%snippet:terms\}/);
 assert.match(copied, /\{#Components\} .* inside \{#Lines\}/);
-assert.match(copied, /<tr><td>\{#Lines\}\{Quantity\}\{\/Lines\}<\/td><\/tr>/);
+const nestedTable =
+    /\{#Lines\}\s*<table>\s*<thead>[\s\S]*?<\/thead>\s*<tbody><tr><td>\{#Components\}\{Price\}\{\/Components\}<\/td><\/tr><\/tbody>\s*<\/table>\s*\{\/Lines\}/;
+assert.match(copied, nestedTable);
+const optionalCell = '{#IF Contact.Title}<span>Title: {Contact.Title}</span>{/IF}';
+assert.ok(copied.includes(optionalCell));
 assert.match(copied, /PDF, screenshot, scan or Word document is attached/);
 assert.doesNotMatch(copied, /private-file-id|servlet\.shepherd|Withdrawn clause|Discontinued logo|Pending upload/);
 
@@ -126,6 +130,8 @@ admin.aiSelectedAssetIds = [];
 await admin.handleCopyAiPrompt();
 assert.doesNotMatch(copied, /\{%asset:(wordmark|seal)\}/);
 assert.match(copied, /No shared images are listed/);
+assert.match(copied, nestedTable);
+assert.ok(copied.includes(optionalCell));
 admin.aiSelectedAssetIds = ['dark'];
 admin.aiDocDescription = 'A landscape invoice with a dark header.';
 await admin.handleCopyAiPrompt();
@@ -141,6 +147,18 @@ const edit = admin._buildDesignerAiPrompt({
 assert.match(edit, /BEGIN CURRENT TEMPLATE\n<p>\{Name\}<\/p>/);
 assert.ok(edit.endsWith('Describe your changes:\nMove the name\n'));
 assert.match(edit, /White horizontal lettering/);
+assert.match(edit, nestedTable);
+assert.ok(edit.includes(optionalCell));
+admin.newTemplateQuery = JSON.stringify({
+    v: 3,
+    nodes: [
+        { id: 'root', fields: ['Name'] },
+        { id: 'children', parentNode: 'root', alias: 'Lines', fields: ['Quantity', 'Price'] }
+    ]
+});
+await admin.handleCopyAiPrompt();
+assert.match(copied, /<tbody><tr><td>\{#Lines\}\{Quantity\}<\/td><td>\{Price\}\{\/Lines\}<\/td><\/tr><\/tbody>/);
+assert.doesNotMatch(copied, /\{#Components\}/);
 fontsAvailable = false;
 await admin._loadAiResources();
 await admin.handleCopyEditAiPrompt();

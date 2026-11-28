@@ -583,7 +583,7 @@ export function buildAiPrompt(shape, options) {
         '- For a linked contents page, pair href="#bundle-{Key}" with a unique matching id. Use .contents a:after { content: leader(".") target-counter(attr(href), page); } for the live destination page and include a return link. Put optional entries and destinations behind the same condition.'
     );
     lines.push(
-        '- For a repeated HTML draft mark, wrap a fixed element in {#IsDraft} ... {/IsDraft}. Reserve margin space for the mark. Use @page margin boxes with counter(page) and counter(pages) for folios. Check the issue-ready copy and a copy long enough to change pagination.'
+        '- For a repeated HTML draft mark, wrap a fixed element in {#IF IsDraft} ... {/IF}. Reserve margin space for the mark. Use @page margin boxes with counter(page) and counter(pages) for folios. Check the issue-ready copy and a copy long enough to change pagination.'
     );
     lines.push('');
     lines.push('PORTWOOD MERGE TAG SYNTAX:');
@@ -608,8 +608,12 @@ export function buildAiPrompt(shape, options) {
     lines.push(
         '- Group-block example: {#GroupBy Lines by Product2.Family}<h3>{GroupName}</h3><table><thead><tr><th>#</th><th>Product</th><th>Amount</th></tr></thead><tbody><tr><td>{#Lines}{RowNumber}</td><td>{Product2.Name}</td><td>{TotalPrice:currency}{/Lines}</td></tr><tr><td colspan="2">Subtotal</td><td>{SUM:Lines.TotalPrice:currency}</td></tr></tbody></table>{/GroupBy}'
     );
-    lines.push('- Conditional: {#SomeField} shown when truthy {:else} otherwise {/SomeField}.');
-    lines.push('- Inverse conditional: {^SomeField} shown when the field is FALSY {:else} otherwise {/SomeField}.');
+    lines.push(
+        '- Optional values in a table row or list item: write {Contact.Title} to print the title; a missing value prints blank. To hide its label or markup too, write {#IF Contact.Title}<span>Title: {Contact.Title}</span>{/IF}. For a fallback, use {#IF Contact.Title}{Contact.Title}{:else}Contact title unavailable{/IF}.'
+    );
+    lines.push(
+        '- Reserve {#RelationshipName}...{/RelationshipName} for repeating records. A section such as {#Contact.Title}...{/Contact.Title} inside a <tr> or <li> can repeat the entire container and cause a loop parsing error even when the tags match. Use {#IF Field}...{/IF} for optional content, including inside a child row. Use {#IF NOT Field}...{/IF} to show content when a field is empty or false.'
+    );
     lines.push(
         "- Comparison conditional: {#IF Amount > 100000} ... {:else} ... {/IF}. Operators > < >= <= = (or ==) != against a field, a number, or a quoted string (case-sensitive). Combine with AND / OR / NOT (or && || !) and parentheses: {#IF (Amount > 1000 AND StageName = 'Closed Won') OR Type = 'Renewal'}. Nest {#IF} blocks freely. To render a section only when a child list has rows, use {#IF RelationshipName.totalSize != 0} — totalSize is 0, never null, on an empty relationship."
     );
@@ -691,36 +695,34 @@ export function buildAiPrompt(shape, options) {
             }
         }
         lines.push('');
-        // #248 — the single most common thing an LLM gets wrong when generating a
-        // Portwood template: it puts the loop tags on their own lines wrapping the
-        // <table>, which repeats the whole table instead of the row.
-        lines.push('REPEATING TABLES — READ THIS TWICE, IT IS THE MOST COMMON MISTAKE:');
-        lines.push(
-            '- Loop tags for a repeating table go INLINE, INSIDE the row that repeats: the opening {#Rel} in the FIRST cell of the data <tr>, and the closing {/Rel} in the LAST cell of that same <tr>.'
-        );
-        lines.push(
-            '- For one growing line-item table, keep its header outside the child loop. For a CPQ configuration, wrap the whole bundle table in the parent loop and place a child component loop inside its own data row. This gives each bundle its own header and prices.'
-        );
-        lines.push('- Column headers belong in a real <thead>, OUTSIDE the loop, so they render once.');
-        if (shape.children && shape.children.length) {
-            const c = shape.children[0];
-            const cols = (c.fields || []).slice(0, 3);
-            if (cols.length) {
-                lines.push('- Correct shape, using this template’s own data:');
-                lines.push('  <table>');
-                lines.push('    <thead>');
-                lines.push(`      <tr>${cols.map((f) => `<th>${f}</th>`).join('')}</tr>`);
-                lines.push('    </thead>');
-                lines.push('    <tbody>');
-                const cells = cols.map((f, index) => {
-                    const open = index === 0 ? `{#${c.relationshipName}}` : '';
-                    const close = index === cols.length - 1 ? `{/${c.relationshipName}}` : '';
-                    return `<td>${open}{${f}}${close}</td>`;
-                });
-                lines.push(`      <tr>${cells.join('')}</tr>`);
-                lines.push('    </tbody>');
-                lines.push('  </table>');
+        const children = shape.children;
+        const row =
+            children.find((child) => child.enclosingLoops?.length && child.fields.length) ||
+            children.find((child) => child.fields.length);
+        if (row) {
+            lines.push('REPEATING TABLES');
+            lines.push(
+                'For one detail row per child, put its opener first in the first <td> and its closer last in the last <td> of the same <tr>. Keep the column headers in <thead> outside that row.'
+            );
+            const ancestors = row.enclosingLoops || [];
+            if (ancestors.length) {
+                lines.push(
+                    'For one section per parent (such as a product bundle), open the parent loop before its heading and table. Close the detail loop inside its row, add any subtotal after the detail row, then close the parent loop after the table.'
+                );
             }
+            lines.push('Example using this template’s relationships and fields:');
+            for (const name of ancestors) lines.push(`  {#${name}}`);
+            const cols = row.fields.slice(0, 3);
+            const cells = cols.map((f, index) => {
+                const open = index === 0 ? `{#${row.relationshipName}}` : '';
+                const close = index === cols.length - 1 ? `{/${row.relationshipName}}` : '';
+                return `<td>${open}{${f}}${close}</td>`;
+            });
+            lines.push('  <table>');
+            lines.push(`    <thead><tr>${cols.map((f) => `<th>${f}</th>`).join('')}</tr></thead>`);
+            lines.push(`    <tbody><tr>${cells.join('')}</tr></tbody>`);
+            lines.push('  </table>');
+            for (const name of [...ancestors].reverse()) lines.push(`  {/${name}}`);
         }
     }
     lines.push('');
@@ -776,6 +778,9 @@ export function buildAiPrompt(shape, options) {
             '3. Only bind to field names listed in DATA SHAPE. On top of those you may use any tag from PORTWOOD MERGE TAG SYNTAX above — {RowNumber}, {#GroupBy}/{GroupName}, {#IF}, aggregates, {Chart:...}, {Today}/{Now}, {RunningUser.*} — since those are built into the engine and need no field of their own.'
         );
     }
+    lines.push(
+        'Before returning the HTML, check each repeating row: only its record collection drives repetition. Use plain field tags or {#IF ...} for optional cell content. Match every opener to its closer in reverse nesting order, including {/IF} for each conditional.'
+    );
     lines.push('');
     lines.push(
         'QUESTIONS? The full Portwood UserGuide covers every merge tag, format suffix, and PDF rendering rule — look it up if anything here is unclear: https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md'
