@@ -110,6 +110,7 @@ const query = JSON.stringify({
 admin.editTemplateQuery = admin.newTemplateQuery = query;
 admin.editTemplateObject = admin.newTemplateObject = 'Account';
 await admin.handleCopyEditAiPrompt();
+assert.ok(copied.endsWith('Describe your document:\n\n'));
 assert.match(copied, /Wordmark \[Brand\].*\{%asset:wordmark\}.*White horizontal lettering for dark headers\./);
 assert.match(copied, /Seal .*\{%asset:seal\}.*No description provided/);
 assert.match(copied, /using none is fine/);
@@ -126,7 +127,9 @@ await admin.handleCopyAiPrompt();
 assert.doesNotMatch(copied, /\{%asset:(wordmark|seal)\}/);
 assert.match(copied, /No shared images are listed/);
 admin.aiSelectedAssetIds = ['dark'];
+admin.aiDocDescription = 'A landscape invoice with a dark header.';
 await admin.handleCopyAiPrompt();
+assert.ok(copied.endsWith('Describe your document:\nA landscape invoice with a dark header.\n'));
 assert.match(copied, /White horizontal lettering/);
 assert.doesNotMatch(copied, /\{%asset:seal\}/);
 
@@ -136,7 +139,7 @@ const edit = admin._buildDesignerAiPrompt({
     docDescription: 'Move the name'
 });
 assert.match(edit, /BEGIN CURRENT TEMPLATE\n<p>\{Name\}<\/p>/);
-assert.match(edit, /Move the name/);
+assert.ok(edit.endsWith('Describe your changes:\nMove the name\n'));
 assert.match(edit, /White horizontal lettering/);
 fontsAvailable = false;
 await admin._loadAiResources();

@@ -507,7 +507,7 @@ export function buildAiPrompt(shape, options) {
     lines.push('');
     lines.push('WORKING FROM AN EXAMPLE');
     lines.push(
-        'If a PDF, screenshot, scan or Word document is attached, use it as the visual reference. Recreate its paper size and orientation, section order, labels, spacing, table headers, typography and image placement in editable HTML. Use the written brief when there is no attachment.'
+        'If a PDF, screenshot, scan or Word document is attached, use it as the visual reference. Recreate its paper size and orientation, section order, labels, spacing, table headers, typography and image placement in editable HTML. Follow the author’s brief at the end. If both the brief and the reference are missing, ask what document to create.'
     );
     lines.push(
         'Keep fixed wording as text. Map sample names, dates, prices and repeated rows to the listed fields and child loops. Build a real flowing table so it works with zero, one or many rows. Never paste a screenshot of the page into the template.'
@@ -728,7 +728,8 @@ export function buildAiPrompt(shape, options) {
     // same data shape as above; only the task and the output contract differ.
     // Kept in this one builder so the create and edit paths cannot drift apart,
     // which is also why "Copy AI Prompt" and the in-org button share it.
-    if (opts.mode === 'edit' && opts.currentBody && opts.currentBody.trim()) {
+    const editing = opts.mode === 'edit' && opts.currentBody?.trim();
+    if (editing) {
         lines.push('YOUR TASK — EDIT AN EXISTING TEMPLATE, DO NOT WRITE A NEW ONE:');
         lines.push(
             'Below is the template as it stands today. Apply the requested change to it and return the result. This is a revision, not a fresh start.'
@@ -739,13 +740,6 @@ export function buildAiPrompt(shape, options) {
         lines.push(opts.currentBody.trim());
         lines.push('>>>END CURRENT TEMPLATE');
         lines.push('');
-        lines.push('WHAT TO CHANGE:');
-        lines.push(
-            opts.docDescription && opts.docDescription.trim()
-                ? opts.docDescription.trim()
-                : '<<DESCRIBE THE CHANGE YOU WANT, e.g. "make the header band dark green", "add a totals row under the line items", "move the date to the top right".>>'
-        );
-        lines.push('');
         lines.push('EDIT RULES — these matter more than anything else here:');
         // Rule 0 is the one that measurably moved the needle. A first attempt
         // without it applied only the first of two requested changes and
@@ -755,7 +749,7 @@ export function buildAiPrompt(shape, options) {
         // did NOT measurably improve on it at that difficulty — so the
         // instruction is what counts, not the packaging around it.
         lines.push(
-            '0. Apply EVERY change asked for above, not just the first one. Break the request into discrete edits first — one sentence often contains several. If you cannot find the element or rule an edit refers to, ADD it rather than skipping it, then re-read your list before returning and confirm every item is present in your output. Use the exact wording given for any text to add, and the exact colour named — if a colour is named without a hex value, pick a specific hex for it and actually change the rule that sets it.'
+            '0. Apply EVERY change in the author’s brief at the end, not just the first one. Break the request into discrete edits first — one sentence often contains several. If you cannot find the element or rule an edit refers to, ADD it rather than skipping it, then re-read your list before returning and confirm every item is present in your output. Use the exact wording given for any text to add, and the exact colour named — if a colour is named without a hex value, pick a specific hex for it and actually change the rule that sets it.'
         );
         lines.push(
             '1. Return the COMPLETE modified HTML document (<!DOCTYPE html> ... </html>). Not a fragment, not a diff, not only the part you changed, no commentary, no markdown fences.'
@@ -772,33 +766,26 @@ export function buildAiPrompt(shape, options) {
         lines.push(
             '5. Obey every rendering constraint listed above — the edited file still has to survive Flying Saucer.'
         );
-        lines.push('');
-        lines.push(
-            'QUESTIONS? The full Portwood UserGuide covers every merge tag, format suffix, and PDF rendering rule — look it up if anything here is unclear: https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md'
-        );
-        return lines.join('\n');
-    }
-
-    lines.push('WHAT I WANT THIS DOCUMENT TO BE:');
-    if (opts.docDescription && opts.docDescription.trim()) {
-        lines.push(opts.docDescription.trim());
     } else {
+        lines.push('OUTPUT REQUIREMENTS:');
         lines.push(
-            'Recreate the attached example if provided. Otherwise ask what document to create, who will read it, and which sections it needs.'
+            '1. Return ONE complete self-contained HTML file (<!DOCTYPE html> ... </html>) with print CSS in a <style> block and approved font tags in inline style attributes. No commentary, no markdown fences.'
+        );
+        lines.push('2. Professional print-ready design within the CSS 2.1 constraints above.');
+        lines.push(
+            '3. Only bind to field names listed in DATA SHAPE. On top of those you may use any tag from PORTWOOD MERGE TAG SYNTAX above — {RowNumber}, {#GroupBy}/{GroupName}, {#IF}, aggregates, {Chart:...}, {Today}/{Now}, {RunningUser.*} — since those are built into the engine and need no field of their own.'
         );
     }
-    lines.push('');
-    lines.push('OUTPUT REQUIREMENTS:');
-    lines.push(
-        '1. Return ONE complete self-contained HTML file (<!DOCTYPE html> ... </html>) with print CSS in a <style> block and approved font tags in inline style attributes. No commentary, no markdown fences.'
-    );
-    lines.push('2. Professional print-ready design within the CSS 2.1 constraints above.');
-    lines.push(
-        '3. Only bind to field names listed in DATA SHAPE. On top of those you may use any tag from PORTWOOD MERGE TAG SYNTAX above — {RowNumber}, {#GroupBy}/{GroupName}, {#IF}, aggregates, {Chart:...}, {Today}/{Now}, {RunningUser.*} — since those are built into the engine and need no field of their own.'
-    );
     lines.push('');
     lines.push(
         'QUESTIONS? The full Portwood UserGuide covers every merge tag, format suffix, and PDF rendering rule — look it up if anything here is unclear: https://github.com/Portwood-Global-Solutions/Portwood/blob/main/UserGuide.md'
+    );
+    // The external assistant places the cursor at the end of the pasted prompt.
+    lines.push(
+        '',
+        editing ? 'Describe your changes:' : 'Describe your document:',
+        opts.docDescription?.trim() || '',
+        ''
     );
     return lines.join('\n');
 }

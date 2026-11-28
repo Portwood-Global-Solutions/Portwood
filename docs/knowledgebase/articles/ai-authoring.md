@@ -9,7 +9,7 @@ The current creation wizard offers an existing file or a blank Canvas. AI help i
 1. Open an HTML template in **Design**.
 2. Choose **Copy AI Prompt** in the designer toolbar.
 3. Paste the prompt into the assistant your organization allows. It lists the template's fields and child loops, approved PDF font faces, available shared images with their descriptions, and active snippet tags.
-4. Attach a sample PDF, screenshot, or Word document and ask for editable Portwood HTML. For example, “Recreate this invoice. Keep the labels and column order, use the white wordmark in the dark header, and repeat one row per line item.” You can also describe a new document without attaching a sample. The assistant can leave out any library asset that does not belong in the design.
+4. At the end of the pasted prompt, type what you want under **Describe your document:**. Attach a sample PDF, screenshot, or Word document if you want the assistant to recreate its layout. For example, “Recreate this invoice. Keep the labels and column order, use the white wordmark in the dark header, and repeat one row per line item.” You can also describe a new document without attaching a sample. The assistant can leave out any library asset that does not belong in the design.
 5. Bring the returned HTML back into the designer or upload it as a replacement HTML file.
 6. Review any fidelity findings and generate a real sample PDF.
 7. Click **Save as New Version** when the result is ready.
