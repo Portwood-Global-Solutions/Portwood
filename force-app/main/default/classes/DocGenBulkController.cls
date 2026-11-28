@@ -19,6 +19,7 @@ public with sharing class DocGenBulkController {
                 'Base_Object_API__c',
                 'Description__c',
                 'Output_Format__c',
+                'Type__c',
                 'Query_Config__c',
                 'Test_Record_Id__c',
                 'Category__c',
@@ -47,6 +48,7 @@ public with sharing class DocGenBulkController {
                 Base_Object_API__c,
                 Description__c,
                 Output_Format__c,
+                Type__c,
                 Query_Config__c,
                 Test_Record_Id__c,
                 Category__c,
@@ -76,29 +78,7 @@ public with sharing class DocGenBulkController {
         if (String.isBlank(objectName)) {
             return 0;
         }
-        // Allowlist validation: object verified against Schema.getGlobalDescribe()
-        SObjectType objType = Schema.getGlobalDescribe().get(objectName);
-        if (objType == null) {
-            throw DocGenService.ahe('Invalid or inaccessible object.');
-        }
-        String sanitizedCondition = sanitizeCondition(condition);
-        // Allowlist validation: WHERE clause field names verified against Schema.describeSObjects() field map
-        if (String.isNotBlank(sanitizedCondition)) {
-            Map<String, Schema.SObjectField> fieldMap = objType.getDescribe().fields.getMap();
-            validateWhereClauseFields(sanitizedCondition, fieldMap);
-        }
-        String query = 'SELECT Count() FROM ' + String.escapeSingleQuotes(objectName);
-        if (String.isNotBlank(sanitizedCondition)) {
-            query += ' WHERE ' + sanitizedCondition;
-        }
-        try {
-            // CxSAST: SOQL injection mitigated by Schema allowlist validation on object + WHERE field names verified against Schema.describeSObjects() field map + keyword blocklist + USER_MODE
-            return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object allowlist-validated against Schema.getGlobalDescribe(); condition fields allowlist-validated against Schema field map; USER_MODE enforced
-        } catch (QueryException e) {
-            // #535: a malformed value (e.g. RecordTypeId = '012XXXXXXXXXXXX') passes the field
-            // allowlist but fails in SOQL. Surface the platform's reason instead of a generic error.
-            throw DocGenService.ahe(e, 'The filter condition could not be run');
-        }
+        return countMatchingRecords(objectName, condition, null);
     }
 
     /**
@@ -148,101 +128,71 @@ public with sharing class DocGenBulkController {
         return msg;
     }
 
-    /**
-     * Allowlist validation: extracts field-name tokens from a WHERE clause and validates
-     * each against the provided Schema field map. Tokens that look like values (quoted strings,
-     * numbers, dates, booleans, null, bind variables) are skipped.
-     */
-    @TestVisible
-    private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
-        // Strip quoted string literals so they don't confuse the tokenizer
-        String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
-        // Tokenize on whitespace, parentheses, commas and comparison operators — so
-        // RecordTypeId='012…' (no spaces round the operator) yields the field token on its own
-        List<String> tokens = stripped.split('[\\s(),=<>!]+');
-        // SOQL operators and keywords to skip
-        Set<String> skipTokens = new Set<String>{
-            '=',
-            '!=',
-            '<',
-            '>',
-            '<=',
-            '>=',
-            'LIKE',
-            'IN',
-            'NOT',
-            'AND',
-            'OR',
-            'NULL',
-            'TRUE',
-            'FALSE',
-            'INCLUDES',
-            'EXCLUDES',
-            'LAST_N_DAYS',
-            'NEXT_N_DAYS',
-            'TODAY',
-            'YESTERDAY',
-            'TOMORROW',
-            'LAST_WEEK',
-            'THIS_WEEK',
-            'NEXT_WEEK',
-            'LAST_MONTH',
-            'THIS_MONTH',
-            'NEXT_MONTH',
-            'LAST_QUARTER',
-            'THIS_QUARTER',
-            'NEXT_QUARTER',
-            'LAST_YEAR',
-            'THIS_YEAR',
-            'NEXT_YEAR',
-            'LAST_90_DAYS',
-            'NEXT_90_DAYS',
-            'LAST_N_MONTHS',
-            'NEXT_N_MONTHS',
-            'LAST_N_QUARTERS',
-            'NEXT_N_QUARTERS',
-            'LAST_N_YEARS',
-            'NEXT_N_YEARS',
-            ''
-        };
-        for (String token : tokens) {
-            String t = token.trim();
-            if (String.isBlank(t)) {
-                continue;
+    /** Validates the selection the Bulk Generation screen will submit. */
+    @AuraEnabled
+    public static Integer validateTemplateFilter(Id templateId, String condition) {
+        try {
+            DocGenFlsGuard.assertAccessible(
+                DocGen_Template__c.sObjectType,
+                new Set<String>{ 'Base_Object_API__c', 'Record_Filter__c' }
+            );
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Template__c> templates = [
+                SELECT Base_Object_API__c, Record_Filter__c
+                FROM DocGen_Template__c
+                WHERE Id = :templateId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+            if (templates.isEmpty()) {
+                throw new DocGenException('Template not found.');
             }
-            String upper = t.toUpperCase();
-            // Skip SOQL keywords, operators, quoted literals, numbers, date literals, bind vars
-            if (skipTokens.contains(upper)) {
-                continue;
+            DocGen_Template__c template = templates[0];
+            return countMatchingRecords(template.Base_Object_API__c, condition, template.Record_Filter__c);
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e);
+        }
+    }
+
+    private static Integer countMatchingRecords(String objectName, String condition, String templateFilter) {
+        SObjectType objectType = String.isBlank(objectName) ? null : Schema.getGlobalDescribe().get(objectName);
+        if (objectType == null) {
+            throw DocGenService.ahe('Invalid or inaccessible object.');
+        }
+        try {
+            String whereClause = DocGenBulkCondition.combine(objectName, condition, templateFilter);
+            String query = 'SELECT Count() FROM ' + objectType.getDescribe().getName();
+            if (String.isNotBlank(whereClause)) {
+                query += ' WHERE ' + whereClause;
             }
-            if (t.startsWith('\'') || t.startsWith(':')) {
-                continue;
-            }
-            if (t.isNumeric() || Pattern.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}.*', upper)) {
-                continue;
-            }
-            if (Pattern.matches('LAST_N_.*:\\d+', upper) || Pattern.matches('NEXT_N_.*:\\d+', upper)) {
-                continue;
-            }
-            // This looks like a field name — allowlist validate against Schema
-            if (!isAllowedFieldPath(t, fieldMap)) {
-                throw DocGenService.ahe(invalidFieldMessage('Invalid field in filter condition: ', t, fieldMap));
-            }
+            return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - Schema object name, parsed filter, user-mode query
+        } catch (QueryException e) {
+            throw DocGenService.ahe(e, 'The filter condition could not be run');
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e);
         }
     }
 
     /**
      * Sanitization of dynamic WHERE conditions to prevent SOQL injection.
      * Two layers: (1) keyword blocklist rejects structural SOQL/DML keywords,
-     * (2) caller performs allowlist validation of field names against Schema describe.
+     * (2) the related-record picker validates field names against Schema describe.
      */
     public static String sanitizeCondition(String condition) {
+        try {
+            return sanitizeConditionInternal(condition);
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e);
+        }
+    }
+
+    public static String sanitizeConditionInternal(String condition) {
         if (String.isBlank(condition)) {
             return condition;
         }
         // Reject dangerous characters (statement termination, comments)
         if (condition.contains(';') || condition.contains('--') || condition.contains('/*')) {
-            throw DocGenService.ahe('Invalid filter condition.');
+            throw new DocGenException('Invalid filter condition.');
         }
         // Normalize whitespace for keyword matching (tabs, newlines, multiple spaces -> single space)
         String normalized = condition.replaceAll('\\s+', ' ').toUpperCase().trim();
@@ -265,7 +215,7 @@ public with sharing class DocGenBulkController {
         };
         for (String keyword : disallowed) {
             if (normalized.contains(keyword)) {
-                throw DocGenService.ahe('Invalid filter condition.');
+                throw new DocGenException('Invalid filter condition.');
             }
         }
         return condition;
@@ -301,13 +251,9 @@ public with sharing class DocGenBulkController {
      * sortable, and check what follows a relationship hop rather than only the
      * token before the dot.
      *
-     * Injection defense is an ALLOWLIST OF CHARACTERS, not a keyword blocklist like
-     * sanitizeCondition(). An ORDER BY clause needs only field paths, commas,
-     * spaces and the ASC/DESC/NULLS/FIRST/LAST keywords — quotes, parentheses,
-     * semicolons and comment markers have no legitimate use here, so rejecting
-     * every character outside that alphabet leaves nothing to keep ahead of. Every
-     * field path is then resolved through Schema describe, so an unknown field is
-     * an error at submit time rather than a batch that dies in start().
+     * Accepts only characters used by field paths, commas, spaces, and sort
+     * keywords. Each path is resolved against Schema describe so an unknown
+     * field fails at submit time.
      *
      * @param objectName The base SObject the bulk query runs against
      * @param sortOrder Author-supplied clause, with or without a leading "ORDER BY"
@@ -1094,6 +1040,51 @@ public with sharing class DocGenBulkController {
         }
     }
 
+    /** Generates private PDF sources whose exact versions are combined in the browser. */
+    @AuraEnabled
+    public static Id submitBrowserMergeJob(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Integer batchSize,
+        String sortOrder
+    ) {
+        try {
+            return submitBrowserMergeJobInternal(templateId, condition, jobLabel, batchSize, sortOrder);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error starting browser PDF generation.');
+        }
+    }
+
+    /** Catchable entry point for Flow and other package-internal callers. */
+    public static Id submitBrowserMergeJobInternal(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Integer batchSize,
+        String sortOrder
+    ) {
+        return DocGenBrowserPdf.submit(templateId, condition, jobLabel, batchSize, sortOrder);
+    }
+
+    @AuraEnabled
+    public static Id retryBrowserMergeJob(Id jobId) {
+        try {
+            return DocGenBrowserPdf.retry(jobId);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error retrying browser PDF generation.');
+        }
+    }
+
+    @AuraEnabled
+    public static String getBrowserMergeDownloadUrl(Id jobId) {
+        try {
+            return DocGenBrowserPdf.downloadUrl(jobId);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error opening the bulk PDF download.');
+        }
+    }
+
     /**
      * The same work, throwing a CATCHABLE exception.
      *
@@ -1235,10 +1226,9 @@ public with sharing class DocGenBulkController {
 
     /**
      * The SObject a template runs against — the schema a sort clause is validated
-     * against. Queried only when a sort order was actually supplied, so the common
-     * unsorted job pays nothing for it.
+     * against and Flow uses to combine a condition with explicit record IDs.
      */
-    private static String templateBaseObject(Id templateId) {
+    public static String templateBaseObject(Id templateId) {
         if (templateId == null) {
             return null;
         }
@@ -1312,11 +1302,29 @@ public with sharing class DocGenBulkController {
     public static DocGen_Job__c getJobStatus(Id jobId) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Job__c.sObjectType,
-            new Set<String>{ 'Name', 'Status__c', 'Success_Count__c', 'Error_Count__c', 'Total_Records__c' }
+            new Set<String>{
+                'Name',
+                'OwnerId',
+                'CreatedById',
+                'Status__c',
+                'Success_Count__c',
+                'Error_Count__c',
+                'Total_Records__c',
+                'Browser_Merge__c'
+            }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Job__c> jsRecords = [
-            SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c
+            SELECT
+                Id,
+                Name,
+                OwnerId,
+                CreatedById,
+                Status__c,
+                Success_Count__c,
+                Error_Count__c,
+                Total_Records__c,
+                Browser_Merge__c
             FROM DocGen_Job__c
             WHERE Id = :jobId
             WITH SYSTEM_MODE
@@ -1334,6 +1342,9 @@ public with sharing class DocGenBulkController {
             DocGen_Job__c.sObjectType,
             new Set<String>{
                 'Name',
+                'OwnerId',
+                'CreatedById',
+                'Browser_Merge__c',
                 'Label__c',
                 'Status__c',
                 'Success_Count__c',
@@ -1348,6 +1359,9 @@ public with sharing class DocGenBulkController {
             SELECT
                 Id,
                 Name,
+                OwnerId,
+                CreatedById,
+                Browser_Merge__c,
                 Label__c,
                 Status__c,
                 Success_Count__c,
@@ -1391,7 +1405,12 @@ public with sharing class DocGenBulkController {
 
         // Query the same records the batch processed
         String recQuery = 'SELECT Id FROM ' + String.escapeSingleQuotes(baseObject);
-        String condition = sanitizeCondition(job.Query_Condition__c);
+        String condition;
+        try {
+            condition = DocGenBulkCondition.validate(baseObject, job.Query_Condition__c);
+        } catch (DocGenException e) {
+            throw DocGenService.ahe(e);
+        }
         if (String.isNotBlank(condition)) {
             recQuery += ' WHERE ' + condition;
         }

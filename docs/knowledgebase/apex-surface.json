@@ -25,13 +25,26 @@
             "global String jobLabel",
             "global Boolean combinedPdfOnly",
             "global Boolean keepIndividualFiles",
+            "global Boolean browserMerge",
             "global Boolean duplexPadding",
             "global Integer batchSize",
             "global class Response",
             "global Id jobId",
+            "global String downloadUrl",
             "global String errorMessage",
             "global Boolean success",
             "global static List<Response> generateBulkDocuments(List<Request> requests)"
+        ]
+    },
+    {
+        "name": "DocGenBulkPdfDownloadController",
+        "package": "Core",
+        "file": "force-app/main/default/classes/DocGenBulkPdfDownloadController.cls",
+        "declarations": [
+            "global with sharing class DocGenBulkPdfDownloadController",
+            "global static Object describe(String jobId)",
+            "global static Object getManifestPage(String jobId, String revisionKey, Integer afterOrdinal)",
+            "global static List<String> getSources(String jobId, String revisionKey, List<Integer> ordinals)"
         ]
     },
     {

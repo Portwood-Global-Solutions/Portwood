@@ -2,10 +2,14 @@ import { LightningElement, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
+import CURRENT_USER_ID from '@salesforce/user/Id';
 import { downloadBase64, extractWhereClause } from 'c/docGenUtils';
 import getBulkTemplates from '@salesforce/apex/DocGenBulkController.getBulkTemplates';
-import validateFilter from '@salesforce/apex/DocGenBulkController.validateFilter';
+import validateTemplateFilter from '@salesforce/apex/DocGenBulkController.validateTemplateFilter';
 import submitJob from '@salesforce/apex/DocGenBulkController.submitJob';
+import submitBrowserMergeJob from '@salesforce/apex/DocGenBulkController.submitBrowserMergeJob';
+import retryBrowserMergeJob from '@salesforce/apex/DocGenBulkController.retryBrowserMergeJob';
+import getBrowserMergeDownloadUrl from '@salesforce/apex/DocGenBulkController.getBrowserMergeDownloadUrl';
 import getSortableFields from '@salesforce/apex/DocGenBulkController.getSortableFields';
 import getJobStatus from '@salesforce/apex/DocGenBulkController.getJobStatus';
 import getSavedQueries from '@salesforce/apex/DocGenBulkController.getSavedQueries';
@@ -18,15 +22,19 @@ import BASE_OBJ_FIELD from '@salesforce/schema/DocGen_Template__c.Base_Object_AP
 import SQ_CONDITION_FIELD from '@salesforce/schema/DocGen_Saved_Query__c.Query_Condition__c';
 import SQ_DESC_FIELD from '@salesforce/schema/DocGen_Saved_Query__c.Description__c';
 import OUT_FMT_FIELD from '@salesforce/schema/DocGen_Template__c.Output_Format__c';
+import TEMPLATE_TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
 import QCONFIG_FIELD from '@salesforce/schema/DocGen_Template__c.Query_Config__c';
 import JOB_LABEL_FIELD from '@salesforce/schema/DocGen_Job__c.Label__c';
 import JOB_STATUS_FIELD from '@salesforce/schema/DocGen_Job__c.Status__c';
 import JOB_SUCCESS_FIELD from '@salesforce/schema/DocGen_Job__c.Success_Count__c';
 import JOB_ERROR_FIELD from '@salesforce/schema/DocGen_Job__c.Error_Count__c';
 import JOB_TOTAL_FIELD from '@salesforce/schema/DocGen_Job__c.Total_Records__c';
+import JOB_BROWSER_MERGE_FIELD from '@salesforce/schema/DocGen_Job__c.Browser_Merge__c';
 
 const POLL_INTERVAL_MS = 5000;
 const TERMINAL_STATUSES = ['Completed', 'Failed', 'Completed with Errors'];
+const BROWSER_MERGE_MODE = 'browserMerge';
+const BROWSER_PDF_TEMPLATE_TYPES = ['HTML', 'Canvas', 'Word'];
 
 export default class DocGenBulkRunner extends NavigationMixin(LightningElement) {
     @track templates = [];
@@ -46,6 +54,9 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     @track jobStatus;
     @track jobProgress = {};
     @track isProcessing = false;
+    @track jobBrowserActions = {};
+    isOpeningBrowserDownload = false;
+    isRetryingBrowserMerge = false;
 
     // Saved Queries State
     @track savedQueries = [];
@@ -98,7 +109,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     @track recentJobs = [];
     @track jobLabel = '';
     @track batchSize = 1;
-    @track outputMode = 'combined'; // 'individual', 'combined', 'both'
+    @track outputMode = 'combined'; // 'individual', 'combined', 'both', 'browserMerge'
     @track jobSearchTerm = '';
 
     // Job analysis state
@@ -133,19 +144,22 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     async runAnalysis() {
         if (!this.selectedTemplateId || !this.recordCount) return;
 
+        const request = {};
+        this._analysisRequest = request;
         this.isAnalyzing = true;
         try {
-            this.analysis = await analyzeJob({
+            const analysis = await analyzeJob({
                 templateId: this.selectedTemplateId,
                 recordCount: this.recordCount,
                 batchSize: this.batchSize || 1,
                 mergePdf: this.mergePdf || false,
                 duplexPadding: (this.mergePdf && this.duplexPadding) || false
             });
+            if (this._analysisRequest === request) this.analysis = analysis;
         } catch (error) {
             console.error('Job analysis failed', error);
         } finally {
-            this.isAnalyzing = false;
+            if (this._analysisRequest === request) this.isAnalyzing = false;
         }
     }
 
@@ -198,6 +212,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
             this.recordCount = null;
             this.analysis = null;
             this.filterValidated = false;
+            this.resetUnsupportedBrowserMerge();
             // The sample record belongs to the PREVIOUS template's base object. Left in
             // place it kept the Preview button enabled against a record of the wrong
             // sObject type, and handed the record picker a value it cannot resolve.
@@ -251,7 +266,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     loadRecentJobs() {
-        getRecentJobs()
+        return getRecentJobs()
             .then((data) => {
                 this.recentJobs = data.map((j) => ({
                     id: j.Id,
@@ -264,10 +279,9 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
                     error: j[JOB_ERROR_FIELD.fieldApiName] || 0,
                     total: j[JOB_TOTAL_FIELD.fieldApiName] || 0,
                     date: new Date(j.CreatedDate).toLocaleDateString(),
-                    isRunning: !['Completed', 'Failed', 'Completed with Errors'].includes(
-                        j[JOB_STATUS_FIELD.fieldApiName]
-                    ),
-                    displayName: j[JOB_LABEL_FIELD.fieldApiName] || (j.Template__r ? j.Template__r.Name : j.Name)
+                    isRunning: !TERMINAL_STATUSES.includes(j[JOB_STATUS_FIELD.fieldApiName]),
+                    displayName: j[JOB_LABEL_FIELD.fieldApiName] || (j.Template__r ? j.Template__r.Name : j.Name),
+                    ...this.browserMergeActions(j)
                 }));
             })
             .catch(() => {});
@@ -292,11 +306,33 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     get outputModeOptions() {
-        return [
+        const options = [
             { label: 'Individual Files', value: 'individual' },
             { label: 'Print-Ready Packet', value: 'combined' },
             { label: 'Combined + Individual', value: 'both' }
         ];
+        if (this.supportsBrowserMerge) {
+            options.push({ label: 'Merge PDFs in Browser', value: BROWSER_MERGE_MODE });
+        }
+        return options;
+    }
+
+    get supportsBrowserMerge() {
+        const template = this._templateDataMap[this.selectedTemplateId];
+        return (
+            template?.[OUT_FMT_FIELD.fieldApiName] === 'PDF' &&
+            BROWSER_PDF_TEMPLATE_TYPES.includes(template[TEMPLATE_TYPE_FIELD.fieldApiName])
+        );
+    }
+
+    get browserMerge() {
+        return this.outputMode === BROWSER_MERGE_MODE;
+    }
+
+    resetUnsupportedBrowserMerge() {
+        this._analysisRequest = null;
+        this.isAnalyzing = false;
+        if (this.browserMerge && !this.supportsBrowserMerge) this.outputMode = 'individual';
     }
 
     handleOutputModeChange(event) {
@@ -305,6 +341,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
             this.duplexPadding = false;
         }
         if (this.filterValidated) {
+            this.analysis = null;
             this.runAnalysis();
         }
     }
@@ -360,6 +397,70 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         });
     }
 
+    browserMergeActions(job) {
+        if (job[JOB_BROWSER_MERGE_FIELD.fieldApiName] !== true || job.OwnerId !== CURRENT_USER_ID) return {};
+        const status = job[JOB_STATUS_FIELD.fieldApiName];
+        const success = job[JOB_SUCCESS_FIELD.fieldApiName] || 0;
+        const total = job[JOB_TOTAL_FIELD.fieldApiName] || 0;
+        return {
+            downloadReady:
+                status === 'Completed' && success > 0 && success === total && !job[JOB_ERROR_FIELD.fieldApiName],
+            retryReady:
+                total > 0 &&
+                job.CreatedById === CURRENT_USER_ID &&
+                (status === 'Failed' || status === 'Completed with Errors')
+        };
+    }
+
+    async handleOpenBrowserDownload(event) {
+        event.stopPropagation();
+        const jobId = event.currentTarget.dataset.jobid;
+        if (!jobId || this.isOpeningBrowserDownload) return;
+        this.isOpeningBrowserDownload = true;
+        try {
+            const url = await getBrowserMergeDownloadUrl({ jobId });
+            // Load the authenticated Visualforce page at the top level for browser file storage.
+            window.location.assign(url);
+        } catch (error) {
+            this.showToast(
+                'Download Error',
+                error.body?.message || error.message || 'Could not open the PDF download.',
+                'error'
+            );
+        } finally {
+            this.isOpeningBrowserDownload = false;
+        }
+    }
+
+    get isBrowserRetryDisabled() {
+        return this.isProcessing || this.isRetryingBrowserMerge;
+    }
+
+    async handleRetryBrowserMerge(event) {
+        event.stopPropagation();
+        const jobId = event.currentTarget.dataset.jobid;
+        if (!jobId || this.isBrowserRetryDisabled) return;
+        this.isRetryingBrowserMerge = true;
+        try {
+            await retryBrowserMergeJob({ jobId });
+            this.jobId = jobId;
+            this.jobStatus = 'Queued';
+            this.jobProgress = { success: 0, error: 0, total: 0, percent: 0 };
+            this.jobBrowserActions = {};
+            this.isProcessing = true;
+            this.startPolling();
+            this.loadRecentJobs();
+        } catch (error) {
+            this.showToast(
+                'Retry Error',
+                error.body?.message || error.message || 'Could not retry the missing PDFs.',
+                'error'
+            );
+        } finally {
+            this.isRetryingBrowserMerge = false;
+        }
+    }
+
     handleTemplateChange(event) {
         this.selectedTemplateId = event.detail.value;
         const selected = this.templates.find((t) => t.value === this.selectedTemplateId);
@@ -368,6 +469,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
             this.recordCount = null;
             this.analysis = null;
             this.filterValidated = false;
+            this.resetUnsupportedBrowserMerge();
             // See handleTemplateSelect — a stale sample record from the previous
             // template's object must not survive the switch.
             this.sampleRecordId = '';
@@ -570,7 +672,10 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.isValidating = true;
         this.analysis = null;
         try {
-            const count = await validateFilter({ objectName: this.baseObject, condition: this.condition });
+            const count = await validateTemplateFilter({
+                templateId: this.selectedTemplateId,
+                condition: this.condition
+            });
             this.recordCount = count;
             this.filterValidated = true;
             this.showToast('Success', `Found ${count} records.`, 'success');
@@ -586,6 +691,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     async handleRun() {
+        if (this.isProcessing || this.isRetryingBrowserMerge) return;
         if (!this.selectedTemplateId) {
             this.showToast('Error', 'Please select a template.', 'error');
             return;
@@ -594,19 +700,25 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.isProcessing = true;
         this.jobStatus = 'Queued';
         this.jobProgress = { success: 0, error: 0, total: 0, percent: 0 };
+        this.jobBrowserActions = {};
 
         try {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-            this.jobId = await submitJob({
+            const common = {
                 templateId: this.selectedTemplateId,
                 condition: this.condition,
                 jobLabel: this.jobLabel,
-                mergePdf: this.mergePdf || false,
                 batchSize: this.batchSize || 1,
-                mergeOnly: this.mergeOnly || false,
-                sortOrder: this.sortOrderClause,
-                duplexPadding: this.mergePdf && this.duplexPadding
-            });
+                sortOrder: this.sortOrderClause
+            };
+            this.jobId = this.browserMerge
+                ? await submitBrowserMergeJob(common)
+                : await submitJob({
+                      ...common,
+                      mergePdf: this.mergePdf || false,
+                      mergeOnly: this.mergeOnly || false,
+                      duplexPadding: this.mergePdf && this.duplexPadding
+                  });
             this.showToast('Success', 'Job started. Status will auto-refresh every 5 seconds.', 'success');
             this.startPolling();
         } catch (error) {
@@ -633,11 +745,14 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     async pollJob() {
-        if (!this.jobId) return;
+        const jobId = this.jobId;
+        if (!jobId) return;
         try {
-            const job = await getJobStatus({ jobId: this.jobId });
+            const job = await getJobStatus({ jobId });
+            if (jobId !== this.jobId) return;
             this._pollFailures = 0;
             this.jobStatus = job[JOB_STATUS_FIELD.fieldApiName];
+            this.jobBrowserActions = this.browserMergeActions(job);
             const total = job[JOB_TOTAL_FIELD.fieldApiName] || 0;
             const current = (job[JOB_SUCCESS_FIELD.fieldApiName] || 0) + (job[JOB_ERROR_FIELD.fieldApiName] || 0);
             this.jobProgress = {
@@ -660,6 +775,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
                 this.loadRecentJobs();
             }
         } catch {
+            if (jobId !== this.jobId) return;
             // Tolerate transient poll failures (session refresh, network blip) —
             // the batch keeps running server-side. Only give up after several in
             // a row, and say so instead of freezing the progress card forever.
@@ -695,6 +811,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.jobId = null;
         this.jobStatus = null;
         this.jobProgress = {};
+        this.jobBrowserActions = {};
         this.isProcessing = false;
     }
 
@@ -721,7 +838,10 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         return (
             !this.selectedTemplateId ||
             this.isProcessing ||
+            this.isRetryingBrowserMerge ||
+            this.isAnalyzing ||
             !this.filterValidated ||
+            (this.browserMerge && !this.supportsBrowserMerge) ||
             (this.analysis && !this.analysis.canProceed)
         );
     }

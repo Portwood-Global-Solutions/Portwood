@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Internal ordered source blocks and pinned PDF versions for opt-in bulk jobs.</description>
+    <enableActivities>false</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableFeeds>false</enableFeeds>
+    <enableReports>false</enableReports>
+    <enableSearch>false</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <label>Portwood Browser PDF Block</label>
+    <nameField>
+        <displayFormat>BPB-{000000}</displayFormat>
+        <label>Browser PDF Block Number</label>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Portwood Browser PDF Blocks</pluralLabel>
+    <sharingModel>ControlledByParent</sharingModel>
+    <visibility>Protected</visibility>
+</CustomObject>

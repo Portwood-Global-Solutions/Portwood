@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Job__c</fullName>
+    <label>Job</label>
+    <referenceTo>DocGen_Job__c</referenceTo>
+    <relationshipLabel>Browser PDF Blocks</relationshipLabel>
+    <relationshipName>Browser_Pdf_Blocks</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+    <type>MasterDetail</type>
+</CustomField>

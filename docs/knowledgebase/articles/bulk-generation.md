@@ -19,7 +19,14 @@ Make one document per record without opening every record yourself.
 8. Click **Run Bulk Generation**.
 9. Review the job and its files when processing finishes.
 
-The condition is the filter only. Do not include `SELECT` or the word `WHERE` in that field.
+Enter the condition that follows the main query's `WHERE`. For an Account template, this example selects households with a Contact in California.
+
+```sql
+RecordType.DeveloperName = 'HH_Account'
+AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
+```
+
+Use your org's record type developer name. Salesforce supports up to two top-level `IN` or `NOT IN` subqueries joined by `AND`. The count also applies the selected template's saved Record Filter.
 
 Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
 
@@ -27,13 +34,23 @@ Filters can traverse supported standard lookups as well as custom relationships.
 
 #### Choose the right output
 
-| Mode                      | Use it when…                                     |
-| ------------------------- | ------------------------------------------------ |
-| **Individual Files**      | Each record needs its own file                   |
-| **Print-Ready Packet**    | You want one PDF covering the selected records   |
-| **Combined + Individual** | You need the individual files and a combined PDF |
+| Mode                      | Use it when…                                           |
+| ------------------------- | ------------------------------------------------------ |
+| **Individual Files**      | Each record needs its own file                         |
+| **Print-Ready Packet**    | You want one PDF covering the selected records         |
+| **Combined + Individual** | You need the individual files and a combined PDF       |
+| **Merge PDFs in Browser** | You want one download from a large set of private PDFs |
 
 Word, HTML, and supported Canvas PDF workflows can be used for PDF documents. Native Excel and PowerPoint output and fillable PDF forms require **Individual Files**. Follow any compatibility message shown for the selected template.
+
+#### Download a large merged PDF
+
+1. Select a PDF template and choose **Merge PDFs in Browser**.
+2. Start the run. Portwood makes a private PDF for each selected record in the background.
+3. Open the completed job from its notification or Recent Jobs, then choose **Download merged PDF**.
+4. Keep the browser open while it assembles and saves the PDF. If the connection drops or the page closes, reopen the same job in the same browser profile to resume.
+
+Use a current desktop browser that supports browser-managed file storage. The mode supports up to 100,000 source records and up to 1 MiB per generated PDF. Each source PDF uses Salesforce File storage. The browser needs space for the merged PDF on the device. If some statements fail, review the job and choose **Retry missing PDFs** when available before downloading.
 
 #### Put the documents in order
 
