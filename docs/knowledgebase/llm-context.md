@@ -1909,7 +1909,7 @@ Make one document per record without opening every record yourself.
 
 1. Open **Portwood → Bulk Generation**.
 2. Select the template.
-3. Choose a saved filter or enter a **SOQL Condition**. For the fictional Accounts in this guide:
+3. Choose **SOQL filter** and enter a condition or load a saved filter. For the fictional Accounts in this guide:
 
     ```sql
     Name IN ('Northstar Bikes', 'Willow and Pine', 'Bluebird Studio')
@@ -1922,7 +1922,16 @@ Make one document per record without opening every record yourself.
 8. Click **Run Bulk Generation**.
 9. Review the job and its files when processing finishes.
 
-The condition is the filter only. Do not include `SELECT` or the word `WHERE` in that field.
+To use a saved report, choose **Salesforce report**, search by name, and select a tabular report containing the template object's record ID column. Click **Preview Report Records** to see the number of distinct eligible records after the template filter. If Salesforce truncates the report, you can narrow its filters or confirm generation from the first 2,000 rows. Choose **Merge PDFs in Browser** to stream those records into one PDF.
+
+Enter the condition that follows the main query's `WHERE`. For an Account template, this example selects households with a Contact in California.
+
+```sql
+RecordType.DeveloperName = 'HH_Account'
+AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
+```
+
+Use your org's record type developer name. Salesforce supports up to two top-level `IN` or `NOT IN` subqueries joined by `AND`. The count also applies the selected template's saved Record Filter.
 
 Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
 
@@ -1930,13 +1939,23 @@ Filters can traverse supported standard lookups as well as custom relationships.
 
 #### Choose the right output
 
-| Mode                      | Use it when…                                     |
-| ------------------------- | ------------------------------------------------ |
-| **Individual Files**      | Each record needs its own file                   |
-| **Print-Ready Packet**    | You want one PDF covering the selected records   |
-| **Combined + Individual** | You need the individual files and a combined PDF |
+| Mode                      | Use it when…                                           |
+| ------------------------- | ------------------------------------------------------ |
+| **Individual Files**      | Each record needs its own file                         |
+| **Print-Ready Packet**    | You want one PDF covering the selected records         |
+| **Combined + Individual** | You need the individual files and a combined PDF       |
+| **Merge PDFs in Browser** | You want one download from a large set of private PDFs |
 
 Word, HTML, and supported Canvas PDF workflows can be used for PDF documents. Native Excel and PowerPoint output and fillable PDF forms require **Individual Files**. Follow any compatibility message shown for the selected template.
+
+#### Download a large merged PDF
+
+1. Select a PDF template and choose **Merge PDFs in Browser**.
+2. Start the run. Portwood makes a private PDF for each selected record in the background.
+3. Open the completed job from its notification or Recent Jobs, then choose **Download merged PDF**.
+4. Keep the browser open while it assembles and saves the PDF. If the connection drops or the page closes, reopen the same job in the same browser profile to resume.
+
+Use a current desktop browser that supports browser-managed file storage. The mode supports up to 100,000 source records and up to 1 MiB per generated PDF. Each source PDF uses Salesforce File storage. The browser needs space for the merged PDF on the device. If some statements fail, review the job and choose **Retry missing PDFs** when available before downloading.
 
 #### Put the documents in order
 
@@ -1944,9 +1963,9 @@ Choose **Sort By** and **Direction** before running. This controls processing an
 
 #### Print double-sided
 
-For Print-Ready Packet or Combined + Individual, turn on **Duplex Padding** when each document should start on the front of a sheet. Portwood adds a blank page after odd-length documents in the combined packet. Individual files are left unpadded.
+For Print-Ready Packet, Combined + Individual, or Merge PDFs in Browser, turn on **Duplex Padding** when each document should start on the front of a sheet. Portwood adds a blank page after odd-length documents in the combined packet. Individual files are left unpadded.
 
-Duplex packets have a size estimate based on the sample record. Large images or embedded fonts can reduce how many documents fit in one packet. Split large runs or choose Individual Files when the estimate or job asks for it.
+Server-side duplex packets have a size estimate based on the sample record. Large images or embedded fonts can reduce how many documents fit in one packet. Split large runs or choose Individual Files when the estimate or job asks for it.
 
 #### Save a filter for next time
 
@@ -2479,6 +2498,10 @@ Store **Success**, **Error Message**, and **Job ID**. Add a Decision for an unsu
 The action submits background work and returns. Follow the job in Portwood job history; do not email a completion notice just because submission returned successfully.
 
 When producing a combined PDF for double-sided printing, the action's **Duplex Padding** input applies the same behavior as the bulk UI.
+
+#### Offer a browser download from Flow
+
+Set **Merge PDFs in Browser** to **True** and enable **Duplex Padding** if each document should start on the front of a sheet. Store **Job ID** and **Merged PDF Download URL** from the result. The URL opens the authenticated download page for the job. The job and private PDFs belong to the Flow running user. Start the job in the user context intended to receive the download. Give that user the link after the job is ready so they can open it in a browser, assemble the pages, and save the PDF. The other bulk output settings apply to the existing server-side modes.
 
 <a id="flow-signatures"></a>
 
@@ -4744,13 +4767,26 @@ global String sortOrder
 global String jobLabel
 global Boolean combinedPdfOnly
 global Boolean keepIndividualFiles
+global Boolean browserMerge
 global Boolean duplexPadding
 global Integer batchSize
 global class Response
 global Id jobId
+global String downloadUrl
 global String errorMessage
 global Boolean success
 global static List<Response> generateBulkDocuments(List<Request> requests)
+```
+
+#### DocGenBulkPdfDownloadController
+
+Core · [Source](https://github.com/Portwood-Global-Solutions/Portwood/blob/main/force-app/main/default/classes/DocGenBulkPdfDownloadController.cls)
+
+```apex
+global with sharing class DocGenBulkPdfDownloadController
+global static Object describe(String jobId)
+global static Object getManifestPage(String jobId, String revisionKey, Integer afterOrdinal)
+global static List<String> getSources(String jobId, String revisionKey, List<Integer> ordinals)
 ```
 
 #### DocGenChartCvReaper

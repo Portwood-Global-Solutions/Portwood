@@ -1,0 +1,13 @@
+* { box-sizing: border-box; }
+body { margin: 0; padding: 3rem 1rem; background: #f4f6f9; color: #182638; font: 1rem/1.5 system-ui, sans-serif; }
+main { max-width: 34rem; margin: 0 auto; padding: 1.75rem; background: white; border: 1px solid #dce4ec; border-radius: .75rem; }
+h1 { margin: 0; font-size: 1.5rem; }
+p { margin: .75rem 0; color: #424f61; overflow-wrap: anywhere; }
+progress { display: block; width: 100%; margin: 1rem 0; accent-color: #0758a4; }
+button, a { font: inherit; font-weight: 600; }
+button { margin: .4rem .3rem .1rem 0; padding: .5rem .85rem; border: 1px solid #0758a4; border-radius: .35rem; color: white; background: #0758a4; cursor: pointer; }
+button:not(:disabled):hover { background: #064783; }
+button:disabled { opacity: .6; cursor: default; }
+button:focus-visible, a:focus-visible { outline: 2px solid #0758a4; outline-offset: 3px; }
+a { color: #0758a4; }
+[hidden] { display: none; }

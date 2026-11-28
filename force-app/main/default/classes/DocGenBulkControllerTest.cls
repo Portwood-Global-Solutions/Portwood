@@ -114,6 +114,78 @@ public with sharing class DocGenBulkControllerTest {
     }
 
     @IsTest
+    static void validateRecordTypeNameDeveloperNameAndId() {
+        Schema.RecordTypeInfo accountType;
+        for (Schema.RecordTypeInfo typeInfo : Account.SObjectType.getDescribe().getRecordTypeInfos()) {
+            if (typeInfo.isAvailable() && !typeInfo.isMaster()) {
+                accountType = typeInfo;
+                break;
+            }
+        }
+        // Salesforce omits the Account.RecordType relationship when no Account types are configured.
+        // The standard relationship test below covers traversal in those orgs.
+        if (accountType == null)
+            return;
+
+        Account account = new Account(Name = 'Typed Account for Bulk Filter');
+        account.put('RecordTypeId', accountType.getRecordTypeId());
+        insert account;
+        String accountPredicate = 'Id = \'' + account.Id + '\' AND ';
+        String developerNameLiteral = '\'' + String.escapeSingleQuotes(accountType.getDeveloperName()) + '\'';
+        String recordTypeIdLiteral = '\'' + accountType.getRecordTypeId() + '\'';
+
+        Test.startTest();
+        Integer byName = DocGenBulkController.validateFilter(
+            'Account',
+            accountPredicate + 'RecordType.Name = \'' + String.escapeSingleQuotes(accountType.getName()) + '\''
+        );
+        Integer byDeveloperName = DocGenBulkController.validateFilter(
+            'Account',
+            accountPredicate + 'RecordType.DeveloperName = ' + developerNameLiteral
+        );
+        Integer byRecordTypeId = DocGenBulkController.validateFilter(
+            'Account',
+            accountPredicate + 'RecordTypeId = ' + recordTypeIdLiteral
+        );
+        Integer otherType = DocGenBulkController.validateFilter(
+            'Account',
+            accountPredicate + 'RecordType.DeveloperName = \'Unconfigured_Bulk_Test_Record_Type\''
+        );
+        Test.stopTest();
+
+        System.assertEquals(1, byName, 'The filter can use the record type label.');
+        System.assertEquals(1, byDeveloperName, 'The filter can use the record type developer name.');
+        System.assertEquals(1, byRecordTypeId, 'The equivalent direct field filter must still select the account.');
+        System.assertEquals(0, otherType, 'A developer name for a different type must exclude the account.');
+    }
+
+    @IsTest
+    static void validateStandardParentRelationshipWithUserMode() {
+        Account account = [SELECT Id FROM Account WHERE Name = 'Heap Test Account' LIMIT 1];
+        Account other = new Account(Name = 'Other Bulk Filter Account');
+        insert other;
+        insert new List<Contact>{
+            new Contact(LastName = 'Selected by Parent Filter', AccountId = account.Id),
+            new Contact(LastName = 'Excluded by Parent Filter', AccountId = other.Id)
+        };
+
+        Integer matches = DocGenBulkController.validateFilter('Contact', 'Account.Name = \'Heap Test Account\'');
+
+        System.assertEquals(1, matches, 'A standard lookup relationship must pass validation and filter in USER_MODE.');
+    }
+
+    @IsTest
+    static void validateFilterRejectsUnknownField() {
+        Boolean rejected = false;
+        try {
+            DocGenBulkController.validateFilter('Account', 'Unconfigured_Bulk_Test_Field__c = null');
+        } catch (AuraHandledException e) {
+            rejected = true;
+        }
+        System.assert(rejected, 'The filter must reject a field that does not exist on Account.');
+    }
+
+    @IsTest
     static void testAnalyzeJobSafe() {
         DocGen_Template__c temp = [SELECT Id FROM DocGen_Template__c LIMIT 1];
 

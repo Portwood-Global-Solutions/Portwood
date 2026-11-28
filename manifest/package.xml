@@ -25,12 +25,19 @@
         <members>DocGenBrandControllerTest</members>
         <members>DocGenBrandResolver</members>
         <members>DocGenBrandResolverTest</members>
+        <members>DocGenBrowserPdf</members>
+        <members>DocGenBrowserPdfBatch</members>
+        <members>DocGenBrowserPdfPlanner</members>
+        <members>DocGenBrowserPdfPlannerTest</members>
+        <members>DocGenBrowserPdfTest</members>
+        <members>DocGenBulkCondition</members>
         <members>DocGenBulkController</members>
         <members>DocGenBulkControllerTest</members>
         <members>DocGenBulkFlowAction</members>
         <members>DocGenBulkFlowActionTest</members>
         <members>DocGenBulkGiantFallbackJob</members>
         <members>DocGenBulkGiantFallbackJobTest</members>
+        <members>DocGenBulkPdfDownloadController</members>
         <members>DocGenBulkTests</members>
         <members>DocGenButtonAdminController</members>
         <members>DocGenButtonAdminControllerTest</members>
@@ -161,6 +168,7 @@
         <name>ApexComponent</name>
     </types>
     <types>
+        <members>DocGenBulkPdfDownload</members>
         <members>DocGenGuide</members>
         <members>DocGenSign</members>
         <members>DocGenSignature</members>
@@ -210,6 +218,14 @@
         <members>DocGen_Brand__c.Logo_Url_Extended__c</members>
         <members>DocGen_Brand__c.Logo_Url__c</members>
         <members>DocGen_Brand__c.OWA_Id__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Complete__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Error_Log__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.First_Ordinal__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Job__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Last_Ordinal__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Source_Ids__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Success_Count__c</members>
+        <members>DocGen_Browser_Pdf_Block__c.Version_Ids__c</members>
         <members>DocGen_Button__mdt.Action_Type__c</members>
         <members>DocGen_Button__mdt.Active__c</members>
         <members>DocGen_Button__mdt.Delivery_Mode__c</members>
@@ -262,6 +278,9 @@
         <members>DocGen_Guest_Render__e.Job_Id__c</members>
         <members>DocGen_Guest_Render__e.Record_Id__c</members>
         <members>DocGen_Guest_Render__e.Template_Id__c</members>
+        <members>DocGen_Job__c.Browser_Batch_Id__c</members>
+        <members>DocGen_Job__c.Browser_Merge__c</members>
+        <members>DocGen_Job__c.Browser_Revision__c</members>
         <members>DocGen_Job__c.Data_Cache_CV__c</members>
         <members>DocGen_Job__c.Duplex_Padding__c</members>
         <members>DocGen_Job__c.Error_Count__c</members>
@@ -457,6 +476,7 @@
     <types>
         <members>DocGen_Asset__c</members>
         <members>DocGen_Brand__c</members>
+        <members>DocGen_Browser_Pdf_Block__c</members>
         <members>DocGen_Button__mdt</members>
         <members>DocGen_Email_Template__c</members>
         <members>DocGen_Error_Log__c</members>
@@ -579,6 +599,7 @@
         <name>PermissionSet</name>
     </types>
     <types>
+        <members>DocGenBulkPdfDownloadApp</members>
         <members>DocGenChartJs</members>
         <members>DocGenKoreanSigningFont</members>
         <members>DocGenLogo</members>

@@ -228,3 +228,20 @@
     border-radius: var(--slds-g-radius-border-3, 12px) !important;
     overflow: hidden;
 }
+
+.report-matches {
+    max-height: 15rem;
+    overflow-y: auto;
+}
+
+.report-match {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    text-align: left;
+}
+
+.report-match:hover,
+.report-match:focus-visible {
+    background: var(--slds-g-color-neutral-base-95, #f3f3f3);
+}

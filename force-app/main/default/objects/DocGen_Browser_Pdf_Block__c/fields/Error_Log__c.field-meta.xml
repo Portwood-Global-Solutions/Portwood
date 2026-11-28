@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Error_Log__c</fullName>
+    <label>Block Error Log</label>
+    <length>8192</length>
+    <visibleLines>3</visibleLines>
+    <type>LongTextArea</type>
+</CustomField>

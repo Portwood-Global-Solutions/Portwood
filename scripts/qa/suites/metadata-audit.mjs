@@ -41,6 +41,7 @@ const LAYOUT_WAIVERS = {
     'DocGen_Template__c.Form_Fields_Config__c': 'edited by the Signer Inputs tab',
     'DocGen_Template__c.Specific_Record_Ids__c': 'set by the sharing panel',
     'DocGen_Template__c.Record_Filter__c': 'set by the filter builder',
+    'DocGen_Job__c.Browser_Merge__c': 'set by bulk submission and displayed by the bulk runner',
     // Platform events have no layouts at all.
     DocGen_Signature_PDF__e: 'platform event',
     DocGen_Guest_Render__e: 'platform event',
@@ -73,11 +74,19 @@ const NO_LAYOUT_EXPECTED = new Set([
     'DocGen_Field_Writeback__e',
     'DocGen_Button__mdt',
     'DocGen_Settings__c', // hierarchy custom setting — no page layout
+    'DocGen_Browser_Pdf_Block__c', // private ordered manifest addressed only through the download service
     'Product2' // standard object we only extend
 ]);
 
 /** Objects that are Hierarchy/List custom settings, detected from their XML. */
 const CUSTOM_SETTINGS = new Set();
+
+/** The ordered index and async identifiers are writable only through the browser PDF job. */
+function isPrivateBrowserPdfField(object, field) {
+    return object === 'DocGen_Browser_Pdf_Block__c' ||
+        (object === 'DocGen_Job__c' && ['Browser_Batch_Id__c', 'Browser_Revision__c'].includes(field));
+}
+
 
 function xmlValues(xml, tag) {
     const out = [];
@@ -117,6 +126,11 @@ export async function run() {
         checks.push(skip('DocGen_Admin permission set present', 'file not found', SEVERITY.BLOCKER));
     }
 
+    const userPermPath = join(ROOT, 'permissionsets', 'DocGen_User.permissionset-meta.xml');
+    const browserPdfUserFields = new Set(
+        existsSync(userPermPath) ? xmlValues(readFileSync(userPermPath, 'utf8'), 'field') : []
+    );
+
     const objects = readdirSync(objectsDir).filter((o) => existsSync(join(objectsDir, o, 'fields')));
 
     // Custom settings behave differently for both layouts and field permissions.
@@ -149,6 +163,18 @@ export async function run() {
             const key = `${obj}.${field}`;
             const objWaived = LAYOUT_WAIVERS[obj];
             const waived = LAYOUT_WAIVERS[key] || objWaived || visibilityWaiver(obj, field);
+
+            if (isPrivateBrowserPdfField(obj, field)) {
+                checks.push(
+                    check(
+                        `${key} stays private to the browser PDF service`,
+                        !onLayout.has(field) && !adminFields.has(key) && !browserPdfUserFields.has(key),
+                        'internal manifest fields must stay off layouts and permission sets',
+                        SEVERITY.BLOCKER
+                    )
+                );
+                continue;
+            }
 
             // A secret on a page layout is a defect in the OTHER direction.
             if (isForbidden(obj, field) || LAYOUT_FORBIDDEN.has(key)) {

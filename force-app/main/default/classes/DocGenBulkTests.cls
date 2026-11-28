@@ -1996,6 +1996,44 @@ private class DocGenBulkTests {
         }
     }
 
+    @IsTest
+    static void testMergePreservesBatchErrorsAndCountsSavedDocuments() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGen_Template__c template = TestDataFactory.getTestTemplate();
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = template.Id,
+                Status__c = 'Merging',
+                Total_Records__c = 3,
+                Success_Count__c = 2,
+                Error_Count__c = 1,
+                Error_Log__c = '1 Salesforce batch chunk(s) failed. First error: Too many SOQL queries: 201'
+            );
+            insert job;
+            insert new ContentVersion(
+                Title = 'docgen_merge_' + job.Id + '_00000',
+                PathOnClient = 'page.html',
+                VersionData = Blob.valueOf('<html><body><p>Saved document</p></body></html>'),
+                IsMajorVersion = false
+            );
+            Test.startTest();
+            System.enqueueJob(new DocGenMergeJob(job.Id));
+            Test.stopTest();
+
+            DocGen_Job__c result = [
+                SELECT Status__c, Success_Count__c, Error_Count__c, Error_Log__c, Merged_PDF_CV__c
+                FROM DocGen_Job__c
+                WHERE Id = :job.Id
+            ];
+            System.assertEquals('Completed with Errors', result.Status__c);
+            System.assertEquals(1, result.Success_Count__c);
+            System.assertEquals(2, result.Error_Count__c);
+            System.assertNotEquals(null, result.Merged_PDF_CV__c);
+            System.assert(result.Error_Log__c.contains('received 1 of 3 expected documents'));
+            System.assert(result.Error_Log__c.contains('Too many SOQL queries: 201'));
+        }
+    }
+
     // =========================================================================
     // DocGenMergeJob — execute with no snippets (empty)
     // =========================================================================

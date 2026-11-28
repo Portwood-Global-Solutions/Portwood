@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Browser_Revision__c</fullName>
+    <description>Opaque identifier for a frozen set of ordered PDF sources.</description>
+    <label>Browser PDF Revision</label>
+    <length>32</length>
+    <required>false</required>
+    <type>Text</type>
+</CustomField>

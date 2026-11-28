@@ -10,6 +10,12 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
     public Boolean mergeMode;
     public Boolean mergeOnly;
 
+    private Integer reportMergeBatchSize;
+
+    public void setReportMergeBatchSize(Integer size) {
+        reportMergeBatchSize = size;
+    }
+
     public Integer successCount = 0;
     public Integer failCount = 0;
 
@@ -124,26 +130,15 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         this.duplexPadding = job.Duplex_Padding__c == true;
     }
 
-    /**
-     * Initializes the batch job: sets status, counts records, builds data cache, and returns query locator.
-     * @param bc The batch context provided by the platform
-     * @return QueryLocator for the records to process
-     */
-    /**
-     * AND the template's Record_Filter__c onto the job's condition.
-     *
-     * Both fragments are parenthesised before joining: `A OR B` combined with
-     * `C` as `A OR B AND C` would silently mean `A OR (B AND C)` and let
-     * excluded records straight through — the exact bug this closes, reopened by
-     * operator precedence.
-     *
-     * Passed through the same sanitizeCondition() as the job's own condition, so
-     * the filter cannot widen what the query may reach.
-     */
+    /** Applies the template's Record Filter to the job selection. */
     // public, not @TestVisible private: the latter is unreachable from anonymous
     // Apex, which is where the e2e scripts verify behaviour. Still not global, so
     // it stays invisible to subscribers in the managed package.
     public String andTemplateFilter(String jobCondition) {
+        return andTemplateFilter(templateId, baseObject, jobCondition);
+    }
+
+    public static String andTemplateFilter(Id templateId, String baseObject, String jobCondition) {
         String tf;
         try {
             List<DocGen_Template__c> ts = [
@@ -167,19 +162,9 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 null
             );
             DocGenErrorLogger.flush();
-            return jobCondition;
+            return DocGenBulkCondition.validate(baseObject, jobCondition);
         }
-        if (String.isBlank(tf)) {
-            return jobCondition;
-        }
-        String safeFilter = sanitizeCondition(tf);
-        if (String.isBlank(safeFilter)) {
-            return jobCondition;
-        }
-        if (String.isBlank(jobCondition)) {
-            return '(' + safeFilter + ')';
-        }
-        return '(' + jobCondition + ') AND (' + safeFilter + ')';
+        return DocGenBulkCondition.combine(baseObject, jobCondition, tf);
     }
 
     public Database.QueryLocator start(Database.BatchableContext bc) {
@@ -191,7 +176,6 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             throw new DocGenException('Invalid object: ' + baseObject);
         }
 
-        String sanitizedCondition = sanitizeCondition(condition);
         // THE TEMPLATE'S OWN AUDIENCE FILTER, applied to the bulk query.
         //
         // Record_Filter__c was evaluated only on the per-record path in
@@ -205,7 +189,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         // instead of one describe-and-check per record, and — importantly — the
         // job's Total_Records__c count below then reflects what will actually be
         // produced, instead of promising a total the run never reaches.
-        sanitizedCondition = andTemplateFilter(sanitizedCondition);
+        String sanitizedCondition = andTemplateFilter(condition);
         String query = 'SELECT Id FROM ' + baseObject;
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
@@ -316,42 +300,6 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
     }
 
     /**
-     * Basic sanitization of dynamic WHERE conditions to prevent SOQL injection.
-     */
-    private static String sanitizeCondition(String condition) {
-        if (String.isBlank(condition)) {
-            return condition;
-        }
-        // Reject dangerous characters (statement termination, comments)
-        if (condition.contains(';') || condition.contains('--') || condition.contains('/*')) {
-            throw new DocGenException('Invalid filter condition.');
-        }
-        String upper = condition.toUpperCase().trim();
-        List<String> disallowed = new List<String>{
-            'SELECT ',
-            'INSERT ',
-            'UPDATE ',
-            'DELETE ',
-            'MERGE ',
-            'UNDELETE ',
-            'WITH ',
-            'GROUP BY ',
-            'ORDER BY ',
-            'LIMIT ',
-            'OFFSET ',
-            'FOR UPDATE',
-            'HAVING ',
-            'TYPEOF '
-        };
-        for (String keyword : disallowed) {
-            if (upper.contains(keyword)) {
-                throw new DocGenException('Invalid filter condition.');
-            }
-        }
-        return condition;
-    }
-
-    /**
      * Generates an individual document for a record, using cached data if available.
      * Also captures HTML snippet for merge mode.
      */
@@ -439,6 +387,14 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
      * @param scope The list of records to process in this batch execution
      */
     public void execute(Database.BatchableContext bc, List<SObject> scope) {
+        // Use the last committed counters. An uncatchable governor error can roll back
+        // this scope's DML even when its in-memory counters have already advanced.
+        if (bc != null) {
+            DocGen_Job__c progress = readCommittedProgress();
+            successCount = progress.Success_Count__c == null ? 0 : progress.Success_Count__c.intValue();
+            failCount = progress.Error_Count__c == null ? 0 : progress.Error_Count__c.intValue();
+        }
+
         // Lazy-load cache from ContentVersion if Stateful string was lost
         if (dataCacheCvId != null && cachedDataJson == null) {
             try {
@@ -634,15 +590,119 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         return log;
     }
 
+    private DocGen_Job__c readCommittedProgress() {
+        return [
+            SELECT Success_Count__c, Error_Count__c, Total_Records__c
+            FROM DocGen_Job__c
+            WHERE Id = :jobId
+            WITH SYSTEM_MODE
+        ];
+    }
+
+    private String reconcileBatchFailures(AsyncApexJob batchJob) {
+        if (batchJob.NumberOfErrors == 0) {
+            return buildErrorLog();
+        }
+        DocGen_Job__c progress = readCommittedProgress();
+        successCount = progress.Success_Count__c == null ? 0 : progress.Success_Count__c.intValue();
+        failCount = progress.Error_Count__c == null ? 0 : progress.Error_Count__c.intValue();
+        if (progress.Total_Records__c != null) {
+            failCount = Math.max(failCount, progress.Total_Records__c.intValue() - successCount);
+        }
+        String reason = batchJob.NumberOfErrors + ' Salesforce batch chunk(s) failed.';
+        if (String.isNotBlank(batchJob.ExtendedStatus)) {
+            reason += ' ' + batchJob.ExtendedStatus;
+        }
+        return DocGenMergeJob.prependError(reason, buildErrorLog());
+    }
+
+    @TestVisible
+    private static Integer smallerReportScope(Integer previousSize, String error) {
+        if (
+            previousSize == null ||
+            previousSize <= 1 ||
+            String.isBlank(error) ||
+            !error.containsIgnoreCase('Too many SOQL queries')
+        ) {
+            return null;
+        }
+        return previousSize / 2;
+    }
+
+    private void restartReportMerge(Integer nextSize, String reason) {
+        Savepoint beforeRestart = Database.setSavepoint();
+        try {
+            // A report job keeps its original record IDs in Query_Condition__c.
+            // Discard only this job's staged documents before regenerating them.
+            String prefix = (duplexPadding ? 'docgen_pdfpart_' : 'docgen_merge_') + jobId + '_%';
+            Set<Id> stagedDocumentIds = new Set<Id>();
+            for (ContentVersion version : [
+                SELECT ContentDocumentId
+                FROM ContentVersion
+                WHERE (Title LIKE :prefix OR Id = :dataCacheCvId) AND IsLatest = TRUE
+                WITH USER_MODE
+            ]) {
+                stagedDocumentIds.add(version.ContentDocumentId);
+            }
+            List<ContentDocument> stagedDocuments = new List<ContentDocument>();
+            for (Id documentId : stagedDocumentIds) {
+                stagedDocuments.add(new ContentDocument(Id = documentId));
+            }
+            if (!stagedDocuments.isEmpty()) {
+                Database.delete(stagedDocuments, AccessLevel.USER_MODE);
+            }
+            update new DocGen_Job__c(
+                Id = jobId,
+                Status__c = 'Recovering',
+                Success_Count__c = 0,
+                Error_Count__c = 0,
+                Error_Log__c = reason,
+                Data_Cache_CV__c = null
+            ); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+
+            DocGenBatch retry = new DocGenBatch(jobId, true, true);
+            retry.setReportMergeBatchSize(nextSize);
+            Database.executeBatch(retry, nextSize);
+        } catch (Exception e) {
+            Database.rollback(beforeRestart);
+            throw e;
+        }
+    }
+
     /**
      * Finalizes the batch job: updates status, chains merge Queueable if needed, sends notification.
      * @param bc The batch context provided by the platform
      */
     public void finish(Database.BatchableContext bc) {
+        String finalErrorLog = buildErrorLog();
+        if (bc != null) {
+            AsyncApexJob batchJob = [
+                SELECT NumberOfErrors, ExtendedStatus
+                FROM AsyncApexJob
+                WHERE Id = :bc.getJobId()
+                WITH SYSTEM_MODE
+            ];
+            finalErrorLog = reconcileBatchFailures(batchJob);
+            Integer nextSize = smallerReportScope(reportMergeBatchSize, batchJob.ExtendedStatus);
+            if (mergeOnly && batchJob.NumberOfErrors > 0 && nextSize != null) {
+                try {
+                    restartReportMerge(
+                        nextSize,
+                        'Retrying with batch size ' + nextSize + '. ' + batchJob.ExtendedStatus
+                    );
+                    return;
+                } catch (Exception e) {
+                    finalErrorLog = DocGenMergeJob.prependError(
+                        'Could not retry with batch size ' + nextSize + ': ' + e.getMessage(),
+                        finalErrorLog
+                    );
+                }
+            }
+        }
         String status;
         if (successCount == 0 && failCount > 0) {
             status = 'Failed';
-        } else if (failCount > 0) {
+        } else if (failCount > 0 || String.isNotBlank(finalErrorLog)) {
             status = 'Completed with Errors';
         } else {
             status = 'Completed';
@@ -657,18 +717,24 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                     Id = jobId,
                     Status__c = status,
                     Success_Count__c = successCount,
-                    Error_Count__c = failCount
+                    Error_Count__c = failCount,
+                    Error_Log__c = finalErrorLog
                 );
 
                 // Chain the merge Queueable — it reads all snippets by title prefix
                 System.enqueueJob(new DocGenMergeJob(jobId));
             } catch (Exception e) {
                 status = 'Completed with Errors';
+                finalErrorLog = DocGenMergeJob.prependError(
+                    'Could not queue the combined PDF: ' + e.getMessage(),
+                    finalErrorLog
+                );
                 update new DocGen_Job__c(
                     Id = jobId,
                     Status__c = status,
                     Success_Count__c = successCount,
-                    Error_Count__c = failCount
+                    Error_Count__c = failCount,
+                    Error_Log__c = finalErrorLog
                 ); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
             }
         } else if (!oversizedRecordIds.isEmpty()) {
@@ -684,7 +750,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 Status__c = status,
                 Success_Count__c = successCount,
                 Error_Count__c = failCount,
-                Error_Log__c = buildErrorLog()
+                Error_Log__c = finalErrorLog
             );
             System.enqueueJob(new DocGenBulkGiantFallbackJob(jobId, templateId, oversizedRecordIds));
         } else {
@@ -692,7 +758,8 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 Id = jobId,
                 Status__c = status,
                 Success_Count__c = successCount,
-                Error_Count__c = failCount
+                Error_Count__c = failCount,
+                Error_Log__c = finalErrorLog
             );
         }
 
