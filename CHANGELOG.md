@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased — Child-record subqueries in bulk filters
+
+### Fixed
+
+- **Bulk filters accept child-record subqueries (#600).** A bulk generation filter can now
+  select records by their child records, for example Household Accounts with a Contact
+  who prefers a mailed acknowledgement:
+
+    ```sql
+    RecordType.DeveloperName = 'HH_Account'
+      AND npo02__OppAmountLastYear__c > 0
+      AND Id IN (SELECT AccountId FROM Contact WHERE Acknowledgement_Preference__c = 'Mail - One-Time Year End')
+    ```
+
+    Before this fix, any filter containing `SELECT` failed with **Invalid filter condition**,
+    even a simple `Id IN (SELECT AccountId FROM Opportunity WHERE IsWon = true)`. Version 3.65
+    fixed the `RecordType.DeveloperName` part of this report, but not the subquery. `IN` and
+    `NOT IN` subqueries now work in **Validate Filter**, in the bulk job itself, and in the
+    **Portwood: Generate Bulk Documents** Flow action, including alongside the Flow's record
+    IDs and the template's own Record Filter. Portwood checks every field on both objects
+    before running the query. It refuses subqueries joined with `OR` or placed inside
+    parentheses, more than two subqueries, a subquery inside another subquery, and ID fields
+    that refer to different objects, because Salesforce does not allow these. An invalid
+    subquery now fails when the job is submitted rather than leaving the job in
+    **Processing**. Filters without a subquery are validated exactly as before.
+
+- Engineering: new `DocGenBulkCondition` parser (adapted from the unreleased
+  `feat/541-bulk-pdf-download` branch), wired into `DocGenBulkController.validateFilter`,
+  `submitJobInternal` and `getJobGeneratedPdfs`, `DocGenBatch.start`/`andTemplateFilter`,
+  and `DocGenBulkFlowAction.buildEffectiveCondition`. The parser keeps semi-joins at the
+  top level of the WHERE clause, because SOQL rejects them inside parentheses. Only
+  conditions with a sub-select take this path. `DocGenBulkController.sanitizeCondition`
+  still rejects every sub-select for the related-record picker. New
+  `DocGenBulkConditionTest` (12 tests).
+
 ## v3.65.0 — iPhone signing in Screen Flows
 
 Released 2026-11-21 · `04tVx000001FJD3IAO` (build 3.65.0-1) · ancestor 3.64.0-1 · 79% package coverage

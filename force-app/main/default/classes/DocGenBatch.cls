@@ -139,6 +139,12 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
      *
      * Passed through the same sanitizeCondition() as the job's own condition, so
      * the filter cannot widen what the query may reach.
+     *
+     * When either fragment carries a semi-join (#600) both go through
+     * DocGenBulkCondition.combine() instead. Parenthesising would nest the
+     * semi-join, and SOQL only allows one in the top-level WHERE expression, so
+     * combine() keeps the ordinary terms grouped and hoists the semi-joins out:
+     * `(A OR B) AND (C) AND Id IN (SELECT …)`.
      */
     // public, not @TestVisible private: the latter is unreachable from anonymous
     // Apex, which is where the e2e scripts verify behaviour. Still not global, so
@@ -167,7 +173,12 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 null
             );
             DocGenErrorLogger.flush();
-            return jobCondition;
+            return DocGenBulkCondition.hasSubquery(jobCondition)
+                ? DocGenBulkCondition.validate(baseObject, jobCondition)
+                : jobCondition;
+        }
+        if (DocGenBulkCondition.hasSubquery(jobCondition) || DocGenBulkCondition.hasSubquery(tf)) {
+            return DocGenBulkCondition.combine(baseObject, jobCondition, tf);
         }
         if (String.isBlank(tf)) {
             return jobCondition;
@@ -191,7 +202,11 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             throw new DocGenException('Invalid object: ' + baseObject);
         }
 
-        String sanitizedCondition = sanitizeCondition(condition);
+        // A semi-join condition skips the keyword blocklist (which rejects every
+        // SELECT) and is parsed and validated inside andTemplateFilter() instead (#600).
+        String sanitizedCondition = DocGenBulkCondition.hasSubquery(condition)
+            ? condition
+            : sanitizeCondition(condition);
         // THE TEMPLATE'S OWN AUDIENCE FILTER, applied to the bulk query.
         //
         // Record_Filter__c was evaluated only on the per-record path in

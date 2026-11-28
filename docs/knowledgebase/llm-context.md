@@ -1922,7 +1922,16 @@ Make one document per record without opening every record yourself.
 8. Click **Run Bulk Generation**.
 9. Review the job and its files when processing finishes.
 
-The condition is the filter only. Do not include `SELECT` or the word `WHERE` in that field.
+The condition is the filter only. Do not start it with `SELECT` or the word `WHERE`.
+
+To select records by their child records, use an `IN` or `NOT IN` subquery. For an Account template, this selects households that have a Contact in California:
+
+```sql
+RecordType.DeveloperName = 'HH_Account'
+AND Id IN (SELECT AccountId FROM Contact WHERE MailingState = 'CA')
+```
+
+Use your org's record type developer name. Join subqueries to the rest of the filter with `AND`, not `OR`, and keep them outside parentheses. A filter can use at most two subqueries.
 
 Filters can traverse supported standard lookups as well as custom relationships. For example, use `RecordType.DeveloperName = 'Partner_Account'`, `Owner.Email = 'owner@example.com'`, or a custom `Account__r.Region__c = 'West'` condition when those fields are available on the selected object. The same relationship rule applies to child-record filters. If the object has no Record Types, or a Record Type value is malformed, the validation message explains the issue. Keep the filter to conditions the builder allows; unknown fields and disallowed SOQL keywords remain rejected.
 
