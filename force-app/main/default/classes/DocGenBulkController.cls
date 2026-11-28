@@ -1053,6 +1053,147 @@ public with sharing class DocGenBulkController {
         public String message;
     }
 
+    @AuraEnabled
+    public static ReportSelection previewReport(Id templateId, Id reportId) {
+        try {
+            return resolveReportSelection(templateId, reportId);
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Could not preview report records.');
+        }
+    }
+
+    @AuraEnabled
+    public static Id submitReportJob(
+        Id templateId,
+        Id reportId,
+        Integer expectedCount,
+        Boolean allowTruncatedReport,
+        String jobLabel,
+        Boolean mergePdf,
+        Integer batchSize,
+        Boolean mergeOnly,
+        String sortOrder,
+        Boolean duplexPadding
+    ) {
+        try {
+            ReportSelection selection = resolveReportSelection(templateId, reportId);
+            if (selection.truncated && allowTruncatedReport != true) {
+                throw new DocGenException('Preview the report and confirm that you want to use its first 2,000 rows.');
+            }
+            if (selection.eligibleCount == 0 || selection.eligibleCount != expectedCount) {
+                throw new DocGenException('The eligible record count changed. Preview the report again before running.');
+            }
+            return submitJobInternal(
+                templateId, selection.condition, jobLabel, mergePdf, batchSize, mergeOnly, sortOrder, duplexPadding, true
+            );
+        } catch (Exception e) {
+            throw DocGenService.ahe(e, 'Error starting bulk generation from the report.');
+        }
+    }
+
+    public class ReportSelection {
+        private String condition;
+        @AuraEnabled
+        public Integer eligibleCount = 0;
+        @AuraEnabled
+        public Boolean truncated = false;
+    }
+
+    private static final Integer MAX_REPORT_ROWS = 2000;
+
+    private static ReportSelection resolveReportSelection(Id templateId, Id reportId) {
+        if (templateId == null || reportId == null || reportId.getSObjectType() != Report.SObjectType) {
+            throw new DocGenException('Select a template and a saved Salesforce report.');
+        }
+        String baseObject = templateBaseObject(templateId);
+        Schema.SObjectType baseType = Schema.getGlobalDescribe().get(baseObject);
+        if (baseType == null) {
+            throw new DocGenException('The template base object is invalid.');
+        }
+
+        Reports.ReportDescribeResult description = Reports.ReportManager.describeReport(reportId);
+        if (description.getReportMetadata().getReportFormat() != Reports.ReportFormat.TABULAR) {
+            throw new DocGenException('Select a tabular report for bulk generation.');
+        }
+        Reports.ReportResults results = Reports.ReportManager.runReport(reportId, true);
+
+        List<String> columns = results.getReportMetadata().getDetailColumns();
+        Map<String, Reports.DetailColumn> columnInfo = results.getReportExtendedMetadata().getDetailColumnInfo();
+        List<Integer> idColumns = new List<Integer>();
+        for (Integer index = 0; index < columns.size(); index++) {
+            Reports.DetailColumn column = columnInfo.get(columns[index]);
+            if (column != null && column.getDataType() == Reports.ColumnDataType.ID_DATA) {
+                idColumns.add(index);
+            }
+        }
+        String idHelp = 'Add the ' + baseObject + ' record ID column to the report and save it.';
+        if (idColumns.isEmpty()) {
+            throw new DocGenException(idHelp);
+        }
+
+        ReportSelection selection = new ReportSelection();
+        selection.truncated = results.getAllData() != true;
+        Reports.ReportFact detail = results.getFactMap().get('T!T');
+        if (!(detail instanceof Reports.ReportFactWithDetails)) {
+            return selection;
+        }
+        List<Reports.ReportDetailRow> rows = ((Reports.ReportFactWithDetails) detail).getRows();
+        selection.truncated = selection.truncated || rows.size() > MAX_REPORT_ROWS;
+        if (rows.isEmpty()) {
+            return selection;
+        }
+        Set<Id> recordIds = matchingReportIds(rows, idColumns, baseType, idHelp);
+
+        // The batch already persists and combines a WHERE condition with the template
+        // audience filter. Only typed Salesforce IDs returned by the report enter it.
+        List<String> literals = new List<String>();
+        for (Id recordId : recordIds) {
+            literals.add('\'' + String.valueOf(recordId) + '\'');
+        }
+        selection.condition = 'Id IN (' + String.join(literals, ',') + ')';
+        String eligibleCondition = DocGenBatch.andTemplateFilter(templateId, selection.condition);
+        selection.eligibleCount = Database.countQuery(
+            'SELECT COUNT() FROM ' + baseType.getDescribe().getName() + ' WHERE ' + eligibleCondition,
+            AccessLevel.USER_MODE
+        );
+        return selection;
+    }
+
+    private static Set<Id> matchingReportIds(
+        List<Reports.ReportDetailRow> rows,
+        List<Integer> idColumns,
+        Schema.SObjectType baseType,
+        String idHelp
+    ) {
+        Set<Id> matchedIds;
+        Integer rowLimit = Math.min(rows.size(), MAX_REPORT_ROWS);
+        for (Integer columnIndex : idColumns) {
+            Set<Id> candidateIds = new Set<Id>();
+            for (Integer rowIndex = 0; rowIndex < rowLimit; rowIndex++) {
+                Object value = rows[rowIndex].getDataCells()[columnIndex].getValue();
+                if (value == null || String.isBlank(String.valueOf(value))) {
+                    continue;
+                }
+                Id recordId = (Id) String.valueOf(value);
+                if (recordId.getSObjectType() != baseType) {
+                    candidateIds.clear();
+                    break;
+                }
+                candidateIds.add(recordId);
+            }
+            if (!candidateIds.isEmpty()) {
+                if (matchedIds != null && matchedIds != candidateIds) {
+                    throw new DocGenException('The report has multiple matching record ID columns. Keep one and preview again.');
+                }
+                matchedIds = candidateIds;
+            }
+        }
+        if (matchedIds == null) {
+            throw new DocGenException(idHelp);
+        }
+        return matchedIds;
+    }
+
     /**
      * Submits a bulk document generation job for async processing.
      * @param templateId The Portwood template record ID
@@ -1153,6 +1294,22 @@ public with sharing class DocGenBulkController {
         String sortOrder,
         Boolean duplexPadding
     ) {
+        return submitJobInternal(
+            templateId, condition, jobLabel, mergePdf, batchSize, mergeOnly, sortOrder, duplexPadding, false
+        );
+    }
+
+    private static Id submitJobInternal(
+        Id templateId,
+        String condition,
+        String jobLabel,
+        Boolean mergePdf,
+        Integer batchSize,
+        Boolean mergeOnly,
+        String sortOrder,
+        Boolean duplexPadding,
+        Boolean fromReport
+    ) {
         try {
             Boolean isMergeOnly = (mergeOnly == true);
             Boolean isMergeMode = (mergePdf == true) || isMergeOnly;
@@ -1224,6 +1381,9 @@ public with sharing class DocGenBulkController {
             // 2. Run Batch — user-configurable batch size (default 1, max 200)
             Integer size = (batchSize != null && batchSize >= 1 && batchSize <= 200) ? batchSize : 1;
             DocGenBatch batch = new DocGenBatch(job.Id, isMergeMode, isMergeOnly);
+            if (fromReport && isMergeOnly) {
+                batch.setReportMergeBatchSize(size);
+            }
             Database.executeBatch(batch, size);
 
             return job.Id;
@@ -1312,11 +1472,11 @@ public with sharing class DocGenBulkController {
     public static DocGen_Job__c getJobStatus(Id jobId) {
         DocGenFlsGuard.assertAccessible(
             DocGen_Job__c.sObjectType,
-            new Set<String>{ 'Name', 'Status__c', 'Success_Count__c', 'Error_Count__c', 'Total_Records__c' }
+            new Set<String>{ 'Name', 'Status__c', 'Success_Count__c', 'Error_Count__c', 'Total_Records__c', 'Error_Log__c' }
         );
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Job__c> jsRecords = [
-            SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c
+            SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c, Error_Log__c
             FROM DocGen_Job__c
             WHERE Id = :jobId
             WITH SYSTEM_MODE

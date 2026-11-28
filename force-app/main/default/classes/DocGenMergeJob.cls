@@ -36,6 +36,8 @@ public with sharing class DocGenMergeJob implements Queueable {
                     'Label__c',
                     'Name',
                     'Success_Count__c',
+                    'Error_Count__c',
+                    'Error_Log__c',
                     'Total_Records__c',
                     'Template__c',
                     'Duplex_Padding__c'
@@ -47,6 +49,8 @@ public with sharing class DocGenMergeJob implements Queueable {
                     Name,
                     CreatedById,
                     Success_Count__c,
+                    Error_Count__c,
+                    Error_Log__c,
                     Total_Records__c,
                     Duplex_Padding__c,
                     Template__r.Type__c
@@ -76,7 +80,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             ];
 
             if (snippets.isEmpty()) {
-                update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                saveMergeResult(job, 0, null);
                 return;
             }
 
@@ -148,7 +152,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             pdfCv.Id = cvDec.getRecords()[0].Id;
 
             // Update Job with merged PDF CV Id
-            update new DocGen_Job__c(Id = jobId, Status__c = 'Completed', Merged_PDF_CV__c = pdfCv.Id); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            saveMergeResult(job, snippetCount, pdfCv.Id);
 
             // Clean up HTML snippets
             List<ContentDocument> docsToDelete = new List<ContentDocument>();
@@ -162,7 +166,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             // Send bell + push notification to the job submitter
             sendCompletionNotification(job, fileName, snippetCount);
         } catch (Exception e) {
-            update new DocGen_Job__c(Id = jobId, Status__c = 'Completed with Errors'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            updateMergeFailure(jobId, describeMergeFailure(e.getMessage()), 'Completed with Errors');
         }
     }
 
@@ -183,7 +187,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             ORDER BY Title
         ];
         if (parts.isEmpty()) {
-            update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            saveMergeResult(job, 0, null);
             return;
         }
 
@@ -224,7 +228,7 @@ public with sharing class DocGenMergeJob implements Queueable {
         insert cvDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
         pdfCv.Id = cvDec.getRecords()[0].Id;
 
-        update new DocGen_Job__c(Id = jobId, Status__c = 'Completed', Merged_PDF_CV__c = pdfCv.Id); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        saveMergeResult(job, partCount, pdfCv.Id);
 
         List<ContentDocument> docsToDelete = new List<ContentDocument>();
         for (Id docId : docIdsToDelete) {
@@ -237,7 +241,58 @@ public with sharing class DocGenMergeJob implements Queueable {
         sendCompletionNotification(job, fileName, partCount);
     }
 
-    private void sendCompletionNotification(DocGen_Job__c job, String fileName, Integer pageCount) {
+    private void saveMergeResult(DocGen_Job__c job, Integer inputCount, Id pdfVersionId) {
+        Integer expected = job.Total_Records__c == null ? 0 : job.Total_Records__c.intValue();
+        Integer previousSuccess = job.Success_Count__c == null ? 0 : job.Success_Count__c.intValue();
+        Integer previousErrors = job.Error_Count__c == null ? 0 : job.Error_Count__c.intValue();
+        Integer failures = Math.max(previousErrors, expected - inputCount);
+        String details = job.Error_Log__c;
+        if (inputCount < expected || inputCount < previousSuccess) {
+            details = prependError(
+                'The combined PDF received ' + inputCount + ' of ' + Math.max(expected, previousSuccess) +
+                    ' expected documents.',
+                details
+            );
+        }
+        Boolean incomplete = failures > 0 || String.isNotBlank(details);
+        job.Status__c = incomplete ? (inputCount == 0 ? 'Failed' : 'Completed with Errors') : 'Completed';
+        job.Success_Count__c = inputCount;
+        job.Error_Count__c = failures;
+        job.Error_Log__c = details;
+        update new DocGen_Job__c(
+            Id = job.Id,
+            Status__c = job.Status__c,
+            Success_Count__c = inputCount,
+            Error_Count__c = failures,
+            Error_Log__c = details,
+            Merged_PDF_CV__c = pdfVersionId
+        ); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+    }
+
+    public static String prependError(String reason, String previous) {
+        if (String.isBlank(reason)) {
+            return previous;
+        }
+        return String.isBlank(previous) ? reason : (reason + '\n' + previous).abbreviate(32000);
+    }
+
+    private static void updateMergeFailure(Id jobId, String reason, String status) {
+        List<DocGen_Job__c> jobs = [
+            SELECT Error_Log__c
+            FROM DocGen_Job__c
+            WHERE Id = :jobId
+            WITH SYSTEM_MODE
+        ];
+        if (!jobs.isEmpty()) {
+            update new DocGen_Job__c(
+                Id = jobId,
+                Status__c = status,
+                Error_Log__c = prependError(reason, jobs[0].Error_Log__c)
+            ); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        }
+    }
+
+    private void sendCompletionNotification(DocGen_Job__c job, String fileName, Integer documentCount) {
         try {
             // Look up the custom notification type
             // v2.0.1 — per-field FLS enforcement on SOQL reads (see DocGenFlsGuard).
@@ -257,10 +312,10 @@ public with sharing class DocGenMergeJob implements Queueable {
             Messaging.CustomNotification notification = new Messaging.CustomNotification();
             notification.setNotificationTypeId(types[0].Id);
             notification.setTargetId(jobId);
-            notification.setTitle('Portwood: ' + fileName + ' is ready');
-            notification.setBody(
-                pageCount + ' pages merged from ' + Integer.valueOf(job.Success_Count__c) + ' records. Tap to view.'
+            notification.setTitle(
+                'Portwood: ' + fileName + (job.Status__c == 'Completed' ? ' is ready' : ' is incomplete')
             );
+            notification.setBody(documentCount + ' record documents merged. Tap to view the job.');
             notification.send(new Set<String>{ job.CreatedById });
         } catch (Exception e) {
             // Intentionally swallowed — notification failure is non-fatal
@@ -288,11 +343,7 @@ public with sharing class DocGenMergeJob implements Queueable {
                 reason = '';
             }
             try {
-                DocGen_Job__c u = new DocGen_Job__c(Id = jobId, Status__c = 'Failed');
-                if (String.isNotBlank(reason)) {
-                    u.Error_Log__c = reason;
-                }
-                update u; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                DocGenMergeJob.updateMergeFailure(jobId, reason, 'Failed');
             } catch (Exception e) {
                 // Intentionally swallowed — best-effort; job record may not exist
                 String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule

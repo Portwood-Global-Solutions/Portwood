@@ -28,6 +28,17 @@ private class DocGenBatchErrorLogTest {
     }
 
     @isTest
+    static void reportMergeRetryReducesScopeOnlyForSoqlLimits() {
+        String soqlLimit = 'First error: Too many SOQL queries: 201';
+        System.assertEquals(25, DocGenBatch.smallerReportScope(50, soqlLimit));
+        System.assertEquals(12, DocGenBatch.smallerReportScope(25, soqlLimit));
+        System.assertEquals(1, DocGenBatch.smallerReportScope(3, soqlLimit));
+        System.assertEquals(null, DocGenBatch.smallerReportScope(1, soqlLimit));
+        System.assertEquals(null, DocGenBatch.smallerReportScope(null, soqlLimit));
+        System.assertEquals(null, DocGenBatch.smallerReportScope(50, 'Apex CPU time limit exceeded'));
+    }
+
+    @isTest
     static void heapFailureIsFlaggedWithGiantQueryGuidance() {
         Id jobId = newJob();
         Id recId = anAccountId();

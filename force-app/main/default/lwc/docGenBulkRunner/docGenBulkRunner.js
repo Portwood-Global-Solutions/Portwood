@@ -6,6 +6,9 @@ import { downloadBase64, extractWhereClause } from 'c/docGenUtils';
 import getBulkTemplates from '@salesforce/apex/DocGenBulkController.getBulkTemplates';
 import validateFilter from '@salesforce/apex/DocGenBulkController.validateFilter';
 import submitJob from '@salesforce/apex/DocGenBulkController.submitJob';
+import previewReport from '@salesforce/apex/DocGenBulkController.previewReport';
+import submitReportJob from '@salesforce/apex/DocGenBulkController.submitReportJob';
+import getAvailableReports from '@salesforce/apex/DocGenController.getAvailableReports';
 import getSortableFields from '@salesforce/apex/DocGenBulkController.getSortableFields';
 import getJobStatus from '@salesforce/apex/DocGenBulkController.getJobStatus';
 import getSavedQueries from '@salesforce/apex/DocGenBulkController.getSavedQueries';
@@ -22,6 +25,7 @@ import QCONFIG_FIELD from '@salesforce/schema/DocGen_Template__c.Query_Config__c
 import JOB_LABEL_FIELD from '@salesforce/schema/DocGen_Job__c.Label__c';
 import JOB_STATUS_FIELD from '@salesforce/schema/DocGen_Job__c.Status__c';
 import JOB_SUCCESS_FIELD from '@salesforce/schema/DocGen_Job__c.Success_Count__c';
+import JOB_ERROR_LOG_FIELD from '@salesforce/schema/DocGen_Job__c.Error_Log__c';
 import JOB_ERROR_FIELD from '@salesforce/schema/DocGen_Job__c.Error_Count__c';
 import JOB_TOTAL_FIELD from '@salesforce/schema/DocGen_Job__c.Total_Records__c';
 
@@ -35,6 +39,17 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     @track condition = '';
     @track recordCount = null;
     @track isValidating = false;
+
+    recordSource = 'report';
+    reportSearchTerm = '';
+    reportMatches = [];
+    reportId = '';
+    reportTruncated = false;
+    allowTruncatedReport = false;
+    reportSearchTimer;
+    reportSearchVersion = 0;
+    reportsLoaded = false;
+    isLoadingReports = false;
 
     // Sort order — decides the page order of a combined PDF, because the batch
     // processes records in query order and the merge assembles in that sequence.
@@ -186,6 +201,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     handleTemplateSelect(event) {
+        if (this.recordSelectionDisabled) return;
         const templateId = event.currentTarget.dataset.id;
         this.selectedTemplateId = templateId;
         this.showTemplateDropdown = false;
@@ -195,9 +211,10 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
             this.baseObject = selected.baseObject;
             this.selectedTemplateName = selected.label;
             this.templateSearchTerm = '';
-            this.recordCount = null;
-            this.analysis = null;
-            this.filterValidated = false;
+            this.resetValidation();
+            this.reportId = '';
+            this.reportSearchTerm = '';
+            if (this.usesReport) this.queueReportSearch(0);
             // The sample record belongs to the PREVIOUS template's base object. Left in
             // place it kept the Preview button enabled against a record of the wrong
             // sObject type, and handed the record picker a value it cannot resolve.
@@ -247,6 +264,8 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     disconnectedCallback() {
+        clearTimeout(this.reportSearchTimer);
+        this.reportSearchVersion++;
         this.stopPolling();
     }
 
@@ -365,9 +384,10 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         const selected = this.templates.find((t) => t.value === this.selectedTemplateId);
         if (selected) {
             this.baseObject = selected.baseObject;
-            this.recordCount = null;
-            this.analysis = null;
-            this.filterValidated = false;
+            this.resetValidation();
+            this.reportId = '';
+            this.reportSearchTerm = '';
+            if (this.usesReport) this.queueReportSearch(0);
             // See handleTemplateSelect — a stale sample record from the previous
             // template's object must not survive the switch.
             this.sampleRecordId = '';
@@ -565,15 +585,117 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.sortDirection = 'ASC';
     }
 
-    async handleValidate() {
-        if (!this.baseObject) return;
-        this.isValidating = true;
-        this.analysis = null;
+    get recordSourceOptions() {
+        return [
+            { label: 'Salesforce report', value: 'report' },
+            { label: 'SOQL filter', value: 'soql' }
+        ];
+    }
+
+    get usesReport() {
+        return this.recordSource === 'report';
+    }
+
+    get recordSelectionDisabled() {
+        return this.isProcessing || this.isValidating;
+    }
+
+    get validateDisabled() {
+        return this.recordSelectionDisabled || (this.usesReport && (this.isLoadingReports || !this.reportId));
+    }
+
+    get showReportMatches() {
+        return !this.reportId && !this.isLoadingReports && this.reportMatches.length > 0;
+    }
+
+    get noReportsFound() {
+        return !this.reportId && this.reportsLoaded && !this.isLoadingReports && this.reportMatches.length === 0;
+    }
+
+    get validateLabel() {
+        return this.usesReport ? 'Preview Report Records' : 'Validate Filter';
+    }
+
+    get validationHelp() {
+        return this.usesReport
+            ? 'Preview the report to see how many records are eligible for generation.'
+            : 'Validate your filter to enable generation.';
+    }
+
+    handleRecordSourceChange(event) {
+        this.recordSource = event.detail.value;
+        this.resetValidation();
+        if (this.usesReport && !this.reportId) this.queueReportSearch(0);
+    }
+
+    handleReportSearchTermChange(event) {
+        this.reportSearchTerm = event.target.value;
+        this.reportId = '';
+        this.resetValidation();
+        this.queueReportSearch(250);
+    }
+
+    queueReportSearch(delay) {
+        clearTimeout(this.reportSearchTimer);
+        const version = ++this.reportSearchVersion;
+        this.isLoadingReports = true;
+        this.reportsLoaded = false;
+        this.reportMatches = [];
+        this.reportSearchTimer = setTimeout(() => this.searchReports(version), delay);
+    }
+
+    async searchReports(version) {
         try {
-            const count = await validateFilter({ objectName: this.baseObject, condition: this.condition });
+            const reports = await getAvailableReports({ searchTerm: this.reportSearchTerm });
+            if (version !== this.reportSearchVersion) return;
+            this.reportMatches = reports;
+            this.reportsLoaded = true;
+        } catch (error) {
+            if (version === this.reportSearchVersion && this.usesReport) {
+                this.showToast('Report Search Error', error.body?.message || error.message, 'error');
+            }
+        } finally {
+            if (version === this.reportSearchVersion) this.isLoadingReports = false;
+        }
+    }
+
+    handleReportSelect(event) {
+        const report = this.reportMatches.find((match) => match.id === event.currentTarget.dataset.id);
+        if (!report || this.recordSelectionDisabled) return;
+        this.reportId = report.id;
+        this.reportSearchTerm = report.name;
+        this.resetValidation();
+        this.template.querySelector('[data-report-search]').focus();
+    }
+
+    handleAllowTruncatedReportChange(event) {
+        this.allowTruncatedReport = event.target.checked;
+    }
+
+    resetValidation() {
+        this.reportTruncated = false;
+        this.allowTruncatedReport = false;
+        this.recordCount = null;
+        this.analysis = null;
+        this.filterValidated = false;
+    }
+
+    async handleValidate() {
+        if (!this.baseObject || this.validateDisabled) return;
+        this.isValidating = true;
+        this.resetValidation();
+        try {
+            let count;
+            if (this.usesReport) {
+                const result = await previewReport({ templateId: this.selectedTemplateId, reportId: this.reportId });
+                count = result.eligibleCount;
+                this.reportTruncated = result.truncated;
+            } else {
+                count = await validateFilter({ objectName: this.baseObject, condition: this.condition });
+            }
             this.recordCount = count;
-            this.filterValidated = true;
-            this.showToast('Success', `Found ${count} records.`, 'success');
+            this.filterValidated = !this.usesReport || count > 0;
+            if (!this.reportTruncated) this.showToast('Success', `Found ${count} records.`, 'success');
             // Always run analysis after validation
             await this.runAnalysis();
         } catch (error) {
@@ -586,10 +708,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     }
 
     async handleRun() {
-        if (!this.selectedTemplateId) {
-            this.showToast('Error', 'Please select a template.', 'error');
-            return;
-        }
+        if (this.isRunDisabled) return;
 
         this.isProcessing = true;
         this.jobStatus = 'Queued';
@@ -597,21 +716,29 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
 
         try {
             // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-            this.jobId = await submitJob({
+            const options = {
                 templateId: this.selectedTemplateId,
-                condition: this.condition,
                 jobLabel: this.jobLabel,
                 mergePdf: this.mergePdf || false,
                 batchSize: this.batchSize || 1,
                 mergeOnly: this.mergeOnly || false,
                 sortOrder: this.sortOrderClause,
                 duplexPadding: this.mergePdf && this.duplexPadding
-            });
+            };
+            this.jobId = this.usesReport
+                ? await submitReportJob({
+                      ...options,
+                      reportId: this.reportId,
+                      expectedCount: this.recordCount,
+                      allowTruncatedReport: this.allowTruncatedReport
+                  })
+                : await submitJob({ ...options, condition: this.condition });
             this.showToast('Success', 'Job started. Status will auto-refresh every 5 seconds.', 'success');
             this.startPolling();
         } catch (error) {
             this.showToast('Error', error.body ? error.body.message : error.message, 'error');
             this.isProcessing = false;
+            if (this.usesReport) this.resetValidation();
         }
     }
 
@@ -644,6 +771,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
                 success: job[JOB_SUCCESS_FIELD.fieldApiName] || 0,
                 error: job[JOB_ERROR_FIELD.fieldApiName] || 0,
                 total: total,
+                errorLog: job[JOB_ERROR_LOG_FIELD.fieldApiName],
                 percent: total > 0 ? Math.floor((current / total) * 100) : 0
             };
 
@@ -720,8 +848,9 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     get isRunDisabled() {
         return (
             !this.selectedTemplateId ||
-            this.isProcessing ||
+            this.validateDisabled ||
             !this.filterValidated ||
+            (this.reportTruncated && !this.allowTruncatedReport) ||
             (this.analysis && !this.analysis.canProceed)
         );
     }

@@ -24,7 +24,7 @@
                                     value={templateSearchTerm}
                                     onchange={handleTemplateSearch}
                                     onfocus={handleTemplateSearchFocus}
-                                    disabled={isProcessing}
+                                    disabled={recordSelectionDisabled}
                                 ></lightning-input>
                             </div>
                             <lightning-button-icon
@@ -149,6 +149,15 @@
                                 </div>
                             </div>
 
+                            <template lwc:if={jobProgress.errorLog}>
+                                <details class="slds-var-m-bottom_small slds-text-color_inverse">
+                                    <summary>Generation errors</summary>
+                                    <div style="white-space: pre-wrap; overflow-wrap: anywhere">
+                                        {jobProgress.errorLog}
+                                    </div>
+                                </details>
+                            </template>
+
                             <template if:true={isProcessing}>
                                 <div class="slds-var-m-top_small">
                                     <lightning-progress-bar
@@ -198,87 +207,147 @@
 
             <template if:true={baseObject}>
                 <div class="divider"></div>
-                <h3 class="section-title">Step 2: Record Filter (SOQL)</h3>
-                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_medium">
-                    Define a SOQL WHERE clause to select records. Leave empty to process ALL records.
-                </p>
-
-                <lightning-textarea
-                    label="SOQL Condition"
-                    variant="label-hidden"
-                    value={condition}
-                    onchange={handleConditionChange}
-                    placeholder="e.g. StageName = 'Closed Won'"
-                    disabled={isProcessing}
-                    class="code-textarea"
-                >
-                </lightning-textarea>
-
-                <div class="slds-grid slds-gutters_large slds-var-m-top_medium">
-                    <!-- Left: Examples -->
-                    <div class="slds-col slds-size_1-of-2">
-                        <div class="info-card">
-                            <p class="slds-text-title_bold slds-var-m-bottom_x-small">Quick Examples</p>
-                            <ul class="slds-list_dotted slds-text-body_small slds-text-color_weak">
-                                <li>Simple: <code class="inline-code">StageName = 'Closed Won'</code></li>
-                                <li>
-                                    Grouped:
-                                    <code class="inline-code"
-                                        >(Type = 'Customer' OR Industry = 'Energy') AND AnnualRevenue > 1000000</code
+                <h3 class="section-title">Step 2: Select Records</h3>
+                <lightning-radio-group
+                    label="Record Source"
+                    options={recordSourceOptions}
+                    value={recordSource}
+                    onchange={handleRecordSourceChange}
+                    disabled={recordSelectionDisabled}
+                    type="button"
+                    class="slds-var-m-bottom_medium"
+                ></lightning-radio-group>
+                <template lwc:if={usesReport}>
+                    <lightning-input
+                        type="search"
+                        label="Search Salesforce Reports"
+                        placeholder="Enter a report name"
+                        value={reportSearchTerm}
+                        onchange={handleReportSearchTermChange}
+                        disabled={recordSelectionDisabled}
+                        data-report-search
+                    ></lightning-input>
+                    <template lwc:if={isLoadingReports}>
+                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_x-small" role="status">
+                            Searching reports…
+                        </p>
+                    </template>
+                    <template lwc:elseif={showReportMatches}>
+                        <ul
+                            class="report-matches slds-box slds-box_xx-small slds-var-m-top_x-small"
+                            aria-label="Matching reports"
+                        >
+                            <template for:each={reportMatches} for:item="report">
+                                <li key={report.id}>
+                                    <button
+                                        type="button"
+                                        class="slds-button slds-button_reset slds-var-p-around_x-small report-match"
+                                        data-id={report.id}
+                                        onclick={handleReportSelect}
+                                        disabled={recordSelectionDisabled}
                                     >
+                                        <span>{report.name}</span>
+                                        <span class="slds-text-body_small slds-text-color_weak">{report.folder}</span>
+                                    </button>
                                 </li>
-                                <li>
-                                    Subquery:
-                                    <code class="inline-code"
-                                        >AccountId IN (SELECT Id FROM Account WHERE BillingState = 'CA')</code
-                                    >
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <!-- Right: Saved Queries -->
-                    <div class="slds-col slds-size_1-of-2">
-                        <div class="info-card bg-white">
-                            <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_small">
-                                <h4 class="slds-text-title_bold">Saved Queries</h4>
-                                <button class="text-link" onclick={openSaveModal}>Save Current</button>
-                            </div>
-                            <template if:false={savedQueries.length}>
-                                <p class="slds-text-color_weak slds-text-body_small">
-                                    No saved queries for this template.
-                                </p>
                             </template>
-                            <ul class="query-list">
-                                <template for:each={savedQueries} for:item="q">
-                                    <li key={q.Id}>
-                                        <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
-                                            <div class="slds-truncate" title={q.description}>
-                                                <a onclick={handleLoadQuery} data-id={q.Id} class="text-link"
-                                                    >{q.Name}</a
-                                                >
-                                            </div>
-                                            <button
-                                                class="delete-icon"
-                                                onclick={handleDeleteQuery}
-                                                data-id={q.Id}
-                                                title="Delete query"
-                                            >
-                                                &times;
-                                            </button>
-                                        </div>
+                        </ul>
+                    </template>
+                    <template lwc:elseif={noReportsFound}>
+                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_x-small" role="status">
+                            No accessible reports match this search.
+                        </p>
+                    </template>
+                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_x-small">
+                        Use a tabular report with the {baseObject} record ID column. Salesforce returns up to 2,000
+                        detail rows.
+                    </p>
+                </template>
+                <template lwc:else>
+                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_medium">
+                        Define a SOQL WHERE clause to select records. Leave empty to process ALL records.
+                    </p>
+
+                    <lightning-textarea
+                        label="SOQL Condition"
+                        variant="label-hidden"
+                        value={condition}
+                        onchange={handleConditionChange}
+                        placeholder="e.g. StageName = 'Closed Won'"
+                        disabled={isProcessing}
+                        class="code-textarea"
+                    >
+                    </lightning-textarea>
+
+                    <div class="slds-grid slds-gutters_large slds-var-m-top_medium">
+                        <!-- Left: Examples -->
+                        <div class="slds-col slds-size_1-of-2">
+                            <div class="info-card">
+                                <p class="slds-text-title_bold slds-var-m-bottom_x-small">Quick Examples</p>
+                                <ul class="slds-list_dotted slds-text-body_small slds-text-color_weak">
+                                    <li>Simple: <code class="inline-code">StageName = 'Closed Won'</code></li>
+                                    <li>
+                                        Grouped:
+                                        <code class="inline-code"
+                                            >(Type = 'Customer' OR Industry = 'Energy') AND AnnualRevenue >
+                                            1000000</code
+                                        >
                                     </li>
+                                    <li>
+                                        Subquery:
+                                        <code class="inline-code"
+                                            >AccountId IN (SELECT Id FROM Account WHERE BillingState = 'CA')</code
+                                        >
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Right: Saved Queries -->
+                        <div class="slds-col slds-size_1-of-2">
+                            <div class="info-card bg-white">
+                                <div class="slds-grid slds-grid_align-spread slds-var-m-bottom_small">
+                                    <h4 class="slds-text-title_bold">Saved Queries</h4>
+                                    <button class="text-link" onclick={openSaveModal}>Save Current</button>
+                                </div>
+                                <template if:false={savedQueries.length}>
+                                    <p class="slds-text-color_weak slds-text-body_small">
+                                        No saved queries for this template.
+                                    </p>
                                 </template>
-                            </ul>
+                                <ul class="query-list">
+                                    <template for:each={savedQueries} for:item="q">
+                                        <li key={q.Id}>
+                                            <div
+                                                class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center"
+                                            >
+                                                <div class="slds-truncate" title={q.description}>
+                                                    <a onclick={handleLoadQuery} data-id={q.Id} class="text-link"
+                                                        >{q.Name}</a
+                                                    >
+                                                </div>
+                                                <button
+                                                    class="delete-icon"
+                                                    onclick={handleDeleteQuery}
+                                                    data-id={q.Id}
+                                                    title="Delete query"
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </template>
 
                 <div class="slds-var-m-top_medium slds-grid slds-grid_vertical-align-center" style="gap: 1rem">
                     <lightning-button
-                        label="Validate Filter"
+                        label={validateLabel}
                         onclick={handleValidate}
-                        disabled={isProcessing}
+                        disabled={validateDisabled}
                         variant="neutral"
                     >
                     </lightning-button>
@@ -300,6 +369,22 @@
                         </template>
                     </template>
                 </div>
+
+                <template lwc:if={reportTruncated}>
+                    <div class="slds-box slds-theme_warning slds-var-m-top_small" role="status">
+                        <p>
+                            Salesforce returned only the first 2,000 report rows. {recordCount} eligible records were
+                            found in those rows. Narrow the report filters if you need a different selection.
+                        </p>
+                        <lightning-input
+                            type="checkbox"
+                            label="Generate from the first 2,000 report rows"
+                            checked={allowTruncatedReport}
+                            onchange={handleAllowTruncatedReportChange}
+                            disabled={recordSelectionDisabled}
+                        ></lightning-input>
+                    </div>
+                </template>
 
                 <!-- Sort order — decides page order in a combined PDF -->
                 <template if:true={hasSortFields}>
@@ -466,7 +551,7 @@
                     <div class="slds-text-align_center">
                         <template if:false={filterValidated}>
                             <p class="slds-text-color_weak slds-text-body_small slds-var-m-bottom_xx-small">
-                                Validate your filter to enable generation.
+                                {validationHelp}
                             </p>
                         </template>
                         <lightning-button
