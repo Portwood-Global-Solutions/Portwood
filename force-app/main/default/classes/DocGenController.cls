@@ -8973,6 +8973,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // field as "No such column" for any running user without FLS on it (e.g. the
         // packaging-build test user) — a namespaced-build-only failure invisible to a
         // no-namespace scratch where the running user holds DocGen_Admin.
+        Boolean canReadDescription = DocGen_Asset__c.Description__c.getDescribe().isAccessible();
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Asset__c> assets = [
             SELECT
@@ -8981,6 +8982,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Asset_Key__c,
                 Asset_Type__c,
                 Category__c,
+                Description__c,
                 Is_Active__c,
                 (
                     SELECT ContentDocument.LatestPublishedVersionId, ContentDocument.LastModifiedDate
@@ -9041,6 +9043,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     'assetKey' => a.Asset_Key__c,
                     'assetType' => a.Asset_Type__c,
                     'category' => a.Category__c,
+                    'description' => canReadDescription ? a.Description__c : null,
                     'isActive' => a.Is_Active__c,
                     'mergeTag' => '{%asset:' +
                     a.Asset_Key__c +
@@ -9065,6 +9068,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      */
     @AuraEnabled
     public static Map<String, Object> createAsset(String name, String assetKey) {
+        return createImageAsset(name, assetKey, null, null);
+    }
+
+    @AuraEnabled
+    public static Map<String, Object> createImageAsset(
+        String name,
+        String assetKey,
+        String category,
+        String description
+    ) {
         if (String.isBlank(name)) {
             throw DocGenService.ahe('Asset name is required.');
         }
@@ -9098,10 +9111,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Asset_Type__c = 'Image',
                 Is_Active__c = true
             );
-            DocGenFlsGuard.assertCreateable(
-                asset,
-                new Set<String>{ 'Name', 'Asset_Key__c', 'Asset_Type__c', 'Is_Active__c' }
-            );
+            Set<String> fields = new Set<String>{ 'Name', 'Asset_Key__c', 'Asset_Type__c', 'Is_Active__c' };
+            if (String.isNotBlank(category)) {
+                asset.Category__c = category.trim();
+                fields.add('Category__c');
+            }
+            if (String.isNotBlank(description)) {
+                asset.Description__c = description.trim();
+                fields.add('Description__c');
+            }
+            DocGenFlsGuard.assertCreateable(asset, fields);
             /* code-analyzer-suppress ApexFlsViolation */
             Database.insert(asset, AccessLevel.SYSTEM_MODE);
 

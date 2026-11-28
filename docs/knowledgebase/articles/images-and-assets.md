@@ -4,8 +4,9 @@ Upload a logo once and reuse it across templates.
 
 1. Open **Portwood → Assets**.
 2. Add an image, give it a clear name, and choose a stable asset key such as `company-logo`.
-3. Upload the image file and save it.
-4. Use the asset's copy or insert controls when placing it in a template.
+3. Add an optional **Image description** with details an author needs to choose the right asset, such as “Horizontal white wordmark on a transparent background, for dark headers.” You can also add it later from **Edit**. Copy AI Prompt lists this text alongside the name, category, and exact image tag.
+4. Upload the image file and save it.
+5. Use the asset's copy or insert controls when placing it in a template.
 
 An asset key is a reusable name. `{%asset:company-logo}` points to that image without tying your template to an org-specific file ID.
 

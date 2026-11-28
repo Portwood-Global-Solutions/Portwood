@@ -200,6 +200,7 @@
         <members>DocGen_Asset__c.Asset_Key__c</members>
         <members>DocGen_Asset__c.Asset_Type__c</members>
         <members>DocGen_Asset__c.Category__c</members>
+        <members>DocGen_Asset__c.Description__c</members>
         <members>DocGen_Asset__c.Is_Active__c</members>
         <members>DocGen_Brand__c.Brand_Color__c</members>
         <members>DocGen_Brand__c.Company_Name__c</members>

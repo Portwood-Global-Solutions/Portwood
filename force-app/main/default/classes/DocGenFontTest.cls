@@ -326,7 +326,12 @@ private class DocGenFontTest {
             );
             String legacy = DocGenService.wrapHtmlForPdf('<p>漢</p>', '', null, null);
             System.assert(legacy.contains('Arial Unicode MS'));
+            List<Map<String, Object>> promptFonts = DocGenFontController.getAuthoringFonts();
+            System.assertEquals(1, promptFonts.size());
+            System.assertEquals(DocGenFontController.getFontFaces()[0].get('mergeTag'), promptFonts[0].get('mergeTag'));
+            System.assert(!promptFonts[0].containsKey('fileUrl'));
             DocGenFontController.retireFont(key);
+            System.assert(DocGenFontController.getAuthoringFonts().isEmpty());
             System.assert(DocGenFontService.prepare(bound(key, 'Şahin')).contains('Identity-H'));
             for (Map<String, Object> face : DocGenFontController.getFontFaces())
                 if (face.get('key') == key)

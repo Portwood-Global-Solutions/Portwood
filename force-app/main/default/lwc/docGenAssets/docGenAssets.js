@@ -5,13 +5,14 @@ import { refreshApex } from '@salesforce/apex';
 // Apex — Workstream A (DocGenController) builds these in parallel.
 // Imported against the exact names/signatures in the approved plan (#185 A6).
 import getAssets from '@salesforce/apex/DocGenController.getAssets';
-import createAsset from '@salesforce/apex/DocGenController.createAsset';
+import createImageAsset from '@salesforce/apex/DocGenController.createImageAsset';
+import { updateRecord } from 'lightning/uiRecordApi';
+import DESC_FIELD from '@salesforce/schema/DocGen_Asset__c.Description__c';
+import CATEGORY_FIELD from '@salesforce/schema/DocGen_Asset__c.Category__c';
 import checkAssetKey from '@salesforce/apex/DocGenController.checkAssetKey';
 import addAssetVersion from '@salesforce/apex/DocGenController.addAssetVersion';
 import deleteAsset from '@salesforce/apex/DocGenController.deleteAsset';
 import LightningConfirm from 'lightning/confirm';
-import renameAsset from '@salesforce/apex/DocGenController.renameAsset';
-import setAssetCategory from '@salesforce/apex/DocGenController.setAssetCategory';
 import deactivateAsset from '@salesforce/apex/DocGenController.deactivateAsset';
 import reactivateAsset from '@salesforce/apex/DocGenController.reactivateAsset';
 import getLatestContentVersionId from '@salesforce/apex/DocGenController.getLatestContentVersionId';
@@ -142,6 +143,7 @@ export default class DocGenAssets extends LightningElement {
     @track createName = '';
     @track createKey = '';
     @track createCategory = '';
+    createDescription = '';
     @track createdAssetId = null;
     @track isUploading = false;
     // Live key validation
@@ -162,6 +164,8 @@ export default class DocGenAssets extends LightningElement {
     @track renameAssetId = null;
     @track renameValue = '';
     @track renameCategory = '';
+    renameDescription = '';
+    originalDescription = '';
 
     // List filtering state
     @track searchTerm = '';
@@ -294,6 +298,8 @@ export default class DocGenAssets extends LightningElement {
             this.renameAssetId = row.id;
             this.renameValue = row.name;
             this.renameCategory = row.category || '';
+            this.originalDescription = row.description || '';
+            this.renameDescription = this.originalDescription;
             this.isRenameModalOpen = true;
         } else if (actionName === 'preview') {
             if (row.thumbnailUrl) {
@@ -335,6 +341,7 @@ export default class DocGenAssets extends LightningElement {
         this.createName = '';
         this.createKey = '';
         this.createCategory = '';
+        this.createDescription = '';
         this.createdAssetId = null;
         this.isUploading = false;
         this.keyEdited = false;
@@ -362,6 +369,10 @@ export default class DocGenAssets extends LightningElement {
         this.keyEdited = true;
         this.createKey = event.target.value;
         this.scheduleKeyCheck();
+    }
+
+    handleCreateDescriptionChange(event) {
+        this.createDescription = event.target.value;
     }
 
     handleCreateCategoryChange(event) {
@@ -410,14 +421,13 @@ export default class DocGenAssets extends LightningElement {
         }
         this.isUploading = true;
         try {
-            const asset = await createAsset({ name: this.createName.trim(), assetKey: this.createKey });
-            // createAsset returns a map { id, name, assetKey, mergeTag }.
-            this.createdAssetId = asset && asset.id ? asset.id : asset;
-            if (this.createCategory && this.createCategory.trim()) {
-                // Separate call — createAsset's signature is fixed (@AuraEnabled
-                // methods can't be overloaded).
-                await setAssetCategory({ assetId: this.createdAssetId, category: this.createCategory.trim() });
-            }
+            const asset = await createImageAsset({
+                name: this.createName.trim(),
+                assetKey: this.createKey,
+                category: this.createCategory,
+                description: this.createDescription
+            });
+            this.createdAssetId = asset.id;
             this.showToast('Asset created', 'Now upload an image for "' + this.createName.trim() + '".', 'success');
             await refreshApex(this.wiredAssetsResult);
         } catch (error) {
@@ -497,6 +507,10 @@ export default class DocGenAssets extends LightningElement {
         this.renameValue = event.target.value;
     }
 
+    handleRenameDescriptionChange(event) {
+        this.renameDescription = event.target.value;
+    }
+
     handleRenameCategoryChange(event) {
         this.renameCategory = event.target.value;
     }
@@ -506,9 +520,15 @@ export default class DocGenAssets extends LightningElement {
             return;
         }
         try {
-            await renameAsset({ assetId: this.renameAssetId, newName: this.renameValue.trim() });
-            // Always sent — blank intentionally clears the category.
-            await setAssetCategory({ assetId: this.renameAssetId, category: this.renameCategory.trim() });
+            const fields = {
+                Id: this.renameAssetId,
+                Name: this.renameValue.trim(),
+                [CATEGORY_FIELD.fieldApiName]: this.renameCategory.trim() || null
+            };
+            if (this.renameDescription !== this.originalDescription) {
+                fields[DESC_FIELD.fieldApiName] = this.renameDescription.trim() || null;
+            }
+            await updateRecord({ fields });
             this.showToast('Saved', '"' + this.renameValue.trim() + '" updated.', 'success');
             this.isRenameModalOpen = false;
             await refreshApex(this.wiredAssetsResult);

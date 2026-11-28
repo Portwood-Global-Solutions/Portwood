@@ -186,7 +186,12 @@ private class DocGenAssetTest {
 
     @IsTest
     static void addVersionRenameDeactivateAndList() {
-        Map<String, Object> created = DocGenController.createAsset('Footer', 'footer');
+        Map<String, Object> created = DocGenController.createImageAsset(
+            'Footer',
+            'footer',
+            'Brand',
+            'Blue horizontal wordmark for a white footer.'
+        );
         Id assetId = (Id) created.get('id');
 
         ContentVersion cv = new ContentVersion(
@@ -216,6 +221,8 @@ private class DocGenAssetTest {
             if (assetId == (Id) row.get('id')) {
                 found = true;
                 System.assertNotEquals(null, row.get('latestVersionCvId'), 'List exposes latest CV Id');
+                System.assertEquals('Brand', row.get('category'));
+                System.assertEquals('Blue horizontal wordmark for a white footer.', row.get('description'));
                 System.assertEquals(true, row.get('isActive'), 'Asset active in list');
             }
         }

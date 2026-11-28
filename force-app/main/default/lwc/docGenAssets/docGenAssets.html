@@ -152,6 +152,17 @@
                         placeholder="e.g. Logos"
                         field-level-help="Optional grouping label used to filter the asset list. Type anything — categories are free text."
                     ></lightning-input>
+                    <lightning-textarea
+                        class="slds-var-m-top_x-small"
+                        label="Image description"
+                        value={createDescription}
+                        onchange={handleCreateDescriptionChange}
+                        maxlength="255"
+                        disabled={createdAssetId}
+                        placeholder="Horizontal white wordmark for use on dark backgrounds"
+                        field-level-help="Optional. Describe what the image shows and when to use it. Copy AI Prompt includes this description."
+                    >
+                    </lightning-textarea>
 
                     <template if:false={createdAssetId}>
                         <lightning-input
@@ -268,6 +279,16 @@
                         placeholder="e.g. Logos"
                         field-level-help="Optional grouping label used to filter the asset list. Leave blank to remove the category."
                     ></lightning-input>
+                    <lightning-textarea
+                        class="slds-var-m-top_x-small"
+                        label="Image description"
+                        value={renameDescription}
+                        onchange={handleRenameDescriptionChange}
+                        maxlength="255"
+                        placeholder="Horizontal white wordmark for use on dark backgrounds"
+                        field-level-help="Optional. Describe what the image shows and when to use it. Copy AI Prompt includes this description."
+                    >
+                    </lightning-textarea>
                 </div>
                 <footer class="slds-modal__footer">
                     <lightning-button label="Cancel" variant="neutral" onclick={handleCloseRename}></lightning-button>

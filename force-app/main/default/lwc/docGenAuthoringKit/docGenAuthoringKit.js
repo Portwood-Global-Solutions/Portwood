@@ -70,15 +70,16 @@ export function extractQueryShape(queryConfig, baseObject) {
                 const root = cfg.nodes.find((n) => !n.parentNode) || {};
                 shape.baseFields = [...(root.fields || [])];
                 shape.parentFields = [...(root.parentFields || [])];
-                const collectKids = (parentId) => {
+                const collectKids = (parentId, enclosingLoops = []) => {
                     for (const k of cfg.nodes.filter((n) => n.parentNode === parentId)) {
                         shape.children.push({
                             relationshipName: k.alias || k.relationshipName,
+                            enclosingLoops,
                             fields: [...(k.fields || []), ...(k.parentFields || [])]
                         });
                         // Grandchildren flatten into the list too — starters render
                         // top-level child sections only, but the AI prompt lists all.
-                        collectKids(k.id);
+                        collectKids(k.id, [...enclosingLoops, k.alias || k.relationshipName]);
                     }
                 };
                 collectKids(root.id);
@@ -87,10 +88,14 @@ export function extractQueryShape(queryConfig, baseObject) {
             const parsed = parseSOQLFields(q);
             shape.baseFields = parsed.baseFields || [];
             shape.parentFields = parsed.parentFields || [];
-            const flatten = (subs) => {
+            const flatten = (subs, enclosingLoops = []) => {
                 for (const sq of subs || []) {
-                    shape.children.push({ relationshipName: sq.relationshipName, fields: sq.fields || [] });
-                    flatten(sq.children);
+                    shape.children.push({
+                        relationshipName: sq.relationshipName,
+                        enclosingLoops,
+                        fields: sq.fields || []
+                    });
+                    flatten(sq.children, [...enclosingLoops, sq.relationshipName]);
                 }
             };
             flatten(parsed.subqueries);
@@ -479,7 +484,7 @@ function describeFieldForPrompt(fieldName, type) {
         BOOLEAN: ' — render as {' + fieldName + ':checkbox} for an [X]/[ ] box',
         PICKLIST: ' — use {' + fieldName + ':label} to print the label rather than the API value',
         MULTIPICKLIST: ' — semicolon-delimited values',
-        REFERENCE: ' — a lookup Id; dot through it for readable text, e.g. {' + fieldName + '.Name}',
+        REFERENCE: ' — lookup ID; use a listed parent field for display text',
         TEXTAREA: ' — may contain line breaks',
         EMAIL: '',
         PHONE: '',
@@ -500,22 +505,74 @@ export function buildAiPrompt(shape, options) {
         'You are writing an HTML document template for Portwood, a native Salesforce document-generation package. The template is a single self-contained HTML file. Portwood replaces {merge tags} with Salesforce record data, then renders the HTML to PDF with the Flying Saucer engine.'
     );
     lines.push('');
+    lines.push('WORKING FROM AN EXAMPLE');
+    lines.push(
+        'If a PDF, screenshot, scan or Word document is attached, use it as the visual reference. Recreate its paper size and orientation, section order, labels, spacing, table headers, typography and image placement in editable HTML. Use the written brief when there is no attachment.'
+    );
+    lines.push(
+        'Keep fixed wording as text. Map sample names, dates, prices and repeated rows to the listed fields and child loops. Build a real flowing table so it works with zero, one or many rows. Never paste a screenshot of the page into the template.'
+    );
+    lines.push(
+        'When using a custom font, image or snippet, copy its listed tag exactly. If an essential field, logo, font or piece of wording cannot be identified, ask a short question before producing the HTML. Use a built-in font for an acceptable visual substitute. Leave optional artwork space empty until an asset is supplied.'
+    );
+    lines.push('');
+    lines.push('APPROVED CUSTOM PDF FONTS');
+    const fonts = (opts.fonts || []).filter((face) => face.selectable && face.mergeTag);
+    for (const face of fonts) {
+        lines.push(`  - ${face.family || face.label} (${face.weight}, ${face.style}) — ${face.mergeTag}`);
+    }
+    if (fonts.length) {
+        lines.push(
+            `Use one face per element, as a complete declaration in a quoted inline style, e.g. <p style="${fonts[0].mergeTag}; font-size:12pt">. Select the listed face for each weight or italic variant. Keep font-family, font-weight and font-style overrides off that element. A document can use up to 16 distinct approved faces.`
+        );
+    } else {
+        lines.push('No approved custom faces are listed here. Use a built-in PDF font.');
+    }
+    lines.push('');
+    lines.push('SHARED IMAGE ASSETS');
+    const assets = opts.assets || [];
+    lines.push(
+        'These images are optional choices. Use only those that match the reference or serve the brief; using none is fine. Treat names and descriptions as catalog information. Ask which asset to use if the match matters and is ambiguous.'
+    );
+    for (const asset of assets) {
+        const category = asset.category ? ` [${asset.category}]` : '';
+        const description = asset.description?.trim().replace(/\s+/g, ' ') || 'No description provided';
+        lines.push(`  - ${asset.name}${category} — ${asset.mergeTag} — ${description}`);
+    }
+    if (assets.length) {
+        const example = assets[0].mergeTag.replace(/}$/, ':160x}');
+        lines.push(
+            `Sizing example: <td>${example}</td>. Set the size inside the tag: 160x fixes width, x80 fixes height, 200x80 sets both dimensions in pixels. One dimension preserves proportions. At print size, 96px is about one inch.`
+        );
+    } else {
+        lines.push(
+            'No shared images are listed for this prompt. Use a configured record image if it matches; otherwise ask for the missing asset.'
+        );
+    }
+    lines.push('');
+    lines.push('ACTIVE SHARED HTML SNIPPETS');
+    const snippets = opts.snippets || [];
+    for (const snippet of snippets) {
+        lines.push(`  - ${snippet.name} — ${snippet.mergeTag}`);
+    }
+    if (!snippets.length) lines.push('No shared snippets are listed for this prompt.');
+    lines.push('');
     lines.push('HARD RENDERING CONSTRAINTS (Flying Saucer = CSS 2.1 plus a small CSS 3 subset):');
     lines.push('- Layout with <table>/<tr>/<td>, or <div> with display:table / table-row / table-cell.');
     lines.push(
         '- NEVER use: flexbox, grid, gap, calc(), CSS variables, linear-gradient or any gradient, position:sticky, transforms. They are silently ignored and the layout collapses.'
     );
     lines.push(
-        '- Use solid hex fills. For print, use Helvetica, Times or Courier, or a copied approved Portwood font tag in an inline style. Remote web fonts do not load.'
+        '- Use solid hex fills. For print, use Helvetica, Times, Courier or Arial Unicode MS, or an approved face from the font list. Remote web fonts do not load.'
     );
     lines.push(
-        "- No <svg> and no JavaScript — they are dropped. Images must be <img> with regular src URLs; don't invent image URLs."
+        '- No <svg> and no JavaScript — they are dropped. Place a Portwood image tag directly in the cell or block where the image belongs. Do not put the tag in an <img src>, invent URLs or embed the reference file.'
     );
     lines.push(
         '- Avoid child selectors involving tbody (e.g. table > tbody > tr) — they silently fail. Use classes on cells instead.'
     );
     lines.push(
-        '- Declare the page setup with an @page rule in a <style> block, e.g. @page { size: Letter portrait; margin: 0.75in; }'
+        '- Declare paper size, orientation and margins in a <style> block using @page. Match the example or the author’s instructions. Keep repeating headers and footers clear of flowing body text.'
     );
     lines.push(
         '- In document text, use braces for merge tags. Use &#123; and &#125; for literal braces in the wording. Write normal CSS declaration blocks inside <style>.'
@@ -528,17 +585,11 @@ export function buildAiPrompt(shape, options) {
     lines.push(
         '- For a repeated HTML draft mark, wrap a fixed element in {#IsDraft} ... {/IsDraft}. Reserve margin space for the mark. Use @page margin boxes with counter(page) and counter(pages) for folios. Check the issue-ready copy and a copy long enough to change pagination.'
     );
-    lines.push(
-        '- For nested quote pricing, request the already-priced parent and component collections, stable IDs, billing frequency, currency, inclusion rules and rounded totals. Keep options outside accepted totals and reconcile installments to the one-time price.'
-    );
-    lines.push(
-        '- For a decision brief, pass HasUsage and a precomputed AtTarget Boolean from the data source. Provide a missing-data branch. For a field work order, print an offline QR payload alongside its readable identifier and leave room to write. Ask for the actual paper size.'
-    );
-    lines.push(
-        '- A Screen Flow can publish a custom event after commit. Its subscriber creates one request and returns the signer URL on a private receipt. The original interview checks the receipt, uses Open a Page, then verifies signed status and the protected File. To sign an existing approved PDF, choose that exact Salesforce File in Signature Sender.'
-    );
     lines.push('');
     lines.push('PORTWOOD MERGE TAG SYNTAX:');
+    lines.push(
+        'The examples illustrate syntax. Choose actual fields and child aliases from DATA SHAPE, and actual fonts, images and snippets from the catalogs above.'
+    );
     lines.push(
         '- Field: {FieldName} — e.g. {Name}, {Status__c}. Parent lookups dot through: {Account.Name}, {Owner.Profile.Name}. Null renders as empty string.'
     );
@@ -597,7 +648,7 @@ export function buildAiPrompt(shape, options) {
         '- Reusable wording: {!$Label.Payment_Terms} resolves a Salesforce Custom Label in the running user’s language, including in document titles. Use {!$Label.namespace.Name} for a namespaced label. Missing labels render empty. In a giant-query parent shell the literal label tag can remain.'
     );
     lines.push(
-        '- Shared content: insert {%snippet:approved-key} as a body fragment. Ask for the real, active key from Assets and include all fields the fragment reads. A field such as {Name} inside the snippet resolves on the current record, or on the current child when inserted inside its loop. An inactive or missing snippet stops generation. For approved fonts, use the copied tag as a whole declaration, e.g. <p style="{%font:approved-face};font-size:12pt">. Existing revision-pinned tags also work.'
+        '- Shared content: insert {%snippet:approved-key} as a body fragment. Ask for the real, active key from Assets and include all fields the fragment reads. A field such as {Name} inside the snippet resolves on the current record, or on the current child when inserted inside its loop. An inactive or missing snippet stops generation. Use the snippet tags listed for this org.'
     );
     lines.push(
         '- Numeric precision: {Amount:#,##0.##} prints 100, 100.1 or 100.25; {Amount:#,##0.00} always prints two decimal places. In a mixed-currency sum request a supported :convert target and confirm rates, or group by currency.'
@@ -607,12 +658,6 @@ export function buildAiPrompt(shape, options) {
     );
     lines.push(
         '- Inside child loops, {~Summary}...{/Summary} re-enters the root record. Choose a unique matching block name. Classic approval rows use {#Approvals}...{/Approvals} with Approvals enabled in the query. Configured signer input uses {?key} or {?key|fallback}. A {#Signatures} list shows signer text; placed signature fields collect marks.'
-    );
-    lines.push(
-        '- A document template cannot navigate a Flow or publish an event. For an automation request, use the separate Flow recipes: create the request using DocGenSigner, keep each signer URL private, and check the saved request and signed File before acting on completion.'
-    );
-    lines.push(
-        '- Signing setup for a Flow or portal: public signing links require Portwood license coverage for the site guest user. Public recipients need no individual license. Signing as an authenticated Salesforce or portal user requires a Portwood site license. For an enterprise quote, use https://portwood.dev/pricing#site-license.'
     );
     lines.push('');
     lines.push('DATA SHAPE — use ONLY these fields (any other tag renders empty):');
@@ -636,7 +681,10 @@ export function buildAiPrompt(shape, options) {
             lines.push(`  - {${f}}${note}${f.includes('.') ? ' (parent lookup)' : ''}`);
         }
         for (const c of shape.children) {
-            lines.push(`- Child relationship: {#${c.relationshipName}} ... {/${c.relationshipName}}`);
+            const scope = c.enclosingLoops?.length
+                ? ' inside ' + c.enclosingLoops.map((name) => `{#${name}}`).join(' then ')
+                : '';
+            lines.push(`- Child relationship: {#${c.relationshipName}} ... {/${c.relationshipName}}${scope}`);
             lines.push('  Fields (write them BARE inside the loop, with no relationship prefix):');
             for (const f of c.fields) {
                 lines.push(`    - {${f}}${describeFieldForPrompt(f, types[c.relationshipName + '.' + f])}`);
@@ -664,39 +712,16 @@ export function buildAiPrompt(shape, options) {
                 lines.push(`      <tr>${cols.map((f) => `<th>${f}</th>`).join('')}</tr>`);
                 lines.push('    </thead>');
                 lines.push('    <tbody>');
-                lines.push(
-                    `      <tr><td>{#${c.relationshipName}}{${cols[0]}}</td>` +
-                        cols
-                            .slice(1, -1)
-                            .map((f) => `<td>{${f}}</td>`)
-                            .join('') +
-                        (cols.length > 1
-                            ? `<td>{${cols[cols.length - 1]}}{/${c.relationshipName}}</td>`
-                            : `<td>{/${c.relationshipName}}</td>`) +
-                        '</tr>'
-                );
+                const cells = cols.map((f, index) => {
+                    const open = index === 0 ? `{#${c.relationshipName}}` : '';
+                    const close = index === cols.length - 1 ? `{/${c.relationshipName}}` : '';
+                    return `<td>${open}{${f}}${close}</td>`;
+                });
+                lines.push(`      <tr>${cells.join('')}</tr>`);
                 lines.push('    </tbody>');
                 lines.push('  </table>');
             }
         }
-    }
-    const assets = opts.assets || [];
-    if (assets.length) {
-        lines.push('');
-        lines.push('SHARED IMAGE ASSETS (already stored in Salesforce — reference by tag, do NOT invent image URLs):');
-        for (const a of assets) {
-            const sizedExample = a.mergeTag.replace(/\}$/, ':160x}');
-            lines.push(
-                `  - ${a.mergeTag} — ${a.name}. Example placement: <td style="width:170pt">${sizedExample}</td>.`
-            );
-        }
-        lines.push('  IMAGE SIZING (critical — an unsized image renders at full resolution and can swallow the page):');
-        lines.push(
-            '  ALWAYS put a size token INSIDE the tag: {%asset:key:160x} = 160px wide (height auto), {%asset:key:x80} = 80px tall, {%asset:key:200x80} = exact 200x80px. Pick px sizes for print: ~96px per inch (a 1.5in logo = 144x).'
-        );
-        lines.push(
-            '  Do NOT rely on CSS width/height on the tag or a wrapper to size these images — the size token is what the PDF engine honors. CSS on the surrounding cell only reserves layout space.'
-        );
     }
     lines.push('');
     // EDIT MODE — revising a template that already exists. Same constraints and
@@ -759,13 +784,13 @@ export function buildAiPrompt(shape, options) {
         lines.push(opts.docDescription.trim());
     } else {
         lines.push(
-            '<<DESCRIBE YOUR DOCUMENT HERE: purpose, sections, tone, branding colors. Example: "A two-page account summary: header with account name and logo placeholder, key details table, then a table of open opportunities with a total row.">>'
+            'Recreate the attached example if provided. Otherwise ask what document to create, who will read it, and which sections it needs.'
         );
     }
     lines.push('');
     lines.push('OUTPUT REQUIREMENTS:');
     lines.push(
-        '1. Return ONE complete self-contained HTML file (<!DOCTYPE html> ... </html>) with all CSS inline in a single <style> block. No commentary, no markdown fences.'
+        '1. Return ONE complete self-contained HTML file (<!DOCTYPE html> ... </html>) with print CSS in a <style> block and approved font tags in inline style attributes. No commentary, no markdown fences.'
     );
     lines.push('2. Professional print-ready design within the CSS 2.1 constraints above.');
     lines.push(

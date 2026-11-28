@@ -70,6 +70,36 @@ public with sharing class DocGenFontController {
             authorizedMutation = false;
         }
     }
+    /** Authoring catalog excludes font files, license text and preview links. */
+    @AuraEnabled
+    public static List<Map<String, Object>> getAuthoringFonts() {
+        List<Map<String, Object>> result = new List<Map<String, Object>>();
+        for (DocGen_Font_Face__c face : [
+            SELECT Name, API_Name__c, Revision_Key__c, Metadata_JSON__c, Asset__r.Asset_Key__c
+            FROM DocGen_Font_Face__c
+            WHERE Status__c = 'Verified' AND Asset__r.Is_Active__c = TRUE
+            WITH USER_MODE
+            ORDER BY Name, Revision_Key__c
+        ]) {
+            Map<String, Object> metadata = catalogMetadata(face.Metadata_JSON__c);
+            result.add(
+                new Map<String, Object>{
+                    'family' => metadata.get('family'),
+                    'label' => face.Name,
+                    'weight' => metadata.get('weight'),
+                    'style' => metadata.get('style'),
+                    'selectable' => true,
+                    'mergeTag' => DocGenFontService.mergeTag(
+                        face.API_Name__c,
+                        face.Asset__r.Asset_Key__c,
+                        face.Revision_Key__c
+                    )
+                }
+            );
+        }
+        return result;
+    }
+
     @AuraEnabled
     public static List<Map<String, Object>> getFontFaces() {
         DocGenFlsGuard.assertAccessible(DocGen_Font_Face__c.sObjectType, FIELDS);
