@@ -249,7 +249,10 @@ public with sharing class DocGenMergeJob implements Queueable {
         String details = job.Error_Log__c;
         if (inputCount < expected || inputCount < previousSuccess) {
             details = prependError(
-                'The combined PDF received ' + inputCount + ' of ' + Math.max(expected, previousSuccess) +
+                'The combined PDF received ' +
+                    inputCount +
+                    ' of ' +
+                    Math.max(expected, previousSuccess) +
                     ' expected documents.',
                 details
             );

@@ -53,8 +53,14 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
         global Boolean keepIndividualFiles;
 
         @InvocableVariable(
+            label='Merge PDFs in Browser'
+            description='Save private PDFs for an authenticated download from the completed job. When enabled, this selects the browser output mode.'
+        )
+        global Boolean browserMerge;
+
+        @InvocableVariable(
             label='Duplex Padding'
-            description='Combined PDF only. Append one blank page after any document with an odd page count so every document starts on the front of a sheet when printed double-sided. Page numbers count real pages only. Ignored for Individual Files. Default: false.'
+            description='For Print-Ready and browser-merged PDFs, append a blank after each odd-length document so the next document starts on the front of a sheet. Default: false.'
         )
         global Boolean duplexPadding;
 
@@ -69,6 +75,12 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
         @InvocableVariable(label='Job ID')
         global Id jobId;
 
+        @InvocableVariable(
+            label='Merged PDF Download URL'
+            description='Authenticated job link for Browser Merge. Open it in a browser after the job is ready.'
+        )
+        global String downloadUrl;
+
         @InvocableVariable(label='Error Message')
         global String errorMessage;
 
@@ -78,7 +90,7 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
 
     @InvocableMethod(
         label='Generate Bulk Documents'
-        description='Starts a batch job to generate documents for multiple records. Supports combined PDF, individual files, batch sizing, WHERE filters, and sort order.'
+        description='Starts a batch job to generate documents for multiple records. Supports combined PDF, individual files, browser merge, batch sizing, WHERE filters, and sort order.'
     )
     global static List<Response> generateBulkDocuments(List<Request> requests) {
         List<Response> responses = new List<Response>();
@@ -120,7 +132,10 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                 // collection of IDs, fold them into an `Id IN (...)` clause so
                 // the bulk pipeline runs only against those records. Combines
                 // (AND) with any user-supplied queryCondition.
-                effectiveCondition = buildEffectiveCondition(req.queryCondition, req.recordIds);
+                String filterObject = req.recordIds != null && String.isNotBlank(req.queryCondition)
+                    ? DocGenBulkController.templateBaseObject(req.templateId)
+                    : null;
+                effectiveCondition = buildEffectiveCondition(filterObject, req.queryCondition, req.recordIds);
 
                 // submitJobInternal, NOT submitJob: the @AuraEnabled entry point
                 // raises AuraHandledException, which cannot be thrown outside an
@@ -128,17 +143,28 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
                 // LimitException. Calling it from a Flow faulted the whole
                 // interview and made these Success/Error Message outputs
                 // unreachable for the commonest failure of all â€” a bad template Id.
-                Id jobId = DocGenBulkController.submitJobInternal(
-                    req.templateId,
-                    effectiveCondition,
-                    req.jobLabel,
-                    mergePdf,
-                    batchSize,
-                    mergeOnly,
-                    req.sortOrder,
-                    req.duplexPadding
-                );
-                res.jobId = jobId;
+                if (req.browserMerge == true) {
+                    res.jobId = DocGenBulkController.submitBrowserMergeJobInternal(
+                        req.templateId,
+                        effectiveCondition,
+                        req.jobLabel,
+                        req.batchSize,
+                        req.sortOrder,
+                        req.duplexPadding
+                    );
+                    res.downloadUrl = DocGenBrowserPdf.pageUrl(res.jobId);
+                } else {
+                    res.jobId = DocGenBulkController.submitJobInternal(
+                        req.templateId,
+                        effectiveCondition,
+                        req.jobLabel,
+                        mergePdf,
+                        batchSize,
+                        mergeOnly,
+                        req.sortOrder,
+                        req.duplexPadding
+                    );
+                }
                 res.success = true;
             } catch (Exception e) {
                 DocGenErrorLogger.logBulkFlowFailure(
@@ -162,7 +188,7 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
      * alphanumeric format before inclusion to defend against injection.
      */
     @TestVisible
-    private static String buildEffectiveCondition(String userCondition, List<String> recordIds) {
+    private static String buildEffectiveCondition(String objectName, String userCondition, List<String> recordIds) {
         String idClause = null;
         if (recordIds != null && !recordIds.isEmpty()) {
             List<String> quoted = new List<String>();
@@ -184,7 +210,7 @@ global with sharing class DocGenBulkFlowAction { // NOPMD AvoidGlobalModifier â€
 
         Boolean hasUser = String.isNotBlank(userCondition);
         if (hasUser && idClause != null) {
-            return '(' + userCondition + ') AND ' + idClause;
+            return DocGenBulkCondition.combine(objectName, userCondition, idClause);
         }
         if (idClause != null) {
             return idClause;

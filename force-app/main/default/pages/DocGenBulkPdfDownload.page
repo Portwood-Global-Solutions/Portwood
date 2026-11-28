@@ -1,0 +1,40 @@
+<apex:page
+    controller="DocGenBulkPdfDownloadController"
+    showHeader="false"
+    sidebar="false"
+    standardStylesheets="false"
+    applyHtmlTag="false"
+    applyBodyTag="false"
+    docType="html-5.0"
+    cache="false"
+>
+    <html lang="en">
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Download combined PDF</title>
+            <link rel="stylesheet" href="{!URLFOR($Resource.DocGenBulkPdfDownloadApp, 'download.css')}" />
+        </head>
+        <body>
+            <main
+                id="downloadPage"
+                data-describe="{!$RemoteAction.DocGenBulkPdfDownloadController.describe}"
+                data-manifest="{!$RemoteAction.DocGenBulkPdfDownloadController.getManifestPage}"
+                data-sources="{!$RemoteAction.DocGenBulkPdfDownloadController.getSources}"
+                data-owner="{!$User.Id}"
+                data-worker="{!URLFOR($Resource.DocGenBulkPdfDownloadApp, 'merge-worker.js')}"
+                data-library="{!URLFOR($Resource.pdflib, 'pdf-lib.min.js')}"
+            >
+                <h1>Download combined PDF</h1>
+                <p id="details" hidden="hidden"></p>
+                <p id="status" role="status">Checking the bulk job…</p>
+                <progress id="progress" max="1" value="0" aria-label="Merge progress" hidden="hidden"></progress>
+                <button id="start" type="button" hidden="hidden">Prepare PDF</button>
+                <button id="pause" type="button" hidden="hidden">Pause</button>
+                <button id="download" type="button" hidden="hidden">Download PDF</button>
+                <button id="retry" type="button" hidden="hidden">Try again</button>
+                <a id="newTab" target="_blank" rel="noopener" hidden="hidden">Open in a new tab</a>
+            </main>
+            <script src="{!URLFOR($Resource.DocGenBulkPdfDownloadApp, 'download.js')}"></script>
+        </body>
+    </html>
+</apex:page>
